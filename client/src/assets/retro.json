@@ -1,0 +1,20 @@
+{"frames": [
+    
+    {
+        "filename": "retro",
+        "frame": {"x":0,"y":0,"w":142,"h":192},
+        "rotated": false,
+        "trimmed": false,
+        "spriteSourceSize": {"x":0,"y":0,"w":142,"h":192},
+        "sourceSize": {"w":142,"h":192},
+        "pivot": {"x":0.5,"y":0.5}
+    }],
+    "meta": {
+        "app": "http://www.codeandweb.com/texturepacker",
+        "version": "1.0",
+        "image": "cards.png",
+        "format": "RGBA8888",
+        "size": {"w":1564,"h":962},
+        "scale": "1"
+    }
+    }

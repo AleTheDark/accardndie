@@ -1,0 +1,12 @@
+-Esternalizzare le variabili di configurazioni creando un file "config" per gestire le impostazioni grafiche.
+-Parametrizzare per fare un responsive approssimativo dal file config.
+-Troppe cose ancora da fare.
++Sistemare log combattimento "Scene Room"
++Operatore ternario prima del log combattimento "Scene Room"
+-Scene animazione nel pvp
+-Disegnare gli scenari
+-Fixare il selected dopo aver terminato la battaglia "Scene Room"
+-Fixxare refresh del log fight "Scene Room"
++USARE QUESTA Phaser.Utils.Array.Remove(arr, item); INVECE DEL RemoveAt "Select Scene"
++Fare funzione esterna che mi deduce il seme simbolo e valore "Room Scene"
++Fare funzione esterna che mi deduce la stanza "Room Scene"
