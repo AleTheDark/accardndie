@@ -25,7 +25,7 @@ class Choose extends Scene{
             this.tweens.add({
                 targets: r,
                 alpha: { from: 0, to: 1 },
-                duration:1000,
+                duration:100,
                 onComplete:() =>{
                     gameManager.room_type = Phaser.Math.Between(1,4+((Phaser.Math.Between(0, 2)*2)));
                     console.log(gameManager.room_type+" è la porcodio di stanza");
@@ -38,7 +38,7 @@ class Choose extends Scene{
             this.tweens.add({
                 targets: r,
                 alpha: { from: 0, to: 1 },
-                duration:1000,
+                duration:100,
                 onComplete:() =>{
                     gameManager.room_type = Phaser.Math.Between(1,4+((Phaser.Math.Between(0, 2)*2)));
                     console.log(gameManager.room_type+" è la porcodio di stanza");
@@ -51,7 +51,7 @@ class Choose extends Scene{
             this.tweens.add({
                 targets: r,
                 alpha: { from: 0, to: 1 },
-                duration:1000,
+                duration:100,
                 onComplete:() =>{
                     gameManager.room_type = Phaser.Math.Between(1,4+((Phaser.Math.Between(0, 2)*2)));
                     console.log(gameManager.room_type+" è la porcodio di stanza");
@@ -65,7 +65,7 @@ class Choose extends Scene{
             targets: retro,
             x:1090,
             y:100,
-            duration:500,    
+            duration:100,    
         });
         var r = this.add.rectangle(1280/2, 760/2, 1280, 760, 0x000000,1);
         this.tweens.add({
@@ -77,7 +77,7 @@ class Choose extends Scene{
     upload (){}
 }
 
-function startroll(){
+function startRoll(){
     console.log("rollo");
     return Phaser.Math.Between(1,4+((Phaser.Math.Between(0, 2))*2));
 }

@@ -76,8 +76,7 @@ class Select extends Scene{
                 targets: imm_deckp1[i],
                 x: x+i*100,
                 y: 500,
-                delay:100+i*600,
-                duration:600+i*40,
+                duration:100,
                 ease: 'Linear',
             });
         }
@@ -114,7 +113,6 @@ class Select extends Scene{
                                 targets: selectedCard,
                                 x: selectedCard.x,
                                 y: selectedCard.y+200,
-                                delay:50,
                                 duration:600,
                                 ease: 'Linear',
                                 onComplete:() =>{
@@ -126,8 +124,7 @@ class Select extends Scene{
                                             targets: imm_deckp1[i],
                                             x: 530,
                                             y: 100,
-                                            delay:100+i*600,
-                                            duration:600+3*40,
+                                            duration:100,
                                             ease: 'Linear',
                                         });
                                     }
@@ -135,15 +132,14 @@ class Select extends Scene{
                                         targets: retro,
                                         x: 530,
                                         y: 100,
-                                        delay:100+5*600,
-                                        duration:600+3*40,
+                                        duration:100,
                                         ease: 'Linear',
                                         onComplete:() =>{
                                             var r = this.add.rectangle(1280/2, 760/2, 1280, 760, 0x000000,1);
                                             this.tweens.add({
                                                 targets: r,
                                                 alpha: { from: 0, to: 1 },
-                                                duration:1000,
+                                                duration:100,
                                                 onComplete:() =>{
                                                     for(var i = 0;i<imm_deckp1.length;i++){ 
                                                         imm_deckp1[i].setVisible(false);

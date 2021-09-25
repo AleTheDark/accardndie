@@ -13,8 +13,7 @@ class Start extends Scene{
     create(){
 
         this.add.text(400,0,"Start_Scene").setOrigin(0);
-        
-        
+     
         this.scene.start("Select");
     }
     upload (){}
