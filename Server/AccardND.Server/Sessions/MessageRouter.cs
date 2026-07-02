@@ -91,6 +91,19 @@ public sealed class MessageRouter
                 await connection.SendAsync(
                     MessageTypes.QueueStatus, new QueueStatus { queued = false, position = 0 }, cancellation);
                 break;
+            case MessageTypes.MatchAction:
+            {
+                MatchSession session = connection.CurrentRoom?.Session;
+                if (session == null)
+                {
+                    await connection.SendErrorAsync(
+                        ErrorCodes.NotInMatch, "Nessun match in corso.", cancellation);
+                    break;
+                }
+                var action = ClientConnection.ParsePayload<MatchActionDto>(envelope);
+                await session.HandleActionAsync(connection, action, cancellation);
+                break;
+            }
             default:
                 await connection.SendErrorAsync(
                     ErrorCodes.InvalidMessage, $"Tipo messaggio sconosciuto: {envelope.type}", cancellation);

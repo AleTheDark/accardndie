@@ -42,8 +42,14 @@ public sealed class ServerConfig
     public int RoundsToWinMatch { get; set; } = 2;
     public int DeployedCardLives { get; set; } = 2;
     public int HandSize { get; set; } = 6;
+    public int FormationSize { get; set; } = 3;
     public int DecisiveHandSize { get; set; } = 3;
     public int InitiativeDieSides { get; set; } = 20;
+    public int[] VigorDieByRound { get; set; } = { 4, 6, 8 };
+    public bool RogueRerollsOnes { get; set; } = true;
+    public int BarbarianRageBonus { get; set; } = 2;
+    public int HunterMarkBonus { get; set; } = 2;
+    public int PriestBlessingBonus { get; set; } = 2;
     public int TurnTimerSeconds { get; set; } = 60;
     public int DisconnectTimeoutSeconds { get; set; } = 120;
 
@@ -63,6 +69,19 @@ public sealed class ServerConfig
         CardValueLimits,
         BaseDieCosts,
         BagDieCosts);
+
+    public PvpMatchRules ToMatchRules() => new(
+        HandSize,
+        FormationSize,
+        DecisiveHandSize,
+        RoundsToWinMatch,
+        DeployedCardLives,
+        VigorDieByRound,
+        InitiativeDieSides,
+        RogueRerollsOnes,
+        BarbarianRageBonus,
+        HunterMarkBonus,
+        PriestBlessingBonus);
 
     public RulesData ToRulesData()
     {

@@ -9,6 +9,10 @@ namespace AccardND.NetProtocol
     {
         public string definitionId;
         public int value;
+
+        /// <summary>Classe eroe come intero di AccardND.GameCore.HeroClass.
+        /// Il server per ora si fida del client: andrà verificato contro il catalogo carte.</summary>
+        public int heroClass;
     }
 
     [Serializable]
@@ -26,7 +30,8 @@ namespace AccardND.NetProtocol
                 foreach (LoadoutCardDto card in cards)
                 {
                     if (card != null)
-                        loadoutCards.Add(new PvpLoadoutCard(card.definitionId, card.value));
+                        loadoutCards.Add(new PvpLoadoutCard(
+                            card.definitionId, card.value, (AccardND.GameCore.HeroClass)card.heroClass));
                 }
             }
             return new PvpLoadout(loadoutCards, baseDieSides, bagDiceSides);
@@ -47,7 +52,8 @@ namespace AccardND.NetProtocol
                 dto.cards[index] = new LoadoutCardDto
                 {
                     definitionId = loadout.Cards[index].DefinitionId,
-                    value = loadout.Cards[index].Value
+                    value = loadout.Cards[index].Value,
+                    heroClass = (int)loadout.Cards[index].HeroClass
                 };
             for (int index = 0; index < loadout.BagDiceSides.Count; index++)
                 dto.bagDiceSides[index] = loadout.BagDiceSides[index];

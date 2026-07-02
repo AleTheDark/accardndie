@@ -5,17 +5,21 @@ namespace AccardND.GameCore.Pvp
 {
     public readonly struct PvpLoadoutCard
     {
-        public PvpLoadoutCard(string definitionId, int value)
+        public PvpLoadoutCard(string definitionId, int value, HeroClass heroClass = HeroClass.Warrior)
         {
             if (string.IsNullOrWhiteSpace(definitionId))
                 throw new ArgumentException("Una carta del loadout deve avere un id.", nameof(definitionId));
 
             DefinitionId = definitionId;
             Value = value;
+            HeroClass = heroClass;
         }
 
         public string DefinitionId { get; }
         public int Value { get; }
+        public HeroClass HeroClass { get; }
+
+        public CombatCard ToCombatCard() => new(DefinitionId, DefinitionId, HeroClass, Value);
     }
 
     public sealed class PvpLoadout

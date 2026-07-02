@@ -30,8 +30,22 @@ I tipi messaggio e i DTO sono in `Assets/_Project/Scripts/NetProtocol`.
 
 Flusso: `auth.register`/`auth.login` → `room.create` (riceve codice) oppure
 `room.join {code}` oppure `queue.join` — il loadout viaggia con la richiesta
-e viene validato server-side. Al pairing: `match.found`, `match.start`
-(iniziativa tirata dal server), `match.hand` (mano privata del round).
+e viene validato server-side. Al pairing: `match.found`, poi `match.start`
+(con l'indice giocatore assegnato) e la partita vera.
+
+## Match
+
+Il match è pilotato da `PvpMatchEngine` (GameCore): best-of-3, 2 vite per
+carta, dado vigore che scala col round (D4/D6/D8), abilità di classe complete,
+aure e attachment. Il client invia `match.action`
+(`deploy`/`ability`/`attack`/`attach`/`pass`/`decisive`) e riceve:
+
+- `match.hand` — mano privata del round (solo al proprietario);
+- `match.event` — eventi pubblici del motore (`RoundStarted`,
+  `DeploymentStarted`, `CardDeployed`, `TurnStarted`, `AttackResolved`,
+  `RoundEnded`, `MatchEnded`, ...), che il client riproduce senza logica propria.
+
+Tutti i tiri (iniziativa, mescolate, vigore) avvengono sul server.
 
 ## Test manuale da Unity
 

@@ -64,6 +64,21 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void ReturnHandToDeck_ReturnsUndeployedSelectionCards()
+        {
+            List<CardDefinition> definitions = CreateCards(6);
+            var state = new CampaignDeckState(definitions);
+            List<CampaignCardInstance> hand = state.DrawCombatHand(new MinimumRandomSource(), 3);
+
+            Assert.That(state.Deploy(hand[0]), Is.True);
+            int returned = state.ReturnHandToDeck();
+
+            Assert.That(returned, Is.EqualTo(2));
+            Assert.That(state.AvailableCount, Is.EqualTo(5));
+            DestroyCards(definitions);
+        }
+
+        [Test]
         public void CombatReadyCount_ExcludesCooldownAndGraveyardCards()
         {
             List<CardDefinition> definitions = CreateCards(6);

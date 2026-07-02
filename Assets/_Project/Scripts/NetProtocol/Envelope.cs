@@ -35,6 +35,8 @@ namespace AccardND.NetProtocol
         public const string MatchFound = "match.found";
         public const string MatchStart = "match.start";
         public const string MatchHand = "match.hand";
+        public const string MatchAction = "match.action";
+        public const string MatchEvent = "match.event";
         public const string MatchOpponentLeft = "match.opponent_left";
     }
 
@@ -48,5 +50,7 @@ namespace AccardND.NetProtocol
         public const string RoomFull = "room_full";
         public const string AlreadyInRoom = "already_in_room";
         public const string InvalidLoadout = "invalid_loadout";
+        public const string InvalidAction = "invalid_action";
+        public const string NotInMatch = "not_in_match";
     }
 }
