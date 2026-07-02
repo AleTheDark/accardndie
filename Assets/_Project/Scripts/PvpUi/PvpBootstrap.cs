@@ -31,6 +31,8 @@ namespace AccardND.PvpUi
         private List<LoadoutCardDto> myLoadout;
         private System.Action onClosed;
         private bool loginAttempted;
+        private bool authenticated;
+        private bool connecting;
         private bool stateDirty;
 
         /// <summary>Da chiamare subito dopo AddComponent quando il PvP è lanciato dal menu di gioco.</summary>
@@ -45,12 +47,21 @@ namespace AccardND.PvpUi
             EnsureGuestCredentials();
             BuildCanvas();
             ShowLobby();
-
             client = new PvpServerClient();
+            await ConnectAndAuthenticateAsync();
+        }
+
+        private async System.Threading.Tasks.Task ConnectAndAuthenticateAsync()
+        {
+            if (connecting || client == null || client.IsConnected)
+                return;
+            connecting = true;
             try
             {
+                lobby.SetStatus($"Connessione a {serverUrl}...");
                 await client.ConnectAsync(serverUrl);
-                lobby.SetStatus($"Connesso a {serverUrl}. Autenticazione...");
+                lobby.SetStatus("Connesso. Autenticazione...");
+                loginAttempted = false;
                 await client.SendAsync(MessageTypes.AuthRegister, new RegisterRequest
                 {
                     username = username,
@@ -59,8 +70,28 @@ namespace AccardND.PvpUi
             }
             catch (System.Exception exception)
             {
-                lobby.SetStatus($"Connessione fallita: {exception.Message}\nAvvia il server con dotnet run in Server/AccardND.Server.");
+                lobby.SetStatus(
+                    $"Server non raggiungibile ({exception.Message}).\n"
+                    + "Avvia il server con: dotnet run in Server/AccardND.Server - poi premi di nuovo un pulsante.");
             }
+            finally
+            {
+                connecting = false;
+            }
+        }
+
+        /// <summary>Guardia dei pulsanti: se la connessione manca la ritenta invece di lanciare eccezioni.</summary>
+        private async System.Threading.Tasks.Task<bool> EnsureReadyAsync()
+        {
+            if (client is { IsConnected: true } && authenticated)
+                return true;
+            if (client is not { IsConnected: true })
+            {
+                await ConnectAndAuthenticateAsync();
+                return false;
+            }
+            lobby.SetStatus("Autenticazione in corso: riprova tra un istante.");
+            return false;
         }
 
         private void Update()
@@ -85,6 +116,7 @@ namespace AccardND.PvpUi
                     var auth = PvpServerClient.ParsePayload<AuthResponse>(envelope);
                     if (auth.ok)
                     {
+                        authenticated = true;
                         lobby.SetStatus($"Autenticato come {auth.username}. Scegli come giocare.");
                     }
                     else if (!loginAttempted)
@@ -157,31 +189,58 @@ namespace AccardND.PvpUi
 
         private async void CreateRoom()
         {
-            PvpLoadoutDto loadout = CurrentLoadout();
-            lobby.SetStatus("Creazione stanza...");
-            await client.SendAsync(MessageTypes.RoomCreate, new CreateRoomRequest { loadout = loadout });
+            if (!await EnsureReadyAsync())
+                return;
+            try
+            {
+                PvpLoadoutDto loadout = CurrentLoadout();
+                lobby.SetStatus("Creazione stanza...");
+                await client.SendAsync(MessageTypes.RoomCreate, new CreateRoomRequest { loadout = loadout });
+            }
+            catch (System.Exception exception)
+            {
+                lobby.SetStatus($"Invio fallito: {exception.Message}");
+            }
         }
 
         private async void JoinRoom()
         {
+            if (!await EnsureReadyAsync())
+                return;
             string code = lobby.TypedRoomCode;
             if (string.IsNullOrWhiteSpace(code) || code.Length < 6)
             {
                 lobby.SetStatus("Componi il codice a 6 caratteri col tastierino.");
                 return;
             }
-            lobby.SetStatus($"Ingresso nella stanza {code}...");
-            await client.SendAsync(MessageTypes.RoomJoin, new JoinRoomRequest
+            try
             {
-                code = code,
-                loadout = CurrentLoadout()
-            });
+                lobby.SetStatus($"Ingresso nella stanza {code}...");
+                await client.SendAsync(MessageTypes.RoomJoin, new JoinRoomRequest
+                {
+                    code = code,
+                    loadout = CurrentLoadout()
+                });
+            }
+            catch (System.Exception exception)
+            {
+                lobby.SetStatus($"Invio fallito: {exception.Message}");
+            }
         }
 
         private async void JoinQueue()
         {
-            lobby.SetStatus("Ingresso in coda...");
-            await client.SendAsync(MessageTypes.QueueJoin, new QueueJoinRequest { loadout = CurrentLoadout() });
+            if (!await EnsureReadyAsync())
+                return;
+            try
+            {
+                lobby.SetStatus("Ingresso in coda...");
+                await client.SendAsync(MessageTypes.QueueJoin, new QueueJoinRequest { loadout = CurrentLoadout() });
+            }
+            catch (System.Exception exception)
+            {
+                lobby.SetStatus($"Invio fallito: {exception.Message}");
+            }
         }
 
         private PvpLoadoutDto CurrentLoadout()
@@ -193,49 +252,63 @@ namespace AccardND.PvpUi
 
         // --- IPvpMatchActions ---
 
-        public async void Deploy(int handIndex) =>
-            await client.SendAsync(MessageTypes.MatchAction, new MatchActionDto
+        public void Deploy(int handIndex) =>
+            SendMatchAction(new MatchActionDto
             {
                 action = MatchActionDto.Deploy,
                 handIndex = handIndex
             });
 
-        public async void Attack(int enemySlot) =>
-            await client.SendAsync(MessageTypes.MatchAction, new MatchActionDto
+        public void Attack(int enemySlot) =>
+            SendMatchAction(new MatchActionDto
             {
                 action = MatchActionDto.Attack,
                 targetIsEnemy = true,
                 targetSlot = enemySlot
             });
 
-        public async void UseAbility(bool targetIsEnemy, int targetSlot) =>
-            await client.SendAsync(MessageTypes.MatchAction, new MatchActionDto
+        public void UseAbility(bool targetIsEnemy, int targetSlot) =>
+            SendMatchAction(new MatchActionDto
             {
                 action = MatchActionDto.Ability,
                 targetIsEnemy = targetIsEnemy,
                 targetSlot = targetSlot
             });
 
-        public async void Attach(int allySlot) =>
-            await client.SendAsync(MessageTypes.MatchAction, new MatchActionDto
+        public void Attach(int allySlot) =>
+            SendMatchAction(new MatchActionDto
             {
                 action = MatchActionDto.Attach,
                 targetIsEnemy = false,
                 targetSlot = allySlot
             });
 
-        public async void Pass() =>
-            await client.SendAsync(MessageTypes.MatchAction, new MatchActionDto
-            {
-                action = MatchActionDto.Pass
-            });
+        public void Pass() =>
+            SendMatchAction(new MatchActionDto { action = MatchActionDto.Pass });
 
-        public async void SubmitDecisive(int[] loadoutIndices) =>
-            await client.SendAsync(MessageTypes.MatchAction, new MatchActionDto
+        public void SubmitDecisive(int[] loadoutIndices) =>
+            SendMatchAction(new MatchActionDto
             {
                 action = MatchActionDto.Decisive,
                 decisiveIndices = loadoutIndices
             });
+
+        private async void SendMatchAction(MatchActionDto action)
+        {
+            if (client is not { IsConnected: true })
+            {
+                Debug.LogWarning("[PvP] Azione ignorata: connessione al server persa.");
+                return;
+            }
+            try
+            {
+                await client.SendAsync(MessageTypes.MatchAction, action);
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogWarning($"[PvP] Invio azione fallito: {exception.Message}");
+            }
+        }
 
         public void LeaveToLobby()
         {
