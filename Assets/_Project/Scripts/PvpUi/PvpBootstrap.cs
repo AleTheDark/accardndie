@@ -17,9 +17,9 @@ namespace AccardND.PvpUi
     public sealed class PvpBootstrap : MonoBehaviour, IPvpMatchActions
     {
         [SerializeField] private string serverUrl = "ws://localhost:5017/ws";
-        [SerializeField] private string username = "giocatore1";
-        [SerializeField] private string password = "password";
-        [SerializeField] private string roomCodeToJoin = string.Empty;
+        [SerializeField, Tooltip("Vuoto = account ospite legato al dispositivo.")]
+        private string username = string.Empty;
+        [SerializeField] private string password = string.Empty;
         [SerializeField] private CardDatabase cardDatabase;
 
         private PvpServerClient client;
@@ -27,12 +27,22 @@ namespace AccardND.PvpUi
         private PvpLobbyScreen lobby;
         private PvpMatchScreen match;
         private Transform canvasRoot;
+        private GameObject canvasObject;
         private List<LoadoutCardDto> myLoadout;
+        private System.Action onClosed;
         private bool loginAttempted;
         private bool stateDirty;
 
+        /// <summary>Da chiamare subito dopo AddComponent quando il PvP è lanciato dal menu di gioco.</summary>
+        public void Configure(CardDatabase database, System.Action closedCallback)
+        {
+            cardDatabase = database;
+            onClosed = closedCallback;
+        }
+
         private async void Start()
         {
+            EnsureGuestCredentials();
             BuildCanvas();
             ShowLobby();
 
@@ -154,15 +164,16 @@ namespace AccardND.PvpUi
 
         private async void JoinRoom()
         {
-            if (string.IsNullOrWhiteSpace(roomCodeToJoin))
+            string code = lobby.TypedRoomCode;
+            if (string.IsNullOrWhiteSpace(code) || code.Length < 6)
             {
-                lobby.SetStatus("Imposta il codice stanza nell'Inspector di PvpBootstrap.");
+                lobby.SetStatus("Componi il codice a 6 caratteri col tastierino.");
                 return;
             }
-            lobby.SetStatus($"Ingresso nella stanza {roomCodeToJoin.ToUpperInvariant()}...");
+            lobby.SetStatus($"Ingresso nella stanza {code}...");
             await client.SendAsync(MessageTypes.RoomJoin, new JoinRoomRequest
             {
-                code = roomCodeToJoin.Trim().ToUpperInvariant(),
+                code = code,
                 loadout = CurrentLoadout()
             });
         }
@@ -236,16 +247,28 @@ namespace AccardND.PvpUi
 
         // --- Setup ---
 
+        private void EnsureGuestCredentials()
+        {
+            if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
+                return;
+            // Account ospite stabile per dispositivo: nessun inserimento richiesto.
+            string device = SystemInfo.deviceUniqueIdentifier;
+            int hash = device.GetHashCode();
+            username = $"ospite-{(uint)hash % 100000:D5}";
+            password = $"dev-{device.Substring(0, Mathf.Min(12, device.Length))}";
+        }
+
         private void BuildCanvas()
         {
-            var canvasHolder = new GameObject("PvpCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-            var canvas = canvasHolder.GetComponent<Canvas>();
+            canvasObject = new GameObject("PvpCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            var canvas = canvasObject.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            var scaler = canvasHolder.GetComponent<CanvasScaler>();
+            canvas.sortingOrder = 950;
+            var scaler = canvasObject.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
-            canvasRoot = canvasHolder.transform;
+            canvasRoot = canvasObject.transform;
 
             if (FindFirstObjectByType<EventSystem>() == null)
                 new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
@@ -253,7 +276,19 @@ namespace AccardND.PvpUi
 
         private void ShowLobby()
         {
-            lobby = new PvpLobbyScreen(canvasRoot, username, roomCodeToJoin, CreateRoom, JoinRoom, JoinQueue);
+            lobby = new PvpLobbyScreen(canvasRoot, username, CreateRoom, JoinRoom, JoinQueue, Close);
+        }
+
+        private void Close()
+        {
+            client?.Dispose();
+            client = null;
+            if (canvasObject != null)
+                Destroy(canvasObject);
+            System.Action callback = onClosed;
+            onClosed = null;
+            Destroy(gameObject);
+            callback?.Invoke();
         }
 
         private void ShowMatch()

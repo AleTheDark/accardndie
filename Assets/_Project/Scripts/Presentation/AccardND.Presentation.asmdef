@@ -4,6 +4,9 @@
   "references": [
     "AccardND.GameCore",
     "AccardND.GameData",
+    "AccardND.NetProtocol",
+    "AccardND.Network",
+    "AccardND.PvpUi",
     "Unity.InputSystem",
     "Unity.ugui"
   ]

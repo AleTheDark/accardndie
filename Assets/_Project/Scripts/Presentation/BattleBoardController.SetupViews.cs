@@ -383,7 +383,7 @@ public sealed partial class BattleBoardController
 		((UnityEvent)button2.onClick).AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
-			ShowMultiplayerPopup();
+			StartPvpMode();
 		});
 		modeSelectionMultiplayerButton = button2;
 		Button button3 = CreateTransparentButton("Tutorial Mode", ((Component)image).transform);
@@ -610,6 +610,23 @@ public sealed partial class BattleBoardController
 		}
 		inputLocked = false;
 		LoadBattle();
+	}
+
+	private void StartPvpMode()
+	{
+		if ((Object)(object)modeSelectionPanel != (Object)null)
+		{
+			modeSelectionPanel.SetActive(false);
+		}
+		GameObject gameObject = new GameObject("Pvp Mode");
+		AccardND.PvpUi.PvpBootstrap pvpBootstrap = gameObject.AddComponent<AccardND.PvpUi.PvpBootstrap>();
+		pvpBootstrap.Configure(cardDatabase, delegate
+		{
+			if ((Object)(object)modeSelectionPanel != (Object)null)
+			{
+				modeSelectionPanel.SetActive(true);
+			}
+		});
 	}
 
 	private void ShowMultiplayerPopup()
