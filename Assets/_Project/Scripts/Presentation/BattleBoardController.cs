@@ -194,6 +194,19 @@ public sealed partial class BattleBoardController : MonoBehaviour
 		}
 	}
 
+	private readonly struct HandRedealPose
+	{
+		public Vector3 WorldPosition { get; }
+
+		public Quaternion WorldRotation { get; }
+
+		public HandRedealPose(Vector3 worldPosition, Quaternion worldRotation)
+		{
+			WorldPosition = worldPosition;
+			WorldRotation = worldRotation;
+		}
+	}
+
 	private const int MerchantMaximumDeckCards = 12;
 
 	private static Sprite runtimePanelSprite;
@@ -240,9 +253,13 @@ public sealed partial class BattleBoardController : MonoBehaviour
 
 	private readonly HashSet<PrototypeCardView> draftEntranceAnimatingViews = new HashSet<PrototypeCardView>();
 
+	private readonly HashSet<PrototypeCardView> handRelayoutAnimatingViews = new HashSet<PrototypeCardView>();
+
 	private readonly List<GameObject> draftEntranceOverlayObjects = new List<GameObject>();
 
 	private Coroutine draftEntranceCoroutine;
+
+	private Coroutine handRelayoutCoroutine;
 
 	private readonly HashSet<int> selectedDraftCards = new HashSet<int>();
 
@@ -762,6 +779,7 @@ public sealed partial class BattleBoardController : MonoBehaviour
 		topInfoText.text = "STANZA 1  |  ROUND 0  |  LV 1  |  EXP 0/100  |  D4  |  DISP 0";
 		topInfoText.color = new Color(0.95f, 0.79f, 0.34f);
 		Stretch(topInfoText.rectTransform, 10f);
+		((Component)topInfoBarRect).gameObject.SetActive(false);
 		logButton = CreateImageButton("Options Button", (Transform)(object)safeAreaRoot, builtinResource, settingsButtonSprite, string.Empty);
 		((UnityEvent)logButton.onClick).AddListener(new UnityAction(ToggleOptionsPanel));
 		SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.87f, 0.93f), new Vector2(0.98f, 0.985f));
@@ -955,6 +973,7 @@ public sealed partial class BattleBoardController : MonoBehaviour
 		CreateRoomTransitionOverlay(((Component)val).transform);
 		CreateModeSelectionView(((Component)val).transform, builtinResource);
 		RefreshPlayerHud();
+		RefreshCpuHud();
 		RefreshRoomHud("PREPARAZIONE", (((Object)(object)currentScenario != (Object)null) ?currentScenario.DisplayName.ToUpperInvariant() : "SCENARIO"));
 		ApplyResponsiveLayout();
 	}

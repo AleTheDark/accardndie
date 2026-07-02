@@ -76,7 +76,11 @@ public sealed partial class BattleBoardController
 			{
 				float handOverlap = responsiveLayout.HandOverlap;
 				float num13 = (float)num12 - (float)(num12 - 1) * handOverlap;
-				float num14 = num6 * (flag2 ?0.96f : 0.9f) / Mathf.Max(1f, num13);
+				int handSizingCount = draftActive
+					? Mathf.Max(num12, draftCandidates.Count)
+					: Mathf.Max(num12, configuration.DeckBuilding.CombatHandSize);
+				float handSizingSpan = (float)handSizingCount - (float)(handSizingCount - 1) * handOverlap;
+				float num14 = num6 * (flag2 ?0.96f : 0.9f) / Mathf.Max(1f, handSizingSpan);
 				float num15 = height * (flag ?responsiveLayout.CompactHandHeight : (flag2 ?0.4f : responsiveLayout.LandscapeHandHeight));
 				float num16 = Mathf.Min(num14, num15 * 0.6708861f);
 				float cardHeight = num16 / 0.6708861f;
@@ -86,9 +90,10 @@ public sealed partial class BattleBoardController
 			if (flag)
 			{
 				SetRect(tableGlowRect, new Vector2(0.025f, 0.035f), new Vector2(0.975f, 0.965f));
-				SetRect(topInfoBarRect, new Vector2(0.035f, 0.952f), new Vector2(0.82f, 0.992f));
-				SetRect(playerHudRect, new Vector2(0.04f, 0.055f), new Vector2(0.54f, 0.19f));
-				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.84f, 0.952f), new Vector2(0.96f, 0.992f));
+				SetRect(topInfoBarRect, new Vector2(0.035f, 0.952f), new Vector2(0.7f, 0.992f));
+				SetRect(playerHud.Rect, new Vector2(0.035f, 0.812f), new Vector2(0.485f, 0.94f));
+				SetRect(cpuHud.Rect, new Vector2(0.515f, 0.812f), new Vector2(0.965f, 0.94f));
+				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.84f, 0.94f), new Vector2(0.96f, 0.992f));
 				if ((Object)(object)optionsPanel != (Object)null)
 				{
 					SetRect((RectTransform)optionsPanel.transform, new Vector2(0.08f, 0.48f), new Vector2(0.92f, 0.9f));
@@ -96,7 +101,7 @@ public sealed partial class BattleBoardController
 				SetRect(implementationArchiveButtonRect, new Vector2(0.8f, 0.005f), new Vector2(0.96f, 0.115f));
 				SetRect(implementationArchivePanelRect, new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.94f));
 				SetRect(messagePanelRect, flag4 ?new Vector2(0.06f, 0.045f) : (flag3 ?new Vector2(0.08f, 0.43f) : (deploymentDraftActive ?new Vector2(0.04f, 0.49f) : new Vector2(0.04f, 0.065f))), flag4 ?new Vector2(0.94f, 0.235f) : (flag3 ?new Vector2(0.92f, 0.535f) : (deploymentDraftActive ?new Vector2(0.96f, 0.575f) : new Vector2(0.96f, 0.17f))));
-				SetRect(timelineBackgroundRect, flag3 ?new Vector2(0.04f, 0.827f) : new Vector2(0.04f, 0.895f), flag3 ?new Vector2(0.96f, 0.875f) : new Vector2(0.96f, 0.942f));
+				SetRect(timelineBackgroundRect, new Vector2(0.16f, 0.76f), new Vector2(0.84f, 0.807f));
 				SetRect(cpuTitleRect, flag3 ?new Vector2(0.05f, 0.78f) : new Vector2(0.05f, 0.848f), flag3 ?new Vector2(0.95f, 0.822f) : new Vector2(0.95f, 0.89f));
 				SetRect(roundText.rectTransform, new Vector2(0.05f, 0.545f), new Vector2(0.62f, 0.59f));
 				SetRect(campaignZoneRect, new Vector2(0.64f, 0.545f), new Vector2(0.95f, 0.59f));
@@ -105,9 +110,10 @@ public sealed partial class BattleBoardController
 			else
 			{
 				SetRect(tableGlowRect, flag2 ?new Vector2(0.04f, 0.105f) : new Vector2(0.08f, 0.13f), flag2 ?new Vector2(0.96f, 0.895f) : new Vector2(0.92f, 0.87f));
-				SetRect(topInfoBarRect, flag2 ?new Vector2(0.05f, 0.925f) : new Vector2(0.08f, 0.93f), new Vector2(0.84f, 0.985f));
-				SetRect(playerHudRect, flag2 ?new Vector2(0.025f, 0.035f) : new Vector2(0.045f, 0.045f), flag2 ?new Vector2(0.265f, 0.21f) : new Vector2(0.32f, 0.22f));
-				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.87f, 0.93f), new Vector2(0.98f, 0.985f));
+				SetRect(topInfoBarRect, flag2 ?new Vector2(0.05f, 0.925f) : new Vector2(0.08f, 0.93f), new Vector2(0.73f, 0.985f));
+				SetRect(playerHud.Rect, flag2 ?new Vector2(0.04f, 0.758f) : new Vector2(0.055f, 0.752f), flag2 ?new Vector2(0.31f, 0.92f) : new Vector2(0.325f, 0.915f));
+				SetRect(cpuHud.Rect, flag2 ?new Vector2(0.69f, 0.758f) : new Vector2(0.675f, 0.752f), flag2 ?new Vector2(0.96f, 0.92f) : new Vector2(0.945f, 0.915f));
+				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.88f, 0.925f), new Vector2(0.985f, 0.985f));
 				if ((Object)(object)optionsPanel != (Object)null)
 				{
 					SetRect((RectTransform)optionsPanel.transform, new Vector2(0.64f, 0.52f), new Vector2(0.98f, 0.92f));
@@ -115,7 +121,7 @@ public sealed partial class BattleBoardController
 				SetRect(implementationArchiveButtonRect, new Vector2(0.9f, 0.015f), new Vector2(0.985f, 0.17f));
 				SetRect(implementationArchivePanelRect, new Vector2(0.62f, 0.05f), new Vector2(0.98f, 0.94f));
 				SetRect(messagePanelRect, flag4 ?new Vector2(0.28f, 0.36f) : (flag3 ?new Vector2(0.22f, 0.41f) : new Vector2(0.25f, 0.41f)), flag4 ?new Vector2(0.72f, 0.575f) : (flag3 ?new Vector2(0.78f, 0.555f) : new Vector2(0.75f, 0.555f)));
-				SetRect(timelineBackgroundRect, flag3 ?new Vector2(0.18f, 0.775f) : new Vector2(0.18f, 0.865f), flag3 ?new Vector2(0.82f, 0.825f) : new Vector2(0.82f, 0.91f));
+				SetRect(timelineBackgroundRect, flag2 ?new Vector2(0.335f, 0.702f) : new Vector2(0.35f, 0.698f), flag2 ?new Vector2(0.665f, 0.75f) : new Vector2(0.65f, 0.745f));
 				SetRect(cpuTitleRect, flag3 ?new Vector2(0.12f, 0.725f) : new Vector2(0.12f, 0.805f), flag3 ?new Vector2(0.88f, 0.765f) : new Vector2(0.88f, 0.85f));
 				SetRect(roundText.rectTransform, new Vector2(0.17f, 0.575f), new Vector2(0.55f, 0.625f));
 				SetRect(campaignZoneRect, new Vector2(0.57f, 0.575f), new Vector2(0.83f, 0.625f));
@@ -162,7 +168,7 @@ public sealed partial class BattleBoardController
 			if (!((Object)(object)val == (Object)null))
 			{
 				PrototypeCardView component = ((Component)val).GetComponent<PrototypeCardView>();
-				if (!((Object)(object)component != (Object)null) || (!component.IsDragging && !draftEntranceAnimatingViews.Contains(component)))
+				if (!((Object)(object)component != (Object)null) || (!component.IsDragging && !draftEntranceAnimatingViews.Contains(component) && !handRelayoutAnimatingViews.Contains(component)))
 				{
 					float num = ((childCount <= 1) ?0f : ((float)i / (float)(childCount - 1) * 2f - 1f));
 					Vector2 anchoredPosition = val.anchoredPosition;

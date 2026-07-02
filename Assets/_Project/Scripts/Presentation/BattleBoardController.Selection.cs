@@ -226,6 +226,7 @@ public sealed partial class BattleBoardController
 			activeAbilityUser.AbilityArmed = false;
 			activeAbilityUser.AbilityUsed = true;
 			RefreshPersistentStatus(battleCardState);
+			PlayClassAbilitySfx(HeroClass.Assassin);
 			string text = ((playerAura == BattleAuraType.Assassin) ?" e gli infligge -1 permanente" : string.Empty);
 			SetMessage("ASSASSINO: " + activeAbilityUser.Card.Name + " inibisce " + battleCardState.Card.Name + text + ". Saltera il prossimo turno.");
 			TriggerMagicAuraAfterAbility();
@@ -244,6 +245,7 @@ public sealed partial class BattleBoardController
 			activeAbilityUser.AbilityArmed = false;
 			activeAbilityUser.AbilityUsed = true;
 			RefreshPersistentStatus(battleCardState2);
+			PlayClassAbilitySfx(HeroClass.Mage);
 			SetMessage($"MAGO: {activeAbilityUser.Card.Name} indebolisce {battleCardState2.Card.Name}. Il suo prossimo Vigore scende di {num} step.");
 			TriggerMagicAuraAfterAbility();
 			abilityTargetMode = AbilityTargetMode.None;
@@ -270,7 +272,7 @@ public sealed partial class BattleBoardController
 			activeAbilityUser.AbilityArmed = false;
 			activeAbilityUser.AbilityUsed = true;
 			RefreshPersistentStatus(battleCardState3);
-			PlayHunterMarkSfx();
+			PlayClassAbilitySfx(HeroClass.Hunter);
 			SetMessage($"CACCIATORE: {activeAbilityUser.Card.Name} marca {battleCardState3.Card.Name}. Preda persistente: chi lo attacca prende +{HunterMarkValueFor(activeAbilityUser)}.");
 			TriggerMagicAuraAfterAbility();
 			abilityTargetMode = AbilityTargetMode.None;
@@ -319,6 +321,7 @@ public sealed partial class BattleBoardController
 				RefreshPersistentStatus(target);
 				ApplyPlayerAuraVisuals(appendLog: false);
 				activeAbilityUser.AbilityUsed = true;
+				PlayClassAbilitySfx(HeroClass.Necromancer);
 				SetMessage("NEGROMANTE: " + activeAbilityUser.Card.Name + " rialza " + target.Card.Name + ". Agira subito dopo il Necromancer.");
 				TriggerMagicAuraAfterAbility();
 			}
@@ -327,6 +330,7 @@ public sealed partial class BattleBoardController
 				activeAbilityUser.AbilityArmed = true;
 				activeAbilityUser.ProtectedAlly = target;
 				RefreshPersistentStatus(activeAbilityUser);
+				PlayClassAbilitySfx(HeroClass.Paladin);
 				string text = ((target == activeAbilityUser) ?"si proteggera: vantaggio al prossimo tiro difesa." : ("proteggera " + target.Card.Name + ": se viene attaccato deviera il colpo su di se e difendera con vantaggio."));
 				SetMessage("PALADINO: " + activeAbilityUser.Card.Name + " " + text);
 			}
@@ -344,6 +348,7 @@ public sealed partial class BattleBoardController
 				}
 				RefreshPersistentStatus(target);
 				activeAbilityUser.AbilityUsed = true;
+				PlayClassAbilitySfx(HeroClass.Priest);
 				SetMessage($"SACERDOTE: {activeAbilityUser.Card.Name} benedice {target.Card.Name} con +{num}.");
 				TriggerMagicAuraAfterAbility();
 			}

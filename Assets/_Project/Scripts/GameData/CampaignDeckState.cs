@@ -117,6 +117,19 @@ namespace AccardND.GameData
             return true;
         }
 
+        public int ReturnHandToDeck()
+        {
+            int returned = 0;
+            foreach (CampaignCardInstance card in cards)
+            {
+                if (card.Zone != CampaignCardZone.Hand)
+                    continue;
+                card.Zone = CampaignCardZone.Deck;
+                returned++;
+            }
+            return returned;
+        }
+
         public int ReleaseCooldown()
         {
             int released = 0;
@@ -161,11 +174,7 @@ namespace AccardND.GameData
 
         private void ReturnUnusedHandToDeck()
         {
-            foreach (CampaignCardInstance card in cards)
-            {
-                if (card.Zone == CampaignCardZone.Hand)
-                    card.Zone = CampaignCardZone.Deck;
-            }
+            ReturnHandToDeck();
         }
 
         private List<CampaignCardInstance> FindZone(CampaignCardZone zone)

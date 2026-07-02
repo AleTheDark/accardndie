@@ -436,6 +436,14 @@ public sealed partial class BattleBoardController
 
 	private void SetCombatChromeVisible(bool visible)
 	{
+		if (playerHud != null && (Object)(object)playerHud.Rect != (Object)null)
+		{
+			((Component)playerHud.Rect).gameObject.SetActive(visible);
+		}
+		if (cpuHud != null && (Object)(object)cpuHud.Rect != (Object)null)
+		{
+			((Component)cpuHud.Rect).gameObject.SetActive(visible);
+		}
 		if ((Object)(object)playerTitleText != (Object)null)
 		{
 			((Component)playerTitleText).gameObject.SetActive(visible);

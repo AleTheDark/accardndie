@@ -212,7 +212,7 @@ namespace AccardND.Editor
                 || fileName.EndsWith("_background_hud", System.StringComparison.Ordinal)
                 || fileName.StartsWith("selection_mode_screen", System.StringComparison.Ordinal)
                 || fileName.StartsWith("tutorial-", System.StringComparison.Ordinal)
-                || fileName == "tutorial_button"
+                || fileName.StartsWith("card_inspection", System.StringComparison.Ordinal)
                 || fileName == "card_inspection_book";
         }
     }

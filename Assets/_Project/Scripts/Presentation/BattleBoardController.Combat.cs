@@ -341,7 +341,7 @@ public sealed partial class BattleBoardController
 		string decisionReason;
 		int index = ChooseCpuTarget(attacker, out decisionReason);
 		BattleCardState defender = playerCards[index];
-		SetMessage("CPU: " + attacker.Card.Name + " sceglie " + defender.Card.Name + " - " + decisionReason + ".");
+		AppendLog("CPU: " + attacker.Card.Name + " sceglie " + defender.Card.Name + " - " + decisionReason + ".");
 		yield return (object)new WaitForSecondsRealtime(configuration.Animation.CpuDecisionReveal);
 		BattleCardState protectingPaladin = playerCards.FirstOrDefault((BattleCardState card) => !card.Eliminated && card.Card.HeroClass == HeroClass.Paladin && card.AbilityArmed && (card.ProtectedAlly == null || card.ProtectedAlly == defender) && card != defender);
 		BattleCardState selfProtectingPaladin = ((defender.Card.HeroClass == HeroClass.Paladin && defender.AbilityArmed && (defender.ProtectedAlly == null || defender.ProtectedAlly == defender)) ?defender : null);
@@ -421,7 +421,7 @@ public sealed partial class BattleBoardController
 		string combatLog = FormatResultDetailed("CPU", attacker, defender, result, modifiers);
 		ConsumeVigorPenalties(attacker, defender);
 		UpdatePostAttackClassState(attacker, result.DefenderIsDefeated);
-		SetMessage(combatLog);
+		AppendLog(combatLog);
 		if (playerAura == BattleAuraType.Paladin && paladinProtectionUser != null && !paladinProtectionUser.Eliminated && !attacker.Eliminated)
 		{
 			yield return ExecutePaladinCounter(paladinProtectionUser, attacker);
@@ -1191,6 +1191,7 @@ public sealed partial class BattleBoardController
 		}
 		card.AbilityUsed = true;
 		RefreshPersistentStatus(battleCardState);
+		PlayClassAbilitySfx(HeroClass.Assassin);
 		string text = ((cpuAura == BattleAuraType.Assassin) ?" e infligge -1 permanente" : string.Empty);
 		message = "CPU ASSASSINO: " + card.Card.Name + " inibisce " + battleCardState.Card.Name + text + ".";
 		return true;
@@ -1208,6 +1209,7 @@ public sealed partial class BattleBoardController
 		battleCardState.PendingVigorStepPenalty = Math.Max(battleCardState.PendingVigorStepPenalty, num);
 		card.AbilityUsed = true;
 		RefreshPersistentStatus(battleCardState);
+		PlayClassAbilitySfx(HeroClass.Mage);
 		message = $"CPU MAGO: {card.Card.Name} abbassa il Vigore di {battleCardState.Card.Name} di {num} step.";
 		return true;
 	}
@@ -1223,6 +1225,7 @@ public sealed partial class BattleBoardController
 		card.AbilityArmed = true;
 		card.ProtectedAlly = battleCardState;
 		RefreshPersistentStatus(card);
+		PlayClassAbilitySfx(HeroClass.Paladin);
 		string text = ((battleCardState == card) ?"si prepara a difendersi con vantaggio" : ("proteggera " + battleCardState.Card.Name));
 		message = "CPU PALADINO: " + card.Card.Name + " " + text + ".";
 		return true;
@@ -1243,7 +1246,7 @@ public sealed partial class BattleBoardController
 		card.MarkedTarget = battleCardState;
 		card.AbilityUsed = true;
 		RefreshPersistentStatus(battleCardState);
-		PlayHunterMarkSfx();
+		PlayClassAbilitySfx(HeroClass.Hunter);
 		message = $"CPU CACCIATORE: {card.Card.Name} marca {battleCardState.Card.Name}. Preda persistente: chi lo attacca prende +{HunterMarkValueFor(card)}.";
 		return true;
 	}
@@ -1266,6 +1269,7 @@ public sealed partial class BattleBoardController
 		RefreshPersistentStatus(battleCardState);
 		ApplyCpuAuraVisuals(appendLog: false);
 		card.AbilityUsed = true;
+		PlayClassAbilitySfx(HeroClass.Necromancer);
 		message = "CPU NEGROMANTE: " + card.Card.Name + " rialza " + battleCardState.Card.Name + ".";
 		return true;
 	}
@@ -1286,6 +1290,7 @@ public sealed partial class BattleBoardController
 		}
 		card.AbilityUsed = true;
 		RefreshPersistentStatus(battleCardState);
+		PlayClassAbilitySfx(HeroClass.Priest);
 		message = $"CPU SACERDOTE: {card.Card.Name} benedice {battleCardState.Card.Name} con +{num}.";
 		return true;
 	}
@@ -1327,7 +1332,7 @@ public sealed partial class BattleBoardController
 		source.View.SetSelected(selected: false);
 		SetMessage($"ATTACH: {source.Card.Name} viene sacrificata e potenzia {target.Card.Name} di +{num} per tutto il fight.");
 		AppendLog($"ATTACH - {source.Card.Name} sacrificata: {target.Card.Name} ottiene +{num} permanente.");
-		PlayDeathCardSfx();
+		PlayAttachmentSfx();
 		yield return source.View.PlayDefeatAnimation();
 		yield return (object)new WaitForSecondsRealtime(configuration.Animation.TurnResultPause);
 		selectedPlayerIndex = -1;
@@ -1345,7 +1350,7 @@ public sealed partial class BattleBoardController
 		source.View.SetSelected(selected: false);
 		SetMessage($"CPU ATTACH: {source.Card.Name} viene sacrificata e potenzia {target.Card.Name} di +{num} per tutto il fight.");
 		AppendLog($"CPU ATTACH - {source.Card.Name} sacrificata: {target.Card.Name} ottiene +{num} permanente.");
-		PlayDeathCardSfx();
+		PlayAttachmentSfx();
 		yield return source.View.PlayDefeatAnimation();
 		yield return (object)new WaitForSecondsRealtime(configuration.Animation.TurnResultPause);
 		FinishTurn();
@@ -1771,6 +1776,7 @@ public sealed partial class BattleBoardController
 			roundText.text = text6;
 		}
 		RefreshPlayerHud();
+		RefreshCpuHud();
 		if ((Object)(object)campaignZoneRect != (Object)null)
 		{
 			((Component)campaignZoneRect).gameObject.SetActive(false);

@@ -117,7 +117,9 @@ public sealed partial class BattleBoardController
 		{
 			((MonoBehaviour)this).StopCoroutine(draftEntranceCoroutine);
 		}
+		StopHandRedealAnimation();
 		draftEntranceAnimatingViews.Clear();
+		handRelayoutAnimatingViews.Clear();
 		for (int i = draftEntranceOverlayObjects.Count - 1; i >= 0; i--)
 		{
 			GameObject overlay = draftEntranceOverlayObjects[i];
@@ -454,9 +456,12 @@ public sealed partial class BattleBoardController
 		}
 		SetTurnBanner(playerTurn: true, "SCHIERAMENTO  -  DAL PIU BASSO AL PIU ALTO");
 		RefreshInitiativeDisplay();
+		ClearDeploymentTimeline();
+		SetMessage("Tiro iniziativa: 3 D20 per te e 3 D20 per il Master.");
+		yield return PlayDeploymentInitiativeDiceRoll(initiativeDieSides);
 		RefreshDeploymentTimeline();
 		SetMessage("Iniziative di schieramento: i valori piu bassi calano per primi.");
-		yield return (object)new WaitForSecondsRealtime(configuration.Animation.DiceResultHold);
+		yield return (object)new WaitForSecondsRealtime(Mathf.Max(0.2f, configuration.Animation.DiceResultHold * 0.45f));
 		ProcessNextDeploymentToken();
 	}
 
@@ -533,6 +538,90 @@ public sealed partial class BattleBoardController
 		ProcessNextDeploymentToken();
 	}
 
+	private void StartHandRedealAnimation(IReadOnlyDictionary<PrototypeCardView, HandRedealPose> startPoses)
+	{
+		if (startPoses == null || startPoses.Count == 0)
+		{
+			return;
+		}
+		StopHandRedealAnimation();
+		handRelayoutCoroutine = ((MonoBehaviour)this).StartCoroutine(PlayHandRedealAnimation(startPoses));
+	}
+
+	private void StopHandRedealAnimation()
+	{
+		if (handRelayoutCoroutine != null)
+		{
+			((MonoBehaviour)this).StopCoroutine(handRelayoutCoroutine);
+			handRelayoutCoroutine = null;
+		}
+		foreach (PrototypeCardView view in handRelayoutAnimatingViews)
+		{
+			if ((Object)(object)view != (Object)null)
+			{
+				view.SetLayoutIgnored(ignored: false);
+			}
+		}
+		handRelayoutAnimatingViews.Clear();
+	}
+
+	private IEnumerator PlayHandRedealAnimation(IReadOnlyDictionary<PrototypeCardView, HandRedealPose> startPoses)
+	{
+		handRelayoutAnimatingViews.Clear();
+		Dictionary<PrototypeCardView, HandRedealPose> targetPoses = new Dictionary<PrototypeCardView, HandRedealPose>();
+		foreach (KeyValuePair<PrototypeCardView, HandRedealPose> pair in startPoses)
+		{
+			PrototypeCardView view = pair.Key;
+			if ((Object)(object)view == (Object)null || (Object)(object)view.RectTransform == (Object)null || selectedDraftCards.Contains(draftViews.IndexOf(view)))
+			{
+				continue;
+			}
+			targetPoses[view] = new HandRedealPose(view.RectTransform.position, ((Transform)view.RectTransform).rotation);
+			handRelayoutAnimatingViews.Add(view);
+			view.SetLayoutIgnored(ignored: true);
+			view.RectTransform.position = pair.Value.WorldPosition;
+			((Transform)view.RectTransform).rotation = pair.Value.WorldRotation;
+		}
+		if (targetPoses.Count == 0)
+		{
+			handRelayoutAnimatingViews.Clear();
+			handRelayoutCoroutine = null;
+			yield break;
+		}
+		float duration = Mathf.Clamp(configuration.Animation.CardDeployDuration * 0.38f, 0.16f, 0.28f);
+		float elapsed = 0f;
+		while (elapsed < duration)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			float t = Mathf.Clamp01(elapsed / duration);
+			float eased = 1f - Mathf.Pow(1f - t, 3f);
+			foreach (KeyValuePair<PrototypeCardView, HandRedealPose> pair in startPoses)
+			{
+				PrototypeCardView view = pair.Key;
+				if ((Object)(object)view == (Object)null || !targetPoses.TryGetValue(view, out HandRedealPose target))
+				{
+					continue;
+				}
+				view.RectTransform.position = Vector3.LerpUnclamped(pair.Value.WorldPosition, target.WorldPosition, eased);
+				((Transform)view.RectTransform).rotation = Quaternion.SlerpUnclamped(pair.Value.WorldRotation, target.WorldRotation, eased);
+			}
+			yield return null;
+		}
+		foreach (PrototypeCardView view in targetPoses.Keys)
+		{
+			if ((Object)(object)view == (Object)null)
+			{
+				continue;
+			}
+			view.SetLayoutIgnored(ignored: false);
+		}
+		handRelayoutAnimatingViews.Clear();
+		ApplyResponsiveLayout();
+		Canvas.ForceUpdateCanvases();
+		ApplyHandFan();
+		handRelayoutCoroutine = null;
+	}
+
 	private CardDefinition ChooseAdaptiveCpuDeploymentCard()
 	{
 		CardDefinition result = cpuDeploymentHand[0];
@@ -562,10 +651,7 @@ public sealed partial class BattleBoardController
 	{
 		if (!((Object)(object)initiativeTimelineRoot == (Object)null))
 		{
-			for (int num = ((Transform)initiativeTimelineRoot).childCount - 1; num >= 0; num--)
-			{
-				Object.Destroy((Object)(object)((Component)((Transform)initiativeTimelineRoot).GetChild(num)).gameObject);
-			}
+			ClearDeploymentTimeline();
 			Font builtinResource = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 			float timelineTileSize = GetTimelineTileSize();
 			for (int i = 0; i < deploymentOrder.Count; i++)
@@ -584,6 +670,259 @@ public sealed partial class BattleBoardController
 		}
 	}
 
+	private void ClearDeploymentTimeline()
+	{
+		if ((Object)(object)initiativeTimelineRoot == (Object)null)
+		{
+			return;
+		}
+		for (int num = ((Transform)initiativeTimelineRoot).childCount - 1; num >= 0; num--)
+		{
+			Object.Destroy((Object)(object)((Component)((Transform)initiativeTimelineRoot).GetChild(num)).gameObject);
+		}
+	}
+
+	private IEnumerator PlayDeploymentInitiativeDiceRoll(int dieSides)
+	{
+		if ((Object)(object)safeAreaRoot == (Object)null || deploymentOrder.Count == 0)
+		{
+			yield break;
+		}
+		Canvas.ForceUpdateCanvases();
+		Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+		List<RectTransform> diceRects = new List<RectTransform>();
+		List<Image> diceImages = new List<Image>();
+		List<Text> diceTexts = new List<Text>();
+		List<Sprite[]> diceFrameSets = new List<Sprite[]>();
+		List<Sprite> diceEndSprites = new List<Sprite>();
+		Sprite[] playerDiceFrames = LoadDiceUiRollFrames("Dice");
+		Sprite[] cpuDiceFrames = LoadDiceUiRollFrames("Brown_Dice");
+		Sprite playerDiceEnd = LoadDiceUiSprite("Dice_End_1");
+		Sprite cpuDiceEnd = LoadDiceUiSprite("Brown_Dice_End_1");
+		Rect safeRect = safeAreaRoot.rect;
+		float width = Mathf.Max(1f, safeRect.width);
+		float height = Mathf.Max(1f, safeRect.height);
+		float diceSize = Mathf.Clamp(Mathf.Min(width, height) * 0.105f, 54f, 92f);
+		List<DeploymentToken> playerTokens = deploymentOrder.Where((DeploymentToken token) => token.BelongsToPlayer).ToList();
+		List<DeploymentToken> cpuTokens = deploymentOrder.Where((DeploymentToken token) => !token.BelongsToPlayer).ToList();
+		Dictionary<DeploymentToken, RectTransform> rectByToken = new Dictionary<DeploymentToken, RectTransform>();
+		Dictionary<DeploymentToken, Image> imageByToken = new Dictionary<DeploymentToken, Image>();
+		CreateDeploymentInitiativeDice(playerTokens, belongsToPlayer: true);
+		CreateDeploymentInitiativeDice(cpuTokens, belongsToPlayer: false);
+		PlayRollingDiceSfx();
+		float rollDuration = Mathf.Max(0.65f, configuration.Animation.DiceRollDuration * 0.72f);
+		float elapsed = 0f;
+		while (elapsed < rollDuration)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			for (int i = 0; i < diceRects.Count; i++)
+			{
+				RectTransform rectTransform = diceRects[i];
+				Image image = diceImages[i];
+				if ((Object)(object)rectTransform == (Object)null || (Object)(object)image == (Object)null)
+				{
+					continue;
+				}
+				Sprite[] frames = i < diceFrameSets.Count ?diceFrameSets[i] : Array.Empty<Sprite>();
+				if (frames.Length > 0)
+				{
+					int frameIndex = Mathf.Abs(Mathf.FloorToInt((elapsed * 18f) + i * 2.37f)) % frames.Length;
+					image.sprite = frames[frameIndex];
+				}
+				rectTransform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin((elapsed * 16f) + i) * 10f);
+				rectTransform.localScale = Vector3.one * (1f + Mathf.Sin((elapsed * 22f) + i) * 0.045f);
+			}
+			yield return null;
+		}
+		for (int i = 0; i < deploymentOrder.Count; i++)
+		{
+			DeploymentToken token = deploymentOrder[i];
+			if (!imageByToken.TryGetValue(token, out Image image) || (Object)(object)image == (Object)null)
+			{
+				continue;
+			}
+			int imageIndex = diceImages.IndexOf(image);
+			Sprite endSprite = imageIndex >= 0 && imageIndex < diceEndSprites.Count ?diceEndSprites[imageIndex] : null;
+			if ((Object)(object)endSprite != (Object)null)
+			{
+				image.sprite = endSprite;
+			}
+		}
+		foreach (Text text in diceTexts)
+		{
+			if ((Object)(object)text != (Object)null)
+			{
+				text.gameObject.SetActive(true);
+			}
+		}
+		yield return (object)new WaitForSecondsRealtime(1f);
+		Canvas.ForceUpdateCanvases();
+		Vector2[] targetPositions = GetDeploymentTimelineTargetPositions(deploymentOrder.Count);
+		List<Vector2> starts = new List<Vector2>(deploymentOrder.Count);
+		for (int i = 0; i < deploymentOrder.Count; i++)
+		{
+			starts.Add(rectByToken.TryGetValue(deploymentOrder[i], out RectTransform rectTransform) && (Object)(object)rectTransform != (Object)null ?rectTransform.anchoredPosition : Vector2.zero);
+		}
+		float flyDuration = 0.46f;
+		elapsed = 0f;
+		while (elapsed < flyDuration)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			float t = Mathf.Clamp01(elapsed / flyDuration);
+			float eased = 1f - Mathf.Pow(1f - t, 3f);
+			for (int i = 0; i < deploymentOrder.Count; i++)
+			{
+				if (!rectByToken.TryGetValue(deploymentOrder[i], out RectTransform rectTransform) || (Object)(object)rectTransform == (Object)null)
+				{
+					continue;
+				}
+				rectTransform.anchoredPosition = Vector2.LerpUnclamped(starts[i], targetPositions[i], eased);
+				rectTransform.sizeDelta = Vector2.LerpUnclamped(new Vector2(diceSize, diceSize), new Vector2(GetTimelineTileSize(), GetTimelineTileSize()), eased);
+				rectTransform.localScale = Vector3.one * Mathf.Lerp(1f, 0.58f, eased);
+			}
+			yield return null;
+		}
+		foreach (RectTransform rectTransform in diceRects)
+		{
+			if ((Object)(object)rectTransform != (Object)null)
+			{
+				Object.Destroy((Object)(object)((Component)rectTransform).gameObject);
+			}
+		}
+
+		void CreateDeploymentInitiativeDice(List<DeploymentToken> tokens, bool belongsToPlayer)
+		{
+			int count = tokens.Count;
+			if (count <= 0)
+			{
+				return;
+			}
+			float rowY = belongsToPlayer ?0.405f : 0.565f;
+			float startX = 0.5f - Mathf.Min(0.24f, 0.085f * (count - 1));
+			float stepX = count <= 1 ?0f : Mathf.Min(0.17f, 0.48f / (count - 1));
+			for (int i = 0; i < count; i++)
+			{
+				DeploymentToken token = tokens[i];
+				GameObject diceObject = new GameObject((belongsToPlayer ?"Player" :"CPU") + " Initiative Die", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+				diceObject.transform.SetParent((Transform)(object)safeAreaRoot, false);
+				diceObject.transform.SetAsLastSibling();
+				RectTransform rectTransform = (RectTransform)diceObject.transform;
+				rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+				rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+				rectTransform.pivot = new Vector2(0.5f, 0.5f);
+				rectTransform.sizeDelta = new Vector2(diceSize, diceSize);
+				rectTransform.anchoredPosition = AnchorToSafeAreaPosition(new Vector2(startX + stepX * i, rowY));
+				Image image = diceObject.GetComponent<Image>();
+				image.color = Color.white;
+				image.preserveAspect = true;
+				image.raycastTarget = false;
+				Sprite[] frames = belongsToPlayer ?playerDiceFrames :cpuDiceFrames;
+				Sprite endSprite = belongsToPlayer ?playerDiceEnd :cpuDiceEnd;
+				image.sprite = frames.Length > 0 ?frames[Mathf.Abs(i) % frames.Length] : endSprite;
+				Text text = CreateText("Initiative Value", diceObject.transform, font, 22, (FontStyle)1, (TextAnchor)4);
+				text.text = $"{(belongsToPlayer ?"TU" :"CPU")}\n{token.Initiative}";
+				text.color = Color.white;
+				text.resizeTextForBestFit = true;
+				text.resizeTextMinSize = 12;
+				text.resizeTextMaxSize = 24;
+				Stretch(text.rectTransform, 2f);
+				text.gameObject.SetActive(false);
+				diceRects.Add(rectTransform);
+				diceImages.Add(image);
+				diceTexts.Add(text);
+				diceFrameSets.Add(frames);
+				diceEndSprites.Add(endSprite);
+				rectByToken[token] = rectTransform;
+				imageByToken[token] = image;
+			}
+		}
+
+		Vector2 AnchorToSafeAreaPosition(Vector2 anchor)
+		{
+			return new Vector2((anchor.x - 0.5f) * width, (anchor.y - 0.5f) * height);
+		}
+	}
+
+	private Vector2[] GetDeploymentTimelineTargetPositions(int count)
+	{
+		Vector2[] positions = new Vector2[Mathf.Max(0, count)];
+		if (count <= 0)
+		{
+			return positions;
+		}
+		RectTransform targetRect = (Object)(object)timelineBackgroundRect != (Object)null ?timelineBackgroundRect : initiativeTimelineRoot;
+		Rect rect = (Object)(object)targetRect != (Object)null ?targetRect.rect : safeAreaRoot.rect;
+		float spacing = 6f;
+		float tileSize = GetTimelineTileSize();
+		float totalWidth = tileSize * count + spacing * Mathf.Max(0, count - 1);
+		float startX = -totalWidth * 0.5f + tileSize * 0.5f;
+		Vector2 center = (Object)(object)targetRect != (Object)null ?RectCenterInSafeArea(targetRect) : Vector2.zero;
+		for (int i = 0; i < count; i++)
+		{
+			positions[i] = center + new Vector2(startX + (tileSize + spacing) * i, 0f);
+		}
+		return positions;
+	}
+
+	private static Sprite[] LoadDiceUiRollFrames(string prefix)
+	{
+		string[] names =
+		{
+			$"{prefix}_Roll_1",
+			$"{prefix}_Roll_2",
+			$"{prefix}_Roll_3",
+			$"{prefix}_Roll_4",
+			$"{prefix}_Roll_5",
+			$"{prefix}_Roll_6_2",
+			$"{prefix}_Roll_6_3",
+			$"{prefix}_Roll_6_4",
+			$"{prefix}_Roll_6_5",
+			$"{prefix}_Roll_6_6",
+			$"{prefix}_Roll_6_7",
+			$"{prefix}_Roll_7_1",
+			$"{prefix}_Roll_7_2",
+			$"{prefix}_Roll_7_3",
+			$"{prefix}_Roll_7_4",
+			$"{prefix}_Roll_7_5",
+			$"{prefix}_Roll_7_6",
+			$"{prefix}_Roll_8_1",
+			$"{prefix}_Roll_8_2",
+			$"{prefix}_Roll_8_3",
+			$"{prefix}_Roll_8_4",
+			$"{prefix}_Roll_8_5",
+			$"{prefix}_Roll_8_6"
+		};
+		List<Sprite> frames = new List<Sprite>(names.Length);
+		foreach (string name in names)
+		{
+			Sprite sprite = LoadDiceUiSprite(name);
+			if ((Object)(object)sprite != (Object)null)
+			{
+				frames.Add(sprite);
+			}
+		}
+		return frames.ToArray();
+	}
+
+	private static Sprite LoadDiceUiSprite(string spriteName)
+	{
+		Sprite sprite = Resources.Load<Sprite>("DiceUI/DiceSprites/" + spriteName);
+		if ((Object)(object)sprite != (Object)null)
+		{
+			return sprite;
+		}
+		Texture2D texture = Resources.Load<Texture2D>("DiceUI/DiceSprites/" + spriteName);
+		if ((Object)(object)texture != (Object)null)
+		{
+			return Sprite.Create(texture, new Rect(0f, 0f, ((Texture)texture).width, ((Texture)texture).height), new Vector2(0.5f, 0.5f), 100f);
+		}
+#if UNITY_EDITOR
+		return UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>($"Assets/DiceUI/DiceSprites/{spriteName}.png");
+#else
+		return null;
+#endif
+	}
+
 	private void ConfirmPendingDeployment()
 	{
 		int num = pendingDeploymentIndex;
@@ -600,6 +939,16 @@ public sealed partial class BattleBoardController
 		Vector3 position = ((Component)prototypeCardView).transform.position;
 		Quaternion rotation = ((Component)prototypeCardView).transform.rotation;
 		Vector2 startSize = RectSizeInSafeArea(prototypeCardView.RectTransform);
+		Dictionary<PrototypeCardView, HandRedealPose> handStartPoses = new Dictionary<PrototypeCardView, HandRedealPose>();
+		for (int i = 0; i < draftViews.Count; i++)
+		{
+			PrototypeCardView view = draftViews[i];
+			if (i == num || selectedDraftCards.Contains(i) || (Object)(object)view == (Object)null || (Object)(object)view.RectTransform == (Object)null || view.RectTransform.parent != (Transform)(object)playerHandRow)
+			{
+				continue;
+			}
+			handStartPoses[view] = new HandRedealPose(view.RectTransform.position, ((Transform)view.RectTransform).rotation);
+		}
 		PrototypeCardView prototypeCardView2 = PrototypeCardView.CreateBattlefieldPreview((Transform)(object)playerRow, draftCandidates[num], configuration);
 		MakeDeploymentPreviewInspectable(prototypeCardView2, draftCandidates[num]);
 		prototypeCardView2.SetSelected(selected: true);
@@ -609,6 +958,7 @@ public sealed partial class BattleBoardController
 		prototypeCardView.SetInteractable(interactable: false);
 		prototypeCardView.SetAlpha(0f);
 		prototypeCardView.SetLayoutIgnored(ignored: true);
+		((Transform)prototypeCardView.RectTransform).SetParent((Transform)(object)safeAreaRoot, true);
 		foreach (PrototypeCardView draftView in draftViews)
 		{
 			draftView.SetInteractable(interactable: false);
@@ -620,10 +970,39 @@ public sealed partial class BattleBoardController
 		inputLocked = true;
 		ApplyResponsiveLayout();
 		Canvas.ForceUpdateCanvases();
+		ApplyHandFan();
+		if (selectedPlayerDeploymentIndices.Count >= configuration.Gameplay.FormationSize)
+		{
+			HideRemainingDeploymentHand();
+		}
+		else
+		{
+			StartHandRedealAnimation(handStartPoses);
+		}
 		PlayPawnEnteringBattlefieldSfx(draftCandidates[num]);
 		((MonoBehaviour)this).StartCoroutine(PlayDeploymentMorph(draftCandidates[num], position, rotation, startSize, prototypeCardView2, configuration.Animation.CardDeployDuration));
 		currentDeploymentIndex++;
 		((MonoBehaviour)this).StartCoroutine(ContinueDeploymentAfterDelay(configuration.Animation.CardDeployDuration));
+	}
+
+	private void HideRemainingDeploymentHand()
+	{
+		StopHandRedealAnimation();
+		foreach (PrototypeCardView draftView in draftViews)
+		{
+			if ((Object)(object)draftView == (Object)null || selectedDraftCards.Contains(draftViews.IndexOf(draftView)))
+			{
+				continue;
+			}
+			draftView.SetSelected(selected: false);
+			draftView.SetInteractable(interactable: false);
+			draftView.SetAlpha(0f);
+			draftView.SetLayoutIgnored(ignored: true);
+		}
+		if ((Object)(object)playerTitleText != (Object)null)
+		{
+			playerTitleText.text = string.Empty;
+		}
 	}
 
 	private IEnumerator PlayDeploymentMorph(CardDefinition definition, Vector3 startWorldPosition, Quaternion startWorldRotation, Vector2 startSize, PrototypeCardView finalPreview, float duration)
@@ -881,6 +1260,7 @@ public sealed partial class BattleBoardController
 				{
 					campaignDeck.Deploy(draftCampaignCards[item3]);
 				}
+				campaignDeck.ReturnHandToDeck();
 			}
 			foreach (PrototypeCardView draftView in draftViews)
 			{

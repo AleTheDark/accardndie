@@ -46,9 +46,17 @@ public sealed partial class BattleBoardController
 
 	private AudioClip pawnEnteringBattlefieldSfx;
 
+	private AudioClip warriorJoinBattlefieldSfx;
+
+	private AudioClip assassinJoinBattlefieldSfx;
+
 	private AudioClip barbarianJoinBattlefieldSfx;
 
 	private AudioClip mageJoinBattlefieldSfx;
+
+	private AudioClip paladinJoinBattlefieldSfx;
+
+	private AudioClip hunterJoinBattlefieldSfx;
 
 	private AudioClip rogueJoinBattlefieldSfx;
 
@@ -61,6 +69,20 @@ public sealed partial class BattleBoardController
 	private AudioClip closedBagSfx;
 
 	private AudioClip deathCardSfx;
+
+	private AudioClip attachmentSfx;
+
+	private AudioClip assassinAbilitySfx;
+
+	private AudioClip mageAbilitySfx;
+
+	private AudioClip paladinAbilitySfx;
+
+	private AudioClip hunterAbilitySfx;
+
+	private AudioClip necromancerAbilitySfx;
+
+	private AudioClip priestAbilitySfx;
 
 	private AudioClip assassinAttackHitSfx;
 
@@ -99,8 +121,6 @@ public sealed partial class BattleBoardController
 	private AudioClip hunterAttackHitSfx;
 
 	private AudioClip hunterAttackBlockedSfx;
-
-	private AudioClip hunterMarkSfx;
 
 	private AudioClip lootRoomEnterSfx;
 
@@ -141,14 +161,25 @@ public sealed partial class BattleBoardController
 		transitionSfx = LoadSfx("transition");
 		rollingDiceSfx = LoadSfx("rolling_dice");
 		pawnEnteringBattlefieldSfx = LoadSfx("pawn_entering_battlefield");
+		warriorJoinBattlefieldSfx = LoadSfx("warrior_join_battlefield");
+		assassinJoinBattlefieldSfx = LoadSfx("assassin_join_battlefield");
 		barbarianJoinBattlefieldSfx = LoadSfx("barbarian_join_battlefield");
 		mageJoinBattlefieldSfx = LoadSfx("mage_join_battlefield");
+		paladinJoinBattlefieldSfx = LoadSfx("paladin_join_battlefield");
+		hunterJoinBattlefieldSfx = LoadSfx("hunter_join_battlefield");
 		rogueJoinBattlefieldSfx = LoadSfx("rogue_join_battlefield");
 		necromancerJoinBattlefieldSfx = LoadSfx("necromancer_hjoin_battlefield");
 		priestJoinBattlefieldSfx = LoadSfx("priest_join_battlefield");
 		openBagSfx = LoadSfx("open_bag");
 		closedBagSfx = LoadSfx("closed_bag");
 		deathCardSfx = LoadSfx("death_card");
+		attachmentSfx = LoadSfx("attachment");
+		assassinAbilitySfx = LoadSfx("assassin_ability");
+		mageAbilitySfx = LoadSfx("mage_ability");
+		paladinAbilitySfx = LoadSfx("paladin_ability");
+		hunterAbilitySfx = LoadSfx("hunter_ability");
+		necromancerAbilitySfx = LoadSfx("necromancer_ability");
+		priestAbilitySfx = LoadSfx("priest_ability");
 		assassinAttackHitSfx = LoadSfx("assassin_attack_hit");
 		assassinAttackBlockedSfx = LoadSfx("assassin_attack_blocked");
 		warriorAttackHitSfx = LoadSfx("warrior_attack_hit");
@@ -168,7 +199,6 @@ public sealed partial class BattleBoardController
 		barbarianFurySfx = LoadSfx("barbarian_fury");
 		hunterAttackHitSfx = LoadSfx("hunter_attack_hit");
 		hunterAttackBlockedSfx = LoadSfx("hunter_attack_blocked");
-		hunterMarkSfx = LoadSfx("hunter_mark");
 		lootRoomEnterSfx = LoadSfx("loot_room_enter");
 		monster1RoomEnterSfx = LoadSfx("monster_1_room");
 		monster2RoomEnterSfx = LoadSfx("monster_2_room");
@@ -411,8 +441,12 @@ public sealed partial class BattleBoardController
 		}
 		AudioClip classJoinSfx = definition.HeroClass switch
 		{
+			HeroClass.Warrior => warriorJoinBattlefieldSfx,
+			HeroClass.Assassin => assassinJoinBattlefieldSfx,
 			HeroClass.Barbarian => barbarianJoinBattlefieldSfx,
 			HeroClass.Mage => mageJoinBattlefieldSfx,
+			HeroClass.Paladin => paladinJoinBattlefieldSfx,
+			HeroClass.Hunter => hunterJoinBattlefieldSfx,
 			HeroClass.Rogue => rogueJoinBattlefieldSfx,
 			HeroClass.Necromancer => necromancerJoinBattlefieldSfx,
 			HeroClass.Priest => priestJoinBattlefieldSfx,
@@ -441,14 +475,34 @@ public sealed partial class BattleBoardController
 		PlaySfx(deathCardSfx);
 	}
 
+	private void PlayAttachmentSfx()
+	{
+		PlaySfx(attachmentSfx);
+	}
+
 	private void PlayBarbarianFurySfx()
 	{
 		PlaySfx(barbarianFurySfx);
 	}
 
-	private void PlayHunterMarkSfx()
+	private void PlayHunterAbilitySfx()
 	{
-		PlaySfx(hunterMarkSfx);
+		PlaySfx(hunterAbilitySfx);
+	}
+
+	private void PlayClassAbilitySfx(HeroClass heroClass)
+	{
+		AudioClip abilitySfx = heroClass switch
+		{
+			HeroClass.Assassin => assassinAbilitySfx,
+			HeroClass.Mage => mageAbilitySfx,
+			HeroClass.Paladin => paladinAbilitySfx,
+			HeroClass.Hunter => hunterAbilitySfx,
+			HeroClass.Necromancer => necromancerAbilitySfx,
+			HeroClass.Priest => priestAbilitySfx,
+			_ => null
+		};
+		PlaySfx(abilitySfx);
 	}
 
 	private void PlayLootRoomEnterSfx()

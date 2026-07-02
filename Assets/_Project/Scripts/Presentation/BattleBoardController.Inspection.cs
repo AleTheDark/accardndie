@@ -74,8 +74,9 @@ public sealed partial class BattleBoardController
 			ClassFamily classFamily = HeroClassFamily.Of(definition.HeroClass);
 			text3 = "Famiglia: " + ClassFamilyDisplayName(classFamily) + "\nForte contro: famiglia " + ClassFamilyDisplayName(StrongAgainst(classFamily)) + "\nDebole contro: famiglia " + ClassFamilyDisplayName(WeakAgainst(classFamily));
 		}
-		cardInspectionSummaryText.text = definition.DisplayName + "\n" + text + "\nClasse: " + text2 + "\n" + text3 + "\n\n" + CardAbilitySummary(definition) + "\n\nStatus attivi:";
-		foreach (InspectionStatusDetail item in BuildInspectionStatusDetails(state))
+		List<InspectionStatusDetail> statusDetails = BuildInspectionStatusDetails(state);
+		cardInspectionSummaryText.text = definition.DisplayName + "\n" + text + "\nClasse: " + text2 + "\n" + text3 + "\n\n" + CardAbilitySummary(definition) + (statusDetails.Count > 0 ? "\n\nStatus attivi:" : string.Empty);
+		foreach (InspectionStatusDetail item in statusDetails)
 		{
 			CreateInspectionStatusRow(item);
 		}
@@ -163,7 +164,6 @@ public sealed partial class BattleBoardController
 		List<InspectionStatusDetail> list = new List<InspectionStatusDetail>();
 		if (state == null)
 		{
-			list.Add(new InspectionStatusDetail("NESSUNO", "Apri una carta in battaglia per vedere buff, debuff e aura attivi.", Color.gray));
 			return list;
 		}
 		if (state.Eliminated)
@@ -216,10 +216,6 @@ public sealed partial class BattleBoardController
 		if (num > 0)
 		{
 			list.Add(new InspectionStatusDetail($"MARCATO +{num}", "La carta e' una preda marcata: gli attacchi contro di lei ricevono bonus. Piu marchi non si sommano.", new Color(1f, 0.65f, 0.2f)));
-		}
-		if (list.Count == 0)
-		{
-			list.Add(new InspectionStatusDetail("NESSUNO", "Nessun buff, debuff o aura attivo in questo momento.", Color.gray));
 		}
 		return list;
 	}
