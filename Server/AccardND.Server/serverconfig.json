@@ -10,8 +10,16 @@
   "RoundsToWinMatch": 2,
   "DeployedCardLives": 2,
   "HandSize": 6,
+  "FormationSize": 3,
   "DecisiveHandSize": 3,
   "InitiativeDieSides": 20,
+  "VigorDieByRound": [4, 6, 8],
+  "RogueRerollsOnes": true,
+  "BarbarianRageBonus": 2,
+  "HunterMarkBonus": 2,
+  "PriestBlessingBonus": 2,
   "TurnTimerSeconds": 60,
-  "DisconnectTimeoutSeconds": 120
+  "ForfeitAfterConsecutiveTimeouts": 3,
+  "DisconnectTimeoutSeconds": 120,
+  "CardCatalogPath": "cardcatalog.json"
 }

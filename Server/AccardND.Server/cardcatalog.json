@@ -1,0 +1,409 @@
+{
+  "cards": [
+    {
+      "id": "10-champion-assassin",
+      "value": 10,
+      "heroClass": 0
+    },
+    {
+      "id": "10-champion-barbarian",
+      "value": 10,
+      "heroClass": 6
+    },
+    {
+      "id": "10-champion-hunter",
+      "value": 10,
+      "heroClass": 5
+    },
+    {
+      "id": "10-champion-mage",
+      "value": 10,
+      "heroClass": 2
+    },
+    {
+      "id": "10-champion-necromancer",
+      "value": 10,
+      "heroClass": 7
+    },
+    {
+      "id": "10-champion-paladin",
+      "value": 10,
+      "heroClass": 3
+    },
+    {
+      "id": "10-champion-priest",
+      "value": 10,
+      "heroClass": 8
+    },
+    {
+      "id": "10-champion-rogue",
+      "value": 10,
+      "heroClass": 4
+    },
+    {
+      "id": "10-champion-warrior",
+      "value": 10,
+      "heroClass": 1
+    },
+    {
+      "id": "2-goblin-assassin",
+      "value": 2,
+      "heroClass": 0
+    },
+    {
+      "id": "2-goblin-barbarian",
+      "value": 2,
+      "heroClass": 6
+    },
+    {
+      "id": "2-goblin-hunter",
+      "value": 2,
+      "heroClass": 5
+    },
+    {
+      "id": "2-goblin-mage",
+      "value": 2,
+      "heroClass": 2
+    },
+    {
+      "id": "2-goblin-necromancer",
+      "value": 2,
+      "heroClass": 7
+    },
+    {
+      "id": "2-goblin-paladin",
+      "value": 2,
+      "heroClass": 3
+    },
+    {
+      "id": "2-goblin-priest",
+      "value": 2,
+      "heroClass": 8
+    },
+    {
+      "id": "2-goblin-rogue",
+      "value": 2,
+      "heroClass": 4
+    },
+    {
+      "id": "2-goblin-warrior",
+      "value": 2,
+      "heroClass": 1
+    },
+    {
+      "id": "3-skeleton-assassin",
+      "value": 3,
+      "heroClass": 0
+    },
+    {
+      "id": "3-skeleton-barbarian",
+      "value": 3,
+      "heroClass": 6
+    },
+    {
+      "id": "3-skeleton-hunter",
+      "value": 3,
+      "heroClass": 5
+    },
+    {
+      "id": "3-skeleton-mage",
+      "value": 3,
+      "heroClass": 2
+    },
+    {
+      "id": "3-skeleton-necromancer",
+      "value": 3,
+      "heroClass": 7
+    },
+    {
+      "id": "3-skeleton-paladin",
+      "value": 3,
+      "heroClass": 3
+    },
+    {
+      "id": "3-skeleton-priest",
+      "value": 3,
+      "heroClass": 8
+    },
+    {
+      "id": "3-skeleton-rogue",
+      "value": 3,
+      "heroClass": 4
+    },
+    {
+      "id": "3-skeleton-warrior",
+      "value": 3,
+      "heroClass": 1
+    },
+    {
+      "id": "4-animal-assassin",
+      "value": 4,
+      "heroClass": 0
+    },
+    {
+      "id": "4-animal-barbarian",
+      "value": 4,
+      "heroClass": 6
+    },
+    {
+      "id": "4-animal-hunter",
+      "value": 4,
+      "heroClass": 5
+    },
+    {
+      "id": "4-animal-mage",
+      "value": 4,
+      "heroClass": 2
+    },
+    {
+      "id": "4-animal-necromancer",
+      "value": 4,
+      "heroClass": 7
+    },
+    {
+      "id": "4-animal-paladin",
+      "value": 4,
+      "heroClass": 3
+    },
+    {
+      "id": "4-animal-priest",
+      "value": 4,
+      "heroClass": 8
+    },
+    {
+      "id": "4-animal-rogue",
+      "value": 4,
+      "heroClass": 4
+    },
+    {
+      "id": "4-animal-warrior",
+      "value": 4,
+      "heroClass": 1
+    },
+    {
+      "id": "5-darkelf-assassin",
+      "value": 5,
+      "heroClass": 0
+    },
+    {
+      "id": "5-darkelf-barbarian",
+      "value": 5,
+      "heroClass": 6
+    },
+    {
+      "id": "5-darkelf-hunter",
+      "value": 5,
+      "heroClass": 5
+    },
+    {
+      "id": "5-darkelf-mage",
+      "value": 5,
+      "heroClass": 2
+    },
+    {
+      "id": "5-darkelf-necromancer",
+      "value": 5,
+      "heroClass": 7
+    },
+    {
+      "id": "5-darkelf-paladin",
+      "value": 5,
+      "heroClass": 3
+    },
+    {
+      "id": "5-darkelf-priest",
+      "value": 5,
+      "heroClass": 8
+    },
+    {
+      "id": "5-darkelf-rogue",
+      "value": 5,
+      "heroClass": 4
+    },
+    {
+      "id": "5-darkelf-warrior",
+      "value": 5,
+      "heroClass": 1
+    },
+    {
+      "id": "6-chimera-assassin",
+      "value": 6,
+      "heroClass": 0
+    },
+    {
+      "id": "6-chimera-barbarian",
+      "value": 6,
+      "heroClass": 6
+    },
+    {
+      "id": "6-chimera-hunter",
+      "value": 6,
+      "heroClass": 5
+    },
+    {
+      "id": "6-chimera-mage",
+      "value": 6,
+      "heroClass": 2
+    },
+    {
+      "id": "6-chimera-necromancer",
+      "value": 6,
+      "heroClass": 7
+    },
+    {
+      "id": "6-chimera-paladin",
+      "value": 6,
+      "heroClass": 3
+    },
+    {
+      "id": "6-chimera-priest",
+      "value": 6,
+      "heroClass": 8
+    },
+    {
+      "id": "6-chimera-rogue",
+      "value": 6,
+      "heroClass": 4
+    },
+    {
+      "id": "6-chimera-warrior",
+      "value": 6,
+      "heroClass": 1
+    },
+    {
+      "id": "7-alien-necromancer",
+      "value": 7,
+      "heroClass": 7
+    },
+    {
+      "id": "7-whitealien-assassin",
+      "value": 7,
+      "heroClass": 0
+    },
+    {
+      "id": "7-whitealien-barbarian",
+      "value": 7,
+      "heroClass": 6
+    },
+    {
+      "id": "7-whitealien-hunter",
+      "value": 7,
+      "heroClass": 5
+    },
+    {
+      "id": "7-whitealien-mage",
+      "value": 7,
+      "heroClass": 2
+    },
+    {
+      "id": "7-whitealien-paladin",
+      "value": 7,
+      "heroClass": 3
+    },
+    {
+      "id": "7-whitealien-priest",
+      "value": 7,
+      "heroClass": 8
+    },
+    {
+      "id": "7-whitealien-rogue",
+      "value": 7,
+      "heroClass": 4
+    },
+    {
+      "id": "7-whitealien-warrior",
+      "value": 7,
+      "heroClass": 1
+    },
+    {
+      "id": "8-spirit-assassin",
+      "value": 8,
+      "heroClass": 0
+    },
+    {
+      "id": "8-spirit-barbarian",
+      "value": 8,
+      "heroClass": 6
+    },
+    {
+      "id": "8-spirit-hunter",
+      "value": 8,
+      "heroClass": 5
+    },
+    {
+      "id": "8-spirit-mage",
+      "value": 8,
+      "heroClass": 2
+    },
+    {
+      "id": "8-spirit-necromancer",
+      "value": 8,
+      "heroClass": 7
+    },
+    {
+      "id": "8-spirit-paladin",
+      "value": 8,
+      "heroClass": 3
+    },
+    {
+      "id": "8-spirit-priest",
+      "value": 8,
+      "heroClass": 8
+    },
+    {
+      "id": "8-spirit-rogue",
+      "value": 8,
+      "heroClass": 4
+    },
+    {
+      "id": "8-spirit-warrior",
+      "value": 8,
+      "heroClass": 1
+    },
+    {
+      "id": "9-faceless-assassin",
+      "value": 9,
+      "heroClass": 0
+    },
+    {
+      "id": "9-faceless-barbarian",
+      "value": 9,
+      "heroClass": 6
+    },
+    {
+      "id": "9-faceless-hunter",
+      "value": 9,
+      "heroClass": 5
+    },
+    {
+      "id": "9-faceless-mage",
+      "value": 9,
+      "heroClass": 2
+    },
+    {
+      "id": "9-faceless-necromancer",
+      "value": 9,
+      "heroClass": 7
+    },
+    {
+      "id": "9-faceless-paladin",
+      "value": 9,
+      "heroClass": 3
+    },
+    {
+      "id": "9-faceless-priest",
+      "value": 9,
+      "heroClass": 8
+    },
+    {
+      "id": "9-faceless-rogue",
+      "value": 9,
+      "heroClass": 4
+    },
+    {
+      "id": "9-faceless-warrior",
+      "value": 9,
+      "heroClass": 1
+    }
+  ]
+}

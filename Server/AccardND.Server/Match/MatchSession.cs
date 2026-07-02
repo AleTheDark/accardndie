@@ -18,6 +18,10 @@ public sealed class MatchSession
     private readonly PvpMatchEngine engine;
     private readonly ClientConnection[] connections;
     private readonly PvpLoadout[] loadouts;
+    private readonly int turnTimerSeconds;
+    private readonly int forfeitAfterTimeouts;
+    private readonly int[] consecutiveTimeouts = new int[2];
+    private CancellationTokenSource turnTimer;
 
     public MatchSession(Room room, ServerConfig config)
     {
@@ -25,6 +29,8 @@ public sealed class MatchSession
         ArgumentNullException.ThrowIfNull(config);
         connections = new[] { room.Host, room.Guest };
         loadouts = new[] { room.HostLoadout, room.GuestLoadout };
+        turnTimerSeconds = config.TurnTimerSeconds;
+        forfeitAfterTimeouts = config.ForfeitAfterConsecutiveTimeouts;
         engine = new PvpMatchEngine(
             ToCombatCards(room.HostLoadout),
             ToCombatCards(room.GuestLoadout),
@@ -48,6 +54,7 @@ public sealed class MatchSession
                 }, cancellation);
             }
             await DispatchAsync(engine.Start(), cancellation);
+            ScheduleTurnTimer();
         }
         finally
         {
@@ -78,11 +85,119 @@ public sealed class MatchSession
                 await sender.SendErrorAsync(ErrorCodes.InvalidAction, exception.Message, cancellation);
                 return;
             }
+            consecutiveTimeouts[player] = 0;
             await DispatchAsync(events, cancellation);
+            ScheduleTurnTimer();
         }
         finally
         {
             gate.Release();
+        }
+    }
+
+    /// <summary>Ferma i timer quando la stanza viene smantellata.</summary>
+    public void Shutdown() => turnTimer?.Cancel();
+
+    // --- Timer per mossa ---
+
+    private void ScheduleTurnTimer()
+    {
+        turnTimer?.Cancel();
+        if (turnTimerSeconds <= 0 || engine.Phase == PvpMatchPhase.Finished)
+            return;
+        var timer = new CancellationTokenSource();
+        turnTimer = timer;
+        _ = RunTurnTimerAsync(timer.Token);
+    }
+
+    private async Task RunTurnTimerAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(turnTimerSeconds), token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        await gate.WaitAsync(CancellationToken.None);
+        try
+        {
+            if (token.IsCancellationRequested || engine.Phase == PvpMatchPhase.Finished)
+                return;
+            await ExecuteTimeoutAsync();
+            ScheduleTurnTimer();
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task ExecuteTimeoutAsync()
+    {
+        var timedOut = new List<int>();
+        var events = new List<PvpEvent>();
+
+        switch (engine.Phase)
+        {
+            case PvpMatchPhase.Deployment:
+            {
+                int player = engine.ActivePlayer;
+                events.AddRange(engine.Deploy(player, 0));
+                timedOut.Add(player);
+                break;
+            }
+            case PvpMatchPhase.Battle:
+            {
+                int player = engine.ActivePlayer;
+                events.AddRange(engine.Pass(player));
+                timedOut.Add(player);
+                break;
+            }
+            case PvpMatchPhase.DecisiveSelection:
+            {
+                for (int player = 0; player < 2; player++)
+                {
+                    if (engine.HasDecisiveChoice(player))
+                        continue;
+                    events.AddRange(engine.SubmitDecisiveSelection(player, new[] { 0, 1, 2 }));
+                    timedOut.Add(player);
+                }
+                break;
+            }
+            default:
+                return;
+        }
+
+        foreach (int player in timedOut)
+        {
+            consecutiveTimeouts[player]++;
+            await BroadcastAsync(new MatchEventDto
+            {
+                type = "ActionTimeout",
+                player = player,
+                amount = consecutiveTimeouts[player]
+            }, CancellationToken.None);
+        }
+        await DispatchAsync(events, CancellationToken.None);
+
+        foreach (int player in timedOut)
+        {
+            if (engine.Phase == PvpMatchPhase.Finished
+                || forfeitAfterTimeouts <= 0
+                || consecutiveTimeouts[player] < forfeitAfterTimeouts)
+                continue;
+            await BroadcastAsync(new MatchEventDto
+            {
+                type = "MatchForfeited",
+                player = player,
+                winner = 1 - player,
+                reason = "timeout"
+            }, CancellationToken.None);
+            await DispatchAsync(engine.Forfeit(player), CancellationToken.None);
+            break;
         }
     }
 
@@ -113,12 +228,18 @@ public sealed class MatchSession
                 continue;
             }
 
-            MatchEventDto dto = PvpEventMapper.ToDto(gameEvent);
-            foreach (ClientConnection connection in connections)
-            {
-                if (connection.IsOpen)
-                    await connection.SendAsync(MessageTypes.MatchEvent, dto, cancellation);
-            }
+            await BroadcastAsync(PvpEventMapper.ToDto(gameEvent), cancellation);
+        }
+        if (engine.Phase == PvpMatchPhase.Finished)
+            turnTimer?.Cancel();
+    }
+
+    private async Task BroadcastAsync(MatchEventDto dto, CancellationToken cancellation)
+    {
+        foreach (ClientConnection connection in connections)
+        {
+            if (connection.IsOpen)
+                await connection.SendAsync(MessageTypes.MatchEvent, dto, cancellation);
         }
     }
 

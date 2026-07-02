@@ -13,6 +13,7 @@ public sealed class MessageRouter
     private readonly RoomManager rooms;
     private readonly MatchmakingQueue queue;
     private readonly PvpLoadoutRules loadoutRules;
+    private readonly PvpCardCatalog cardCatalog;
     private readonly ILogger<MessageRouter> logger;
 
     public MessageRouter(
@@ -20,12 +21,14 @@ public sealed class MessageRouter
         AccountService accounts,
         RoomManager rooms,
         MatchmakingQueue queue,
+        PvpCardCatalog cardCatalog,
         ILogger<MessageRouter> logger)
     {
         this.config = config;
         this.accounts = accounts;
         this.rooms = rooms;
         this.queue = queue;
+        this.cardCatalog = cardCatalog;
         this.logger = logger;
         loadoutRules = config.ToLoadoutRules();
     }
@@ -270,6 +273,12 @@ public sealed class MessageRouter
             return null;
         }
 
+        if (!cardCatalog.TryValidate(loadout, out string catalogError))
+        {
+            await connection.SendErrorAsync(ErrorCodes.InvalidLoadout, catalogError, cancellation);
+            return null;
+        }
+
         return loadout;
     }
 
@@ -283,6 +292,7 @@ public sealed class MessageRouter
             return;
 
         ClientConnection opponent = room.OpponentOf(connection);
+        room.Session?.Shutdown();
         rooms.Remove(room);
         if (opponent is { IsOpen: true })
             await opponent.SendAsync(MessageTypes.MatchOpponentLeft, new ErrorMessage

@@ -328,6 +328,23 @@ namespace AccardND.GameCore.Pvp
             return events;
         }
 
+        public bool HasDecisiveChoice(int player) => players[ValidPlayer(player)].DecisiveChoice != null;
+
+        /// <summary>Abbandono (disconnessione o troppi timeout): vince l'avversario.</summary>
+        public IReadOnlyList<PvpEvent> Forfeit(int player)
+        {
+            ValidPlayer(player);
+            if (Phase is PvpMatchPhase.NotStarted or PvpMatchPhase.Finished)
+                throw new PvpActionException("Nessun match in corso da abbandonare.");
+
+            Phase = PvpMatchPhase.Finished;
+            MatchWinner = 1 - player;
+            return new List<PvpEvent>
+            {
+                new MatchEndedEvent(MatchWinner, players[0].RoundWins, players[1].RoundWins)
+            };
+        }
+
         // --- Flusso round ---
 
         private void StartRound(List<PvpEvent> events)

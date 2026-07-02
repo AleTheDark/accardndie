@@ -51,7 +51,9 @@ public sealed class ServerConfig
     public int HunterMarkBonus { get; set; } = 2;
     public int PriestBlessingBonus { get; set; } = 2;
     public int TurnTimerSeconds { get; set; } = 60;
+    public int ForfeitAfterConsecutiveTimeouts { get; set; } = 3;
     public int DisconnectTimeoutSeconds { get; set; } = 120;
+    public string CardCatalogPath { get; set; } = "cardcatalog.json";
 
     public static ServerConfig Load(string path)
     {
