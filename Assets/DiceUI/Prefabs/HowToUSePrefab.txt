@@ -1,0 +1,9 @@
+
+-The prefab will only be visible on canvas.
+
+-Recommended canvas mode - Scale With Screen Size (no Constant Pixel Size)
+
+-If you want to make a new cube, copy the prefab, copy and rename the animations,
+(replace the animations inside the animator and drag the new animator to Dice) 
+you can change the copied animations and also change the color of the cube 
+in the graphic editor, replace the cube sprites in the animation.

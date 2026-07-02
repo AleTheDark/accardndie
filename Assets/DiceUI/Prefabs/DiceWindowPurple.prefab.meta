@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 2d1bab7aa828931429662026bdc0d3fd
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 307168
+  packageName: DnD Dice Animation + Icons.
+  packageVersion: 1.1
+  assetPath: Assets/DiceUI/Prefabs/DiceWindowPurple.prefab
+  uploadId: 862012

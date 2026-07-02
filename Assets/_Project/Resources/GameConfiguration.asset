@@ -1,0 +1,159 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 84d36c895a66f7542ab332258eb6050e, type: 3}
+  m_Name: GameConfiguration
+  m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.GameConfiguration
+  schemaVersion: 26
+  animation:
+    attackExpandDuration: 0.13
+    attackReturnDuration: 0.16
+    attackScale: 1.13
+    defeatDuration: 0.28
+    diceRollDuration: 1.36
+    diceResultHold: 0.85
+    cpuThinkDelay: 0.65
+    cpuDecisionReveal: 0.35
+    turnResultPause: 0.65
+    combatResultHold: 0.9
+    cardDeployDuration: 0.34
+    cpuCardRevealDuration: 0.4
+    selectedCardScale: 1.055
+    draftCardEnterDuration: 0.36
+    draftCardCenterHold: 0.28
+    draftCardSettleDuration: 0.42
+    draftCardEntranceStagger: 0.08
+    draftCardEntranceInitialDelay: 0.2
+    draftCardEntranceScale: 1.5
+    roomFadeOutDuration: 0.32
+    roomBlackHoldDuration: 0.14
+    roomFadeInDuration: 0.42
+  gameplay:
+    initiativeDieSides: 20
+    vigorDieSides: 6
+    randomSeed: 20260620
+    useRandomSeedEachSession: 1
+    draftCandidateCount: 6
+    formationSize: 3
+    cpuDifficulty: 1
+    killProbabilityWeight: 1000
+    classAdvantageWeight: 100
+    weakerTargetWeight: 8
+    randomTieBreaker: 5
+  responsiveLayout:
+    portraitReferenceResolution: {x: 1080, y: 1920}
+    landscapeReferenceResolution: {x: 1920, y: 1080}
+    compactAspectBreakpoint: 1.2
+    compactRowWidth: 0.98
+    landscapeRowWidth: 0.9
+    landscapeMaximumRowWidth: 1200
+    gapFraction: 0.025
+    minimumGap: 12
+    maximumGap: 34
+    compactCardHeight: 0.29
+    landscapeCardHeight: 0.3
+    landscapeHandHeight: 0.6
+    compactHandHeight: 0.48
+    handOverlap: 0.22
+    handMaximumAngle: 15
+    handEdgeDrop: 52
+  visual:
+    backgroundFillBrightness: 0.28
+    terrainBrightness: 0.78
+    tableOverlayOpacity: 0.16
+    playerTurnColor: {r: 0.04, g: 0.5, b: 0.55, a: 0.98}
+    cpuTurnColor: {r: 0.58, g: 0.14, b: 0.12, a: 0.98}
+    targetAdvantageColor: {r: 0.08, g: 0.55, b: 0.25, a: 0.94}
+    targetNeutralColor: {r: 0.95, g: 0.78, b: 0.12, a: 0.94}
+    targetDisadvantageColor: {r: 0.65, g: 0.1, b: 0.1, a: 0.94}
+  startingRoom:
+    roomType: 1
+    difficulty: 2
+    bossId: 
+    scenarioId: 
+  progression:
+    experiencePerLevel: 100
+    monsterRoomClearExperience: 10
+    maximumLevel: 6
+    roomsPerMasterLevel: 5
+    vigorDiceByLevel: 0400000006000000080000000a0000000c00000014000000
+    minibossEveryRooms: 10
+    finalBossRoom: 25
+    bossFormationSize: 1
+    monsterRoomWeight: 60
+    merchantRoomWeight: 15
+    lootRoomWeight: 15
+    opportunityRoomWeight: 10
+    lootRoomExperience: 10
+    opportunityRoomExperience: 0
+    merchantRoomExperience: 0
+    opportunityExperienceJackpot: 50
+    lootReserveCards: 1
+    merchantHeroCardCost: 15
+    godMerchantHeroCardCost: 30
+    godMerchantMinimumStrength: 7
+  classBalance:
+    rogueRerollsOnes: 1
+    barbarianRageBonus: 2
+    hunterStrongTargetBonus: 2
+    priestBlessingBonus: 2
+  logging:
+    maximumEntries: 250
+    visibleEntries: 14
+    echoToUnityConsole: 1
+    includeTimestamp: 1
+  deckBuilding:
+    startingEssence: 75
+    deckSize: 9
+    combatHandSize: 6
+    formationSize: 3
+    blindRandomCost: 5
+    chosenClassCost: 7
+    chosenStrengthBaseCost: 4
+    maximumCopiesPerCard: 1
+    strengthWeights: 1400000012000000100000000e0000000b00000008000000060000000400000003000000
+  pvp:
+    loadoutBudget: 60
+    loadoutCardCount: 9
+    cardCostByValue: 0100000002000000030000000400000005000000060000000700000008000000090000000a000000
+    cardValueLimits:
+    - cardValue: 10
+      maximumCopies: 1
+    - cardValue: 9
+      maximumCopies: 2
+    - cardValue: 8
+      maximumCopies: 3
+    - cardValue: 7
+      maximumCopies: 4
+    baseDieCosts:
+    - sides: 3
+      cost: 0
+    - sides: 4
+      cost: 4
+    - sides: 6
+      cost: 8
+    - sides: 8
+      cost: 13
+    bagDieCosts:
+    - sides: 6
+      cost: 2
+    - sides: 8
+      cost: 4
+    - sides: 10
+      cost: 7
+    - sides: 12
+      cost: 10
+    - sides: 20
+      cost: 18
+    roundsToWinMatch: 2
+    deployedCardLives: 2
+    turnTimerSeconds: 60
+    disconnectTimeoutSeconds: 120

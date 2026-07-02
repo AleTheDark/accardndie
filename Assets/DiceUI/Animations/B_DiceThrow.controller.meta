@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 4c9ced554ce895348a0d97e4abf44459
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 307168
+  packageName: DnD Dice Animation + Icons.
+  packageVersion: 1.1
+  assetPath: Assets/DiceUI/Animations/B_DiceThrow.controller
+  uploadId: 862012

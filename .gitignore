@@ -1,0 +1,40 @@
+# --- Unity ---
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+ExportedObj/
+crashlogs/
+sysinfo.txt
+*.stackdump
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Build output del progetto
+output/
+output-ios/
+.utmp/
+_Recovery/
+
+# Progetti generati da Unity (rigenerati a ogni apertura)
+*.csproj
+*.sln
+*.slnx
+*.user
+.vs/
+.vsconfig
+.idea/
+
+# --- Server .NET ---
+[Bb]in/
+Server/**/appsettings.Development.json
+Server/AccardND.Server/accounts.json
+
+# Il vecchio progetto archiviato mantiene tutto com'era
+!old_project/**

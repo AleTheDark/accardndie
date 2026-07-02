@@ -1,0 +1,11 @@
+{
+  "name": "AccardND.GameCore.Tests",
+  "rootNamespace": "AccardND.GameCore.Tests",
+  "references": [
+    "AccardND.GameCore",
+    "AccardND.GameData"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

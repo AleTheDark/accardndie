@@ -1,0 +1,7 @@
+{
+  "name": "AccardND.GameData",
+  "rootNamespace": "AccardND.GameData",
+  "references": [
+    "AccardND.GameCore"
+  ]
+}

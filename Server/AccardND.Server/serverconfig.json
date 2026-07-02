@@ -1,0 +1,17 @@
+{
+  "Urls": "http://localhost:5017",
+  "AccountsFilePath": "accounts.json",
+  "LoadoutBudget": 60,
+  "LoadoutCardCount": 9,
+  "CardCostByValue": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "CardValueLimits": { "10": 1, "9": 2, "8": 3, "7": 4 },
+  "BaseDieCosts": { "3": 0, "4": 4, "6": 8, "8": 13 },
+  "BagDieCosts": { "6": 2, "8": 4, "10": 7, "12": 10, "20": 18 },
+  "RoundsToWinMatch": 2,
+  "DeployedCardLives": 2,
+  "HandSize": 6,
+  "DecisiveHandSize": 3,
+  "InitiativeDieSides": 20,
+  "TurnTimerSeconds": 60,
+  "DisconnectTimeoutSeconds": 120
+}

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 147860a67576d0143bee809603e14675
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 307168
+  packageName: DnD Dice Animation + Icons.
+  packageVersion: 1.1
+  assetPath: Assets/DiceUI/Animations/DiceEnd.anim
+  uploadId: 862012

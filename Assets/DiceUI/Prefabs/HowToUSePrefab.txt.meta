@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 7294bfafcddb08346902f81daefbda67
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 307168
+  packageName: DnD Dice Animation + Icons.
+  packageVersion: 1.1
+  assetPath: Assets/DiceUI/Prefabs/HowToUSePrefab.txt
+  uploadId: 862012

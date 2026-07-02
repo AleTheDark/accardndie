@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 7aa7071ba38107944983cc3ac085d5bd
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 307168
+  packageName: DnD Dice Animation + Icons.
+  packageVersion: 1.1
+  assetPath: Assets/DiceUI/Prefabs/DiceWindowBrown.prefab
+  uploadId: 862012

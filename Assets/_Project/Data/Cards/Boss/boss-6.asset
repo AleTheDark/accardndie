@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d42e105f465d48f43a32e6d78f6b8cf6, type: 3}
+  m_Name: boss-6
+  m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
+  id: boss-6
+  displayName: 6
+  category: 1
+  artwork: {fileID: 21300000, guid: f796734a90880ff4a82f95a4d6a4a44c, type: 3}
+  strength: 0
+  hasHeroClass: 0
+  heroClass: 0
+  rulesText: 

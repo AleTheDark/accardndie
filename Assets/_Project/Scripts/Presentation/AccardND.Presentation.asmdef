@@ -1,0 +1,10 @@
+{
+  "name": "AccardND.Presentation",
+  "rootNamespace": "AccardND.Presentation",
+  "references": [
+    "AccardND.GameCore",
+    "AccardND.GameData",
+    "Unity.InputSystem",
+    "Unity.ugui"
+  ]
+}

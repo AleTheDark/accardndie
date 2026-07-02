@@ -1,0 +1,8 @@
+{
+  "name": "AccardND.Network",
+  "rootNamespace": "AccardND.Network",
+  "references": [
+    "AccardND.GameCore",
+    "AccardND.NetProtocol"
+  ]
+}
