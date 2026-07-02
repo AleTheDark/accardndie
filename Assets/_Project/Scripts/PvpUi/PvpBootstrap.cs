@@ -325,9 +325,11 @@ namespace AccardND.PvpUi
             if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
                 return;
             // Account ospite stabile per dispositivo: nessun inserimento richiesto.
+            // In editor il suffisso distingue l'istanza dalla build affiancata nei test locali.
             string device = SystemInfo.deviceUniqueIdentifier;
             int hash = device.GetHashCode();
-            username = $"ospite-{(uint)hash % 100000:D5}";
+            string editorSuffix = Application.isEditor ? "-editor" : string.Empty;
+            username = $"ospite-{(uint)hash % 100000:D5}{editorSuffix}";
             password = $"dev-{device.Substring(0, Mathf.Min(12, device.Length))}";
         }
 
