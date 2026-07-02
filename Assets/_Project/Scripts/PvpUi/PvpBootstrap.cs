@@ -26,6 +26,8 @@ namespace AccardND.PvpUi
         private PvpClientMatchState state;
         private PvpLobbyScreen lobby;
         private PvpMatchScreen match;
+        private PvpLoadoutBuilderScreen builder;
+        private PvpLoadoutDto confirmedLoadout;
         private Transform canvasRoot;
         private GameObject canvasObject;
         private List<LoadoutCardDto> myLoadout;
@@ -191,9 +193,10 @@ namespace AccardND.PvpUi
         {
             if (!await EnsureReadyAsync())
                 return;
+            if (!RequireLoadout(out PvpLoadoutDto loadout))
+                return;
             try
             {
-                PvpLoadoutDto loadout = CurrentLoadout();
                 lobby.SetStatus("Creazione stanza...");
                 await client.SendAsync(MessageTypes.RoomCreate, new CreateRoomRequest { loadout = loadout });
             }
@@ -213,13 +216,15 @@ namespace AccardND.PvpUi
                 lobby.SetStatus("Componi il codice a 6 caratteri col tastierino.");
                 return;
             }
+            if (!RequireLoadout(out PvpLoadoutDto loadout))
+                return;
             try
             {
                 lobby.SetStatus($"Ingresso nella stanza {code}...");
                 await client.SendAsync(MessageTypes.RoomJoin, new JoinRoomRequest
                 {
                     code = code,
-                    loadout = CurrentLoadout()
+                    loadout = loadout
                 });
             }
             catch (System.Exception exception)
@@ -232,10 +237,12 @@ namespace AccardND.PvpUi
         {
             if (!await EnsureReadyAsync())
                 return;
+            if (!RequireLoadout(out PvpLoadoutDto loadout))
+                return;
             try
             {
                 lobby.SetStatus("Ingresso in coda...");
-                await client.SendAsync(MessageTypes.QueueJoin, new QueueJoinRequest { loadout = CurrentLoadout() });
+                await client.SendAsync(MessageTypes.QueueJoin, new QueueJoinRequest { loadout = loadout });
             }
             catch (System.Exception exception)
             {
@@ -243,11 +250,53 @@ namespace AccardND.PvpUi
             }
         }
 
+        /// <summary>Loadout confermato o salvato; null se va ancora composto.</summary>
         private PvpLoadoutDto CurrentLoadout()
         {
-            PvpLoadoutDto loadout = PvpQuickLoadout.Build(cardDatabase);
+            PvpLoadoutDto loadout = confirmedLoadout ?? PvpLoadoutBuilderScreen.LoadSaved();
+            if (loadout == null && cardDatabase == null)
+                loadout = PvpQuickLoadout.Build(null); // senza database non c'è builder: fallback
+            if (loadout == null)
+                return null;
+            confirmedLoadout = loadout;
             myLoadout = new List<LoadoutCardDto>(loadout.cards);
             return loadout;
+        }
+
+        private bool RequireLoadout(out PvpLoadoutDto loadout)
+        {
+            loadout = CurrentLoadout();
+            if (loadout != null)
+                return true;
+            lobby.SetStatus("Prima componi il tuo loadout!");
+            OpenLoadoutBuilder();
+            return false;
+        }
+
+        private void OpenLoadoutBuilder()
+        {
+            if (builder != null)
+                return;
+            lobby.SetVisible(false);
+            builder = new PvpLoadoutBuilderScreen(
+                canvasRoot,
+                cardDatabase,
+                confirmed =>
+                {
+                    confirmedLoadout = confirmed;
+                    myLoadout = new List<LoadoutCardDto>(confirmed.cards);
+                    CloseLoadoutBuilder("Loadout pronto: crea una stanza o cerca un avversario.");
+                },
+                () => CloseLoadoutBuilder(null));
+        }
+
+        private void CloseLoadoutBuilder(string statusMessage)
+        {
+            builder?.Destroy();
+            builder = null;
+            lobby.SetVisible(true);
+            if (!string.IsNullOrEmpty(statusMessage))
+                lobby.SetStatus(statusMessage);
         }
 
         // --- IPvpMatchActions ---
@@ -351,7 +400,8 @@ namespace AccardND.PvpUi
 
         private void ShowLobby()
         {
-            lobby = new PvpLobbyScreen(canvasRoot, username, CreateRoom, JoinRoom, JoinQueue, Close);
+            lobby = new PvpLobbyScreen(
+                canvasRoot, username, CreateRoom, JoinRoom, JoinQueue, OpenLoadoutBuilder, Close);
         }
 
         private void Close()
@@ -368,9 +418,11 @@ namespace AccardND.PvpUi
 
         private void ShowMatch()
         {
+            CloseLoadoutBuilder(null);
             lobby.SetVisible(false);
             match?.Destroy();
-            match = new PvpMatchScreen(canvasRoot, state, this, myLoadout ?? new List<LoadoutCardDto>());
+            match = new PvpMatchScreen(
+                canvasRoot, state, this, myLoadout ?? new List<LoadoutCardDto>(), cardDatabase);
         }
 
         private void OnDestroy()

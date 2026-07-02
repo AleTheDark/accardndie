@@ -24,6 +24,7 @@ namespace AccardND.PvpUi
             UnityAction onCreateRoom,
             UnityAction onJoinRoom,
             UnityAction onQueue,
+            UnityAction onLoadout,
             UnityAction onClose)
         {
             root = PvpUiFactory.CreatePanel(parent, "Lobby", new Color(0.07f, 0.1f, 0.14f, 0.98f));
@@ -37,9 +38,13 @@ namespace AccardND.PvpUi
             PvpUiFactory.SetAnchors((RectTransform)close.transform, new Vector2(0.93f, 0.92f), new Vector2(0.985f, 0.99f));
 
             Text player = PvpUiFactory.CreateText(
-                root, "Player", $"Account: {username}", 18, TextAnchor.MiddleCenter, FontStyle.Normal);
+                root, "Player", $"Account: {username}", 18, TextAnchor.MiddleLeft, FontStyle.Normal);
             player.color = new Color(0.75f, 0.85f, 0.95f);
-            PvpUiFactory.SetAnchors((RectTransform)player.transform, new Vector2(0.1f, 0.845f), new Vector2(0.9f, 0.9f));
+            PvpUiFactory.SetAnchors((RectTransform)player.transform, new Vector2(0.06f, 0.845f), new Vector2(0.5f, 0.9f));
+
+            Button loadout = PvpUiFactory.CreateButton(
+                root, "Loadout", "COMPONI LOADOUT", new Color(0.12f, 0.3f, 0.5f, 0.98f), onLoadout, 20);
+            PvpUiFactory.SetAnchors((RectTransform)loadout.transform, new Vector2(0.53f, 0.838f), new Vector2(0.94f, 0.905f));
 
             Button create = PvpUiFactory.CreateButton(
                 root, "CreateRoom", "CREA STANZA", new Color(0.05f, 0.45f, 0.5f, 0.98f), onCreateRoom, 24);

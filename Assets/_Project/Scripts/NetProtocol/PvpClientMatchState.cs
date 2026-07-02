@@ -53,6 +53,7 @@ namespace AccardND.NetProtocol
         public int ActivePlayer { get; private set; } = -1;
         public int ActiveSlot { get; private set; } = -1;
         public int Winner { get; private set; } = -1;
+        public bool EndedByForfeit { get; private set; }
         public int DecisiveRequiredCount { get; private set; }
         public IReadOnlyList<string> Log => log;
 
@@ -259,6 +260,7 @@ namespace AccardND.NetProtocol
                     break;
 
                 case "MatchForfeited":
+                    EndedByForfeit = true;
                     AddLog($"{PlayerName(e.player)} abbandona: vittoria a {PlayerName(e.winner)}.");
                     break;
 
@@ -273,9 +275,13 @@ namespace AccardND.NetProtocol
                     Wins[1] = e.winsPlayer1;
                     Winner = e.winner;
                     Phase = PvpClientPhase.Finished;
-                    AddLog(Winner == MyIndex
-                        ? $"HAI VINTO IL MATCH {Wins[MyIndex]}-{Wins[1 - MyIndex]}!"
-                        : $"Hai perso il match {Wins[MyIndex]}-{Wins[1 - MyIndex]}.");
+                    AddLog(EndedByForfeit
+                        ? Winner == MyIndex
+                            ? "HAI VINTO PER ABBANDONO DELL'AVVERSARIO!"
+                            : "Hai perso per abbandono."
+                        : Winner == MyIndex
+                            ? $"HAI VINTO IL MATCH {Wins[MyIndex]}-{Wins[1 - MyIndex]}!"
+                            : $"Hai perso il match {Wins[MyIndex]}-{Wins[1 - MyIndex]}.");
                     break;
             }
             Changed?.Invoke();

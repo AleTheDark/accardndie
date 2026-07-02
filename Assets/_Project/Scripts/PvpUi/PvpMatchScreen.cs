@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using AccardND.GameCore;
+using AccardND.GameData;
 using AccardND.NetProtocol;
 using UnityEngine;
 using UnityEngine.UI;
@@ -34,6 +35,7 @@ namespace AccardND.PvpUi
         private readonly PvpClientMatchState state;
         private readonly IPvpMatchActions actions;
         private readonly List<LoadoutCardDto> myLoadout;
+        private readonly CardDatabase database;
         private readonly HashSet<int> decisiveSelection = new();
         private TargetMode mode = TargetMode.Attack;
 
@@ -41,11 +43,13 @@ namespace AccardND.PvpUi
             Transform parent,
             PvpClientMatchState state,
             IPvpMatchActions actions,
-            List<LoadoutCardDto> myLoadout)
+            List<LoadoutCardDto> myLoadout,
+            CardDatabase database)
         {
             this.state = state;
             this.actions = actions;
             this.myLoadout = myLoadout;
+            this.database = database;
             root = PvpUiFactory.CreatePanel(parent, "Match", new Color(0.05f, 0.08f, 0.11f, 0.98f));
             PvpUiFactory.Stretch(root);
             Rebuild();
@@ -102,15 +106,32 @@ namespace AccardND.PvpUi
                     continue;
                 }
 
-                Text name = PvpUiFactory.CreateText(tile, "Name", CardTitle(card), 20, TextAnchor.UpperCenter);
-                PvpUiFactory.SetAnchors((RectTransform)name.transform, new Vector2(0.02f, 0.62f), new Vector2(0.98f, 0.98f));
+                Sprite artwork = database != null ? database.FindById(card.CardId)?.Artwork : null;
+                if (artwork != null)
+                {
+                    var artHolder = new GameObject("Art", typeof(RectTransform), typeof(Image));
+                    artHolder.transform.SetParent(tile, false);
+                    var art = artHolder.GetComponent<Image>();
+                    art.sprite = artwork;
+                    art.preserveAspect = true;
+                    art.raycastTarget = false;
+                    if (card.Eliminated)
+                        art.color = new Color(0.35f, 0.3f, 0.3f, 0.75f);
+                    PvpUiFactory.SetAnchors((RectTransform)artHolder.transform, new Vector2(0.08f, 0.32f), new Vector2(0.92f, 0.84f));
+                }
 
-                Text stats = PvpUiFactory.CreateText(tile, "Stats", CardStats(card), 19, TextAnchor.MiddleCenter, FontStyle.Normal);
-                PvpUiFactory.SetAnchors((RectTransform)stats.transform, new Vector2(0.02f, 0.3f), new Vector2(0.98f, 0.62f));
+                Text name = PvpUiFactory.CreateText(tile, "Name", CardTitle(card), 18, TextAnchor.UpperCenter);
+                name.raycastTarget = false;
+                PvpUiFactory.SetAnchors((RectTransform)name.transform, new Vector2(0.02f, 0.84f), new Vector2(0.98f, 0.99f));
 
-                Text status = PvpUiFactory.CreateText(tile, "Status", CardStatus(card), 15, TextAnchor.LowerCenter, FontStyle.Normal);
+                Text stats = PvpUiFactory.CreateText(tile, "Stats", CardStats(card), 18, TextAnchor.MiddleCenter, FontStyle.Normal);
+                stats.raycastTarget = false;
+                PvpUiFactory.SetAnchors((RectTransform)stats.transform, new Vector2(0.02f, 0.16f), new Vector2(0.98f, 0.34f));
+
+                Text status = PvpUiFactory.CreateText(tile, "Status", CardStatus(card), 14, TextAnchor.LowerCenter, FontStyle.Normal);
                 status.color = new Color(1f, 0.8f, 0.4f);
-                PvpUiFactory.SetAnchors((RectTransform)status.transform, new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.3f));
+                status.raycastTarget = false;
+                PvpUiFactory.SetAnchors((RectTransform)status.transform, new Vector2(0.02f, 0.01f), new Vector2(0.98f, 0.16f));
 
                 if (!card.Eliminated && IsTileClickable(player))
                 {
@@ -154,7 +175,8 @@ namespace AccardND.PvpUi
         {
             int shownStrength = card.Strength + card.PermanentBonus + card.PendingBonus;
             string hearts = card.Eliminated ? "MORTA" : new string('♥', Mathf.Max(card.Lives, 0));
-            return $"FORZA {shownStrength}   {hearts}\nINIZIATIVA {card.Initiative}";
+            string initiative = card.Initiative > 0 ? $"\nINIZIATIVA {card.Initiative}" : string.Empty;
+            return $"FORZA {shownStrength}   {hearts}{initiative}";
         }
 
         private static string CardStatus(PvpClientCard card)

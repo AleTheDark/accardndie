@@ -24,6 +24,10 @@ Canvas, EventSystem e tutta la UI vengono creati da codice al Play.
 
 ## 3. Gioca
 
+- **Componi loadout** → griglia delle 81 carte con artwork: scegli 9 carte
+  entro 60 punti (budget e limiti validati in tempo reale). La selezione
+  resta salvata tra le sessioni. Se provi a giocare senza loadout, il
+  builder si apre da solo.
 - **Crea stanza** → appare il codice a 6 lettere da condividere.
 - Il secondo giocatore (altra istanza dell'editor, build, o un secondo
   progetto) imposta il codice nell'Inspector e preme **Entra con codice**.

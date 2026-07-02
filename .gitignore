@@ -17,8 +17,7 @@ sysinfo.txt
 *.mdb.meta
 
 # Build output del progetto
-output/
-output-ios/
+output*/
 .utmp/
 _Recovery/
 
