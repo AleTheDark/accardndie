@@ -3,7 +3,8 @@
   "rootNamespace": "AccardND.GameCore.Tests",
   "references": [
     "AccardND.GameCore",
-    "AccardND.GameData"
+    "AccardND.GameData",
+    "AccardND.NetProtocol"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"

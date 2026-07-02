@@ -1,0 +1,12 @@
+{
+  "name": "AccardND.PvpUi",
+  "rootNamespace": "AccardND.PvpUi",
+  "references": [
+    "AccardND.GameCore",
+    "AccardND.GameData",
+    "AccardND.NetProtocol",
+    "AccardND.Network",
+    "Unity.ugui",
+    "Unity.InputSystem"
+  ]
+}
