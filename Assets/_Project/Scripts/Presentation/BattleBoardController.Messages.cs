@@ -151,12 +151,17 @@ public sealed partial class BattleBoardController
 
 	private void SetMessage(string message)
 	{
+		SetBattlefieldMessage(message);
+		AppendLog(message);
+	}
+
+	private void SetBattlefieldMessage(string message)
+	{
 		if ((Object)(object)messageText != (Object)null)
 		{
 			messageText.text = message;
 			UpdateMessageTextLayout();
 		}
-		AppendLog(message);
 	}
 
 	private void UpdateMessageTextLayout()

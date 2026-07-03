@@ -4,6 +4,7 @@
   "references": [
     "AccardND.GameCore",
     "AccardND.GameData",
+    "AccardND.Battlefield",
     "AccardND.NetProtocol",
     "AccardND.Network",
     "AccardND.PvpUi",

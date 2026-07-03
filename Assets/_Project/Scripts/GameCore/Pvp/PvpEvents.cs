@@ -52,6 +52,20 @@ namespace AccardND.GameCore.Pvp
         public int RollPlayer1 { get; }
     }
 
+    public sealed class DeploymentInitiativeEvent : PvpEvent
+    {
+        public DeploymentInitiativeEvent(int order, int player, int initiative)
+        {
+            Order = order;
+            Player = player;
+            Initiative = initiative;
+        }
+
+        public int Order { get; }
+        public int Player { get; }
+        public int Initiative { get; }
+    }
+
     public sealed class DeployTurnEvent : PvpEvent
     {
         public DeployTurnEvent(int player)

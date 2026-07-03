@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using AccardND.Battlefield;
 using AccardND.GameData;
 using AccardND.Network;
 using AccardND.NetProtocol;
@@ -14,34 +15,40 @@ namespace AccardND.PvpUi
     /// vuota, imposta username/password (e codice stanza per il join)
     /// dall'Inspector, avvia il server e premi Play.
     /// </summary>
-    public sealed class PvpBootstrap : MonoBehaviour, IPvpMatchActions
+    public sealed class PvpBootstrap : MonoBehaviour, IBattlePresentationActions
     {
         [SerializeField] private string serverUrl = "ws://localhost:5017/ws";
         [SerializeField, Tooltip("Vuoto = account ospite legato al dispositivo.")]
         private string username = string.Empty;
         [SerializeField] private string password = string.Empty;
         [SerializeField] private CardDatabase cardDatabase;
+        [SerializeField] private GameConfiguration configuration;
 
         private PvpServerClient client;
         private PvpClientMatchState state;
         private PvpLobbyScreen lobby;
-        private PvpMatchScreen match;
         private PvpLoadoutBuilderScreen builder;
         private PvpLoadoutDto confirmedLoadout;
         private Transform canvasRoot;
         private GameObject canvasObject;
         private List<LoadoutCardDto> myLoadout;
+        private IPvpMatchView matchView;
         private System.Action onClosed;
+        private bool registerAttempted;
         private bool loginAttempted;
         private bool authenticated;
         private bool connecting;
         private bool stateDirty;
+        private BattleSfxPlayer battleSfx;
+        private BattlePresentationSfxRouter battleSfxRouter;
+        private readonly List<BattlePresentationEvent> pendingAnimationEvents = new();
 
         /// <summary>Da chiamare subito dopo AddComponent quando il PvP è lanciato dal menu di gioco.</summary>
-        public void Configure(CardDatabase database, System.Action closedCallback)
+        public void Configure(CardDatabase database, System.Action closedCallback, IPvpMatchView view = null)
         {
             cardDatabase = database;
             onClosed = closedCallback;
+            matchView = view;
         }
 
         private async void Start()
@@ -63,7 +70,26 @@ namespace AccardND.PvpUi
                 lobby.SetStatus($"Connessione a {serverUrl}...");
                 await client.ConnectAsync(serverUrl);
                 lobby.SetStatus("Connesso. Autenticazione...");
+                registerAttempted = false;
                 loginAttempted = false;
+
+                // Prima scelta: Unity Authentication (login anonimo, niente password).
+                if (PvpUgsAuth.IsAvailable)
+                {
+                    (string accessToken, _) = await PvpUgsAuth.SignInAnonymouslyAsync();
+                    if (accessToken != null)
+                    {
+                        await client.SendAsync(MessageTypes.AuthUgs, new UgsLoginRequest
+                        {
+                            accessToken = accessToken,
+                            displayName = username
+                        });
+                        return;
+                    }
+                    lobby.SetStatus("Unity Auth non disponibile: uso l'account locale...");
+                }
+
+                registerAttempted = true;
                 await client.SendAsync(MessageTypes.AuthRegister, new RegisterRequest
                 {
                     username = username,
@@ -105,7 +131,8 @@ namespace AccardND.PvpUi
             if (stateDirty)
             {
                 stateDirty = false;
-                match?.Rebuild();
+                matchView?.UpdatePvpMatch(state, myLoadout, pendingAnimationEvents);
+                pendingAnimationEvents.Clear();
             }
         }
 
@@ -120,6 +147,16 @@ namespace AccardND.PvpUi
                     {
                         authenticated = true;
                         lobby.SetStatus($"Autenticato come {auth.username}. Scegli come giocare.");
+                    }
+                    else if (!registerAttempted)
+                    {
+                        // L'auth UGS è stata rifiutata dal server: fallback all'account locale.
+                        registerAttempted = true;
+                        await client.SendAsync(MessageTypes.AuthRegister, new RegisterRequest
+                        {
+                            username = username,
+                            password = password
+                        });
                     }
                     else if (!loginAttempted)
                     {
@@ -167,11 +204,19 @@ namespace AccardND.PvpUi
                     break;
 
                 case MessageTypes.MatchEvent:
-                    state?.Apply(PvpServerClient.ParsePayload<MatchEventDto>(envelope));
+                {
+                    MatchEventDto matchEvent = PvpServerClient.ParsePayload<MatchEventDto>(envelope);
+                    BattlePresentationEvent presentationEvent =
+                        PvpBattlePresentationMapper.ToPresentationEvent(matchEvent, state);
+                    battleSfxRouter?.Play(presentationEvent);
+                    state?.Apply(matchEvent);
+                    if (presentationEvent != null)
+                        pendingAnimationEvents.Add(presentationEvent);
                     break;
+                }
 
                 case MessageTypes.MatchOpponentLeft:
-                    if (match != null)
+                    if (state != null)
                         lobby.SetStatus("L'avversario ha lasciato la partita.");
                     LeaveToLobby();
                     break;
@@ -180,7 +225,7 @@ namespace AccardND.PvpUi
                 {
                     var error = PvpServerClient.ParsePayload<ErrorMessage>(envelope);
                     Debug.LogWarning($"[PvP] {error.code}: {error.message}");
-                    if (match == null)
+                    if (state == null)
                         lobby.SetStatus($"Errore: {error.message}");
                     break;
                 }
@@ -299,7 +344,7 @@ namespace AccardND.PvpUi
                 lobby.SetStatus(statusMessage);
         }
 
-        // --- IPvpMatchActions ---
+        // --- IBattlePresentationActions ---
 
         public void Deploy(int handIndex) =>
             SendMatchAction(new MatchActionDto
@@ -351,6 +396,7 @@ namespace AccardND.PvpUi
             }
             try
             {
+                battleSfx?.PlayButtonClick();
                 await client.SendAsync(MessageTypes.MatchAction, action);
             }
             catch (System.Exception exception)
@@ -361,8 +407,7 @@ namespace AccardND.PvpUi
 
         public void LeaveToLobby()
         {
-            match?.Destroy();
-            match = null;
+            matchView?.HidePvpMatch();
             state = null;
             lobby.SetVisible(true);
         }
@@ -384,6 +429,12 @@ namespace AccardND.PvpUi
 
         private void BuildCanvas()
         {
+            configuration ??= Resources.Load<GameConfiguration>("GameConfiguration");
+            if (configuration == null)
+                configuration = ScriptableObject.CreateInstance<GameConfiguration>();
+            cardDatabase ??= Resources.Load<CardDatabase>("CardDatabase");
+            InitializeAudio();
+
             canvasObject = new GameObject("PvpCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = canvasObject.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -420,15 +471,23 @@ namespace AccardND.PvpUi
         {
             CloseLoadoutBuilder(null);
             lobby.SetVisible(false);
-            match?.Destroy();
-            match = new PvpMatchScreen(
-                canvasRoot, state, this, myLoadout ?? new List<LoadoutCardDto>(), cardDatabase);
+            matchView?.ShowPvpMatch(state, myLoadout, this);
         }
 
         private void OnDestroy()
         {
             client?.Dispose();
             client = null;
+        }
+
+        private void InitializeAudio()
+        {
+            if (battleSfx != null)
+                return;
+
+            battleSfx = new BattleSfxPlayer();
+            battleSfx.Initialize(transform, "PvP Battle SFX Audio Source");
+            battleSfxRouter = new BattlePresentationSfxRouter(battleSfx);
         }
     }
 }

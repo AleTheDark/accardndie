@@ -4,9 +4,19 @@
   "references": [
     "AccardND.GameCore",
     "AccardND.GameData",
+    "AccardND.Battlefield",
     "AccardND.NetProtocol",
     "AccardND.Network",
     "Unity.ugui",
-    "Unity.InputSystem"
+    "Unity.InputSystem",
+    "Unity.Services.Authentication",
+    "Unity.Services.Core"
+  ],
+  "versionDefines": [
+    {
+      "name": "com.unity.services.authentication",
+      "expression": "",
+      "define": "UGS_AUTH"
+    }
   ]
 }

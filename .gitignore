@@ -17,7 +17,7 @@ sysinfo.txt
 *.mdb.meta
 
 # Build output del progetto
-output*/
+output*
 .utmp/
 _Recovery/
 

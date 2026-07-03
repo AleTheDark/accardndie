@@ -117,6 +117,7 @@ public sealed partial class BattleBoardController
 		{
 			((MonoBehaviour)this).StopCoroutine(draftEntranceCoroutine);
 		}
+		StopPlayerBattlefieldRowTransition();
 		StopHandRedealAnimation();
 		draftEntranceAnimatingViews.Clear();
 		handRelayoutAnimatingViews.Clear();
@@ -651,22 +652,22 @@ public sealed partial class BattleBoardController
 	{
 		if (!((Object)(object)initiativeTimelineRoot == (Object)null))
 		{
+			RestoreTimelineBaseRect();
 			ClearDeploymentTimeline();
 			Font builtinResource = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-			float timelineTileSize = GetTimelineTileSize();
+			float timelineTileSize = GetTimelineTileSize(deploymentOrder.Count);
 			for (int i = 0; i < deploymentOrder.Count; i++)
 			{
 				DeploymentToken deploymentToken = deploymentOrder[i];
 				bool flag = i == currentDeploymentIndex;
 				Image image = CreateImage(deploymentToken.BelongsToPlayer ?"Deploy TU" : "Deploy CPU", (Transform)(object)initiativeTimelineRoot, flag ?new Color(0.72f, 0.48f, 0.12f, 0.98f) : (deploymentToken.BelongsToPlayer ?new Color(0.04f, 0.42f, 0.48f, 0.95f) : new Color(0.5f, 0.1f, 0.12f, 0.95f)));
 				LayoutElement layoutElement = ((Component)image).gameObject.AddComponent<LayoutElement>();
-				layoutElement.minWidth = timelineTileSize;
-				layoutElement.preferredWidth = timelineTileSize;
-				layoutElement.flexibleWidth = 0f;
+				ConfigureTimelineTileLayout(layoutElement, timelineTileSize);
 				Text text = CreateText("Token", ((Component)image).transform, builtinResource, 18, (FontStyle)1, (TextAnchor)4);
 				text.text = string.Format("{0}\n{1}", deploymentToken.BelongsToPlayer ?"TU" : "CPU", deploymentToken.Initiative);
 				Stretch(text.rectTransform, 2f);
 			}
+			ResizeTimelineTiles(deploymentOrder.Count);
 		}
 	}
 
@@ -854,12 +855,15 @@ public sealed partial class BattleBoardController
 		Rect rect = (Object)(object)targetRect != (Object)null ?targetRect.rect : safeAreaRoot.rect;
 		float spacing = 6f;
 		float tileSize = GetTimelineTileSize();
-		float totalWidth = tileSize * count + spacing * Mathf.Max(0, count - 1);
-		float startX = -totalWidth * 0.5f + tileSize * 0.5f;
+		bool vertical = IsTimelineVerticalLayout();
+		float totalLength = tileSize * count + spacing * Mathf.Max(0, count - 1);
+		float start = totalLength * 0.5f - tileSize * 0.5f;
 		Vector2 center = (Object)(object)targetRect != (Object)null ?RectCenterInSafeArea(targetRect) : Vector2.zero;
 		for (int i = 0; i < count; i++)
 		{
-			positions[i] = center + new Vector2(startX + (tileSize + spacing) * i, 0f);
+			positions[i] = vertical
+				? center + new Vector2(0f, start - (tileSize + spacing) * i)
+				: center + new Vector2(-start + (tileSize + spacing) * i, 0f);
 		}
 		return positions;
 	}
@@ -1305,10 +1309,93 @@ public sealed partial class BattleBoardController
 					battleCardState2.Initiative = selectedCpuDeploymentInitiatives[num3];
 				}
 			}
+			bool animatePlayerRowToBattlePosition = deploymentInitiativesReady && (Object)(object)playerRow != (Object)null;
+			Vector2 playerRowStartAnchorMin = animatePlayerRowToBattlePosition ?playerRow.anchorMin : Vector2.zero;
+			Vector2 playerRowStartAnchorMax = animatePlayerRowToBattlePosition ?playerRow.anchorMax : Vector2.zero;
+			Vector2 playerRowStartSize = animatePlayerRowToBattlePosition ?playerRow.sizeDelta : Vector2.zero;
+			Vector2 playerRowStartPosition = animatePlayerRowToBattlePosition ?playerRow.anchoredPosition : Vector2.zero;
 			ApplyResponsiveLayout();
+			if (animatePlayerRowToBattlePosition)
+			{
+				StartPlayerBattlefieldRowTransition(
+					playerRowStartAnchorMin,
+					playerRowStartAnchorMax,
+					playerRowStartSize,
+					playerRowStartPosition);
+			}
 			RestoreBattlefieldCardVisibility();
 			StartBattle();
 		}
+	}
+
+	private void StartPlayerBattlefieldRowTransition(Vector2 startAnchorMin, Vector2 startAnchorMax, Vector2 startSize, Vector2 startPosition)
+	{
+		if ((Object)(object)playerRow == (Object)null)
+		{
+			return;
+		}
+		if (playerBattlefieldRowTransitionCoroutine != null)
+		{
+			((MonoBehaviour)this).StopCoroutine(playerBattlefieldRowTransitionCoroutine);
+		}
+		Vector2 targetAnchorMin = playerRow.anchorMin;
+		Vector2 targetAnchorMax = playerRow.anchorMax;
+		Vector2 targetSize = playerRow.sizeDelta;
+		Vector2 targetPosition = playerRow.anchoredPosition;
+		if (Vector2.Distance(startAnchorMin, targetAnchorMin) < 0.001f && Vector2.Distance(startAnchorMax, targetAnchorMax) < 0.001f)
+		{
+			playerBattlefieldRowTransitionCoroutine = null;
+			return;
+		}
+		playerRow.anchorMin = startAnchorMin;
+		playerRow.anchorMax = startAnchorMax;
+		playerRow.sizeDelta = startSize;
+		playerRow.anchoredPosition = startPosition;
+		playerBattlefieldRowTransitionCoroutine = ((MonoBehaviour)this).StartCoroutine(PlayPlayerBattlefieldRowTransition(
+			targetAnchorMin,
+			targetAnchorMax,
+			targetSize,
+			targetPosition));
+	}
+
+	private void StopPlayerBattlefieldRowTransition()
+	{
+		if (playerBattlefieldRowTransitionCoroutine != null)
+		{
+			((MonoBehaviour)this).StopCoroutine(playerBattlefieldRowTransitionCoroutine);
+			playerBattlefieldRowTransitionCoroutine = null;
+		}
+	}
+
+	private IEnumerator PlayPlayerBattlefieldRowTransition(Vector2 targetAnchorMin, Vector2 targetAnchorMax, Vector2 targetSize, Vector2 targetPosition)
+	{
+		float duration = Mathf.Clamp(configuration.Animation.CardDeployDuration * 0.55f, 0.22f, 0.42f);
+		Vector2 startAnchorMin = playerRow.anchorMin;
+		Vector2 startAnchorMax = playerRow.anchorMax;
+		Vector2 startSize = playerRow.sizeDelta;
+		Vector2 startPosition = playerRow.anchoredPosition;
+		float elapsed = 0f;
+		while (elapsed < duration)
+		{
+			if ((Object)(object)playerRow == (Object)null)
+			{
+				playerBattlefieldRowTransitionCoroutine = null;
+				yield break;
+			}
+			elapsed += Time.unscaledDeltaTime;
+			float t = Mathf.Clamp01(elapsed / duration);
+			float eased = 1f - Mathf.Pow(1f - t, 3f);
+			playerRow.anchorMin = Vector2.LerpUnclamped(startAnchorMin, targetAnchorMin, eased);
+			playerRow.anchorMax = Vector2.LerpUnclamped(startAnchorMax, targetAnchorMax, eased);
+			playerRow.sizeDelta = Vector2.LerpUnclamped(startSize, targetSize, eased);
+			playerRow.anchoredPosition = Vector2.LerpUnclamped(startPosition, targetPosition, eased);
+			yield return null;
+		}
+		playerRow.anchorMin = targetAnchorMin;
+		playerRow.anchorMax = targetAnchorMax;
+		playerRow.sizeDelta = targetSize;
+		playerRow.anchoredPosition = targetPosition;
+		playerBattlefieldRowTransitionCoroutine = null;
 	}
 
 	private static void ClearCardRowChildren(RectTransform row)

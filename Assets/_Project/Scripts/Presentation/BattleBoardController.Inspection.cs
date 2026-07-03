@@ -337,7 +337,11 @@ public sealed partial class BattleBoardController
 		{
 			PlayCardInspectionCloseSfx();
 		}
-		if (playerCards.Count > 0 || cpuCards.Count > 0)
+		if (pvpPresentationActive)
+		{
+			RenderPvpMatch();
+		}
+		else if (playerCards.Count > 0 || cpuCards.Count > 0)
 		{
 			UpdateInteractions();
 		}

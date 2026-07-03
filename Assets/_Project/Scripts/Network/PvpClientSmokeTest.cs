@@ -118,7 +118,11 @@ namespace AccardND.Network
                     break;
 
                 case "DeploymentStarted":
-                    Debug.Log($"[PvP] Iniziativa round: {matchEvent.rollPlayer0} vs {matchEvent.rollPlayer1} - schiera prima il giocatore {matchEvent.firstPlayer}");
+                    Debug.Log($"[PvP] Iniziative schieramento: apre il giocatore {matchEvent.firstPlayer}");
+                    break;
+
+                case "DeploymentInitiative":
+                    Debug.Log($"[PvP] Token schieramento {matchEvent.slot}: G{matchEvent.player} iniziativa {matchEvent.initiative}");
                     break;
 
                 case "DeployTurn":

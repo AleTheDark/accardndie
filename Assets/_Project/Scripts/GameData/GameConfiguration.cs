@@ -165,6 +165,24 @@ namespace AccardND.GameData
         public int MerchantHeroCardCost => merchantHeroCardCost;
         public int GodMerchantHeroCardCost => godMerchantHeroCardCost;
         public int GodMerchantMinimumStrength => godMerchantMinimumStrength;
+
+        public int[] BuildVigorDiceByLevel(int startingVigorDieSides)
+        {
+            int safeStartingDie = Math.Max(2, startingVigorDieSides);
+            int count = Math.Max(1, maximumLevel);
+            int[] effectiveDice = new int[count];
+
+            for (int index = 0; index < count; index++)
+            {
+                int configuredDie = vigorDiceByLevel != null && index < vigorDiceByLevel.Length
+                    ? vigorDiceByLevel[index]
+                    : safeStartingDie;
+                effectiveDice[index] = Math.Max(safeStartingDie, configuredDie);
+            }
+
+            effectiveDice[0] = safeStartingDie;
+            return effectiveDice;
+        }
     }
 
     [Serializable]

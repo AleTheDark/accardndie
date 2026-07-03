@@ -29,6 +29,14 @@ namespace AccardND.NetProtocol
                         rollPlayer0 = e.RollPlayer0,
                         rollPlayer1 = e.RollPlayer1
                     };
+                case DeploymentInitiativeEvent e:
+                    return new MatchEventDto
+                    {
+                        type = "DeploymentInitiative",
+                        slot = e.Order,
+                        player = e.Player,
+                        initiative = e.Initiative
+                    };
                 case DeployTurnEvent e:
                     return new MatchEventDto { type = "DeployTurn", player = e.Player };
                 case CardDeployedEvent e:

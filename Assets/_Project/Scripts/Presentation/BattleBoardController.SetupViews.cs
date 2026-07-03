@@ -626,7 +626,7 @@ public sealed partial class BattleBoardController
 			{
 				modeSelectionPanel.SetActive(true);
 			}
-		});
+		}, this);
 	}
 
 	private void ShowMultiplayerPopup()

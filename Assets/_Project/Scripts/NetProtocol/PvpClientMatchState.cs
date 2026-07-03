@@ -34,6 +34,13 @@ namespace AccardND.NetProtocol
         public int DiePenaltySteps;
     }
 
+    public sealed class PvpClientDeploymentToken
+    {
+        public int Order;
+        public int Player;
+        public int Initiative;
+    }
+
     /// <summary>
     /// Ricostruisce lo stato del match dagli eventi del server. La UI legge da
     /// qui e non contiene logica di gioco: qualunque discrepanza col server è
@@ -58,6 +65,7 @@ namespace AccardND.NetProtocol
         public IReadOnlyList<string> Log => log;
 
         public List<PvpClientCard>[] Boards { get; } = { new(), new() };
+        public List<PvpClientDeploymentToken> DeploymentOrder { get; } = new();
         public int[] Wins { get; } = new int[2];
         public PvpAuraType[] Auras { get; } = new PvpAuraType[2];
 
@@ -98,6 +106,7 @@ namespace AccardND.NetProtocol
                     Cycle = 1;
                     Boards[0].Clear();
                     Boards[1].Clear();
+                    DeploymentOrder.Clear();
                     Auras[0] = PvpAuraType.None;
                     Auras[1] = PvpAuraType.None;
                     Phase = PvpClientPhase.Waiting;
@@ -114,7 +123,18 @@ namespace AccardND.NetProtocol
 
                 case "DeploymentStarted":
                     Phase = PvpClientPhase.Deployment;
-                    AddLog($"Iniziativa: {e.rollPlayer0} contro {e.rollPlayer1}. Schiera prima {PlayerName(e.firstPlayer)}.");
+                    DeploymentOrder.Clear();
+                    AddLog($"Iniziative schieramento: {PlayerName(e.firstPlayer)} apre la sequenza.");
+                    break;
+
+                case "DeploymentInitiative":
+                    DeploymentOrder.Add(new PvpClientDeploymentToken
+                    {
+                        Order = e.slot,
+                        Player = e.player,
+                        Initiative = e.initiative
+                    });
+                    DeploymentOrder.Sort((left, right) => left.Order.CompareTo(right.Order));
                     break;
 
                 case "DeployTurn":
