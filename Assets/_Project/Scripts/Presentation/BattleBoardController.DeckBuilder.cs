@@ -367,8 +367,18 @@ public sealed partial class BattleBoardController
 
 	private void ResetRunProgress()
 	{
+		runProgress = CreateRunProgress();
+	}
+
+	private RunProgressState CreateRunProgress()
+	{
 		ProgressionConfiguration progression = configuration.Progression;
-		runProgress = new RunProgressState(progression.ExperiencePerLevel, progression.MonsterRoomClearExperience, progression.MaximumLevel, progression.RoomsPerMasterLevel, progression.VigorDiceByLevel);
+		return new RunProgressState(
+			progression.ExperiencePerLevel,
+			progression.MonsterRoomClearExperience,
+			progression.MaximumLevel,
+			progression.RoomsPerMasterLevel,
+			progression.BuildVigorDiceByLevel(configuration.Gameplay.VigorDieSides));
 	}
 }
 }

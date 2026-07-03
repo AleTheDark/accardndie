@@ -36,11 +36,19 @@ namespace AccardND.GameCore.Tests
                     yield return index;
         }
 
-        // Roll-off (10 vs 5 = inizia il player 0) + iniziative interlacciate col tiebreaker.
+        // Token di schieramento (ordine crescente: p0 e p1 si alternano partendo da p0)
+        // seguiti dalle iniziative di battaglia, tutte interlacciate col tiebreaker.
         private static IEnumerable<int> DeploymentAndInitiatives(int[] player0Initiatives, int[] player1Initiatives)
         {
-            yield return 10;
-            yield return 5;
+            int[][] deploymentTokens = { new[] { 1, 3, 5 }, new[] { 2, 4, 6 } };
+            foreach (int[] tokens in deploymentTokens)
+            {
+                foreach (int initiative in tokens)
+                {
+                    yield return initiative;
+                    yield return 1;
+                }
+            }
             foreach (int initiative in player0Initiatives)
             {
                 yield return initiative;

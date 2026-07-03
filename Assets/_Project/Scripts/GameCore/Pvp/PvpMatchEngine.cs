@@ -50,10 +50,26 @@ namespace AccardND.GameCore.Pvp
         private readonly CombatResolver resolver;
         private readonly PlayerState[] players = { new(), new() };
         private readonly List<PvpCardState> turnOrder = new();
+        private readonly List<DeploymentToken> deploymentOrder = new();
 
         private int turnIndex;
         private int cycle;
         private int deployTurnPlayer;
+        private int deploymentIndex;
+
+        private readonly struct DeploymentToken
+        {
+            public DeploymentToken(int player, int initiative, int tieBreaker)
+            {
+                Player = player;
+                Initiative = initiative;
+                TieBreaker = tieBreaker;
+            }
+
+            public int Player { get; }
+            public int Initiative { get; }
+            public int TieBreaker { get; }
+        }
 
         public PvpMatchEngine(
             IReadOnlyList<CombatCard> loadoutPlayer0,
@@ -148,11 +164,23 @@ namespace AccardND.GameCore.Pvp
             }
             else
             {
-                int other = 1 - player;
-                deployTurnPlayer = players[other].Board.Count < rules.FormationSize ? other : player;
+                AdvanceDeploymentIndex();
                 events.Add(new DeployTurnEvent(deployTurnPlayer));
             }
             return events;
+        }
+
+        private void AdvanceDeploymentIndex()
+        {
+            deploymentIndex++;
+            while (deploymentIndex < deploymentOrder.Count
+                && players[deploymentOrder[deploymentIndex].Player].Board.Count >= rules.FormationSize)
+            {
+                deploymentIndex++;
+            }
+            deployTurnPlayer = deploymentIndex < deploymentOrder.Count
+                ? deploymentOrder[deploymentIndex].Player
+                : -1;
         }
 
         public IReadOnlyList<PvpEvent> UseAbility(int player, int targetPlayer, int targetSlot)
@@ -393,10 +421,49 @@ namespace AccardND.GameCore.Pvp
             Phase = PvpMatchPhase.Deployment;
             events.Add(new HandReadyEvent(0));
             events.Add(new HandReadyEvent(1));
-            PvpInitiativeResult rollOff = PvpInitiative.RollOff(random, rules.InitiativeDieSides);
-            deployTurnPlayer = rollOff.FirstPlayerStarts ? 0 : 1;
-            events.Add(new DeploymentStartedEvent(deployTurnPlayer, rollOff.FirstPlayerRoll, rollOff.SecondPlayerRoll));
+            BuildDeploymentOrder();
+            deploymentIndex = 0;
+            deployTurnPlayer = deploymentOrder.Count > 0 ? deploymentOrder[0].Player : 0;
+            int firstPlayerRoll = FirstDeploymentInitiativeFor(0);
+            int secondPlayerRoll = FirstDeploymentInitiativeFor(1);
+            events.Add(new DeploymentStartedEvent(deployTurnPlayer, firstPlayerRoll, secondPlayerRoll));
+            for (int index = 0; index < deploymentOrder.Count; index++)
+            {
+                DeploymentToken token = deploymentOrder[index];
+                events.Add(new DeploymentInitiativeEvent(index, token.Player, token.Initiative));
+            }
             events.Add(new DeployTurnEvent(deployTurnPlayer));
+        }
+
+        private void BuildDeploymentOrder()
+        {
+            deploymentOrder.Clear();
+            var usedInitiatives = new HashSet<int>();
+            for (int player = 0; player < players.Length; player++)
+            {
+                for (int slot = 0; slot < rules.FormationSize; slot++)
+                {
+                    deploymentOrder.Add(new DeploymentToken(
+                        player,
+                        RollUniqueInitiative(usedInitiatives),
+                        random.NextInclusive(1, 10000)));
+                }
+            }
+            deploymentOrder.Sort((left, right) =>
+            {
+                int byInitiative = left.Initiative.CompareTo(right.Initiative);
+                return byInitiative != 0 ? byInitiative : left.TieBreaker.CompareTo(right.TieBreaker);
+            });
+        }
+
+        private int FirstDeploymentInitiativeFor(int player)
+        {
+            foreach (DeploymentToken token in deploymentOrder)
+            {
+                if (token.Player == player)
+                    return token.Initiative;
+            }
+            return 0;
         }
 
         private void BeginBattle(List<PvpEvent> events)

@@ -1,4 +1,5 @@
 using System.Collections;
+using AccardND.Battlefield;
 using AccardND.GameCore;
 using AccardND.GameData;
 using UnityEngine;
@@ -8,23 +9,15 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
-	private const string SfxVolumePlayerPrefsKey = "AccardND.SfxVolume";
-
-	private const string SfxMutedPlayerPrefsKey = "AccardND.SfxMuted";
-
 	private const string MusicVolumePlayerPrefsKey = "AccardND.MusicVolume";
 
 	private const string MusicMutedPlayerPrefsKey = "AccardND.MusicMuted";
-
-	private AudioSource sfxAudioSource;
 
 	private AudioSource musicAudioSource;
 
 	private Coroutine musicFadeRoutine;
 
-	private float sfxVolume = 1f;
-
-	private bool sfxMuted;
+	private BattleSfxPlayer battleSfx;
 
 	private float musicVolume = 0.75f;
 
@@ -34,93 +27,15 @@ public sealed partial class BattleBoardController
 
 	private AudioClip closeCardInspectionSfx;
 
-	private AudioClip genericButtonClickSfx;
-
 	private AudioClip buyCardSfx;
 
 	private AudioClip arrowChangeSfx;
 
 	private AudioClip transitionSfx;
 
-	private AudioClip rollingDiceSfx;
-
-	private AudioClip pawnEnteringBattlefieldSfx;
-
-	private AudioClip warriorJoinBattlefieldSfx;
-
-	private AudioClip assassinJoinBattlefieldSfx;
-
-	private AudioClip barbarianJoinBattlefieldSfx;
-
-	private AudioClip mageJoinBattlefieldSfx;
-
-	private AudioClip paladinJoinBattlefieldSfx;
-
-	private AudioClip hunterJoinBattlefieldSfx;
-
-	private AudioClip rogueJoinBattlefieldSfx;
-
-	private AudioClip necromancerJoinBattlefieldSfx;
-
-	private AudioClip priestJoinBattlefieldSfx;
-
 	private AudioClip openBagSfx;
 
 	private AudioClip closedBagSfx;
-
-	private AudioClip deathCardSfx;
-
-	private AudioClip attachmentSfx;
-
-	private AudioClip assassinAbilitySfx;
-
-	private AudioClip mageAbilitySfx;
-
-	private AudioClip paladinAbilitySfx;
-
-	private AudioClip hunterAbilitySfx;
-
-	private AudioClip necromancerAbilitySfx;
-
-	private AudioClip priestAbilitySfx;
-
-	private AudioClip assassinAttackHitSfx;
-
-	private AudioClip assassinAttackBlockedSfx;
-
-	private AudioClip warriorAttackHitSfx;
-
-	private AudioClip warriorAttackBlockedSfx;
-
-	private AudioClip rogueAttackHitSfx;
-
-	private AudioClip rogueAttackBlockedSfx;
-
-	private AudioClip mageAttackHitSfx;
-
-	private AudioClip mageAttackBlockedSfx;
-
-	private AudioClip paladinAttackHitSfx;
-
-	private AudioClip paladinAttackBlockedSfx;
-
-	private AudioClip priestAttackHitSfx;
-
-	private AudioClip priestAttackBlockedSfx;
-
-	private AudioClip necromancerAttackHitSfx;
-
-	private AudioClip necromancerAttackBlockedSfx;
-
-	private AudioClip barbarianAttackHitSfx;
-
-	private AudioClip barbarianAttackBlockedSfx;
-
-	private AudioClip barbarianFurySfx;
-
-	private AudioClip hunterAttackHitSfx;
-
-	private AudioClip hunterAttackBlockedSfx;
 
 	private AudioClip lootRoomEnterSfx;
 
@@ -134,16 +49,10 @@ public sealed partial class BattleBoardController
 
 	private void InitializeAudio()
 	{
-		sfxVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(SfxVolumePlayerPrefsKey, 1f));
-		sfxMuted = PlayerPrefs.GetInt(SfxMutedPlayerPrefsKey, 0) != 0;
+		battleSfx = new BattleSfxPlayer();
+		battleSfx.Initialize(transform);
 		musicVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(MusicVolumePlayerPrefsKey, 0.75f));
 		musicMuted = PlayerPrefs.GetInt(MusicMutedPlayerPrefsKey, 0) != 0;
-		GameObject audioObject = new GameObject("SFX Audio Source");
-		audioObject.transform.SetParent(transform, false);
-		sfxAudioSource = audioObject.AddComponent<AudioSource>();
-		sfxAudioSource.playOnAwake = false;
-		sfxAudioSource.loop = false;
-		sfxAudioSource.spatialBlend = 0f;
 
 		GameObject musicObject = new GameObject("Music Audio Source");
 		musicObject.transform.SetParent(transform, false);
@@ -155,50 +64,11 @@ public sealed partial class BattleBoardController
 
 		openCardInspectionSfx = LoadSfx("open_card_inspection");
 		closeCardInspectionSfx = LoadSfx("close_card_inspection");
-		genericButtonClickSfx = LoadSfx("generic_button_click");
 		buyCardSfx = LoadSfx("buy_card");
 		arrowChangeSfx = LoadSfx("arrow_change");
 		transitionSfx = LoadSfx("transition");
-		rollingDiceSfx = LoadSfx("rolling_dice");
-		pawnEnteringBattlefieldSfx = LoadSfx("pawn_entering_battlefield");
-		warriorJoinBattlefieldSfx = LoadSfx("warrior_join_battlefield");
-		assassinJoinBattlefieldSfx = LoadSfx("assassin_join_battlefield");
-		barbarianJoinBattlefieldSfx = LoadSfx("barbarian_join_battlefield");
-		mageJoinBattlefieldSfx = LoadSfx("mage_join_battlefield");
-		paladinJoinBattlefieldSfx = LoadSfx("paladin_join_battlefield");
-		hunterJoinBattlefieldSfx = LoadSfx("hunter_join_battlefield");
-		rogueJoinBattlefieldSfx = LoadSfx("rogue_join_battlefield");
-		necromancerJoinBattlefieldSfx = LoadSfx("necromancer_hjoin_battlefield");
-		priestJoinBattlefieldSfx = LoadSfx("priest_join_battlefield");
 		openBagSfx = LoadSfx("open_bag");
 		closedBagSfx = LoadSfx("closed_bag");
-		deathCardSfx = LoadSfx("death_card");
-		attachmentSfx = LoadSfx("attachment");
-		assassinAbilitySfx = LoadSfx("assassin_ability");
-		mageAbilitySfx = LoadSfx("mage_ability");
-		paladinAbilitySfx = LoadSfx("paladin_ability");
-		hunterAbilitySfx = LoadSfx("hunter_ability");
-		necromancerAbilitySfx = LoadSfx("necromancer_ability");
-		priestAbilitySfx = LoadSfx("priest_ability");
-		assassinAttackHitSfx = LoadSfx("assassin_attack_hit");
-		assassinAttackBlockedSfx = LoadSfx("assassin_attack_blocked");
-		warriorAttackHitSfx = LoadSfx("warrior_attack_hit");
-		warriorAttackBlockedSfx = LoadSfx("warrior_attack_blocked");
-		rogueAttackHitSfx = LoadSfx("rogue_attack_hit");
-		rogueAttackBlockedSfx = LoadSfx("rogue_attack_blocked");
-		mageAttackHitSfx = LoadSfx("mage_attack_hit");
-		mageAttackBlockedSfx = LoadSfx("mage_attack_blocked");
-		paladinAttackHitSfx = LoadSfx("paladin_attack_hit");
-		paladinAttackBlockedSfx = LoadSfx("paladin_attack_blocked");
-		priestAttackHitSfx = LoadSfx("priest_attack_hit");
-		priestAttackBlockedSfx = LoadSfx("priest_attack_blocked");
-		necromancerAttackHitSfx = LoadSfx("necromancer_attack_hit");
-		necromancerAttackBlockedSfx = LoadSfx("necromancer_attack_blocked");
-		barbarianAttackHitSfx = LoadSfx("barbarian_attack_hit");
-		barbarianAttackBlockedSfx = LoadSfx("barbarian_attack_blocked");
-		barbarianFurySfx = LoadSfx("barbarian_fury");
-		hunterAttackHitSfx = LoadSfx("hunter_attack_hit");
-		hunterAttackBlockedSfx = LoadSfx("hunter_attack_blocked");
 		lootRoomEnterSfx = LoadSfx("loot_room_enter");
 		monster1RoomEnterSfx = LoadSfx("monster_1_room");
 		monster2RoomEnterSfx = LoadSfx("monster_2_room");
@@ -213,46 +83,28 @@ public sealed partial class BattleBoardController
 
 	private void PlaySfx(AudioClip clip, float volume = 1f)
 	{
-		if ((Object)(object)sfxAudioSource == (Object)null || (Object)(object)clip == (Object)null)
-		{
-			return;
-		}
-		float effectiveVolume = sfxMuted ? 0f : Mathf.Clamp01(volume * sfxVolume);
-		if (effectiveVolume <= 0f)
-		{
-			return;
-		}
-		sfxAudioSource.PlayOneShot(clip, effectiveVolume);
+		battleSfx?.PlayClip(clip, volume);
 	}
 
 	private void IncreaseSfxVolume()
 	{
-		SetSfxVolume(sfxVolume + 0.1f);
+		SetSfxVolume((battleSfx?.Volume ?? 1f) + 0.1f);
 	}
 
 	private void DecreaseSfxVolume()
 	{
-		SetSfxVolume(sfxVolume - 0.1f);
+		SetSfxVolume((battleSfx?.Volume ?? 1f) - 0.1f);
 	}
 
 	private void SetSfxVolume(float volume)
 	{
-		sfxVolume = Mathf.Clamp01(volume);
-		if (sfxVolume > 0f)
-		{
-			sfxMuted = false;
-		}
-		PlayerPrefs.SetFloat(SfxVolumePlayerPrefsKey, sfxVolume);
-		PlayerPrefs.SetInt(SfxMutedPlayerPrefsKey, sfxMuted ? 1 : 0);
-		PlayerPrefs.Save();
+		battleSfx?.SetVolume(volume);
 		RefreshSfxOptionsUi();
 	}
 
 	private void ToggleSfxMute()
 	{
-		sfxMuted = !sfxMuted;
-		PlayerPrefs.SetInt(SfxMutedPlayerPrefsKey, sfxMuted ? 1 : 0);
-		PlayerPrefs.Save();
+		battleSfx?.ToggleMute();
 		RefreshSfxOptionsUi();
 	}
 
@@ -260,11 +112,13 @@ public sealed partial class BattleBoardController
 	{
 		if ((Object)(object)sfxVolumeText != (Object)null)
 		{
-			sfxVolumeText.text = sfxMuted ? "MUTO" : Mathf.RoundToInt(sfxVolume * 100f) + "%";
+			bool muted = battleSfx?.Muted ?? false;
+			float volume = battleSfx?.Volume ?? 1f;
+			sfxVolumeText.text = muted ? "MUTO" : Mathf.RoundToInt(volume * 100f) + "%";
 		}
 		if ((Object)(object)sfxMuteButtonText != (Object)null)
 		{
-			sfxMuteButtonText.text = sfxMuted ? "ATTIVA" : "MUTE";
+			sfxMuteButtonText.text = battleSfx?.Muted == true ? "ATTIVA" : "MUTE";
 		}
 	}
 
@@ -404,7 +258,7 @@ public sealed partial class BattleBoardController
 
 	private void PlayGenericButtonClickSfx()
 	{
-		PlaySfx(genericButtonClickSfx);
+		battleSfx?.PlayButtonClick();
 	}
 
 	private void PlayBuyCardSfx()
@@ -424,35 +278,17 @@ public sealed partial class BattleBoardController
 
 	private void PlayRollingDiceSfx()
 	{
-		PlaySfx(rollingDiceSfx);
+		battleSfx?.PlayRollingDice();
 	}
 
 	private void PlayPawnEnteringBattlefieldSfx()
 	{
-		PlaySfx(pawnEnteringBattlefieldSfx);
+		battleSfx?.PlayJoinBattlefield();
 	}
 
 	private void PlayPawnEnteringBattlefieldSfx(CardDefinition definition)
 	{
-		if ((Object)(object)definition == (Object)null || !definition.HasHeroClass)
-		{
-			PlayPawnEnteringBattlefieldSfx();
-			return;
-		}
-		AudioClip classJoinSfx = definition.HeroClass switch
-		{
-			HeroClass.Warrior => warriorJoinBattlefieldSfx,
-			HeroClass.Assassin => assassinJoinBattlefieldSfx,
-			HeroClass.Barbarian => barbarianJoinBattlefieldSfx,
-			HeroClass.Mage => mageJoinBattlefieldSfx,
-			HeroClass.Paladin => paladinJoinBattlefieldSfx,
-			HeroClass.Hunter => hunterJoinBattlefieldSfx,
-			HeroClass.Rogue => rogueJoinBattlefieldSfx,
-			HeroClass.Necromancer => necromancerJoinBattlefieldSfx,
-			HeroClass.Priest => priestJoinBattlefieldSfx,
-			_ => pawnEnteringBattlefieldSfx
-		};
-		PlaySfx(classJoinSfx);
+		battleSfx?.PlayJoinBattlefield(definition);
 	}
 
 	private void PlayPawnEnteringBattlefieldSfx(BattleCardState card)
@@ -472,37 +308,27 @@ public sealed partial class BattleBoardController
 
 	private void PlayDeathCardSfx()
 	{
-		PlaySfx(deathCardSfx);
+		battleSfx?.PlayDeath();
 	}
 
 	private void PlayAttachmentSfx()
 	{
-		PlaySfx(attachmentSfx);
+		battleSfx?.PlayAttachment();
 	}
 
 	private void PlayBarbarianFurySfx()
 	{
-		PlaySfx(barbarianFurySfx);
+		battleSfx?.PlayBarbarianFury();
 	}
 
 	private void PlayHunterAbilitySfx()
 	{
-		PlaySfx(hunterAbilitySfx);
+		battleSfx?.PlayHunterAbility();
 	}
 
 	private void PlayClassAbilitySfx(HeroClass heroClass)
 	{
-		AudioClip abilitySfx = heroClass switch
-		{
-			HeroClass.Assassin => assassinAbilitySfx,
-			HeroClass.Mage => mageAbilitySfx,
-			HeroClass.Paladin => paladinAbilitySfx,
-			HeroClass.Hunter => hunterAbilitySfx,
-			HeroClass.Necromancer => necromancerAbilitySfx,
-			HeroClass.Priest => priestAbilitySfx,
-			_ => null
-		};
-		PlaySfx(abilitySfx);
+		battleSfx?.PlayClassAbility(heroClass);
 	}
 
 	private void PlayLootRoomEnterSfx()
@@ -533,36 +359,7 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
-		switch (attacker.Card.HeroClass)
-		{
-			case HeroClass.Assassin:
-				PlaySfx(hit ? assassinAttackHitSfx : assassinAttackBlockedSfx);
-				break;
-			case HeroClass.Warrior:
-				PlaySfx(hit ? warriorAttackHitSfx : warriorAttackBlockedSfx);
-				break;
-			case HeroClass.Rogue:
-				PlaySfx(hit ? rogueAttackHitSfx : rogueAttackBlockedSfx);
-				break;
-			case HeroClass.Mage:
-				PlaySfx(hit ? mageAttackHitSfx : mageAttackBlockedSfx);
-				break;
-			case HeroClass.Paladin:
-				PlaySfx(hit ? paladinAttackHitSfx : paladinAttackBlockedSfx);
-				break;
-			case HeroClass.Priest:
-				PlaySfx(hit ? priestAttackHitSfx : priestAttackBlockedSfx);
-				break;
-			case HeroClass.Necromancer:
-				PlaySfx(hit ? necromancerAttackHitSfx : necromancerAttackBlockedSfx);
-				break;
-			case HeroClass.Barbarian:
-				PlaySfx(hit ? barbarianAttackHitSfx : barbarianAttackBlockedSfx);
-				break;
-			case HeroClass.Hunter:
-				PlaySfx(hit ? hunterAttackHitSfx : hunterAttackBlockedSfx);
-				break;
-		}
+		battleSfx?.PlayAttackResult(attacker.Card.HeroClass, hit);
 	}
 }
 }

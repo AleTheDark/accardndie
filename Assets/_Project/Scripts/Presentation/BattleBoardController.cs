@@ -2,8 +2,10 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using AccardND.Battlefield;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.PvpUi;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
@@ -15,7 +17,7 @@ using Object = UnityEngine.Object;
 
 namespace AccardND.Presentation
 {
-public sealed partial class BattleBoardController : MonoBehaviour
+public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 {
 	private const string ComposableGolemCardId = "miniboss-composable-golem";
 	private const string ComposableGolemModelResourcePath = "Minibosses/miniboss_golem_componibile";
@@ -261,6 +263,8 @@ public sealed partial class BattleBoardController : MonoBehaviour
 
 	private Coroutine handRelayoutCoroutine;
 
+	private Coroutine playerBattlefieldRowTransitionCoroutine;
+
 	private readonly HashSet<int> selectedDraftCards = new HashSet<int>();
 
 	private readonly List<int> selectedPlayerDeploymentIndices = new List<int>();
@@ -377,6 +381,8 @@ public sealed partial class BattleBoardController : MonoBehaviour
 
 	private DiceSpriteCatalog diceCatalog;
 
+	private BattlePresentationAnimationPlayer battleAnimationPlayer;
+
 	private GameConfiguration configuration;
 
 	private CardDatabase cardDatabase;
@@ -392,6 +398,12 @@ public sealed partial class BattleBoardController : MonoBehaviour
 	private RectTransform initiativeTimelineRoot;
 
 	private RectTransform timelineBackgroundRect;
+
+	private Vector2 timelineBackgroundBaseMin;
+
+	private Vector2 timelineBackgroundBaseMax;
+
+	private bool hasTimelineBackgroundBaseRect;
 
 	private Text roundText;
 
@@ -687,9 +699,9 @@ public sealed partial class BattleBoardController : MonoBehaviour
 		random = new SeededRandomSource(num);
 		combatResolver = new CombatResolver(random);
 		cpuDecisionService = new CpuDecisionService(random);
-		ProgressionConfiguration progression = configuration.Progression;
-		runProgress = new RunProgressState(progression.ExperiencePerLevel, progression.MonsterRoomClearExperience, progression.MaximumLevel, progression.RoomsPerMasterLevel, progression.VigorDiceByLevel);
+		runProgress = CreateRunProgress();
 		diceCatalog = Resources.Load<DiceSpriteCatalog>("DiceSpriteCatalog");
+		battleAnimationPlayer = gameObject.AddComponent<BattlePresentationAnimationPlayer>();
 		InitializeAudio();
 		BuildInterface();
 		AppendLog($"SESSIONE AVVIATA - seed {num}");
@@ -881,18 +893,16 @@ public sealed partial class BattleBoardController : MonoBehaviour
 		initiativeTimelineRoot = new GameObject("Turn Timeline", new Type[2]
 		{
 			typeof(RectTransform),
-			typeof(HorizontalLayoutGroup)
+			typeof(GridLayoutGroup)
 		}).GetComponent<RectTransform>();
 		((Transform)initiativeTimelineRoot).SetParent(((Component)image6).transform, false);
 		Stretch(initiativeTimelineRoot, 4f);
-		HorizontalLayoutGroup component = ((Component)initiativeTimelineRoot).GetComponent<HorizontalLayoutGroup>();
-		component.spacing = 6f;
+		GridLayoutGroup component = ((Component)initiativeTimelineRoot).GetComponent<GridLayoutGroup>();
+		component.spacing = new Vector2(6f, 6f);
 		component.padding = new RectOffset(4, 4, 2, 2);
 		component.childAlignment = (TextAnchor)4;
-		component.childControlWidth = true;
-		component.childControlHeight = true;
-		component.childForceExpandWidth = false;
-		component.childForceExpandHeight = true;
+		component.constraint = GridLayoutGroup.Constraint.FixedRowCount;
+		component.constraintCount = 1;
 		Image image7 = CreateImage("Message Panel", (Transform)(object)safeAreaRoot, new Color(0.015f, 0.025f, 0.04f, 0.34f));
 		StylePanel(image7);
 		messagePanelRect = image7.rectTransform;

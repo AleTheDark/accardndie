@@ -51,7 +51,7 @@ public sealed partial class BattleBoardController
 
 		Image avatarFrame = CreateImage(name + " Avatar Placeholder", ((Component)panel).transform, new Color(0.08f, 0.12f, 0.15f, 0.98f));
 		StylePanel(avatarFrame);
-		SetRect(avatarFrame.rectTransform, new Vector2(0.045f, 0.31f), new Vector2(0.25f, 0.86f));
+		SetRect(avatarFrame.rectTransform, new Vector2(0.035f, 0.16f), new Vector2(0.17f, 0.86f));
 
 		Image avatarImage = CreateImage(name + " Avatar Icon Placeholder", ((Component)avatarFrame).transform, new Color(0.2f, 0.28f, 0.3f, 0.85f));
 		avatarImage.preserveAspect = true;
@@ -60,6 +60,9 @@ public sealed partial class BattleBoardController
 		Text avatarText = CreateText(name + " Avatar Placeholder Text", ((Component)avatarFrame).transform, font, 14, (FontStyle)1, (TextAnchor)4);
 		avatarText.text = "ICONA";
 		avatarText.color = new Color(0.65f, 0.75f, 0.76f);
+		avatarText.resizeTextForBestFit = true;
+		avatarText.resizeTextMinSize = 8;
+		avatarText.resizeTextMaxSize = 14;
 		Stretch(avatarText.rectTransform, 3f);
 
 		CombatantHud hud = new CombatantHud
@@ -80,25 +83,31 @@ public sealed partial class BattleBoardController
 
 		hud.NameText.text = displayName;
 		hud.NameText.color = new Color(0.96f, 0.82f, 0.42f);
-		SetRect(hud.NameText.rectTransform, new Vector2(0.29f, 0.68f), new Vector2(0.94f, 0.9f));
+		hud.NameText.resizeTextForBestFit = true;
+		hud.NameText.resizeTextMinSize = 13;
+		hud.NameText.resizeTextMaxSize = 21;
+		SetRect(hud.NameText.rectTransform, new Vector2(0.205f, 0.67f), new Vector2(0.61f, 0.9f));
 
 		hud.LevelText.color = new Color(0.87f, 0.92f, 0.94f);
-		SetRect(hud.LevelText.rectTransform, new Vector2(0.29f, 0.49f), new Vector2(0.47f, 0.66f));
+		SetRect(hud.LevelText.rectTransform, new Vector2(0.205f, 0.43f), new Vector2(0.34f, 0.64f));
 
 		Image progressTrack = CreateImage(name + " Progress Track", ((Component)panel).transform, new Color(0.04f, 0.06f, 0.07f, 0.95f));
 		StylePanel(progressTrack);
-		SetRect(progressTrack.rectTransform, new Vector2(0.49f, 0.52f), new Vector2(0.94f, 0.63f));
+		SetRect(progressTrack.rectTransform, new Vector2(0.36f, 0.47f), new Vector2(0.61f, 0.62f));
 
 		hud.ExperienceFill = CreateImage(name + " Progress Fill", ((Component)progressTrack).transform, new Color(0.72f, 0.48f, 0.12f, 0.95f));
 		SetRect(hud.ExperienceFill.rectTransform, Vector2.zero, new Vector2(0f, 1f));
 
 		hud.ExperienceText.color = new Color(0.86f, 0.92f, 0.95f);
-		SetRect(hud.ExperienceText.rectTransform, new Vector2(0.49f, 0.34f), new Vector2(0.94f, 0.49f));
+		hud.ExperienceText.resizeTextForBestFit = true;
+		hud.ExperienceText.resizeTextMinSize = 9;
+		hud.ExperienceText.resizeTextMaxSize = 14;
+		SetRect(hud.ExperienceText.rectTransform, new Vector2(0.36f, 0.22f), new Vector2(0.61f, 0.43f));
 
-		ConfigureHudStat(hud.DiceImage, hud.DiceText, 0.05f, 0.25f);
-		ConfigureHudStat(hud.DeckImage, hud.DeckText, 0.29f, 0.49f);
-		ConfigureHudStat(hud.CooldownImage, hud.CooldownText, 0.54f, 0.72f);
-		ConfigureHudStat(hud.GraveyardImage, hud.GraveyardText, 0.76f, 0.94f);
+		ConfigureHudStat(hud.DiceImage, hud.DiceText, new Vector2(0.66f, 0.52f), new Vector2(0.81f, 0.88f));
+		ConfigureHudStat(hud.DeckImage, hud.DeckText, new Vector2(0.83f, 0.52f), new Vector2(0.98f, 0.88f));
+		ConfigureHudStat(hud.CooldownImage, hud.CooldownText, new Vector2(0.66f, 0.12f), new Vector2(0.81f, 0.48f));
+		ConfigureHudStat(hud.GraveyardImage, hud.GraveyardText, new Vector2(0.83f, 0.12f), new Vector2(0.98f, 0.48f));
 
 		hud.DiceImage.preserveAspect = true;
 		hud.DeckImage.sprite = LoadSpriteResource("UI/deck_icon");
@@ -117,10 +126,10 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
-		CreateHudTooltipButton(hud.Rect, new Vector2(0.035f, 0.0f), new Vector2(0.265f, 0.33f), () => ShowHudTooltip(isPlayer ?$"Il tuo dado Vigore: {hud.DiceText.text}." : $"Il dado Vigore del tuo avversario: {hud.DiceText.text}.", hud.Rect));
-		CreateHudTooltipButton(hud.Rect, new Vector2(0.275f, 0.0f), new Vector2(0.515f, 0.33f), () => ShowHudTooltip(isPlayer ?$"Carte disponibili nel tuo mazzo: {hud.DeckText.text}." : $"Carte dell'avversario in formazione: {hud.DeckText.text}.", hud.Rect));
-		CreateHudTooltipButton(hud.Rect, new Vector2(0.525f, 0.0f), new Vector2(0.745f, 0.33f), () => ShowHudTooltip(isPlayer ?$"Carte in cooldown: {hud.CooldownText.text}." : $"Carte avversarie in cooldown: {hud.CooldownText.text}.", hud.Rect));
-		CreateHudTooltipButton(hud.Rect, new Vector2(0.75f, 0.0f), new Vector2(0.965f, 0.33f), () => ShowHudTooltip(isPlayer ?$"Carte nel tuo cimitero: {hud.GraveyardText.text}." : $"Carte avversarie eliminate: {hud.GraveyardText.text}.", hud.Rect));
+		CreateHudTooltipButton(hud.Rect, new Vector2(0.64f, 0.5f), new Vector2(0.82f, 0.92f), () => ShowHudTooltip(isPlayer ?$"Il tuo dado Vigore: {hud.DiceText.text}." : $"Il dado Vigore del tuo avversario: {hud.DiceText.text}.", hud.Rect));
+		CreateHudTooltipButton(hud.Rect, new Vector2(0.82f, 0.5f), new Vector2(1f, 0.92f), () => ShowHudTooltip(isPlayer ?$"Carte disponibili nel tuo mazzo: {hud.DeckText.text}." : $"Carte dell'avversario in formazione: {hud.DeckText.text}.", hud.Rect));
+		CreateHudTooltipButton(hud.Rect, new Vector2(0.64f, 0.08f), new Vector2(0.82f, 0.5f), () => ShowHudTooltip(isPlayer ?$"Carte in cooldown: {hud.CooldownText.text}." : $"Carte avversarie in cooldown: {hud.CooldownText.text}.", hud.Rect));
+		CreateHudTooltipButton(hud.Rect, new Vector2(0.82f, 0.08f), new Vector2(1f, 0.5f), () => ShowHudTooltip(isPlayer ?$"Carte nel tuo cimitero: {hud.GraveyardText.text}." : $"Carte avversarie eliminate: {hud.GraveyardText.text}.", hud.Rect));
 	}
 
 	private Button CreateHudTooltipButton(RectTransform parent, Vector2 minimum, Vector2 maximum, Action action)
@@ -185,14 +194,15 @@ public sealed partial class BattleBoardController
 		hudTooltipRoutine = null;
 	}
 
-	private static void ConfigureHudStat(Image image, Text text, float minimumX, float maximumX)
+	private static void ConfigureHudStat(Image image, Text text, Vector2 minimum, Vector2 maximum)
 	{
-		SetRect(image.rectTransform, new Vector2(minimumX, 0.015f), new Vector2(minimumX + 0.13f, 0.31f));
+		float width = maximum.x - minimum.x;
+		SetRect(image.rectTransform, new Vector2(minimum.x, minimum.y), new Vector2(minimum.x + width * 0.52f, maximum.y));
 		text.color = new Color(0.87f, 0.92f, 0.94f);
 		text.resizeTextForBestFit = true;
 		text.resizeTextMinSize = 11;
 		text.resizeTextMaxSize = 16;
-		SetRect(text.rectTransform, new Vector2(minimumX + 0.135f, 0.065f), new Vector2(maximumX, 0.255f));
+		SetRect(text.rectTransform, new Vector2(minimum.x + width * 0.56f, minimum.y + 0.08f), new Vector2(maximum.x, maximum.y - 0.08f));
 	}
 
 	private void RefreshPlayerHud()

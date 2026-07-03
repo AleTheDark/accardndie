@@ -38,7 +38,7 @@ MonoBehaviour:
     roomFadeInDuration: 0.42
   gameplay:
     initiativeDieSides: 20
-    vigorDieSides: 6
+    vigorDieSides: 12
     randomSeed: 20260620
     useRandomSeedEachSession: 1
     draftCandidateCount: 6

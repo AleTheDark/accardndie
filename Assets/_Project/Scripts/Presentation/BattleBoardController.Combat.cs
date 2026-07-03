@@ -255,7 +255,8 @@ public sealed partial class BattleBoardController
 			UpdatePostAttackClassState(attacker, defeatedTarget: false);
 			yield return ShowAutomaticOutcome(guaranteedKill: false);
 			PlayAttackResultSfx(attacker, hit: false);
-			SetMessage(FormatImpossibleAttackDetailed(attacker, defender, attackerDieSides, defenderDieSides, modifiers) + " Turno saltato.");
+			AppendLog(FormatImpossibleAttackDetailed(attacker, defender, attackerDieSides, defenderDieSides, modifiers) + " Turno saltato.");
+			SetBattlefieldMessage("Attacco impossibile: turno saltato.");
 			selectedPlayerIndex = -1;
 			attacker.View.SetSelected(selected: false);
 			yield return (object)new WaitForSecondsRealtime(configuration.Animation.TurnResultPause);
@@ -377,7 +378,8 @@ public sealed partial class BattleBoardController
 			UpdatePostAttackClassState(attacker, defeatedTarget: false);
 			yield return ShowAutomaticOutcome(guaranteedKill: false);
 			PlayAttackResultSfx(attacker, hit: false);
-			SetMessage(FormatImpossibleAttackDetailed(attacker, defender, attackerDieSides, defenderDieSides, modifiers) + " La CPU salta il turno.");
+			AppendLog(FormatImpossibleAttackDetailed(attacker, defender, attackerDieSides, defenderDieSides, modifiers) + " La CPU salta il turno.");
+			SetBattlefieldMessage("Attacco CPU impossibile: turno saltato.");
 			yield return (object)new WaitForSecondsRealtime(configuration.Animation.TurnResultPause);
 			FinishTurn();
 			yield break;
@@ -543,26 +545,44 @@ public sealed partial class BattleBoardController
 		SetMessagePanelHiddenForDuel(hidden: true);
 		Vector3 worldPosition = DuelWorldPoint(attacker, attacker: true);
 		Vector3 worldPosition2 = DuelWorldPoint(defender, attacker: false);
-		((MonoBehaviour)this).StartCoroutine(attacker.View.MoveToDuelPoint(worldPosition, 0.34f, 1.16f));
-		((MonoBehaviour)this).StartCoroutine(defender.View.MoveToDuelPoint(worldPosition2, 0.34f, 1.16f));
-		yield return (object)new WaitForSecondsRealtime(0.37f);
+		if ((Object)(object)battleAnimationPlayer != (Object)null)
+		{
+			yield return battleAnimationPlayer.MoveToDuelPoints(attacker.View, defender.View, worldPosition, worldPosition2);
+		}
+		else
+		{
+			((MonoBehaviour)this).StartCoroutine(attacker.View.MoveToDuelPoint(worldPosition, 0.34f, 1.16f));
+			((MonoBehaviour)this).StartCoroutine(defender.View.MoveToDuelPoint(worldPosition2, 0.34f, 1.16f));
+			yield return (object)new WaitForSecondsRealtime(0.37f);
+		}
 	}
 
 	private IEnumerator ReturnDuelSurvivors(BattleCardState attacker, BattleCardState defender)
 	{
 		bool num = attacker != null && !attacker.Eliminated;
 		bool flag = defender != null && !defender.Eliminated;
-		if (num)
+		if ((Object)(object)battleAnimationPlayer != (Object)null)
 		{
-			((MonoBehaviour)this).StartCoroutine(attacker.View.ReturnFromDuelPoint(0.26f));
+			yield return battleAnimationPlayer.ReturnDuelParticipants(
+				attacker?.View,
+				defender?.View,
+				num,
+				flag);
 		}
-		if (flag)
+		else
 		{
-			((MonoBehaviour)this).StartCoroutine(defender.View.ReturnFromDuelPoint(0.26f));
-		}
-		if (num || flag)
-		{
-			yield return (object)new WaitForSecondsRealtime(0.28f);
+			if (num)
+			{
+				((MonoBehaviour)this).StartCoroutine(attacker.View.ReturnFromDuelPoint(0.26f));
+			}
+			if (flag)
+			{
+				((MonoBehaviour)this).StartCoroutine(defender.View.ReturnFromDuelPoint(0.26f));
+			}
+			if (num || flag)
+			{
+				yield return (object)new WaitForSecondsRealtime(0.28f);
+			}
 		}
 		SetMessagePanelHiddenForDuel(hidden: false);
 	}
@@ -1789,16 +1809,19 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
+		RestoreTimelineBaseRect();
 		for (int num = ((Transform)initiativeTimelineRoot).childCount - 1; num >= 0; num--)
 		{
 			Object.Destroy((Object)(object)((Component)((Transform)initiativeTimelineRoot).GetChild(num)).gameObject);
 		}
 		if (turnOrder.Count == 0)
 		{
+			ResizeTimelineTiles(0);
 			return;
 		}
 		Font builtinResource = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-		float timelineTileSize = GetTimelineTileSize();
+		int visibleTimelineTileCount = GetVisibleTimelineTileCount();
+		float timelineTileSize = GetTimelineTileSize(visibleTimelineTileCount);
 		for (int i = 0; i < turnOrder.Count; i++)
 		{
 			int num2 = (currentTurnIndex + i) % turnOrder.Count;
@@ -1808,9 +1831,7 @@ public sealed partial class BattleBoardController
 				bool num3 = num2 == currentTurnIndex;
 				Image image = CreateImage(color: num3 ?new Color(0.72f, 0.48f, 0.12f, 0.98f) : (battleCardState.BelongsToPlayer ?new Color(0.08f, 0.25f, 0.32f, 0.94f) : new Color(0.32f, 0.1f, 0.12f, 0.94f)), name: "Timeline " + battleCardState.Card.Name, parent: (Transform)(object)initiativeTimelineRoot);
 				LayoutElement layoutElement = ((Component)image).gameObject.AddComponent<LayoutElement>();
-				layoutElement.minWidth = timelineTileSize;
-				layoutElement.preferredWidth = timelineTileSize;
-				layoutElement.flexibleWidth = 0f;
+				ConfigureTimelineTileLayout(layoutElement, timelineTileSize);
 				Image image2 = CreateImage("Portrait", ((Component)image).transform, Color.white);
 				image2.sprite = battleCardState.Definition.Artwork;
 				image2.preserveAspect = true;
@@ -1838,6 +1859,7 @@ public sealed partial class BattleBoardController
 				}
 			}
 		}
+		ResizeTimelineTiles(visibleTimelineTileCount);
 	}
 
 	private void AppendComposableGolemTimelineTile(Font font, float timelineTileSize)
@@ -1850,9 +1872,7 @@ public sealed partial class BattleBoardController
 		ComposableGolemFormStats nextForm = activeComposableGolem.NextForm;
 		Image image = CreateImage("Timeline Golem Form", (Transform)(object)initiativeTimelineRoot, GolemFormColor(activeForm.Form));
 		LayoutElement layoutElement = ((Component)image).gameObject.AddComponent<LayoutElement>();
-		layoutElement.minWidth = timelineTileSize * 1.85f;
-		layoutElement.preferredWidth = timelineTileSize * 1.85f;
-		layoutElement.flexibleWidth = 0f;
+		ConfigureTimelineTileLayout(layoutElement, IsTimelineVerticalLayout() ?timelineTileSize : timelineTileSize * 1.85f);
 		Text title = CreateText("Title", ((Component)image).transform, font, 15, (FontStyle)1, (TextAnchor)4);
 		title.text = "GOLEM";
 		title.color = Color.white;
@@ -1905,7 +1925,7 @@ public sealed partial class BattleBoardController
 		};
 	}
 
-	private float GetTimelineTileSize()
+	private float GetTimelineTileSize(int visibleTimelineTileCount = -1)
 	{
 		Rect val = Screen.safeArea;
 		float num = Mathf.Max(1f, val.width);
@@ -1914,17 +1934,21 @@ public sealed partial class BattleBoardController
 		bool num3 = IsCompactLayout(num / num2, configuration.ResponsiveLayout);
 		float num4 = (num3 ?84f : 52f);
 		float num5 = (num3 ?48f : 36f);
-		int visibleTimelineTileCount = GetVisibleTimelineTileCount();
+		if (visibleTimelineTileCount < 0)
+		{
+			visibleTimelineTileCount = GetVisibleTimelineTileCount();
+		}
 		if ((Object)(object)initiativeTimelineRoot == (Object)null || visibleTimelineTileCount <= 0)
 		{
 			return num4;
 		}
 		val = initiativeTimelineRoot.rect;
-		float num6 = val.width;
+		bool vertical = IsTimelineVerticalLayout();
+		float num6 = vertical ?val.height : val.width;
 		if (num6 <= 0f && (Object)(object)timelineBackgroundRect != (Object)null)
 		{
 			val = timelineBackgroundRect.rect;
-			num6 = val.width - 16f;
+			num6 = (vertical ?val.height : val.width) - 16f;
 		}
 		if (num6 <= 0f)
 		{
@@ -1951,13 +1975,19 @@ public sealed partial class BattleBoardController
 		return ((Transform)initiativeTimelineRoot).childCount;
 	}
 
-	private void ResizeTimelineTiles()
+	private void ResizeTimelineTiles(int timelineTileCount = -1)
 	{
 		if ((Object)(object)initiativeTimelineRoot == (Object)null)
 		{
 			return;
 		}
-		float timelineTileSize = GetTimelineTileSize();
+		int visibleTileCount = timelineTileCount >= 0 ?timelineTileCount : GetVisibleTimelineTileCount();
+		float timelineTileSize = GetTimelineTileSize(visibleTileCount);
+		GridLayoutGroup grid = ((Component)initiativeTimelineRoot).GetComponent<GridLayoutGroup>();
+		if ((Object)(object)grid != (Object)null)
+		{
+			grid.cellSize = new Vector2(timelineTileSize, timelineTileSize);
+		}
 		for (int i = 0; i < ((Transform)initiativeTimelineRoot).childCount; i++)
 		{
 			Transform child = ((Transform)initiativeTimelineRoot).GetChild(i);
@@ -1969,11 +1999,72 @@ public sealed partial class BattleBoardController
 				{
 					layoutElement = ((Component)val).gameObject.AddComponent<LayoutElement>();
 				}
-				layoutElement.minWidth = timelineTileSize;
-				layoutElement.preferredWidth = timelineTileSize;
-				layoutElement.flexibleWidth = 0f;
+				ConfigureTimelineTileLayout(layoutElement, timelineTileSize);
 			}
 		}
+		ResizeTimelineBackgroundToContent(timelineTileSize, visibleTileCount);
+	}
+
+	private void ResizeTimelineBackgroundToContent(float timelineTileSize, int visibleTileCount)
+	{
+		if ((Object)(object)timelineBackgroundRect == (Object)null || (Object)(object)initiativeTimelineRoot == (Object)null)
+		{
+			return;
+		}
+		((Component)timelineBackgroundRect).gameObject.SetActive(visibleTileCount > 0);
+		if (visibleTileCount <= 0 || !hasTimelineBackgroundBaseRect)
+		{
+			return;
+		}
+		GridLayoutGroup grid = ((Component)initiativeTimelineRoot).GetComponent<GridLayoutGroup>();
+		bool vertical = IsTimelineVerticalLayout();
+		float spacing = (Object)(object)grid != (Object)null ?(vertical ?grid.spacing.y : grid.spacing.x) :6f;
+		float padding = 8f;
+		if ((Object)(object)grid != (Object)null)
+		{
+			padding = vertical ?grid.padding.top + grid.padding.bottom : grid.padding.left + grid.padding.right;
+		}
+		float neededPixels = timelineTileSize * visibleTileCount + spacing * Mathf.Max(0, visibleTileCount - 1) + padding + 8f;
+		RectTransform parent = (RectTransform)(object)((Transform)timelineBackgroundRect).parent;
+		Rect parentRect = parent.rect;
+		float parentLength = Mathf.Max(1f, vertical ?parentRect.height : parentRect.width);
+		float baseLength = parentLength * (vertical ?timelineBackgroundBaseMax.y - timelineBackgroundBaseMin.y : timelineBackgroundBaseMax.x - timelineBackgroundBaseMin.x);
+		float normalizedLength = Mathf.Clamp(neededPixels / parentLength, 0.01f, baseLength / parentLength);
+		if (vertical)
+		{
+			float parentWidth = Mathf.Max(1f, parentRect.width);
+			float horizontalPadding = 8f;
+			if ((Object)(object)grid != (Object)null)
+			{
+				horizontalPadding = grid.padding.left + grid.padding.right;
+			}
+			float neededWidth = timelineTileSize + horizontalPadding + 8f;
+			float normalizedWidth = Mathf.Clamp(neededWidth / parentWidth, 0.01f, timelineBackgroundBaseMax.x - timelineBackgroundBaseMin.x);
+			float right = Mathf.Min(0.998f, timelineBackgroundBaseMax.x);
+			float center = (timelineBackgroundBaseMin.y + timelineBackgroundBaseMax.y) * 0.5f;
+			float half = normalizedLength * 0.5f;
+			SetRect(timelineBackgroundRect, new Vector2(Mathf.Max(0f, right - normalizedWidth), Mathf.Max(timelineBackgroundBaseMin.y, center - half)), new Vector2(right, Mathf.Min(timelineBackgroundBaseMax.y, center + half)));
+		}
+		else
+		{
+			float center = (timelineBackgroundBaseMin.x + timelineBackgroundBaseMax.x) * 0.5f;
+			float half = normalizedLength * 0.5f;
+			SetRect(timelineBackgroundRect, new Vector2(Mathf.Max(timelineBackgroundBaseMin.x, center - half), timelineBackgroundBaseMin.y), new Vector2(Mathf.Min(timelineBackgroundBaseMax.x, center + half), timelineBackgroundBaseMax.y));
+		}
+	}
+
+	private void ConfigureTimelineTileLayout(LayoutElement layoutElement, float timelineTileSize)
+	{
+		if ((Object)(object)layoutElement == (Object)null)
+		{
+			return;
+		}
+		layoutElement.minWidth = timelineTileSize;
+		layoutElement.preferredWidth = timelineTileSize;
+		layoutElement.flexibleWidth = 0f;
+		layoutElement.minHeight = timelineTileSize;
+		layoutElement.preferredHeight = timelineTileSize;
+		layoutElement.flexibleHeight = 0f;
 	}
 
 	private int ChooseCpuTarget(BattleCardState attacker, out string decisionReason)

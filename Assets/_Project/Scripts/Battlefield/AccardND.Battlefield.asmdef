@@ -1,0 +1,10 @@
+{
+  "name": "AccardND.Battlefield",
+  "rootNamespace": "AccardND.Battlefield",
+  "references": [
+    "AccardND.GameCore",
+    "AccardND.GameData",
+    "Unity.ugui",
+    "Unity.InputSystem"
+  ]
+}

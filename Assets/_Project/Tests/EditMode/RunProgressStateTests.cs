@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using AccardND.GameData;
 
 namespace AccardND.GameCore.Tests
 {
@@ -79,6 +80,31 @@ namespace AccardND.GameCore.Tests
             Assert.That(progress.CurrentExperience, Is.EqualTo(2));
             Assert.That(progress.AvailableExperience, Is.EqualTo(102));
             Assert.That(progress.RoomsCleared, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ProgressionConfiguration_UsesGameplayVigorDieAsStartingDie()
+        {
+            var progression = new ProgressionConfiguration();
+
+            int[] dice = progression.BuildVigorDiceByLevel(6);
+
+            Assert.That(dice[0], Is.EqualTo(6));
+            Assert.That(dice[1], Is.EqualTo(6));
+            Assert.That(dice[2], Is.EqualTo(8));
+        }
+
+        [Test]
+        public void ProgressionConfiguration_DebugStartingDieDoesNotDowngradeOnLevelUp()
+        {
+            var progression = new ProgressionConfiguration();
+
+            int[] dice = progression.BuildVigorDiceByLevel(8);
+
+            Assert.That(dice[0], Is.EqualTo(8));
+            Assert.That(dice[1], Is.EqualTo(8));
+            Assert.That(dice[2], Is.EqualTo(8));
+            Assert.That(dice[3], Is.EqualTo(10));
         }
 
         private static RunProgressState CreateProgress()
