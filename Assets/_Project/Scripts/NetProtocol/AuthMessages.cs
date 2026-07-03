@@ -16,6 +16,15 @@ namespace AccardND.NetProtocol
         public string password;
     }
 
+    /// <summary>Login con token di Unity Authentication: il server lo valida
+    /// contro le chiavi pubbliche di Unity, nessuna password coinvolta.</summary>
+    [Serializable]
+    public sealed class UgsLoginRequest
+    {
+        public string accessToken;
+        public string displayName;
+    }
+
     [Serializable]
     public sealed class AuthResponse
     {

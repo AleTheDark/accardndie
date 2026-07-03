@@ -19,6 +19,7 @@ namespace AccardND.NetProtocol
 
         public const string AuthRegister = "auth.register";
         public const string AuthLogin = "auth.login";
+        public const string AuthUgs = "auth.ugs";
         public const string AuthResponse = "auth.response";
 
         public const string RulesGet = "rules.get";

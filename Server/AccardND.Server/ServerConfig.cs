@@ -13,6 +13,14 @@ public sealed class ServerConfig
     public string Urls { get; set; } = "http://localhost:5017";
     public string AccountsFilePath { get; set; } = "accounts.json";
 
+    /// <summary>Project ID di Unity (dashboard UGS). Vuoto = auth UGS disattivata.</summary>
+    public string UgsProjectId { get; set; } = string.Empty;
+    public string UgsIssuer { get; set; } = "https://player-auth.services.api.unity.com";
+    public string UgsJwksSource { get; set; } = "https://player-auth.services.api.unity.com/.well-known/jwks.json";
+
+    /// <summary>Login username/password legacy (dev). Da spegnere in produzione.</summary>
+    public bool AllowPasswordAuth { get; set; } = true;
+
     public int LoadoutBudget { get; set; } = 60;
     public int LoadoutCardCount { get; set; } = 9;
     public int[] CardCostByValue { get; set; } = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };

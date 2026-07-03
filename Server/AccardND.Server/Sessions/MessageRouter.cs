@@ -10,6 +10,7 @@ public sealed class MessageRouter
 {
     private readonly ServerConfig config;
     private readonly AccountService accounts;
+    private readonly UgsAuthService ugsAuth;
     private readonly RoomManager rooms;
     private readonly MatchmakingQueue queue;
     private readonly PvpLoadoutRules loadoutRules;
@@ -19,6 +20,7 @@ public sealed class MessageRouter
     public MessageRouter(
         ServerConfig config,
         AccountService accounts,
+        UgsAuthService ugsAuth,
         RoomManager rooms,
         MatchmakingQueue queue,
         PvpCardCatalog cardCatalog,
@@ -26,6 +28,7 @@ public sealed class MessageRouter
     {
         this.config = config;
         this.accounts = accounts;
+        this.ugsAuth = ugsAuth;
         this.rooms = rooms;
         this.queue = queue;
         this.cardCatalog = cardCatalog;
@@ -65,6 +68,9 @@ public sealed class MessageRouter
                 return;
             case MessageTypes.AuthLogin:
                 await HandleAuthAsync(connection, envelope, isRegistration: false, cancellation);
+                return;
+            case MessageTypes.AuthUgs:
+                await HandleUgsAuthAsync(connection, envelope, cancellation);
                 return;
             case MessageTypes.RulesGet:
                 await connection.SendAsync(MessageTypes.RulesData, config.ToRulesData(), cancellation);
@@ -114,9 +120,43 @@ public sealed class MessageRouter
         }
     }
 
+    private async Task HandleUgsAuthAsync(
+        ClientConnection connection, Envelope envelope, CancellationToken cancellation)
+    {
+        var request = ClientConnection.ParsePayload<UgsLoginRequest>(envelope);
+        (AccountIdentity identity, string error) =
+            await ugsAuth.ValidateAsync(request?.accessToken, request?.displayName);
+
+        if (identity != null)
+        {
+            connection.Identity = identity;
+            logger.LogInformation(
+                "Autenticato via UGS '{Username}' ({PlayerId}) su {ConnectionId}",
+                identity.Username, identity.PlayerId, connection.ConnectionId);
+        }
+
+        await connection.SendAsync(MessageTypes.AuthResponse, new AuthResponse
+        {
+            ok = identity != null,
+            error = error,
+            token = null,
+            playerId = identity?.PlayerId,
+            username = identity?.Username
+        }, cancellation);
+    }
+
     private async Task HandleAuthAsync(
         ClientConnection connection, Envelope envelope, bool isRegistration, CancellationToken cancellation)
     {
+        if (!config.AllowPasswordAuth)
+        {
+            await connection.SendAsync(MessageTypes.AuthResponse, new AuthResponse
+            {
+                ok = false,
+                error = "Login con password disattivato: usa Unity Authentication."
+            }, cancellation);
+            return;
+        }
         string username;
         string password;
         if (isRegistration)

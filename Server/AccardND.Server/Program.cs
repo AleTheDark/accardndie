@@ -21,6 +21,7 @@ builder.Services.AddSingleton(provider =>
         catalogPath, provider.GetRequiredService<ILogger<AccardND.Server.Match.PvpCardCatalog>>());
 });
 builder.Services.AddSingleton<AccountService>();
+builder.Services.AddSingleton<UgsAuthService>();
 builder.Services.AddSingleton<RoomManager>();
 builder.Services.AddSingleton<MatchmakingQueue>();
 builder.Services.AddSingleton<MessageRouter>();
