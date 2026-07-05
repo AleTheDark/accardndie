@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 5-darkelf-assassin
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 5-darkelf-assassin
-  displayName: Dark Elf
+  displayName: darkelf
   category: 0
   artwork: {fileID: 21300000, guid: 438fa4d7a973aec40b53335ef64e9c6a, type: 3}
   strength: 5

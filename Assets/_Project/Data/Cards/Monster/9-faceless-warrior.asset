@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 9-faceless-warrior
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 9-faceless-warrior
-  displayName: Faceless
+  displayName: faceless
   category: 0
   artwork: {fileID: 21300000, guid: aa987f9c3bea3de4489b24b29d42a4b0, type: 3}
   strength: 9

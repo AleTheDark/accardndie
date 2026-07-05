@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 9-faceless-priest
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 9-faceless-priest
-  displayName: Faceless
+  displayName: faceless
   category: 0
   artwork: {fileID: 21300000, guid: 4f522a283953c5744a599d73fb61857d, type: 3}
   strength: 9

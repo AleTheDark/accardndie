@@ -209,11 +209,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		}
 	}
 
-	private const int MerchantMaximumDeckCards = 12;
-
 	private static Sprite runtimePanelSprite;
 
 	private static Sprite helpAuraSprite;
+
+	private static readonly Dictionary<string, Sprite> spriteResourceCache = new Dictionary<string, Sprite>();
 
 	private readonly List<BattleCardState> playerCards = new List<BattleCardState>();
 
@@ -485,6 +485,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private GameObject optionsPanel;
 
+	private GameObject returnToMenuConfirmPanel;
+
 	private Text sfxVolumeText;
 
 	private Button sfxMuteButton;
@@ -714,7 +716,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private void Update()
 	{
-		if ((Object)(object)cardInspectionPanel != (Object)null && cardInspectionPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+		if ((Object)(object)returnToMenuConfirmPanel != (Object)null && returnToMenuConfirmPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+		{
+			HideReturnToMenuConfirmation();
+		}
+		else if ((Object)(object)cardInspectionPanel != (Object)null && cardInspectionPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
 		{
 			CloseCardInspection();
 		}
@@ -864,8 +870,12 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		SetRect((RectTransform)((Component)musicMuteButton).transform, new Vector2(0.79f, 0.25f), new Vector2(0.94f, 0.36f));
 		Button closeOptionsButton = CreateButton("Close Options", optionsPanel.transform, builtinResource, "CHIUDI");
 		((UnityEvent)closeOptionsButton.onClick).AddListener(new UnityAction(ToggleOptionsPanel));
-		SetRect((RectTransform)((Component)closeOptionsButton).transform, new Vector2(0.06f, 0.06f), new Vector2(0.94f, 0.18f));
+		SetRect((RectTransform)((Component)closeOptionsButton).transform, new Vector2(0.06f, 0.06f), new Vector2(0.47f, 0.18f));
+		Button mainMenuButton = CreateButton("Options Main Menu", optionsPanel.transform, builtinResource, "MENU");
+		((UnityEvent)mainMenuButton.onClick).AddListener(new UnityAction(ReturnToMainMenuFromOptions));
+		SetRect((RectTransform)((Component)mainMenuButton).transform, new Vector2(0.53f, 0.06f), new Vector2(0.94f, 0.18f));
 		optionsPanel.SetActive(false);
+		CreateReturnToMenuConfirmation((Transform)(object)safeAreaRoot, builtinResource);
 		RefreshSfxOptionsUi();
 		RefreshMusicOptionsUi();
 		Text text2 = (cpuTitleText = CreateText("CPU Title", (Transform)(object)safeAreaRoot, builtinResource, 25, (FontStyle)1, (TextAnchor)3));

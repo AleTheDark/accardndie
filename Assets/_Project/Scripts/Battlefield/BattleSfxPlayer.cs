@@ -99,6 +99,7 @@ namespace AccardND.Battlefield
             if (effectiveVolume <= 0f)
                 return;
 
+            Debug.Log($"[SFX] Riproduco '{clip.name}' (volume {effectiveVolume:0.00})");
             source.PlayOneShot(clip, effectiveVolume);
         }
 
@@ -141,8 +142,6 @@ namespace AccardND.Battlefield
         public void PlayAttachment() => PlayClip(attachmentSfx);
 
         public void PlayBarbarianFury() => PlayClip(barbarianFurySfx);
-
-        public void PlayHunterAbility() => PlayClip(hunterAbilitySfx);
 
         public void PlayClassAbility(HeroClass heroClass)
         {

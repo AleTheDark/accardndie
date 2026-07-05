@@ -1,6 +1,7 @@
 {
   "Urls": "http://localhost:5017",
   "AccountsFilePath": "accounts.json",
+  "UgsProjectId": "8d275572-6657-4987-a777-9d7b84c86790",
   "LoadoutBudget": 60,
   "LoadoutCardCount": 9,
   "CardCostByValue": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],

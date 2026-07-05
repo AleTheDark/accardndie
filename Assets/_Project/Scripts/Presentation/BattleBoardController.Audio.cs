@@ -191,6 +191,7 @@ public sealed partial class BattleBoardController
 		musicAudioSource.clip = clip;
 		musicAudioSource.loop = true;
 		UpdateMusicSourceVolume();
+		Debug.Log($"[Music] Riproduco '{clip.name}' (volume {musicAudioSource.volume:0.00})");
 		musicAudioSource.Play();
 	}
 
@@ -319,11 +320,6 @@ public sealed partial class BattleBoardController
 	private void PlayBarbarianFurySfx()
 	{
 		battleSfx?.PlayBarbarianFury();
-	}
-
-	private void PlayHunterAbilitySfx()
-	{
-		battleSfx?.PlayHunterAbility();
 	}
 
 	private void PlayClassAbilitySfx(HeroClass heroClass)

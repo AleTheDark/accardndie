@@ -223,6 +223,13 @@ public sealed partial class BattleBoardController
 		DestroyPrototypeViews(playerDeploymentPreviewViews);
 		DestroyPrototypeViews(cpuDeploymentPreviewViews);
 		DestroyPrototypeViews(deckBuilderCardViews);
+		DestroyPrototypeViews(merchantOwnedCardViews);
+		ClearImplementationArchiveCards();
+		CloseCardInspection();
+		ClearCardRowChildren(playerRow);
+		ClearCardRowChildren(cpuRow);
+		ClearCardRowChildren(playerHandRow);
+		ClearInitiativeTimeline();
 		((Component)restartButton).gameObject.SetActive(false);
 		((Component)confirmFormationButton).gameObject.SetActive(false);
 		((Component)cancelActionButton).gameObject.SetActive(false);

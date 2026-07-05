@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 2-goblin-necromancer
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 2-goblin-necromancer
-  displayName: Goblin
+  displayName: goblin
   category: 0
   artwork: {fileID: 21300000, guid: 6a218a7f55c9470a9e02b4a5bc18a3df, type: 3}
   strength: 2

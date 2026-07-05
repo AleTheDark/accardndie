@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 9-faceless-rogue
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 9-faceless-rogue
-  displayName: Faceless
+  displayName: faceless
   category: 0
   artwork: {fileID: 21300000, guid: 001d3729529417e4e9001ac9f611ea97, type: 3}
   strength: 9

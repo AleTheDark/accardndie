@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.NetProtocol;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -340,13 +341,6 @@ public sealed partial class BattleBoardController
 					draftViews[i].SetSelected(i == pendingDeploymentIndex);
 					draftViews[i].SetInteractable(!flag);
 				}
-				if ((Object)(object)confirmFormationButtonText != (Object)null)
-				{
-					confirmFormationButtonText.text = "OK";
-				}
-				((Component)confirmFormationButton).gameObject.SetActive(true);
-				confirmFormationButton.interactable = true;
-				((Component)cancelActionButton).gameObject.SetActive(true);
 				RefreshCardActionOverlays();
 				SetMessage($"INIZIATIVA {deploymentToken.Initiative}: confermi {draftCandidates[index].DisplayName} in campo?");
 			}
@@ -683,7 +677,7 @@ public sealed partial class BattleBoardController
 		}
 	}
 
-	private IEnumerator PlayDeploymentInitiativeDiceRoll(int dieSides)
+	private IEnumerator PlayDeploymentInitiativeDiceRoll(int dieSides, string opponentLabel = "CPU")
 	{
 		if ((Object)(object)safeAreaRoot == (Object)null || deploymentOrder.Count == 0)
 		{
@@ -700,6 +694,23 @@ public sealed partial class BattleBoardController
 		Sprite[] cpuDiceFrames = LoadDiceUiRollFrames("Brown_Dice");
 		Sprite playerDiceEnd = LoadDiceUiSprite("Dice_End_1");
 		Sprite cpuDiceEnd = LoadDiceUiSprite("Brown_Dice_End_1");
+		Sprite catalogDiceEnd = LoadCatalogDiceSprite(dieSides, dieSides);
+		if ((Object)(object)playerDiceEnd == (Object)null)
+		{
+			playerDiceEnd = catalogDiceEnd;
+		}
+		if ((Object)(object)cpuDiceEnd == (Object)null)
+		{
+			cpuDiceEnd = catalogDiceEnd;
+		}
+		if (playerDiceFrames.Length == 0 && (Object)(object)playerDiceEnd != (Object)null)
+		{
+			playerDiceFrames = new[] { playerDiceEnd };
+		}
+		if (cpuDiceFrames.Length == 0 && (Object)(object)cpuDiceEnd != (Object)null)
+		{
+			cpuDiceFrames = new[] { cpuDiceEnd };
+		}
 		Rect safeRect = safeAreaRoot.rect;
 		float width = Mathf.Max(1f, safeRect.width);
 		float height = Mathf.Max(1f, safeRect.height);
@@ -757,6 +768,7 @@ public sealed partial class BattleBoardController
 			}
 		}
 		yield return (object)new WaitForSecondsRealtime(1f);
+		ResizeTimelineTiles(deploymentOrder.Count);
 		Canvas.ForceUpdateCanvases();
 		Vector2[] targetPositions = GetDeploymentTimelineTargetPositions(deploymentOrder.Count);
 		List<Vector2> starts = new List<Vector2>(deploymentOrder.Count);
@@ -821,7 +833,7 @@ public sealed partial class BattleBoardController
 				Sprite endSprite = belongsToPlayer ?playerDiceEnd :cpuDiceEnd;
 				image.sprite = frames.Length > 0 ?frames[Mathf.Abs(i) % frames.Length] : endSprite;
 				Text text = CreateText("Initiative Value", diceObject.transform, font, 22, (FontStyle)1, (TextAnchor)4);
-				text.text = $"{(belongsToPlayer ?"TU" :"CPU")}\n{token.Initiative}";
+				text.text = $"{(belongsToPlayer ?"TU" :opponentLabel)}\n{token.Initiative}";
 				text.color = Color.white;
 				text.resizeTextForBestFit = true;
 				text.resizeTextMinSize = 12;
@@ -851,19 +863,40 @@ public sealed partial class BattleBoardController
 		{
 			return positions;
 		}
-		RectTransform targetRect = (Object)(object)timelineBackgroundRect != (Object)null ?timelineBackgroundRect : initiativeTimelineRoot;
-		Rect rect = (Object)(object)targetRect != (Object)null ?targetRect.rect : safeAreaRoot.rect;
-		float spacing = 6f;
-		float tileSize = GetTimelineTileSize();
+		if ((Object)(object)initiativeTimelineRoot == (Object)null)
+		{
+			return positions;
+		}
+		GridLayoutGroup grid = ((Component)initiativeTimelineRoot).GetComponent<GridLayoutGroup>();
+		RectOffset padding = (Object)(object)grid != (Object)null ?grid.padding : new RectOffset();
+		float tileSize = GetTimelineTileSize(count);
 		bool vertical = IsTimelineVerticalLayout();
+		float spacing = (Object)(object)grid != (Object)null ?(vertical ?grid.spacing.y : grid.spacing.x) :6f;
 		float totalLength = tileSize * count + spacing * Mathf.Max(0, count - 1);
-		float start = totalLength * 0.5f - tileSize * 0.5f;
-		Vector2 center = (Object)(object)targetRect != (Object)null ?RectCenterInSafeArea(targetRect) : Vector2.zero;
+		Rect rect = initiativeTimelineRoot.rect;
+		float availableLength = Mathf.Max(0f, (vertical ?rect.height : rect.width) - (vertical ?padding.vertical : padding.horizontal));
+		float availableCross = Mathf.Max(0f, (vertical ?rect.width : rect.height) - (vertical ?padding.horizontal : padding.vertical));
+		float startOffset = Mathf.Max(0f, (availableLength - totalLength) * 0.5f);
+		float crossOffset = Mathf.Max(0f, (availableCross - tileSize) * 0.5f);
 		for (int i = 0; i < count; i++)
 		{
-			positions[i] = vertical
-				? center + new Vector2(0f, start - (tileSize + spacing) * i)
-				: center + new Vector2(-start + (tileSize + spacing) * i, 0f);
+			Vector2 localCenter;
+			if (vertical)
+			{
+				localCenter = new Vector2(
+					rect.xMin + padding.left + crossOffset + tileSize * 0.5f,
+					rect.yMax - padding.top - startOffset - tileSize * 0.5f - (tileSize + spacing) * i);
+			}
+			else
+			{
+				localCenter = new Vector2(
+					rect.xMin + padding.left + startOffset + tileSize * 0.5f + (tileSize + spacing) * i,
+					rect.yMax - padding.top - crossOffset - tileSize * 0.5f);
+			}
+			Vector3 worldPosition = ((Transform)initiativeTimelineRoot).TransformPoint(localCenter);
+			positions[i] = (Object)(object)safeAreaRoot != (Object)null
+				?(Vector2)((Transform)safeAreaRoot).InverseTransformPoint(worldPosition)
+				: (Vector2)worldPosition;
 		}
 		return positions;
 	}
@@ -910,21 +943,37 @@ public sealed partial class BattleBoardController
 
 	private static Sprite LoadDiceUiSprite(string spriteName)
 	{
-		Sprite sprite = Resources.Load<Sprite>("DiceUI/DiceSprites/" + spriteName);
+		string resourcePath = "DiceUI/DiceSprites/" + spriteName;
+		if (spriteResourceCache.TryGetValue(resourcePath, out Sprite cached) && (Object)(object)cached != (Object)null)
+		{
+			return cached;
+		}
+		Sprite sprite = Resources.Load<Sprite>(resourcePath);
 		if ((Object)(object)sprite != (Object)null)
 		{
+			spriteResourceCache[resourcePath] = sprite;
 			return sprite;
 		}
-		Texture2D texture = Resources.Load<Texture2D>("DiceUI/DiceSprites/" + spriteName);
+		Texture2D texture = Resources.Load<Texture2D>(resourcePath);
 		if ((Object)(object)texture != (Object)null)
 		{
-			return Sprite.Create(texture, new Rect(0f, 0f, ((Texture)texture).width, ((Texture)texture).height), new Vector2(0.5f, 0.5f), 100f);
+			Sprite generated = Sprite.Create(texture, new Rect(0f, 0f, ((Texture)texture).width, ((Texture)texture).height), new Vector2(0.5f, 0.5f), 100f);
+			generated.name = texture.name;
+			generated.hideFlags = HideFlags.DontSave;
+			spriteResourceCache[resourcePath] = generated;
+			return generated;
 		}
 #if UNITY_EDITOR
 		return UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>($"Assets/DiceUI/DiceSprites/{spriteName}.png");
 #else
 		return null;
 #endif
+	}
+
+	private static Sprite LoadCatalogDiceSprite(int sides, int result)
+	{
+		DiceSpriteCatalog catalog = Resources.Load<DiceSpriteCatalog>("DiceSpriteCatalog");
+		return catalog != null ? catalog.FindResult(sides, Mathf.Clamp(result, 1, Mathf.Max(1, sides))) : null;
 	}
 
 	private void ConfirmPendingDeployment()
@@ -1113,6 +1162,11 @@ public sealed partial class BattleBoardController
 
 	private void CancelPendingAction()
 	{
+		if (pvpPresentationActive && pvpState != null && pvpState.Phase == PvpClientPhase.DecisiveSelection)
+		{
+			TryClearPvpDecisiveSelection();
+			return;
+		}
 		if (pendingDeploymentIndex >= 0)
 		{
 			pendingDeploymentIndex = -1;
@@ -1205,6 +1259,11 @@ public sealed partial class BattleBoardController
 
 	private void ConfirmFormation()
 	{
+		if (pvpPresentationActive && pvpState != null && pvpState.Phase == PvpClientPhase.DecisiveSelection)
+		{
+			TryConfirmPvpDecisiveSelection();
+			return;
+		}
 		if (pendingDeploymentIndex >= 0)
 		{
 			ConfirmPendingDeployment();

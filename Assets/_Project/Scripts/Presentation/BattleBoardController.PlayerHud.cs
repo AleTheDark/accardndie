@@ -291,6 +291,12 @@ public sealed partial class BattleBoardController
 		{
 			return sprite;
 		}
+		DiceSpriteCatalog catalog = Resources.Load<DiceSpriteCatalog>("DiceSpriteCatalog");
+		sprite = catalog != null ? catalog.FindResult(sides, Mathf.Clamp(sides, 1, sides)) : null;
+		if ((Object)(object)sprite != (Object)null)
+		{
+			return sprite;
+		}
 #if UNITY_EDITOR
 		return UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>($"Assets/DiceUI/DiceImages/D{sides}_Divine.png");
 #else

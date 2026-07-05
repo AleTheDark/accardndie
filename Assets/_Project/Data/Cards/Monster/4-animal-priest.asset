@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 4-animal-priest
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 4-animal-priest
-  displayName: Animal
+  displayName: animal
   category: 0
   artwork: {fileID: 21300000, guid: 18511f52942548b7b619b1590a073ffd, type: 3}
   strength: 4

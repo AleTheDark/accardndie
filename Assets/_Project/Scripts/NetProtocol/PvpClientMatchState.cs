@@ -29,8 +29,11 @@ namespace AccardND.NetProtocol
         public bool Inhibited;
         public bool Marked;
         public bool Protecting;
+        public bool AbilityUsed;
+        public bool AbilityArmed;
         public int PermanentBonus;
         public int PendingBonus;
+        public PvpPendingBonusKind PendingBonusKind;
         public int DiePenaltySteps;
     }
 
@@ -74,6 +77,7 @@ namespace AccardND.NetProtocol
 
         public bool IsMyDeployTurn => Phase == PvpClientPhase.Deployment && DeployPlayer == MyIndex;
         public bool IsMyBattleTurn => Phase == PvpClientPhase.Battle && ActivePlayer == MyIndex;
+        public bool HasEliminatedFormation => FormationEliminated(0) || FormationEliminated(1);
 
         public event Action Changed;
 
@@ -151,7 +155,8 @@ namespace AccardND.NetProtocol
                         CardName = e.cardName,
                         HeroClass = (HeroClass)e.heroClass,
                         Strength = e.strength,
-                        Lives = e.lives
+                        Lives = e.lives,
+                        Initiative = e.initiative
                     });
                     if (e.player == MyIndex)
                         RemoveFromHand(e.cardId);
@@ -204,6 +209,8 @@ namespace AccardND.NetProtocol
                     {
                         card.Eliminated = false;
                         card.Lives = e.lives;
+                        card.AbilityUsed = false;
+                        card.AbilityArmed = false;
                         AddLog($"{card.CardName} torna in gioco con {e.lives} vita.");
                     }
                     break;
@@ -215,6 +222,8 @@ namespace AccardND.NetProtocol
                     if (paladin != null)
                     {
                         paladin.Protecting = false;
+                        paladin.AbilityArmed = false;
+                        paladin.AbilityUsed = true;
                         AddLog(e.redirected
                             ? $"{paladin.CardName} devia l'attacco su di sé."
                             : $"{paladin.CardName} si difende con vantaggio.");
@@ -247,6 +256,7 @@ namespace AccardND.NetProtocol
                     if (card != null)
                     {
                         card.PendingBonus = e.amount;
+                        card.PendingBonusKind = PvpPendingBonusKind.Fury;
                         AddLog($"{card.CardName} entra in Furia (+{e.amount}).");
                     }
                     break;
@@ -295,6 +305,8 @@ namespace AccardND.NetProtocol
                     Wins[1] = e.winsPlayer1;
                     Winner = e.winner;
                     Phase = PvpClientPhase.Finished;
+                    if (!EndedByForfeit && !HasEliminatedFormation)
+                        AddLog("Risultato ricevuto dal server, ma il replay locale non mostra ancora una formazione eliminata.");
                     AddLog(EndedByForfeit
                         ? Winner == MyIndex
                             ? "HAI VINTO PER ABBANDONO DELL'AVVERSARIO!"
@@ -312,6 +324,7 @@ namespace AccardND.NetProtocol
             PvpClientCard actor = CardAt(e.player, e.slot);
             PvpClientCard target = CardAt(e.targetPlayer, e.targetSlot);
             var ability = (HeroClass)e.ability;
+            MarkAbilityState(actor, ability);
             switch (ability)
             {
                 case HeroClass.Assassin:
@@ -342,7 +355,11 @@ namespace AccardND.NetProtocol
                     break;
                 case HeroClass.Priest:
                     if (target != null)
+                    {
                         target.PendingBonus += e.magnitude;
+                        if (target.PendingBonusKind != PvpPendingBonusKind.Fury)
+                            target.PendingBonusKind = PvpPendingBonusKind.Blessing;
+                    }
                     AddLog($"{actor?.CardName} benedice {target?.CardName} (+{e.magnitude}).");
                     break;
                 case HeroClass.Warrior:
@@ -361,7 +378,13 @@ namespace AccardND.NetProtocol
             if (attacker != null)
             {
                 attacker.PendingBonus = 0;
+                attacker.PendingBonusKind = PvpPendingBonusKind.None;
                 attacker.DiePenaltySteps = 0;
+                if (attacker.AbilityArmed && attacker.HeroClass == HeroClass.Warrior)
+                {
+                    attacker.AbilityArmed = false;
+                    attacker.AbilityUsed = true;
+                }
             }
             if (defender != null)
             {
@@ -395,6 +418,17 @@ namespace AccardND.NetProtocol
             AddLog($"{prefix}{attacker?.CardName} attacca {defender?.CardName}: {outcome}.{effect}");
         }
 
+        private static void MarkAbilityState(PvpClientCard actor, HeroClass ability)
+        {
+            if (actor == null)
+                return;
+
+            if (ability is HeroClass.Warrior or HeroClass.Paladin)
+                actor.AbilityArmed = true;
+            else
+                actor.AbilityUsed = true;
+        }
+
         private void RemoveFromHand(string definitionId)
         {
             for (int position = 0; position < Hand.Count; position++)
@@ -417,6 +451,18 @@ namespace AccardND.NetProtocol
                     return card;
             }
             return null;
+        }
+
+        private bool FormationEliminated(int player)
+        {
+            if (player is < 0 or > 1 || Boards[player].Count == 0)
+                return false;
+            foreach (PvpClientCard card in Boards[player])
+            {
+                if (card != null && !card.Eliminated && card.Lives > 0)
+                    return false;
+            }
+            return true;
         }
 
         private string PlayerName(int player) =>

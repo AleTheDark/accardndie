@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 8-spirit-mage
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 8-spirit-mage
-  displayName: Spirit
+  displayName: spirit
   category: 0
   artwork: {fileID: 21300000, guid: 9f1a7b5357287e940ba9a63f80afa318, type: 3}
   strength: 8

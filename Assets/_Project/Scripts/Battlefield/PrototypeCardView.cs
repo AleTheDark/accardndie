@@ -63,6 +63,11 @@ namespace AccardND.Presentation
         private GameObject healthBarRoot;
         private Image healthBarFill;
         private Text healthBarText;
+        private GameObject lifeIconsRoot;
+        private Image leftLifeIcon;
+        private Image rightLifeIcon;
+        private Sprite heartIcon;
+        private Sprite blackHeartIcon;
         private float statusIconSize = 56f;
         private GameObject diceRoot;
         private Image diceImage;
@@ -376,7 +381,6 @@ namespace AccardND.Presentation
             statusLabel.gameObject.SetActive(false);
             statusLabel.raycastTarget = false;
             CreateStatusIconRoot(new Vector2(0.04f, -0.18f), new Vector2(0.96f, 0.08f), 56f, 6f);
-            CreateHealthBar(font);
 
             defeatedLabel = CreateText("Defeated", transform, font, 21, FontStyle.Bold, TextAnchor.MiddleCenter);
             defeatedLabel.text = "KO";
@@ -471,6 +475,20 @@ namespace AccardND.Presentation
                 ? Vector3.one * configuration.Animation.SelectedCardScale
                 : initialScale;
             AnimateSelectionScale(targetScale, 0.12f);
+        }
+
+        public void SetTargetHint(bool highlighted, Color color)
+        {
+            if (highlighted)
+            {
+                selectionOutline.enabled = true;
+                selectionOutline.effectColor = color;
+                if (liftShadow != null && !dragging)
+                    liftShadow.enabled = true;
+                return;
+            }
+
+            ApplySelectionChrome(selectedVisual);
         }
 
         private void ApplySelectionChrome(bool selected)
@@ -1010,6 +1028,8 @@ namespace AccardND.Presentation
 
         public void SetHealthBar(int current, int maximum, Color fillColor)
         {
+            SetLifeIconsVisible(false);
+
             if (maximum <= 0)
             {
                 SetHealthBarVisible(false);
@@ -1036,6 +1056,50 @@ namespace AccardND.Presentation
         {
             if (healthBarRoot != null)
                 healthBarRoot.SetActive(visible);
+        }
+
+        public void SetLifeIcons(int current, int maximum)
+        {
+            SetHealthBarVisible(false);
+
+            if (maximum <= 0 || current <= 0)
+            {
+                SetLifeIconsVisible(false);
+                return;
+            }
+
+            if (lifeIconsRoot == null)
+                CreateLifeIcons();
+
+            int clampedCurrent = Mathf.Clamp(current, 0, maximum);
+            lifeIconsRoot.SetActive(clampedCurrent > 0);
+            lifeIconsRoot.transform.SetAsLastSibling();
+
+            if (leftLifeIcon != null)
+            {
+                leftLifeIcon.sprite = heartIcon;
+                leftLifeIcon.color = heartIcon != null ? Color.white : new Color(0.95f, 0.05f, 0.06f, 1f);
+                leftLifeIcon.gameObject.SetActive(clampedCurrent > 0);
+            }
+
+            if (rightLifeIcon != null)
+            {
+                bool full = clampedCurrent >= Mathf.Min(maximum, 2);
+                Sprite icon = full ? heartIcon : blackHeartIcon;
+                rightLifeIcon.sprite = icon;
+                rightLifeIcon.color = icon != null
+                    ? Color.white
+                    : full
+                        ? new Color(0.95f, 0.05f, 0.06f, 1f)
+                        : new Color(0.03f, 0.025f, 0.025f, 1f);
+                rightLifeIcon.gameObject.SetActive(clampedCurrent > 0);
+            }
+        }
+
+        public void SetLifeIconsVisible(bool visible)
+        {
+            if (lifeIconsRoot != null)
+                lifeIconsRoot.SetActive(visible);
         }
 
         public void SetStatuses(params StatusToken[] statuses)
@@ -1082,7 +1146,8 @@ namespace AccardND.Presentation
                 VigorSelectionMode.Single,
                 caption,
                 rollDuration,
-                resultHold));
+                resultHold,
+                use3DDice: false));
         }
 
         public void PlayVigorRoll(
@@ -1107,7 +1172,8 @@ namespace AccardND.Presentation
                 roll.SelectionMode,
                 caption,
                 rollDuration,
-                resultHold));
+                resultHold,
+                use3DDice: true));
         }
 
         public IEnumerator PlayAttackAnimation()
@@ -1306,6 +1372,38 @@ namespace AccardND.Presentation
 
             healthBarRoot.transform.SetAsLastSibling();
             healthBarRoot.SetActive(false);
+        }
+
+        private void CreateLifeIcons()
+        {
+            if (lifeIconsRoot != null)
+                return;
+
+            heartIcon = Resources.Load<Sprite>("UI/heart_icon");
+            blackHeartIcon = Resources.Load<Sprite>("UI/blackheart_icon")
+                ?? Resources.Load<Sprite>("UI/blackhearth_icon");
+
+            lifeIconsRoot = new GameObject(
+                "Life Icons",
+                typeof(RectTransform));
+            lifeIconsRoot.transform.SetParent(transform, false);
+            Stretch((RectTransform)lifeIconsRoot.transform);
+
+            leftLifeIcon = CreateLifeIcon("Left Life Icon", new Vector2(0.06f, 0.74f), new Vector2(0.28f, 0.96f));
+            rightLifeIcon = CreateLifeIcon("Right Life Icon", new Vector2(0.72f, 0.74f), new Vector2(0.94f, 0.96f));
+
+            lifeIconsRoot.transform.SetAsLastSibling();
+            lifeIconsRoot.SetActive(false);
+        }
+
+        private Image CreateLifeIcon(string name, Vector2 anchorMin, Vector2 anchorMax)
+        {
+            Image icon = CreateImage(name, lifeIconsRoot.transform, Color.white);
+            icon.sprite = heartIcon;
+            icon.preserveAspect = true;
+            icon.raycastTarget = false;
+            SetAnchors(icon.rectTransform, anchorMin, anchorMax);
+            return icon;
         }
 
         private IEnumerator DeploymentRoutine(
@@ -2251,7 +2349,8 @@ namespace AccardND.Presentation
             VigorSelectionMode selectionMode,
             string caption,
             float rollDuration,
-            float resultHold)
+            float resultHold,
+            bool use3DDice)
         {
             diceRoot.SetActive(true);
             diceCaption.text = caption;
@@ -2260,7 +2359,7 @@ namespace AccardND.Presentation
             secondDiceImage.rectTransform.localScale = Vector3.one;
             ConfigureDiceLayout(hasSecondResult);
 
-            bool uses3DDice = Dice3DRollView.IsSupported(visualSides);
+            bool uses3DDice = use3DDice && Dice3DRollView.IsSupported(visualSides);
             bool usesAnimatedDice = !uses3DDice && firstAnimatedDiceRoot != null;
             if (uses3DDice)
             {

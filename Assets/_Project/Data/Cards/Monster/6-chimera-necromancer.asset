@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 6-chimera-necromancer
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 6-chimera-necromancer
-  displayName: Chimera
+  displayName: chimera
   category: 0
   artwork: {fileID: 21300000, guid: b97c75bde903490bb0bf0c76bae44d64, type: 3}
   strength: 6

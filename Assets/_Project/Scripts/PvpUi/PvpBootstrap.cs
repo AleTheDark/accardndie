@@ -17,7 +17,7 @@ namespace AccardND.PvpUi
     /// </summary>
     public sealed class PvpBootstrap : MonoBehaviour, IBattlePresentationActions
     {
-        [SerializeField] private string serverUrl = "ws://localhost:5017/ws";
+        [SerializeField] private string serverUrl = "ws://217.160.212.85:5017/ws";
         [SerializeField, Tooltip("Vuoto = account ospite legato al dispositivo.")]
         private string username = string.Empty;
         [SerializeField] private string password = string.Empty;
@@ -195,17 +195,23 @@ namespace AccardND.PvpUi
                     state = new PvpClientMatchState();
                     state.Changed += () => stateDirty = true;
                     state.ApplyMatchStart(PvpServerClient.ParsePayload<MatchStart>(envelope));
+                    Debug.Log($"[PvP] Match iniziato: sono G{state.MyIndex} contro '{state.OpponentName}'.");
                     ShowMatch();
                     break;
                 }
 
                 case MessageTypes.MatchHand:
-                    state?.ApplyHand(PvpServerClient.ParsePayload<MatchHand>(envelope));
+                {
+                    MatchHand hand = PvpServerClient.ParsePayload<MatchHand>(envelope);
+                    Debug.Log($"[PvP] Mano round {hand.roundNumber}: {string.Join(", ", hand.handDefinitionIds ?? new string[0])}");
+                    state?.ApplyHand(hand);
                     break;
+                }
 
                 case MessageTypes.MatchEvent:
                 {
                     MatchEventDto matchEvent = PvpServerClient.ParsePayload<MatchEventDto>(envelope);
+                    Debug.Log($"[PvP] Evento {matchEvent.type}: player {matchEvent.player}, slot {matchEvent.slot}");
                     BattlePresentationEvent presentationEvent =
                         PvpBattlePresentationMapper.ToPresentationEvent(matchEvent, state);
                     battleSfxRouter?.Play(presentationEvent);

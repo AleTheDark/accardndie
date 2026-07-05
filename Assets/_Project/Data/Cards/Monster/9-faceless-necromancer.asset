@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 9-faceless-necromancer
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 9-faceless-necromancer
-  displayName: Faceless
+  displayName: faceless
   category: 0
   artwork: {fileID: 21300000, guid: a08b765b6c219d846913a38a92b6433f, type: 3}
   strength: 9

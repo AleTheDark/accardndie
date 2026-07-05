@@ -6,6 +6,7 @@ namespace AccardND.GameCore.Pvp
     public enum PvpLoadoutErrorCode
     {
         WrongCardCount,
+        DuplicateCard,
         CardValueOutOfRange,
         TooManyCardsOfValue,
         InvalidBaseDie,
@@ -89,8 +90,12 @@ namespace AccardND.GameCore.Pvp
 
             int cardsCost = 0;
             var countsByValue = new Dictionary<int, int>();
+            var countsByDefinitionId = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (PvpLoadoutCard card in loadout.Cards)
             {
+                countsByDefinitionId.TryGetValue(card.DefinitionId, out int definitionCount);
+                countsByDefinitionId[card.DefinitionId] = definitionCount + 1;
+
                 if (!rules.TryGetCardCost(card.Value, out int cost))
                 {
                     errors.Add(new PvpLoadoutError(
@@ -101,6 +106,14 @@ namespace AccardND.GameCore.Pvp
                 cardsCost += cost;
                 countsByValue.TryGetValue(card.Value, out int count);
                 countsByValue[card.Value] = count + 1;
+            }
+
+            foreach (KeyValuePair<string, int> entry in countsByDefinitionId)
+            {
+                if (entry.Value > 1)
+                    errors.Add(new PvpLoadoutError(
+                        PvpLoadoutErrorCode.DuplicateCard,
+                        $"La carta '{entry.Key}' Ã¨ presente {entry.Value} volte: ogni carta puÃ² essere selezionata una sola volta."));
             }
 
             foreach (KeyValuePair<int, int> entry in countsByValue)

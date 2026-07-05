@@ -988,7 +988,6 @@ public sealed partial class BattleBoardController
 				pendingAbilityUser = null;
 				((Component)abilityButton).gameObject.SetActive(false);
 				((Component)attachmentButton).gameObject.SetActive(false);
-				((Component)cancelActionButton).gameObject.SetActive(true);
 				ShowTargetHints(battleCardState);
 				SetMessage("ATTACCO: scegli una pedina avversaria da colpire con " + battleCardState.Card.Name + ".");
 				UpdateInteractions();
@@ -1031,14 +1030,12 @@ public sealed partial class BattleBoardController
 			battleCardState.AbilityArmed = true;
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.AssassinEnemy;
-			((Component)cancelActionButton).gameObject.SetActive(true);
 			SetMessage("ABILITA ASSASSINO: scegli un nemico da inibire.");
 			UpdateInteractions();
 			break;
 		case HeroClass.Warrior:
 			battleCardState.AbilityArmed = true;
 			attackTargetingActive = true;
-			((Component)cancelActionButton).gameObject.SetActive(true);
 			ShowTargetHints(battleCardState);
 			SetMessage("ABILITA GUERRIERO: " + battleCardState.Card.Name + " sommera due dadi nel prossimo attacco.");
 			break;
@@ -1046,21 +1043,18 @@ public sealed partial class BattleBoardController
 			battleCardState.AbilityArmed = true;
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.MageEnemy;
-			((Component)cancelActionButton).gameObject.SetActive(true);
 			SetMessage("ABILITA MAGO: scegli un nemico a cui abbassare il dado Vigore.");
 			UpdateInteractions();
 			break;
 		case HeroClass.Paladin:
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.PaladinAlly;
-			((Component)cancelActionButton).gameObject.SetActive(true);
 			SetMessage("ABILITA PALADINO: scegli una pedina alleata o " + battleCardState.Card.Name + " stesso da proteggere.");
 			break;
 		case HeroClass.Hunter:
 			battleCardState.AbilityArmed = true;
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.HunterEnemy;
-			((Component)cancelActionButton).gameObject.SetActive(true);
 			ShowTargetHints(battleCardState);
 			SetMessage("ABILITA CACCIATORE: scegli un nemico da marcare.");
 			UpdateInteractions();
@@ -1072,14 +1066,12 @@ public sealed partial class BattleBoardController
 			}
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.NecromancerAlly;
-			((Component)cancelActionButton).gameObject.SetActive(true);
 			SetMessage("ABILITA NEGROMANTE: scegli una carta alleata eliminata da rialzare.");
 			UpdateInteractions();
 			break;
 		case HeroClass.Priest:
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.PriestAlly;
-			((Component)cancelActionButton).gameObject.SetActive(true);
 			SetMessage("ABILITA SACERDOTE: scegli una carta alleata da benedire.");
 			UpdateInteractions();
 			break;
@@ -1119,7 +1111,6 @@ public sealed partial class BattleBoardController
 				abilityTargetMode = AbilityTargetMode.AttachmentAlly;
 				attachmentButton.interactable = false;
 				((Component)abilityButton).gameObject.SetActive(false);
-				((Component)cancelActionButton).gameObject.SetActive(true);
 				ClearTargetHints();
 				SetMessage($"ATTACH: sacrifica {battleCardState.Card.Name} per dare +{AttachmentBonus(battleCardState)} a una carta alleata.");
 				UpdateInteractions();
@@ -1487,84 +1478,30 @@ public sealed partial class BattleBoardController
 
 	private static Sprite LoadSpriteResource(string resourcePath)
 	{
+		if (string.IsNullOrWhiteSpace(resourcePath))
+		{
+			return null;
+		}
+		if (spriteResourceCache.TryGetValue(resourcePath, out Sprite cached) && (Object)(object)cached != (Object)null)
+		{
+			return cached;
+		}
 		Sprite val = Resources.Load<Sprite>(resourcePath);
 		if ((Object)(object)val != (Object)null)
 		{
+			spriteResourceCache[resourcePath] = val;
 			return val;
 		}
 		Texture2D val2 = Resources.Load<Texture2D>(resourcePath);
 		if (!((Object)(object)val2 == (Object)null))
 		{
-			return Sprite.Create(val2, new Rect(0f, 0f, (float)((Texture)val2).width, (float)((Texture)val2).height), new Vector2(0.5f, 0.5f), 100f);
+			Sprite generated = Sprite.Create(val2, new Rect(0f, 0f, (float)((Texture)val2).width, (float)((Texture)val2).height), new Vector2(0.5f, 0.5f), 100f);
+			generated.name = val2.name;
+			generated.hideFlags = HideFlags.DontSave;
+			spriteResourceCache[resourcePath] = generated;
+			return generated;
 		}
 		return null;
-	}
-
-	private IEnumerator ExecuteAssassinSummon(BattleCardState assassin)
-	{
-		inputLocked = true;
-		((Component)abilityButton).gameObject.SetActive(false);
-		RefreshCardActionOverlays();
-		UpdateInteractions();
-		CardDefinition definition = TakeReserveCard();
-		BattleCardState summoned = AddCard(playerCards, playerRow, definition, belongsToPlayer: true, playerCards.Count);
-		summoned.AbilityUsed = true;
-		HashSet<int> usedInitiatives = new HashSet<int>(turnOrder.Select((BattleCardState card) => card.Initiative));
-		summoned.Initiative = RollUniqueInitiative(configuration.Gameplay.InitiativeDieSides, usedInitiatives);
-		summoned.TieBreaker = random.NextInclusive(1, 10000);
-		turnOrder.Add(summoned);
-		ApplyResponsiveLayout();
-		PlayPawnEnteringBattlefieldSfx(summoned);
-		SetMessage("ABILITA ASSASSINO: " + assassin.Card.Name + " evoca " + summoned.Card.Name + " dalla riserva.");
-		PlayRollingDiceSfx();
-		summoned.View.PlayDiceRoll(diceCatalog, configuration.Gameplay.InitiativeDieSides, summoned.Initiative, "NUOVA INIZIATIVA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		yield return (object)new WaitForSecondsRealtime(configuration.Animation.DiceRollDuration + configuration.Animation.DiceResultHold);
-		summoned.View.SetInitiative(summoned.Initiative);
-		RefreshInitiativeDisplay();
-		inputLocked = false;
-		RefreshAbilityButton(assassin);
-		UpdateInteractions();
-	}
-
-	private void ReplaceMageFromReserve(BattleCardState mage)
-	{
-		int num = playerCards.IndexOf(mage);
-		if (num >= 0)
-		{
-			CardDefinition definition = TakeReserveCard();
-			PrototypeCardView prototypeCardView = PrototypeCardView.CreateBattlefieldPreview((Transform)(object)playerRow, definition, configuration);
-			BattleCardState replacement = new BattleCardState(definition, prototypeCardView, belongsToPlayer: true)
-			{
-				Initiative = mage.Initiative,
-				TieBreaker = mage.TieBreaker,
-				AbilityUsed = true
-			};
-			((UnityEvent)prototypeCardView.Button.onClick).AddListener((UnityAction)delegate
-			{
-				HandlePlayerCardClick(replacement);
-			});
-			playerCards[num] = replacement;
-			turnOrder[currentTurnIndex] = replacement;
-			Object.Destroy((Object)(object)((Component)mage.View).gameObject);
-			replacement.View.SetInitiative(replacement.Initiative);
-			replacement.View.SetSelected(selected: true);
-			PlayPawnEnteringBattlefieldSfx(replacement);
-			SetActiveTurnAura(replacement);
-			selectedPlayerIndex = num;
-			ApplyResponsiveLayout();
-			ClearTargetHints();
-			ShowTargetHints(replacement);
-			RefreshAbilityButton(replacement);
-			UpdateInteractions();
-			SetMessage("ABILITA MAGO: " + mage.Card.Name + " viene sostituito da " + replacement.Card.Name + ". Ora scegli il bersaglio.");
-		}
-	}
-
-	private CardDefinition TakeReserveCard()
-	{
-		CardDefinition result = playerReserve[0];
-		playerReserve.RemoveAt(0);
-		return result;
 	}
 
 	private void FinishTurn()
@@ -1862,36 +1799,6 @@ public sealed partial class BattleBoardController
 		ResizeTimelineTiles(visibleTimelineTileCount);
 	}
 
-	private void AppendComposableGolemTimelineTile(Font font, float timelineTileSize)
-	{
-		if (activeComposableGolem == null || activeComposableGolem.IsDefeated || (Object)(object)initiativeTimelineRoot == (Object)null)
-		{
-			return;
-		}
-		ComposableGolemFormStats activeForm = activeComposableGolem.ActiveForm;
-		ComposableGolemFormStats nextForm = activeComposableGolem.NextForm;
-		Image image = CreateImage("Timeline Golem Form", (Transform)(object)initiativeTimelineRoot, GolemFormColor(activeForm.Form));
-		LayoutElement layoutElement = ((Component)image).gameObject.AddComponent<LayoutElement>();
-		ConfigureTimelineTileLayout(layoutElement, IsTimelineVerticalLayout() ?timelineTileSize : timelineTileSize * 1.85f);
-		Text title = CreateText("Title", ((Component)image).transform, font, 15, (FontStyle)1, (TextAnchor)4);
-		title.text = "GOLEM";
-		title.color = Color.white;
-		SetRect(title.rectTransform, new Vector2(0.04f, 0.58f), new Vector2(0.34f, 0.96f));
-		Text active = CreateText("Active Form", ((Component)image).transform, font, 18, (FontStyle)1, (TextAnchor)4);
-		active.text = GolemFormName(activeForm.Form);
-		active.color = Color.white;
-		SetRect(active.rectTransform, new Vector2(0.34f, 0.56f), new Vector2(0.96f, 0.98f));
-		Text next = CreateText("Next Form", ((Component)image).transform, font, 13, (FontStyle)0, (TextAnchor)4);
-		next.text = $"PROSSIMA {GolemFormName(nextForm.Form)}";
-		next.color = new Color(0.82f, 0.9f, 1f);
-		SetRect(next.rectTransform, new Vector2(0.04f, 0.27f), new Vector2(0.96f, 0.58f));
-		Text countdown = CreateText("Round Countdown", ((Component)image).transform, font, 13, (FontStyle)0, (TextAnchor)4);
-		int roundsLeft = Mathf.Max(1, ComposableGolem.DefaultRoundsPerForm - activeComposableGolem.RoundsInActiveForm);
-		countdown.text = roundsLeft == 1 ?"CAMBIO TRA 1 ROUND" : $"CAMBIO TRA {roundsLeft} ROUND";
-		countdown.color = new Color(1f, 0.9f, 0.55f);
-		SetRect(countdown.rectTransform, new Vector2(0.04f, 0.02f), new Vector2(0.96f, 0.3f));
-	}
-
 	private static string GolemFormName(ComposableGolemForm form)
 	{
 		return form switch
@@ -2019,12 +1926,7 @@ public sealed partial class BattleBoardController
 		GridLayoutGroup grid = ((Component)initiativeTimelineRoot).GetComponent<GridLayoutGroup>();
 		bool vertical = IsTimelineVerticalLayout();
 		float spacing = (Object)(object)grid != (Object)null ?(vertical ?grid.spacing.y : grid.spacing.x) :6f;
-		float padding = 8f;
-		if ((Object)(object)grid != (Object)null)
-		{
-			padding = vertical ?grid.padding.top + grid.padding.bottom : grid.padding.left + grid.padding.right;
-		}
-		float neededPixels = timelineTileSize * visibleTileCount + spacing * Mathf.Max(0, visibleTileCount - 1) + padding + 8f;
+		float neededPixels = timelineTileSize * visibleTileCount + spacing * Mathf.Max(0, visibleTileCount - 1);
 		RectTransform parent = (RectTransform)(object)((Transform)timelineBackgroundRect).parent;
 		Rect parentRect = parent.rect;
 		float parentLength = Mathf.Max(1f, vertical ?parentRect.height : parentRect.width);
@@ -2033,12 +1935,7 @@ public sealed partial class BattleBoardController
 		if (vertical)
 		{
 			float parentWidth = Mathf.Max(1f, parentRect.width);
-			float horizontalPadding = 8f;
-			if ((Object)(object)grid != (Object)null)
-			{
-				horizontalPadding = grid.padding.left + grid.padding.right;
-			}
-			float neededWidth = timelineTileSize + horizontalPadding + 8f;
+			float neededWidth = timelineTileSize;
 			float normalizedWidth = Mathf.Clamp(neededWidth / parentWidth, 0.01f, timelineBackgroundBaseMax.x - timelineBackgroundBaseMin.x);
 			float right = Mathf.Min(0.998f, timelineBackgroundBaseMax.x);
 			float center = (timelineBackgroundBaseMin.y + timelineBackgroundBaseMax.y) * 0.5f;

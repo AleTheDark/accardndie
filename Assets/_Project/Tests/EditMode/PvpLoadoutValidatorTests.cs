@@ -104,6 +104,23 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void Validate_RejectsDuplicateCards()
+        {
+            var rules = PvpLoadoutRules.CreateDefault();
+            var cards = new List<PvpLoadoutCard>
+            {
+                Card(6), Card(6), Card(5), Card(5, "b"), Card(4),
+                Card(4, "b"), Card(3), Card(3, "b"), Card(2)
+            };
+            var loadout = new PvpLoadout(cards, baseDieSides: 3);
+
+            PvpLoadoutValidationResult result = PvpLoadoutValidator.Validate(loadout, rules);
+
+            Assert.That(result.IsValid, Is.False);
+            Assert.That(result.HasError(PvpLoadoutErrorCode.DuplicateCard), Is.True);
+        }
+
+        [Test]
         public void Validate_LowValueCardsHaveNoCopyLimit()
         {
             var rules = PvpLoadoutRules.CreateDefault();

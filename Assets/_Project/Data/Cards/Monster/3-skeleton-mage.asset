@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 3-skeleton-mage
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 3-skeleton-mage
-  displayName: Skeleton
+  displayName: skeleton
   category: 0
   artwork: {fileID: 21300000, guid: 107d02847f7ef5c44a908ff6b2c95eb1, type: 3}
   strength: 3

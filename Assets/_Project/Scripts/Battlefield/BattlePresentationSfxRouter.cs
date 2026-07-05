@@ -18,7 +18,6 @@ namespace AccardND.Battlefield
 
             switch (battleEvent.Type)
             {
-                case "DeploymentStarted":
                 case "CardInitiative":
                     sfx.PlayRollingDice();
                     break;
@@ -35,14 +34,6 @@ namespace AccardND.Battlefield
                 case "CardRevived":
                     sfx.PlayClassAbility(HeroClass.Necromancer);
                     sfx.PlayJoinBattlefield(HeroClass.Necromancer);
-                    break;
-                case "AttackResolved":
-                    if (battleEvent.HasHeroClass)
-                        sfx.PlayAttackResult(
-                            battleEvent.HeroClass,
-                            battleEvent.DefenderLostLife || battleEvent.DefenderEliminated);
-                    if (battleEvent.DefenderEliminated && !battleEvent.BecameSpirit)
-                        sfx.PlayDeath();
                     break;
                 case "AttachmentApplied":
                     sfx.PlayAttachment();

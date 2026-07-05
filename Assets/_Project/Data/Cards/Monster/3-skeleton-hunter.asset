@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 3-skeleton-hunter
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 3-skeleton-hunter
-  displayName: Skeleton
+  displayName: skeleton
   category: 0
   artwork: {fileID: 21300000, guid: d0ec2d7b3baf49d6ad4d43b93e2ffb73, type: 3}
   strength: 3

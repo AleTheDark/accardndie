@@ -49,7 +49,8 @@ namespace AccardND.NetProtocol
                         cardName = e.CardName,
                         heroClass = (int)e.HeroClass,
                         strength = e.Strength,
-                        lives = e.Lives
+                        lives = e.Lives,
+                        initiative = e.Initiative
                     };
                 case BattleStartedEvent e:
                     return new MatchEventDto

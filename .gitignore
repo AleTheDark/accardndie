@@ -18,6 +18,8 @@ sysinfo.txt
 
 # Build output del progetto
 output*
+WebGLBuild/
+webgl.zip
 .utmp/
 _Recovery/
 

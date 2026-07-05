@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 9-faceless-hunter
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 9-faceless-hunter
-  displayName: Faceless
+  displayName: faceless
   category: 0
   artwork: {fileID: 21300000, guid: 131944cfb0688274bacd38439f50d231, type: 3}
   strength: 9

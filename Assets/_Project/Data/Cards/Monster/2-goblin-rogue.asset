@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 2-goblin-rogue
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 2-goblin-rogue
-  displayName: Goblin
+  displayName: goblin
   category: 0
   artwork: {fileID: 21300000, guid: 82f9b93f64de4d15a98882c4ebf7db92, type: 3}
   strength: 2

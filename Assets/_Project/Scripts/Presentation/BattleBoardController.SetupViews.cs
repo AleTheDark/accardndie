@@ -618,6 +618,10 @@ public sealed partial class BattleBoardController
 		{
 			modeSelectionPanel.SetActive(false);
 		}
+		if ((Object)(object)cardDatabase == (Object)null)
+		{
+			cardDatabase = Resources.Load<CardDatabase>("CardDatabase");
+		}
 		GameObject gameObject = new GameObject("Pvp Mode");
 		AccardND.PvpUi.PvpBootstrap pvpBootstrap = gameObject.AddComponent<AccardND.PvpUi.PvpBootstrap>();
 		pvpBootstrap.Configure(cardDatabase, delegate
@@ -627,14 +631,6 @@ public sealed partial class BattleBoardController
 				modeSelectionPanel.SetActive(true);
 			}
 		}, this);
-	}
-
-	private void ShowMultiplayerPopup()
-	{
-		if ((Object)(object)multiplayerPopup != (Object)null)
-		{
-			multiplayerPopup.SetActive(true);
-		}
 	}
 
 	private void CreateDeckBuilderView(Font font)

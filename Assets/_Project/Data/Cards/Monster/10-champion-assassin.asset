@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 10-champion-assassin
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 10-champion-assassin
-  displayName: Champion
+  displayName: champion
   category: 0
   artwork: {fileID: 21300000, guid: f0b3cf383a864921babcac99a1d2d36b, type: 3}
   strength: 10

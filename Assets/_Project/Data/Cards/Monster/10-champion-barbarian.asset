@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 10-champion-barbarian
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 10-champion-barbarian
-  displayName: Champion
+  displayName: champion
   category: 0
   artwork: {fileID: 21300000, guid: 55222437669fac846a803f00a12abe43, type: 3}
   strength: 10

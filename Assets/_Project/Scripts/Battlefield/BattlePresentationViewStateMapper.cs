@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using AccardND.GameCore;
-using AccardND.GameData;
+using AccardND.GameCore.Pvp;
 using AccardND.Presentation;
 using UnityEngine;
 
@@ -8,54 +8,6 @@ namespace AccardND.Battlefield
 {
     public static class BattlePresentationViewStateMapper
     {
-        public static BattlefieldViewState ToBattlefieldViewState(
-            BattlePresentationState state,
-            CardDatabase database,
-            System.Func<int, bool> isTileClickable,
-            System.Func<int, bool> isTargetModeSelection,
-            System.Func<string, bool> shouldPlayEnterAnimation,
-            System.Func<string, bool> hasPendingDeploymentPose)
-        {
-            if (state == null)
-                state = new BattlePresentationState();
-
-            return new BattlefieldViewState
-            {
-                FormationSize = 3,
-                TopCards = BuildCards(
-                    state,
-                    1 - state.LocalPlayerIndex,
-                    BattlefieldSide.Top,
-                    database,
-                    isTileClickable,
-                    isTargetModeSelection,
-                    shouldPlayEnterAnimation,
-                    hasPendingDeploymentPose),
-                BottomCards = BuildCards(
-                    state,
-                    state.LocalPlayerIndex,
-                    BattlefieldSide.Bottom,
-                    database,
-                    isTileClickable,
-                    isTargetModeSelection,
-                    shouldPlayEnterAnimation,
-                    hasPendingDeploymentPose)
-            };
-        }
-
-        public static BattlePresentationCard FindBySlot(List<BattlePresentationCard> board, int slot)
-        {
-            if (board == null)
-                return null;
-
-            foreach (BattlePresentationCard card in board)
-            {
-                if (card.Slot == slot)
-                    return card;
-            }
-            return null;
-        }
-
         public static IReadOnlyList<PrototypeCardView.StatusToken> CardStatuses(BattlePresentationCard card)
         {
             var flags = new List<PrototypeCardView.StatusToken>();
@@ -75,77 +27,23 @@ namespace AccardND.Battlefield
             if (card.DiePenaltySteps > 0)
                 flags.Add(new PrototypeCardView.StatusToken($"DADO -{card.DiePenaltySteps}", new Color(0.8f, 0.65f, 1f)));
             if (card.PendingBonus > 0)
-                flags.Add(new PrototypeCardView.StatusToken($"BONUS +{card.PendingBonus}", new Color(0.2f, 1f, 0.45f)));
+                flags.Add(new PrototypeCardView.StatusToken(
+                    PendingBonusLabel(card),
+                    card.PendingBonusKind == PvpPendingBonusKind.Blessing
+                        ? new Color(0.85f, 0.8f, 1f)
+                        : new Color(1f, 0.75f, 0.25f)));
             return flags;
         }
 
-        public static bool AbilityTargetsEnemy(BattlePresentationCard card) =>
-            card != null && card.HeroClass is HeroClass.Assassin or HeroClass.Mage or HeroClass.Hunter;
+        private static string PendingBonusLabel(BattlePresentationCard card) =>
+            card.PendingBonusKind switch
+            {
+                PvpPendingBonusKind.Blessing => $"BENEDIZIONE +{card.PendingBonus}",
+                PvpPendingBonusKind.Fury => $"FURIA +{card.PendingBonus}",
+                _ => $"BONUS +{card.PendingBonus}"
+            };
 
         public static bool HasActivatableAbility(HeroClass heroClass) =>
             heroClass is not (HeroClass.Rogue or HeroClass.Barbarian);
-
-        public static int PlayerForSide(BattlePresentationState state, BattlefieldSide side) =>
-            side == BattlefieldSide.Bottom ? state.LocalPlayerIndex : 1 - state.LocalPlayerIndex;
-
-        private static List<BattlefieldCardViewState> BuildCards(
-            BattlePresentationState state,
-            int player,
-            BattlefieldSide side,
-            CardDatabase database,
-            System.Func<int, bool> isTileClickable,
-            System.Func<int, bool> isTargetModeSelection,
-            System.Func<string, bool> shouldPlayEnterAnimation,
-            System.Func<string, bool> hasPendingDeploymentPose)
-        {
-            var cards = new List<BattlefieldCardViewState>();
-            if (player < 0 || player >= state.Boards.Length)
-                return cards;
-
-            List<BattlePresentationCard> board = state.Boards[player];
-            for (int slot = 0; slot < 3; slot++)
-            {
-                BattlePresentationCard card = FindBySlot(board, slot);
-                if (card == null)
-                    continue;
-
-                string revealKey = $"{state.MatchRound}:{player}:{card.Slot}:{card.CardId}";
-                bool playEnterAnimation = !(hasPendingDeploymentPose?.Invoke(card.CardId) ?? false)
-                    && (shouldPlayEnterAnimation?.Invoke(revealKey) ?? false);
-
-                cards.Add(new BattlefieldCardViewState
-                {
-                    Key = new BattlefieldCardKey(side, slot),
-                    Definition = FindCardDefinition(database, card.CardId),
-                    Strength = card.Strength + card.PermanentBonus + card.PendingBonus,
-                    Lives = Mathf.Max(0, card.Lives),
-                    MaximumLives = card.MaximumLives,
-                    Eliminated = card.Eliminated,
-                    ActiveTurn = state.Phase == BattlePresentationPhase.Battle
-                        && state.ActivePlayer == player
-                        && state.ActiveSlot == card.Slot,
-                    Clickable = !card.Eliminated && (isTileClickable?.Invoke(player) ?? false),
-                    Inspectable = true,
-                    Selected = isTargetModeSelection?.Invoke(player) ?? false,
-                    PlayerOwned = player == state.LocalPlayerIndex,
-                    PlayEnterAnimation = playEnterAnimation,
-                    EmptyLabel = ShortCardName(card.CardId),
-                    Statuses = CardStatuses(card)
-                });
-            }
-            return cards;
-        }
-
-        private static CardDefinition FindCardDefinition(CardDatabase database, string definitionId)
-        {
-            if (database == null || string.IsNullOrWhiteSpace(definitionId))
-                return null;
-
-            CardDefinition definition = database.FindById(definitionId);
-            return definition != null ? definition : database.FindById(definitionId.Replace('_', '-'));
-        }
-
-        private static string ShortCardName(string definitionId) =>
-            string.IsNullOrEmpty(definitionId) ? "?" : definitionId.Replace('-', '\n');
     }
 }

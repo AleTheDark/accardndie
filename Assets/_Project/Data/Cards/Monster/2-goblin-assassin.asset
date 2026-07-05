@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 2-goblin-assassin
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 2-goblin-assassin
-  displayName: Goblin
+  displayName: goblin
   category: 0
   artwork: {fileID: 21300000, guid: 2493f0ecc6984ae995687f4c6f36e20e, type: 3}
   strength: 2

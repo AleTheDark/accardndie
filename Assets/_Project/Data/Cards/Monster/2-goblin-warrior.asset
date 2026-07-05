@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 2-goblin-warrior
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 2-goblin-warrior
-  displayName: Goblin
+  displayName: goblin
   category: 0
   artwork: {fileID: 21300000, guid: f49c078e65d2a2d42b4bc81898d29b0d, type: 3}
   strength: 2

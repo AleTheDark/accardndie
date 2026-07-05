@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 8-spirit-barbarian
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 8-spirit-barbarian
-  displayName: Spirit
+  displayName: spirit
   category: 0
   artwork: {fileID: 21300000, guid: 06f545bfa12b59844bc33f90e86b1a5e, type: 3}
   strength: 8

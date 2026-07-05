@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 4-animal-hunter
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 4-animal-hunter
-  displayName: Animal
+  displayName: animal
   category: 0
   artwork: {fileID: 21300000, guid: 992432d45dc64b7a83c50ef899dcd33d, type: 3}
   strength: 4

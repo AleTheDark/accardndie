@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 6-chimera-mage
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 6-chimera-mage
-  displayName: Chimera
+  displayName: chimera
   category: 0
   artwork: {fileID: 21300000, guid: 54793f24e3d937d4fb2f299c463248d2, type: 3}
   strength: 6

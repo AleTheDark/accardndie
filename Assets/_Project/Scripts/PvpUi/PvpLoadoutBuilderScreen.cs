@@ -172,10 +172,10 @@ namespace AccardND.PvpUi
             foreach (CardDefinition card in catalog)
             {
                 CardDefinition captured = card;
-                int copies = CountCopies(card);
+                bool selected = IsSelected(card);
                 var cell = PvpUiFactory.CreatePanel(
                     gridContent, $"Card {card.Id}",
-                    copies > 0 ? new Color(0.75f, 0.55f, 0.1f, 0.95f) : new Color(0.13f, 0.2f, 0.28f, 0.95f));
+                    selected ? new Color(0.75f, 0.55f, 0.1f, 0.95f) : new Color(0.13f, 0.2f, 0.28f, 0.95f));
 
                 if (card.Artwork != null)
                 {
@@ -190,12 +190,14 @@ namespace AccardND.PvpUi
 
                 Text label = PvpUiFactory.CreateText(
                     cell, "Label",
-                    $"{card.DisplayName}  [{card.Strength}]\n{card.HeroClass}" + (copies > 0 ? $"  x{copies}" : string.Empty),
+                    $"{card.DisplayName}  [{card.Strength}]\n{card.HeroClass}" + (selected ? "  SCELTA" : string.Empty),
                     15, TextAnchor.LowerCenter, FontStyle.Bold);
                 label.raycastTarget = false;
                 PvpUiFactory.SetAnchors((RectTransform)label.transform, new Vector2(0.02f, 0.01f), new Vector2(0.98f, 0.27f));
 
-                cell.gameObject.AddComponent<Button>().onClick.AddListener(() => AddCard(captured));
+                Button button = cell.gameObject.AddComponent<Button>();
+                button.interactable = !selected && selection.Count < rules.RequiredCardCount;
+                button.onClick.AddListener(() => AddCard(captured));
             }
         }
 
@@ -242,20 +244,21 @@ namespace AccardND.PvpUi
             }
         }
 
-        private int CountCopies(CardDefinition card)
+        private bool IsSelected(CardDefinition card)
         {
-            int count = 0;
+            if (card == null)
+                return false;
             foreach (CardDefinition selected in selection)
             {
-                if (selected == card)
-                    count++;
+                if (selected != null && selected.Id == card.Id)
+                    return true;
             }
-            return count;
+            return false;
         }
 
         private void AddCard(CardDefinition card)
         {
-            if (selection.Count >= rules.RequiredCardCount)
+            if (selection.Count >= rules.RequiredCardCount || IsSelected(card))
                 return;
             selection.Add(card);
             RefreshDynamicUi();

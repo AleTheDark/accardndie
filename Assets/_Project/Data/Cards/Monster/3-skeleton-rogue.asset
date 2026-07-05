@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 3-skeleton-rogue
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 3-skeleton-rogue
-  displayName: Skeleton
+  displayName: skeleton
   category: 0
   artwork: {fileID: 21300000, guid: e3f808677a304ce49ddf008db16f6e89, type: 3}
   strength: 3

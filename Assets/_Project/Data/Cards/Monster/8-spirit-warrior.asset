@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 8-spirit-warrior
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 8-spirit-warrior
-  displayName: Spirit
+  displayName: spirit
   category: 0
   artwork: {fileID: 21300000, guid: 882e797402a6d1f4897e502ab2e70cdd, type: 3}
   strength: 8

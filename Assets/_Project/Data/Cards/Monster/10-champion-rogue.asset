@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 10-champion-rogue
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 10-champion-rogue
-  displayName: Champion
+  displayName: champion
   category: 0
   artwork: {fileID: 21300000, guid: dc3f189a9fad774428b3a9a978ba96a6, type: 3}
   strength: 10

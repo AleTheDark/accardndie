@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 10-champion-necromancer
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 10-champion-necromancer
-  displayName: Champion
+  displayName: champion
   category: 0
   artwork: {fileID: 21300000, guid: ed4cb42e7f5d0ac4e8c4b9609c796efe, type: 3}
   strength: 10

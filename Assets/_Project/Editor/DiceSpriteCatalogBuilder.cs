@@ -11,8 +11,10 @@ namespace AccardND.Editor
     [InitializeOnLoad]
     public static class DiceSpriteCatalogBuilder
     {
-        private const string DiceArtFolder = "Assets/_Project/Art/Dice";
+        private const string DiceSpritesFolder = "Assets/DiceUI/DiceSprites";
+        private const string DiceResultsFolder = "Assets/DiceUI/DiceSpritesResult";
         private const string CatalogPath = "Assets/_Project/Resources/DiceSpriteCatalog.asset";
+        private static readonly int[] SupportedDiceSides = { 4, 6, 8, 10, 12, 20 };
 
         static DiceSpriteCatalogBuilder()
         {
@@ -25,7 +27,7 @@ namespace AccardND.Editor
             if (EditorApplication.isPlayingOrWillChangePlaymode)
                 return;
 
-            string[] diceGuids = AssetDatabase.FindAssets("t:Texture2D", new[] { DiceArtFolder });
+            string[] diceGuids = AssetDatabase.FindAssets("t:Texture2D", new[] { DiceSpritesFolder, DiceResultsFolder });
             foreach (string guid in diceGuids)
                 AssetDatabase.ImportAsset(AssetDatabase.GUIDToAssetPath(guid), ImportAssetOptions.ForceUpdate);
 
@@ -38,23 +40,23 @@ namespace AccardND.Editor
             if (EditorApplication.isPlayingOrWillChangePlaymode)
                 return;
 
-            var sets = new List<DiceAnimationSet>();
-            foreach (string path in Directory.GetFiles(DiceArtFolder, "D*.png"))
+            if (!Directory.Exists(DiceSpritesFolder) || !Directory.Exists(DiceResultsFolder))
             {
-                string unityPath = path.Replace('\\', '/');
-                string name = Path.GetFileNameWithoutExtension(unityPath);
-                if (!int.TryParse(name.Substring(1), out int sides))
-                    continue;
+                Debug.LogWarning("[Accard N' Die] Impossibile aggiornare il catalogo dadi: cartelle DiceUI mancanti.");
+                return;
+            }
 
-                Sprite[] allSprites = AssetDatabase.LoadAllAssetsAtPath(unityPath).OfType<Sprite>().ToArray();
-                Sprite[] frames = allSprites
-                    .Where(sprite => sprite.name.StartsWith(name + "_roll_", StringComparison.Ordinal))
-                    .OrderBy(sprite => sprite.name, StringComparer.Ordinal)
-                    .ToArray();
+            Sprite[] frames = Directory.GetFiles(DiceSpritesFolder, "Purple_Dice_Roll*.png")
+                .Select(LoadSpriteAtPath)
+                .Where(sprite => sprite != null)
+                .OrderBy(sprite => sprite.name, StringComparer.Ordinal)
+                .ToArray();
 
+            var sets = new List<DiceAnimationSet>();
+            foreach (int sides in SupportedDiceSides)
+            {
                 Sprite[] results = Enumerable.Range(1, sides)
-                    .Select(result => allSprites.FirstOrDefault(
-                        sprite => sprite.name.Equals($"{name}_result_{result:00}", StringComparison.Ordinal)))
+                    .Select(result => LoadSpriteAtPath($"{DiceResultsFolder}/DicePu_R_{result}.png"))
                     .ToArray();
 
                 if (frames.Length > 0 && results.All(sprite => sprite != null))
@@ -74,6 +76,12 @@ namespace AccardND.Editor
             Debug.Log($"[Accard N' Die] Catalogo dadi aggiornato: {sets.Count} dadi, "
                 + $"{sets.Sum(set => set.Frames.Length)} frame e risultati completi.");
         }
+
+        private static Sprite LoadSpriteAtPath(string path)
+        {
+            string unityPath = path.Replace('\\', '/');
+            return AssetDatabase.LoadAssetAtPath<Sprite>(unityPath);
+        }
     }
 
     public sealed class DiceCatalogAssetPostprocessor : AssetPostprocessor
@@ -85,7 +93,8 @@ namespace AccardND.Editor
             string[] movedFromAssetPaths)
         {
             bool diceChanged = importedAssets.Concat(movedAssets)
-                .Any(path => path.StartsWith("Assets/_Project/Art/Dice/", StringComparison.Ordinal));
+                .Any(path => path.StartsWith("Assets/DiceUI/DiceSprites/", StringComparison.Ordinal)
+                    || path.StartsWith("Assets/DiceUI/DiceSpritesResult/", StringComparison.Ordinal));
             if (diceChanged)
                 EditorApplication.delayCall += DiceSpriteCatalogBuilder.Rebuild;
         }

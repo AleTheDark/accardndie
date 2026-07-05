@@ -148,14 +148,25 @@ namespace AccardND.GameCore.Pvp
             int loadoutIndex = state.Hand[handIndex];
             state.Hand.RemoveAt(handIndex);
             CombatCard card = state.Loadout[loadoutIndex];
+            DeploymentToken token = deploymentOrder[deploymentIndex];
             var deployed = new PvpCardState(player, state.Board.Count, loadoutIndex, card, rules.CardLives);
+            deployed.Initiative = token.Initiative;
+            deployed.TieBreaker = token.TieBreaker;
             state.Board.Add(deployed);
             if (MatchRound == 1)
                 state.Round1Deployed.Add(loadoutIndex);
 
             var events = new List<PvpEvent>
             {
-                new CardDeployedEvent(player, deployed.Slot, card.Id, card.Name, card.HeroClass, card.Strength, deployed.Lives)
+                new CardDeployedEvent(
+                    player,
+                    deployed.Slot,
+                    card.Id,
+                    card.Name,
+                    card.HeroClass,
+                    card.Strength,
+                    deployed.Lives,
+                    deployed.Initiative)
             };
 
             if (players[0].Board.Count >= rules.FormationSize && players[1].Board.Count >= rules.FormationSize)
@@ -472,16 +483,12 @@ namespace AccardND.GameCore.Pvp
             players[1].Aura = PvpAura.Determine(CardsOf(players[1].Board));
             events.Add(new BattleStartedEvent(players[0].Aura, players[1].Aura));
 
-            var usedInitiatives = new HashSet<int>();
             turnOrder.Clear();
             foreach (PlayerState state in players)
             {
                 foreach (PvpCardState card in state.Board)
                 {
-                    card.Initiative = RollUniqueInitiative(usedInitiatives);
-                    card.TieBreaker = random.NextInclusive(1, 10000);
                     turnOrder.Add(card);
-                    events.Add(new CardInitiativeEvent(card.Owner, card.Slot, card.Initiative));
                 }
             }
             turnOrder.Sort((left, right) =>

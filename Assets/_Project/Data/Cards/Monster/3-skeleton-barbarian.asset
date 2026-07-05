@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 3-skeleton-barbarian
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 3-skeleton-barbarian
-  displayName: Skeleton
+  displayName: skeleton
   category: 0
   artwork: {fileID: 21300000, guid: f379cf54166c4860aafb830a78ea6a5d, type: 3}
   strength: 3

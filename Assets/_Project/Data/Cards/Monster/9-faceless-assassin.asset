@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 9-faceless-assassin
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 9-faceless-assassin
-  displayName: Faceless
+  displayName: faceless
   category: 0
   artwork: {fileID: 21300000, guid: c1ba291a8f8e13c4986956a52e6d8102, type: 3}
   strength: 9

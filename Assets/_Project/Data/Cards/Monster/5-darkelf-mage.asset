@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 5-darkelf-mage
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 5-darkelf-mage
-  displayName: Dark Elf
+  displayName: darkelf
   category: 0
   artwork: {fileID: 21300000, guid: 70070a964c2dbb5439ba6828685b0ae6, type: 3}
   strength: 5

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 10-champion-mage
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 10-champion-mage
-  displayName: Champion
+  displayName: champion
   category: 0
   artwork: {fileID: 21300000, guid: ee41b899334f4074aa9cb23f009943e0, type: 3}
   strength: 10

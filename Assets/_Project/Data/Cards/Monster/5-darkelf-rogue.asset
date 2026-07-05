@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 5-darkelf-rogue
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 5-darkelf-rogue
-  displayName: Dark Elf
+  displayName: darkelf
   category: 0
   artwork: {fileID: 21300000, guid: 2d882920d579e344eac6f056ca61a152, type: 3}
   strength: 5

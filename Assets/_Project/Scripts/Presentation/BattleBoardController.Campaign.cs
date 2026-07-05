@@ -111,68 +111,6 @@ public sealed partial class BattleBoardController
 		return LoadScenario(RoomType.Monster, pendingRoomDifficulty);
 	}
 
-	private void LoadRandomScenario(RoomType roomType)
-	{
-		if ((Object)(object)scenarioCatalog == (Object)null || scenarioCatalog.Scenarios.Count == 0)
-		{
-			return;
-		}
-		RoomDifficulty roomDifficulty = ((roomType != RoomType.Merchant) ?((runProgress.MasterLevel <= 2) ?RoomDifficulty.Easy : ((runProgress.MasterLevel <= 4) ?RoomDifficulty.Normal : RoomDifficulty.Hard)) : ((runProgress.MasterLevel <= 3) ?RoomDifficulty.Easy : RoomDifficulty.Hard));
-		List<ScenarioDefinition> list = new List<ScenarioDefinition>();
-		List<ScenarioDefinition> list2 = new List<ScenarioDefinition>();
-		foreach (ScenarioDefinition scenario in scenarioCatalog.Scenarios)
-		{
-			if (!((Object)(object)scenario == (Object)null) && scenario.RoomType == roomType)
-			{
-				list2.Add(scenario);
-				if (scenario.Difficulty == roomDifficulty || scenario.Difficulty == RoomDifficulty.Any)
-				{
-					list.Add(scenario);
-				}
-			}
-		}
-		List<ScenarioDefinition> list3 = ((list.Count > 0) ?list : list2);
-		if (list3.Count > 0)
-		{
-			ApplyScenario(list3[random.NextInclusive(0, list3.Count - 1)]);
-		}
-	}
-
-	private RoomType GenerateNextRoomType()
-	{
-		ProgressionConfiguration progression = configuration.Progression;
-		int num = runProgress.RoomsCleared + 1;
-		if (ShouldForceFirstRoomComposableGolem())
-		{
-			return RoomType.Boss;
-		}
-		if (num == progression.FinalBossRoom || (progression.MinibossEveryRooms > 0 && num % progression.MinibossEveryRooms == 0))
-		{
-			return RoomType.Boss;
-		}
-		int num2 = progression.MonsterRoomWeight + progression.MerchantRoomWeight + progression.LootRoomWeight + progression.OpportunityRoomWeight;
-		if (num2 <= 0)
-		{
-			return RoomType.Monster;
-		}
-		int num3 = random.NextInclusive(1, num2);
-		if (num3 <= progression.MonsterRoomWeight)
-		{
-			return RoomType.Monster;
-		}
-		num3 -= progression.MonsterRoomWeight;
-		if (num3 <= progression.MerchantRoomWeight)
-		{
-			return RoomType.Merchant;
-		}
-		num3 -= progression.MerchantRoomWeight;
-		if (num3 <= progression.LootRoomWeight)
-		{
-			return RoomType.Loot;
-		}
-		return RoomType.UnexpectedOpportunity;
-	}
-
 	private void BeginRoomChoice()
 	{
 		((MonoBehaviour)this).StopAllCoroutines();

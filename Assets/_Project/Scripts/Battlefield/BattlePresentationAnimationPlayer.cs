@@ -13,6 +13,9 @@ namespace AccardND.Battlefield
         private readonly Queue<IEnumerator> queue = new();
         private Coroutine routine;
 
+        /// <summary>True finché la coda di animazioni (duelli) è in esecuzione.</summary>
+        public bool IsBusy => routine != null;
+
         public void PlayDuel(
             RectTransform root,
             GameConfiguration configuration,
@@ -25,10 +28,13 @@ namespace AccardND.Battlefield
             int defenderDieSides,
             string attackerCaption,
             string defenderCaption,
-            bool defenderEliminated)
+            bool defenderEliminated,
+            System.Action onDiceResolved = null,
+            System.Action onDuelStarted = null,
+            System.Action onDuelFinished = null)
         {
-            Vector3 attackerPoint = DuelWorldPoint(root, 0.43f);
-            Vector3 defenderPoint = DuelWorldPoint(root, 0.57f);
+            Vector3 attackerPoint = DuelWorldPoint(root, 0.34f);
+            Vector3 defenderPoint = DuelWorldPoint(root, 0.66f);
             PlayDuelAtPoints(
                 configuration,
                 diceCatalog,
@@ -42,7 +48,10 @@ namespace AccardND.Battlefield
                 defenderCaption,
                 defenderEliminated,
                 attackerPoint,
-                defenderPoint);
+                defenderPoint,
+                onDiceResolved,
+                onDuelStarted,
+                onDuelFinished);
         }
 
         public void PlayDuelAtPoints(
@@ -58,7 +67,10 @@ namespace AccardND.Battlefield
             string defenderCaption,
             bool defenderEliminated,
             Vector3 attackerPoint,
-            Vector3 defenderPoint)
+            Vector3 defenderPoint,
+            System.Action onDiceResolved = null,
+            System.Action onDuelStarted = null,
+            System.Action onDuelFinished = null)
         {
             queue.Enqueue(PlayDuelRoutine(
                 configuration,
@@ -73,7 +85,10 @@ namespace AccardND.Battlefield
                 defenderCaption,
                 defenderEliminated,
                 attackerPoint,
-                defenderPoint));
+                defenderPoint,
+                onDiceResolved,
+                onDuelStarted,
+                onDuelFinished));
             if (routine == null)
                 routine = StartCoroutine(RunQueue());
         }
@@ -143,12 +158,16 @@ namespace AccardND.Battlefield
             string defenderCaption,
             bool defenderEliminated,
             Vector3 attackerPoint,
-            Vector3 defenderPoint)
+            Vector3 defenderPoint,
+            System.Action onDiceResolved,
+            System.Action onDuelStarted,
+            System.Action onDuelFinished)
         {
             if (attacker == null || defender == null)
                 yield break;
 
             Canvas.ForceUpdateCanvases();
+            onDuelStarted?.Invoke();
             yield return MoveToDuelPoints(
                 attacker,
                 defender,
@@ -180,6 +199,7 @@ namespace AccardND.Battlefield
             }
             if (hasAttackerRoll || hasDefenderRoll)
                 yield return new WaitForSecondsRealtime(configuration.Animation.DiceRollDuration + configuration.Animation.DiceResultHold);
+            onDiceResolved?.Invoke();
 
             yield return StartCoroutine(attacker.PlayAttackAnimation());
             yield return ReturnDuelParticipants(
@@ -188,6 +208,7 @@ namespace AccardND.Battlefield
                 returnAttacker: true,
                 returnDefender: true,
                 wait: 0.26f);
+            onDuelFinished?.Invoke();
             if (defenderEliminated)
                 yield return StartCoroutine(defender.PlayDefeatAnimation());
         }
@@ -197,7 +218,7 @@ namespace AccardND.Battlefield
             Rect rect = root.rect;
             return root.TransformPoint(new Vector3(
                 Mathf.Lerp(rect.xMin, rect.xMax, xAnchor),
-                Mathf.Lerp(rect.yMin, rect.yMax, 0.58f),
+                Mathf.Lerp(rect.yMin, rect.yMax, 0.5f),
                 0f));
         }
     }

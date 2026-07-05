@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 2-goblin-barbarian
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 2-goblin-barbarian
-  displayName: Goblin
+  displayName: goblin
   category: 0
   artwork: {fileID: 21300000, guid: e5108fd2e4f1406b9d5b1556871a525f, type: 3}
   strength: 2

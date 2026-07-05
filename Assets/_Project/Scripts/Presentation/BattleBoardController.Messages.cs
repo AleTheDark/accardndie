@@ -17,29 +17,6 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
-	private string FormatResult(string actor, BattleCardState attacker, BattleCardState defender, CombatResult result, CombatModifiers modifiers)
-	{
-		string text = (result.DefenderIsDefeated ?"eliminata" : "resiste");
-		return actor + ": " + attacker.Card.Name + " [" + FormatCombatTotal(attacker.Card.Strength, modifiers.AttackerFlatBonus, result.AttackerRoll, result.AttackerTotal) + "] contro " + defender.Card.Name + " [" + FormatCombatTotal(defender.Card.Strength, modifiers.DefenderFlatBonus, result.DefenderRoll, result.DefenderTotal) + "] - " + text + ".";
-	}
-
-	private string FormatCombatTotal(int strength, int flatBonus, VigorRollResult roll, int total)
-	{
-		string text = ((flatBonus > 0) ?$" + {flatBonus}" : string.Empty);
-		return $"{strength}{text} + {FormatVigorRoll(roll)} = {total}";
-	}
-
-	private static string FormatImpossibleAttack(BattleCardState attacker, BattleCardState defender, int attackerDieSides, int defenderDieSides, CombatModifiers modifiers)
-	{
-		int num = (modifiers.SumAttackerVigor ?(attackerDieSides * 2) : attackerDieSides);
-		int num2 = attacker.Card.Strength + num + modifiers.AttackerFlatBonus;
-		int num3 = defender.Card.Strength + 1 + modifiers.DefenderFlatBonus;
-		string text = (modifiers.SumAttackerVigor ?$"2D{attackerDieSides}" : $"D{attackerDieSides}");
-		string text2 = ((modifiers.AttackerFlatBonus > 0) ?$" + {modifiers.AttackerFlatBonus}" : string.Empty);
-		string text3 = ((modifiers.DefenderFlatBonus > 0) ?$" + {modifiers.DefenderFlatBonus}" : string.Empty);
-		return $"0%: {attacker.Card.Name} arriva al massimo a {num2} " + $"({attacker.Card.Strength}{text2} + {text}), mentre {defender.Card.Name} parte da " + $"{num3} ({defender.Card.Strength}{text3} + D{defenderDieSides}:1).";
-	}
-
 	private string FormatResultDetailed(string actor, BattleCardState attacker, BattleCardState defender, CombatResult result, CombatModifiers modifiers)
 	{
 		string text = (result.DefenderIsDefeated ?"eliminata" : "resiste");
@@ -312,6 +289,107 @@ public sealed partial class BattleBoardController
 			logPanel.SetActive(true);
 			RefreshLogText();
 		}
+	}
+
+	private void ReturnToMainMenuFromOptions()
+	{
+		ShowReturnToMenuConfirmation();
+	}
+
+	private void CreateReturnToMenuConfirmation(Transform parent, Font font)
+	{
+		Image overlay = CreateImage("Return To Menu Confirmation", parent, new Color(0f, 0f, 0f, 0.72f));
+		overlay.raycastTarget = true;
+		Stretch(overlay.rectTransform);
+		returnToMenuConfirmPanel = ((Component)overlay).gameObject;
+		Canvas canvas = returnToMenuConfirmPanel.AddComponent<Canvas>();
+		canvas.overrideSorting = true;
+		canvas.sortingOrder = 940;
+		returnToMenuConfirmPanel.AddComponent<GraphicRaycaster>();
+
+		Image dialog = CreateImage("Return To Menu Dialog", ((Component)overlay).transform, new Color(0.01f, 0.018f, 0.028f, 0.98f));
+		dialog.raycastTarget = true;
+		StylePanel(dialog);
+		SetRect(dialog.rectTransform, new Vector2(0.18f, 0.34f), new Vector2(0.82f, 0.66f));
+
+		Text title = CreateText("Return To Menu Title", ((Component)dialog).transform, font, 29, (FontStyle)1, (TextAnchor)4);
+		title.text = "USCIRE AL MENU?";
+		title.color = new Color(0.95f, 0.79f, 0.34f);
+		SetRect(title.rectTransform, new Vector2(0.06f, 0.68f), new Vector2(0.94f, 0.9f));
+
+		Text body = CreateText("Return To Menu Body", ((Component)dialog).transform, font, 20, (FontStyle)0, (TextAnchor)4);
+		body.text = "La campagna in corso verra' abbandonata. I progressi di questa sessione andranno persi.";
+		body.color = new Color(0.86f, 0.92f, 0.94f);
+		body.horizontalOverflow = HorizontalWrapMode.Wrap;
+		body.verticalOverflow = VerticalWrapMode.Truncate;
+		body.resizeTextForBestFit = true;
+		body.resizeTextMinSize = 13;
+		body.resizeTextMaxSize = 20;
+		SetRect(body.rectTransform, new Vector2(0.08f, 0.36f), new Vector2(0.92f, 0.66f));
+
+		Button cancelButton = CreateButton("Cancel Return To Menu", ((Component)dialog).transform, font, "ANNULLA");
+		((UnityEvent)cancelButton.onClick).AddListener(new UnityAction(HideReturnToMenuConfirmation));
+		SetRect((RectTransform)((Component)cancelButton).transform, new Vector2(0.08f, 0.09f), new Vector2(0.46f, 0.28f));
+
+		Button confirmButton = CreateButton("Confirm Return To Menu", ((Component)dialog).transform, font, "ESCI");
+		((UnityEvent)confirmButton.onClick).AddListener(new UnityAction(ConfirmReturnToMainMenu));
+		SetRect((RectTransform)((Component)confirmButton).transform, new Vector2(0.54f, 0.09f), new Vector2(0.92f, 0.28f));
+
+		returnToMenuConfirmPanel.SetActive(false);
+	}
+
+	private void ShowReturnToMenuConfirmation()
+	{
+		if ((Object)(object)returnToMenuConfirmPanel == (Object)null)
+		{
+			ConfirmReturnToMainMenu();
+			return;
+		}
+		if ((Object)(object)optionsPanel != (Object)null)
+		{
+			optionsPanel.SetActive(false);
+		}
+		if ((Object)(object)logPanel != (Object)null)
+		{
+			logPanel.SetActive(false);
+		}
+		returnToMenuConfirmPanel.SetActive(true);
+		returnToMenuConfirmPanel.transform.SetAsLastSibling();
+	}
+
+	private void HideReturnToMenuConfirmation()
+	{
+		if ((Object)(object)returnToMenuConfirmPanel != (Object)null)
+		{
+			returnToMenuConfirmPanel.SetActive(false);
+		}
+	}
+
+	private void ConfirmReturnToMainMenu()
+	{
+		if ((Object)(object)optionsPanel != (Object)null)
+		{
+			optionsPanel.SetActive(false);
+		}
+		if ((Object)(object)logPanel != (Object)null)
+		{
+			logPanel.SetActive(false);
+		}
+		if ((Object)(object)cardInspectionPanel != (Object)null)
+		{
+			cardInspectionPanel.SetActive(false);
+		}
+		if ((Object)(object)merchantPanel != (Object)null)
+		{
+			merchantPanel.SetActive(false);
+		}
+		if ((Object)(object)implementationArchivePanel != (Object)null)
+		{
+			implementationArchivePanel.SetActive(false);
+		}
+		HideReturnToMenuConfirmation();
+
+		ReturnToStart();
 	}
 }
 }

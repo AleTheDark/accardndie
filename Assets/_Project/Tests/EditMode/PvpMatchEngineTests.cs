@@ -36,19 +36,10 @@ namespace AccardND.GameCore.Tests
                     yield return index;
         }
 
-        // Token di schieramento (ordine crescente: p0 e p1 si alternano partendo da p0)
-        // seguiti dalle iniziative di battaglia, tutte interlacciate col tiebreaker.
+        // Token di schieramento: ordine crescente per deploy, poi gli stessi
+        // valori vengono usati in ordine decrescente per la battaglia.
         private static IEnumerable<int> DeploymentAndInitiatives(int[] player0Initiatives, int[] player1Initiatives)
         {
-            int[][] deploymentTokens = { new[] { 1, 3, 5 }, new[] { 2, 4, 6 } };
-            foreach (int[] tokens in deploymentTokens)
-            {
-                foreach (int initiative in tokens)
-                {
-                    yield return initiative;
-                    yield return 1;
-                }
-            }
             foreach (int initiative in player0Initiatives)
             {
                 yield return initiative;
@@ -185,6 +176,29 @@ namespace AccardND.GameCore.Tests
             Assert.That(second.DefenderRemainingLives, Is.EqualTo(0));
             Assert.That(second.DefenderEliminated, Is.True);
             Assert.That(engine.BoardOf(1)[0].Eliminated, Is.True);
+        }
+
+        [Test]
+        public void Battle_UsesDeploymentInitiativesInDescendingOrderWithoutReroll()
+        {
+            var random = QueueFor(
+                IdentityShuffles(),
+                DeploymentAndInitiatives(new[] { 20, 10, 6 }, new[] { 19, 9, 5 }),
+                Enumerable.Repeat(3, 40));
+            var engine = new PvpMatchEngine(
+                UniformLoadout("p0", HeroClass.Warrior, 5),
+                UniformLoadout("p1", HeroClass.Warrior, 5),
+                PvpMatchRules.CreateDefault(),
+                random);
+
+            var events = new List<PvpEvent>(engine.Start());
+            events.AddRange(DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 }));
+
+            Assert.That(events.OfType<CardInitiativeEvent>(), Is.Empty);
+            CollectionAssert.AreEquivalent(new[] { 20, 10, 6 }, engine.BoardOf(0).Select(card => card.Initiative));
+            CollectionAssert.AreEquivalent(new[] { 19, 9, 5 }, engine.BoardOf(1).Select(card => card.Initiative));
+            Assert.That(engine.ActiveCard.Owner, Is.EqualTo(0));
+            Assert.That(engine.ActiveCard.Initiative, Is.EqualTo(20));
         }
 
         [Test]

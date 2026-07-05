@@ -159,18 +159,6 @@ public sealed partial class BattleBoardController
 		}
 	}
 
-	private List<CampaignCardInstance> GetSellableMerchantCards()
-	{
-		if (campaignDeck == null)
-		{
-			return new List<CampaignCardInstance>();
-		}
-		return (from card in campaignDeck.Cards
-			where card.Zone != CampaignCardZone.Hand && card.Zone != CampaignCardZone.Battlefield && card.Zone != CampaignCardZone.Graveyard
-			orderby card.Definition.Strength, card.Definition.DisplayName
-			select card).ToList();
-	}
-
 	private List<CampaignCardInstance> GetMerchantDeckCards()
 	{
 		if (campaignDeck == null)

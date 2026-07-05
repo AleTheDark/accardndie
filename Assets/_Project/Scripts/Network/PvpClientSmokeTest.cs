@@ -20,7 +20,7 @@ namespace AccardND.Network
             Queue
         }
 
-        [SerializeField] private string serverUrl = "ws://localhost:5017/ws";
+        [SerializeField] private string serverUrl = "ws://217.160.212.85:5017/ws";
         [SerializeField] private string username = "tester1";
         [SerializeField] private string password = "password";
         [SerializeField] private LobbyAction action = LobbyAction.CreateRoom;

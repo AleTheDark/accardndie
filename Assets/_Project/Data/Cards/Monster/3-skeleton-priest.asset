@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 3-skeleton-priest
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 3-skeleton-priest
-  displayName: Skeleton
+  displayName: skeleton
   category: 0
   artwork: {fileID: 21300000, guid: 253dd0e6124444c69c266bfd61fdb3e1, type: 3}
   strength: 3

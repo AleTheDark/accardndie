@@ -4,7 +4,8 @@
   "references": [
     "AccardND.GameCore",
     "AccardND.GameData",
-    "AccardND.NetProtocol"
+    "AccardND.NetProtocol",
+    "AccardND.Battlefield"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"

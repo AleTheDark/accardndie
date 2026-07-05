@@ -78,7 +78,15 @@ namespace AccardND.GameCore.Pvp
 
     public sealed class CardDeployedEvent : PvpEvent
     {
-        public CardDeployedEvent(int player, int slot, string cardId, string cardName, HeroClass heroClass, int strength, int lives)
+        public CardDeployedEvent(
+            int player,
+            int slot,
+            string cardId,
+            string cardName,
+            HeroClass heroClass,
+            int strength,
+            int lives,
+            int initiative)
         {
             Player = player;
             Slot = slot;
@@ -87,6 +95,7 @@ namespace AccardND.GameCore.Pvp
             HeroClass = heroClass;
             Strength = strength;
             Lives = lives;
+            Initiative = initiative;
         }
 
         public int Player { get; }
@@ -96,6 +105,7 @@ namespace AccardND.GameCore.Pvp
         public HeroClass HeroClass { get; }
         public int Strength { get; }
         public int Lives { get; }
+        public int Initiative { get; }
     }
 
     public sealed class BattleStartedEvent : PvpEvent

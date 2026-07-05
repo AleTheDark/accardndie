@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: 8-spirit-necromancer
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
   id: 8-spirit-necromancer
-  displayName: Spirit
+  displayName: spirit
   category: 0
   artwork: {fileID: 21300000, guid: 422858a0017097a4eae9cbb79bc75df8, type: 3}
   strength: 8

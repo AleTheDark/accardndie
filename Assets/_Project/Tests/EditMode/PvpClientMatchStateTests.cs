@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using AccardND.Battlefield;
 using AccardND.GameCore.Pvp;
 using AccardND.NetProtocol;
 using NUnit.Framework;
@@ -104,6 +105,106 @@ namespace AccardND.GameCore.Tests
                 }
             }
             Assert.That(client.Hand, Has.Count.EqualTo(6 - engine.BoardOf(0).Count));
+        }
+
+        [Test]
+        public void AbilityReplay_PriestMarksAbilityUsedAndBlessingBonus()
+        {
+            var client = new PvpClientMatchState();
+            client.ApplyMatchStart(new MatchStart { opponentName = "x", yourPlayerIndex = 0 });
+            client.Apply(new MatchEventDto
+            {
+                type = "CardDeployed",
+                player = 0,
+                slot = 0,
+                cardId = "priest",
+                cardName = "Priest",
+                heroClass = (int)HeroClass.Priest,
+                strength = 8,
+                lives = 2
+            });
+
+            client.Apply(new MatchEventDto
+            {
+                type = "AbilityUsed",
+                player = 0,
+                slot = 0,
+                ability = (int)HeroClass.Priest,
+                targetPlayer = 0,
+                targetSlot = 0,
+                magnitude = 2
+            });
+
+            PvpClientCard card = client.Boards[0].Single();
+            Assert.That(card.AbilityUsed, Is.True);
+            Assert.That(card.AbilityArmed, Is.False);
+            Assert.That(card.PendingBonus, Is.EqualTo(2));
+            Assert.That(card.PendingBonusKind, Is.EqualTo(PvpPendingBonusKind.Blessing));
+
+            var presentedCard = new BattlePresentationCard
+            {
+                PendingBonus = card.PendingBonus,
+                PendingBonusKind = card.PendingBonusKind,
+                AbilityUsed = card.AbilityUsed
+            };
+            Assert.That(presentedCard.AbilityUsed, Is.True);
+            Assert.That(BattlePresentationViewStateMapper.CardStatuses(presentedCard)
+                .Any(status => status.Label == "BENEDIZIONE +2"), Is.True);
+        }
+
+        [Test]
+        public void AbilityReplay_WarriorButtonStaysUnavailableAfterArmedAttack()
+        {
+            var client = new PvpClientMatchState();
+            client.ApplyMatchStart(new MatchStart { opponentName = "x", yourPlayerIndex = 0 });
+            client.Apply(new MatchEventDto
+            {
+                type = "CardDeployed",
+                player = 0,
+                slot = 0,
+                cardId = "warrior",
+                cardName = "Warrior",
+                heroClass = (int)HeroClass.Warrior,
+                strength = 5,
+                lives = 2
+            });
+            client.Apply(new MatchEventDto
+            {
+                type = "CardDeployed",
+                player = 1,
+                slot = 0,
+                cardId = "enemy",
+                cardName = "Enemy",
+                heroClass = (int)HeroClass.Mage,
+                strength = 5,
+                lives = 2
+            });
+            client.Apply(new MatchEventDto
+            {
+                type = "AbilityUsed",
+                player = 0,
+                slot = 0,
+                ability = (int)HeroClass.Warrior,
+                targetPlayer = 0,
+                targetSlot = 0
+            });
+
+            PvpClientCard card = client.Boards[0].Single();
+            Assert.That(card.AbilityArmed, Is.True);
+
+            client.Apply(new MatchEventDto
+            {
+                type = "AttackResolved",
+                player = 0,
+                slot = 0,
+                targetPlayer = 1,
+                targetSlot = 0,
+                certainty = "Normal",
+                defenderRemainingLives = 2
+            });
+
+            Assert.That(card.AbilityArmed, Is.False);
+            Assert.That(card.AbilityUsed, Is.True);
         }
 
         private static void Feed(
