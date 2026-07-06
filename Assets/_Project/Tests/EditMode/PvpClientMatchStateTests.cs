@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using AccardND.GameCore;
 using AccardND.Battlefield;
 using AccardND.GameCore.Pvp;
 using AccardND.NetProtocol;
@@ -205,6 +206,37 @@ namespace AccardND.GameCore.Tests
 
             Assert.That(card.AbilityArmed, Is.False);
             Assert.That(card.AbilityUsed, Is.True);
+        }
+
+        [Test]
+        public void AttackResolvedMapping_PreservesRollsAndTotals()
+        {
+            var gameEvent = new AttackResolvedEvent(
+                attackerPlayer: 0,
+                attackerSlot: 0,
+                defenderPlayer: 1,
+                defenderSlot: 0,
+                certainty: CombatCertainty.RollRequired,
+                attackerDieSides: 6,
+                defenderDieSides: 6,
+                attackerRoll: new VigorRollResult(6, 4, 0, false, 4, MatchupResult.Neutral, VigorSelectionMode.Single),
+                defenderRoll: new VigorRollResult(6, 1, 0, false, 1, MatchupResult.Neutral, VigorSelectionMode.Single),
+                attackerTotal: 9,
+                defenderTotal: 9,
+                defenderLostLife: false,
+                defenderRemainingLives: 2,
+                defenderEliminated: false,
+                becameSpirit: false,
+                overkill: false,
+                isCounter: false);
+
+            MatchEventDto dto = PvpEventMapper.ToDto(gameEvent);
+
+            Assert.That(dto.certainty, Is.EqualTo("RollRequired"));
+            Assert.That(dto.attackerRollFirst, Is.EqualTo(4));
+            Assert.That(dto.defenderRollFirst, Is.EqualTo(1));
+            Assert.That(dto.attackerTotal, Is.EqualTo(9));
+            Assert.That(dto.defenderTotal, Is.EqualTo(9));
         }
 
         private static void Feed(

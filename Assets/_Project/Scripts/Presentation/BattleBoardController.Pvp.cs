@@ -25,6 +25,7 @@ public sealed partial class BattleBoardController
     }
 
     private bool pvpPresentationActive;
+    private PvpBootstrap activePvpBootstrap;
     private PvpClientMatchState pvpState;
     private IReadOnlyList<LoadoutCardDto> pvpLoadout;
     private IBattlePresentationActions pvpActions;
@@ -90,7 +91,7 @@ public sealed partial class BattleBoardController
         if ((Object)(object)deckBuilderPanel != (Object)null)
             deckBuilderPanel.SetActive(false);
 
-        SetCombatChromeVisible(true);
+        SetBattlefieldSurfaceVisible(true);
         // La label formazione è parte della chrome campagna: nel PvP resta vuota.
         if ((Object)(object)playerTitleText != (Object)null)
             playerTitleText.text = string.Empty;
@@ -152,7 +153,20 @@ public sealed partial class BattleBoardController
         SetTurnBanner(playerTurn: true, "PREPARAZIONE");
         if ((Object)(object)playerTitleText != (Object)null)
             playerTitleText.text = "LA TUA FORMAZIONE";
-        SetCombatChromeVisible(false);
+        SetBattlefieldSurfaceVisible(false);
+    }
+
+    private void AbandonActivePvpSession()
+    {
+        if ((Object)(object)activePvpBootstrap != (Object)null)
+        {
+            PvpBootstrap bootstrap = activePvpBootstrap;
+            activePvpBootstrap = null;
+            bootstrap.CloseFromMainMenu();
+            return;
+        }
+
+        HidePvpMatch();
     }
 
     private void RenderPvpMatch()
@@ -1055,7 +1069,7 @@ public sealed partial class BattleBoardController
         LayoutElement layout = ((Component)tile).gameObject.AddComponent<LayoutElement>();
         ConfigureTimelineTileLayout(layout, timelineTileSize);
         Text text = CreateText("Turn", ((Component)tile).transform, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), 18, FontStyle.Bold, TextAnchor.MiddleCenter);
-        text.text = $"{(player == pvpState.MyIndex ? "TU" : "AVV")}\n{initiative}";
+        text.text = player == pvpState.MyIndex ? "TU" : "AVV";
         Stretch(text.rectTransform, 2f);
     }
 
@@ -1259,6 +1273,7 @@ public sealed partial class BattleBoardController
             ((Transform)animatedRect).localRotation = Quaternion.identity;
             ((Transform)animatedRect).localScale = Vector3.one * 0.82f;
             overlayView.SetAlpha(0f);
+            PlayDrawCardSfx();
 
             float elapsed = 0f;
             while (elapsed < enterDuration)
@@ -1326,13 +1341,15 @@ public sealed partial class BattleBoardController
             battleEvent.AttackerRollFirst,
             battleEvent.AttackerRollSecond,
             battleEvent.AttackerRollHasSecond,
-            battleEvent.AttackerRollSelected);
+            battleEvent.AttackerRollSelected,
+            battleEvent.AttackerRollSelectionMode);
         VigorRollResult defenderRoll = BattlePresentationAnimationPlayer.BuildRoll(
             battleEvent.DefenderDieSides,
             battleEvent.DefenderRollFirst,
             battleEvent.DefenderRollSecond,
             battleEvent.DefenderRollHasSecond,
-            battleEvent.DefenderRollSelected);
+            battleEvent.DefenderRollSelected,
+            battleEvent.DefenderRollSelectionMode);
 
         ClearPvpActionSelectionForDuel();
         RectTransform duelRoot = (Object)(object)safeAreaRoot != (Object)null ? safeAreaRoot : canvasRect;
@@ -1355,7 +1372,10 @@ public sealed partial class BattleBoardController
                 PlayPvpAttackResolvedSfx(battleEvent);
             },
             () => SetMessagePanelHiddenForDuel(hidden: true),
-            () => SetMessagePanelHiddenForDuel(hidden: false));
+            () => SetMessagePanelHiddenForDuel(hidden: false),
+            defenderHit: battleEvent.DefenderLostLife || battleEvent.DefenderEliminated,
+            attackerTotal: battleEvent.AttackerTotal,
+            defenderTotal: battleEvent.DefenderTotal);
         yield return new WaitWhile(() =>
             (Object)(object)battleAnimationPlayer != (Object)null && battleAnimationPlayer.IsBusy);
     }
@@ -1377,6 +1397,30 @@ public sealed partial class BattleBoardController
         if (battleEvent == null || attacker == null || defender == null)
             return;
 
+        if (battleEvent.Certainty == CombatCertainty.Impossible)
+        {
+            var impossibleModifiers = CombatModifiers.None;
+            string impossibleMessage = FormatImpossibleAttackDetailed(
+                attacker,
+                defender,
+                battleEvent.AttackerDieSides,
+                battleEvent.DefenderDieSides,
+                impossibleModifiers) + " Resiste.";
+            AppendLog(impossibleMessage);
+            SetBattlefieldMessage($"{defender.Card.Name} resiste all'attacco di {attacker.Card.Name}.");
+            return;
+        }
+
+        if (attackerRoll.FirstRoll <= 0 || defenderRoll.FirstRoll <= 0)
+        {
+            string incompleteMessage =
+                $"Evento PvP incompleto: mancano i tiri per {attacker.Card.Name} contro {defender.Card.Name} " +
+                $"(certezza: {battleEvent.Certainty}, D{battleEvent.AttackerDieSides}/D{battleEvent.DefenderDieSides}).";
+            AppendLog(incompleteMessage);
+            SetBattlefieldMessage("Errore replay PvP: tiri mancanti.");
+            return;
+        }
+
         int attackerTotal = battleEvent.AttackerTotal != 0
             ? battleEvent.AttackerTotal
             : attacker.Card.Strength + attackerRoll.SelectedRoll;
@@ -1390,7 +1434,11 @@ public sealed partial class BattleBoardController
             attackerFlatBonus: attackerTotal - attacker.Card.Strength - attackerRoll.SelectedRoll,
             defenderFlatBonus: defenderTotal - defender.Card.Strength - defenderRoll.SelectedRoll);
         string actor = battleEvent.Player == pvpState?.MyIndex ? "TU" : "AVVERSARIO";
-        SetMessage(FormatResultDetailed(actor, attacker, defender, result, modifiers));
+        string message = FormatResultDetailed(actor, attacker, defender, result, modifiers);
+        if (battleEvent.Overkill)
+            message = "OVERKILL! " + message;
+        AppendLog(message);
+        SetBattlefieldMessage((battleEvent.Overkill ? "OVERKILL! " : string.Empty) + FormatResultSummary(attacker, defender, result));
     }
 
     private void PlayPvpAttackResolvedSfx(BattlePresentationEvent battleEvent)
@@ -1398,10 +1446,11 @@ public sealed partial class BattleBoardController
         if (battleEvent == null)
             return;
 
-        if (battleEvent.HasHeroClass)
+        bool hit = battleEvent.DefenderLostLife || battleEvent.DefenderEliminated;
+        if (battleEvent.HasHeroClass && !(hit && battleEvent.HeroClass == HeroClass.Rogue))
             battleSfx?.PlayAttackResult(
                 battleEvent.HeroClass,
-                battleEvent.DefenderLostLife || battleEvent.DefenderEliminated);
+                hit);
         if (battleEvent.DefenderEliminated && !battleEvent.BecameSpirit)
             battleSfx?.PlayDeath();
     }

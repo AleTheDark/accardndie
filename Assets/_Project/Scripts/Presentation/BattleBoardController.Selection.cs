@@ -273,7 +273,7 @@ public sealed partial class BattleBoardController
 			activeAbilityUser.AbilityUsed = true;
 			RefreshPersistentStatus(battleCardState3);
 			PlayClassAbilitySfx(HeroClass.Hunter);
-			SetMessage($"CACCIATORE: {activeAbilityUser.Card.Name} marca {battleCardState3.Card.Name}. Preda persistente: chi lo attacca prende +{HunterMarkValueFor(activeAbilityUser)}.");
+			SetMessage($"CACCIATORE: {activeAbilityUser.Card.Name} marca {battleCardState3.Card.Name}. Bersaglio marcato: chi lo attacca prende +{HunterMarkValueFor(activeAbilityUser)}.");
 			TriggerMagicAuraAfterAbility();
 			abilityTargetMode = AbilityTargetMode.None;
 			ClearTargetHints();
@@ -322,7 +322,7 @@ public sealed partial class BattleBoardController
 				ApplyPlayerAuraVisuals(appendLog: false);
 				activeAbilityUser.AbilityUsed = true;
 				PlayClassAbilitySfx(HeroClass.Necromancer);
-				SetMessage("NEGROMANTE: " + activeAbilityUser.Card.Name + " rialza " + target.Card.Name + ". Agira subito dopo il Necromancer.");
+				SetMessage("NECROMANTE: " + activeAbilityUser.Card.Name + " rialza " + target.Card.Name + ". Agira subito dopo il Necromante.");
 				TriggerMagicAuraAfterAbility();
 			}
 			else if (abilityTargetMode == AbilityTargetMode.PaladinAlly && !target.Eliminated)

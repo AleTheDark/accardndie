@@ -1,0 +1,31 @@
+{
+    "asset": "193cd4cc13d1853489b43bf23955699e",
+    "fileName": "019f31b0-6266-7369-a41d-50b5caedd8f3.png",
+    "prompt": "Glowing orange runic cracks, glowing bright magical magma fissures, isolated on a solid black background, highly detailed dark fantasy game effect texture",
+    "negativePrompt": "",
+    "model": "flux-2-dev",
+    "modelName": "Flux 2 (Dev)",
+    "customSeed": -1,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "refinementMode": "Generation",
+    "pixelateTargetSize": 0,
+    "pixelateKeepImageSize": false,
+    "pixelatePixelBlockSize": 0,
+    "pixelatePixelGridSize": 0,
+    "pixelateMode": 0,
+    "pixelateOutlineThickness": 0,
+    "doodles": {
+        "m_Items": []
+    },
+    "upscaleFactor": 0,
+    "dimensions": {
+        "width": 1024,
+        "height": 1024
+    },
+    "spriteSheet": false,
+    "duration": 0.0,
+    "dynamicParams": {
+        "serializedData": []
+    }
+}

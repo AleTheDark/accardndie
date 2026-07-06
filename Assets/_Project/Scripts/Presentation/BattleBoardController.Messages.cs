@@ -23,6 +23,13 @@ public sealed partial class BattleBoardController
 		return actor + ": " + attacker.Card.Name + " [" + FormatCombatTotalDetailed(attacker, modifiers.AttackerFlatBonus, result.AttackerRoll, result.AttackerTotal, true, defender) + "] contro " + defender.Card.Name + " [" + FormatCombatTotalDetailed(defender, modifiers.DefenderFlatBonus, result.DefenderRoll, result.DefenderTotal, false, attacker) + "] - " + text + ".";
 	}
 
+	private static string FormatResultSummary(BattleCardState attacker, BattleCardState defender, CombatResult result)
+	{
+		return result.DefenderIsDefeated
+			?$"{attacker.Card.Name} elimina {defender.Card.Name}."
+			:$"{defender.Card.Name} resiste all'attacco di {attacker.Card.Name}.";
+	}
+
 	private string FormatCombatTotalDetailed(BattleCardState card, int flatBonus, VigorRollResult roll, int total, bool attacking, BattleCardState opponent)
 	{
 		string text = FormatFlatBonus(flatBonus, FormatFlatBonusDetails(card, flatBonus, attacking, opponent));
@@ -147,13 +154,27 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
+		if (IsCampaignEndedBannerVisible())
+		{
+			messageText.alignment = (TextAnchor)4;
+			SetRect(messageText.rectTransform, new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.58f));
+			if ((Object)(object)turnBannerImage != (Object)null)
+			{
+				SetRect(turnBannerImage.rectTransform, new Vector2(0.18f, 0.66f), new Vector2(0.82f, 0.96f));
+			}
+			if ((Object)(object)messagePanelRect != (Object)null)
+			{
+				SetCenteredCampaignEndedMessagePanel();
+			}
+			return;
+		}
 		bool flag = IsActionButtonVisible(restartButton) || IsActionButtonVisible(confirmFormationButton) || IsActionButtonVisible(cancelActionButton) || IsActionButtonVisible(abilityButton) || IsActionButtonVisible(attachmentButton) || IsActionButtonVisible(merchantBuyButton);
 		bool flag2 = IsMerchantActionHudVisible();
 		bool flag3 = IsSingleActionNonCombatHudVisible();
 		if (deploymentDraftActive)
 		{
 			messageText.alignment = (TextAnchor)4;
-			SetRect(messageText.rectTransform, flag ?new Vector2(0.06f, 0.06f) : new Vector2(0.06f, 0.06f), flag ?new Vector2(0.62f, 0.66f) : new Vector2(0.94f, 0.66f));
+			SetRect(messageText.rectTransform, flag ?new Vector2(0.06f, 0.06f) : new Vector2(0.04f, 0.06f), flag ?new Vector2(0.62f, 0.66f) : new Vector2(0.88f, 0.66f));
 			if ((Object)(object)turnBannerImage != (Object)null)
 			{
 				SetRect(turnBannerImage.rectTransform, new Vector2(0.08f, 0.69f), new Vector2(0.92f, 0.98f));
@@ -190,6 +211,10 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)turnBannerImage != (Object)null)
 		{
 			Color val = (playerTurn ?configuration.Visual.PlayerTurnColor : configuration.Visual.CpuTurnColor);
+			if (!playerTurn && !string.IsNullOrEmpty(label) && label.IndexOf("SCONFITTA", StringComparison.OrdinalIgnoreCase) >= 0)
+			{
+				val = Color.Lerp(val, Color.black, 0.35f);
+			}
 			val.a = Mathf.Min(val.a, 0.78f);
 			turnBannerImage.color = val;
 		}
@@ -200,12 +225,27 @@ public sealed partial class BattleBoardController
 		}
 	}
 
+	private bool IsCampaignEndedBannerVisible()
+	{
+		return gameFinished
+			&& (Object)(object)turnBannerText != (Object)null
+			&& !string.IsNullOrEmpty(turnBannerText.text)
+			&& turnBannerText.text.IndexOf("CAMPAGNA TERMINATA", StringComparison.OrdinalIgnoreCase) >= 0;
+	}
+
+	private void SetCenteredCampaignEndedMessagePanel()
+	{
+		float aspect = Mathf.Max(1f, Screen.safeArea.width) / Mathf.Max(1f, Screen.safeArea.height);
+		bool compact = IsCompactLayout(aspect, configuration.ResponsiveLayout);
+		SetRect(messagePanelRect, compact ?new Vector2(0.08f, 0.42f) : new Vector2(0.25f, 0.405f), compact ?new Vector2(0.92f, 0.58f) : new Vector2(0.75f, 0.565f));
+	}
+
 	private void ConfigureActionButtonLayout(bool merchantVisible)
 	{
 		if (!((Object)(object)restartButton == (Object)null) && !((Object)(object)merchantBuyButton == (Object)null))
 		{
 			bool singleNonCombat = !merchantVisible && IsSingleActionNonCombatHudVisible();
-			SetRect((RectTransform)((Component)restartButton).transform, merchantVisible ?new Vector2(0.53f, 0.06f) : (singleNonCombat ?new Vector2(0.325f, 0.06f) : new Vector2(0.69f, 0.16f)), merchantVisible ?new Vector2(0.88f, 0.27f) : (singleNonCombat ?new Vector2(0.675f, 0.27f) : new Vector2(0.97f, 0.84f)));
+			SetRect((RectTransform)((Component)restartButton).transform, merchantVisible ?new Vector2(0.53f, 0.06f) : (singleNonCombat ?new Vector2(0.325f, 0.06f) : new Vector2(0.69f, 0.14f)), merchantVisible ?new Vector2(0.88f, 0.27f) : (singleNonCombat ?new Vector2(0.675f, 0.27f) : new Vector2(0.97f, 0.58f)));
 			SetRect((RectTransform)((Component)merchantBuyButton).transform, merchantVisible ?new Vector2(0.12f, 0.06f) : new Vector2(0.69f, 0.54f), merchantVisible ?new Vector2(0.47f, 0.27f) : new Vector2(0.97f, 0.92f));
 		}
 		UpdateMessageTextLayout();
@@ -388,6 +428,16 @@ public sealed partial class BattleBoardController
 			implementationArchivePanel.SetActive(false);
 		}
 		HideReturnToMenuConfirmation();
+		if ((Object)(object)hintPanel != (Object)null)
+		{
+			hintPanel.SetActive(false);
+		}
+		if ((Object)(object)auraCodexPanel != (Object)null)
+		{
+			auraCodexPanel.SetActive(false);
+		}
+		pendingHints.Clear();
+		hintActive = false;
 
 		ReturnToStart();
 	}

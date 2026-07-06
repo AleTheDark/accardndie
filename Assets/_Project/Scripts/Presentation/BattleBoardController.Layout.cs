@@ -101,8 +101,13 @@ public sealed partial class BattleBoardController
 				}
 				SetRect(implementationArchiveButtonRect, new Vector2(0.8f, 0.005f), new Vector2(0.96f, 0.115f));
 				SetRect(implementationArchivePanelRect, new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.94f));
-				SetRect(messagePanelRect, flag4 ?new Vector2(0.06f, 0.045f) : (flag3 ?new Vector2(0.08f, 0.43f) : (deploymentDraftActive ?new Vector2(0.04f, 0.49f) : new Vector2(0.04f, 0.065f))), flag4 ?new Vector2(0.94f, 0.235f) : (flag3 ?new Vector2(0.92f, 0.535f) : (deploymentDraftActive ?new Vector2(0.96f, 0.575f) : new Vector2(0.96f, 0.17f))));
-				SetTimelineBaseRect(new Vector2(0.78f, 0.34f), new Vector2(0.998f, 0.74f));
+				SetRect(messagePanelRect, flag4 ?new Vector2(0.08f, 0.055f) : (deploymentDraftActive ?new Vector2(0.04f, 0.49f) : (flag3 ?new Vector2(0.1f, 0.43f) : new Vector2(0.08f, 0.065f))), flag4 ?new Vector2(0.92f, 0.215f) : (deploymentDraftActive ?new Vector2(0.76f, 0.575f) : (flag3 ?new Vector2(0.9f, 0.535f) : new Vector2(0.92f, 0.17f))));
+				if (deploymentDraftActive)
+				{
+					messagePanelRect.offsetMin = new Vector2(-13f, messagePanelRect.offsetMin.y);
+					messagePanelRect.offsetMax = new Vector2(-13f, messagePanelRect.offsetMax.y);
+				}
+				SetTimelineBaseRect(new Vector2(0.78f, 0.30f), new Vector2(0.998f, 0.70f));
 				ConfigureTimelineLayout(vertical: true);
 				SetRect(cpuTitleRect, flag3 ?new Vector2(0.05f, 0.78f) : new Vector2(0.05f, 0.848f), flag3 ?new Vector2(0.95f, 0.822f) : new Vector2(0.95f, 0.89f));
 				SetRect(roundText.rectTransform, new Vector2(0.05f, 0.545f), new Vector2(0.62f, 0.59f));
@@ -130,8 +135,40 @@ public sealed partial class BattleBoardController
 				SetRect(campaignZoneRect, new Vector2(0.57f, 0.575f), new Vector2(0.83f, 0.625f));
 				SetRect(playerTitleRect, new Vector2(0.12f, 0.32f), new Vector2(0.88f, 0.38f));
 			}
+			if (IsCampaignEndedBannerVisible())
+			{
+				SetCenteredCampaignEndedMessagePanel();
+			}
+			ApplyCompactChromeVisibility(flag);
 			Canvas.ForceUpdateCanvases();
 			ResizeTimelineTiles();
+		}
+	}
+
+	private bool IsCurrentCompactLayout()
+	{
+		float width = Mathf.Max(1f, Screen.safeArea.width);
+		float height = Mathf.Max(1f, Screen.safeArea.height);
+		return IsCompactLayout(width / height, configuration.ResponsiveLayout);
+	}
+
+	private void ApplyCompactChromeVisibility(bool compact)
+	{
+		if (cpuHud != null && (Object)(object)cpuHud.Rect != (Object)null)
+		{
+			((Component)cpuHud.Rect).gameObject.SetActive(combatChromeVisible);
+		}
+		if ((Object)(object)cpuTitleText != (Object)null)
+		{
+			((Component)cpuTitleText).gameObject.SetActive(false);
+		}
+		if ((Object)(object)topInfoBarRect != (Object)null)
+		{
+			((Component)topInfoBarRect).gameObject.SetActive(false);
+		}
+		if ((Object)(object)roundText != (Object)null)
+		{
+			((Component)roundText).gameObject.SetActive(false);
 		}
 	}
 
@@ -160,7 +197,7 @@ public sealed partial class BattleBoardController
 			grid.constraint = vertical ?GridLayoutGroup.Constraint.FixedColumnCount : GridLayoutGroup.Constraint.FixedRowCount;
 			grid.constraintCount = 1;
 			grid.startAxis = vertical ?GridLayoutGroup.Axis.Vertical : GridLayoutGroup.Axis.Horizontal;
-			grid.padding = vertical ?new RectOffset(4, 4, 4, 4) : new RectOffset(4, 4, 2, 2);
+			grid.padding = vertical ?new RectOffset(7, 7, 4, 4) : new RectOffset(4, 4, 2, 2);
 		}
 	}
 

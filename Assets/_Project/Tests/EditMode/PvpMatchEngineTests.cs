@@ -87,7 +87,7 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
-        public void FullMatch_DeterministicBestOfThree_ReachesDecisiveRound()
+        public void FullMatch_DeterministicBestOfThree_ThirdRoundUsesSurvivors()
         {
             // P0: carte forti agli indici 0-2. P1: forti agli indici 6-8 (arrivano solo nella mano del round 2).
             var random = QueueFor(
@@ -114,11 +114,15 @@ namespace AccardND.GameCore.Tests
             events.AddRange(DeployAll(engine, new[] { 0, 0, 0 }, new[] { 3, 3, 3 }));
             events.AddRange(DriveBattle(engine));
             Assert.That(engine.WinsOf(1), Is.EqualTo(1), "il round 2 va a P1");
-            Assert.That(engine.Phase, Is.EqualTo(PvpMatchPhase.DecisiveSelection));
 
-            // Round 3: scelta libera tra tutte le 9.
-            engine.SubmitDecisiveSelection(0, new[] { 0, 1, 2 });
-            events.AddRange(engine.SubmitDecisiveSelection(1, new[] { 0, 1, 2 }));
+            // Round 3: nessuna selezione manuale, si schiera come sempre. La mano è
+            // composta dalle sole carte mai morte: P0 ha perso il round 2 con {3,4,5},
+            // P1 il round 1 con {0,1,2}, quindi restano rispettivamente 6 carte a testa.
+            Assert.That(engine.MatchRound, Is.EqualTo(3));
+            Assert.That(engine.Phase, Is.EqualTo(PvpMatchPhase.Deployment));
+            Assert.That(engine.HandOf(0), Is.EquivalentTo(new[] { 0, 1, 2, 6, 7, 8 }));
+            Assert.That(engine.HandOf(1), Is.EquivalentTo(new[] { 3, 4, 5, 6, 7, 8 }));
+
             events.AddRange(DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 }));
             events.AddRange(DriveBattle(engine));
 
@@ -159,22 +163,53 @@ namespace AccardND.GameCore.Tests
         [Test]
         public void Attack_DeployedCardsHaveTwoLives()
         {
-            var engine = BattleReadyEngine(
-                MixedLoadout("p0", 0, 1, 2),
-                UniformLoadout("p1", HeroClass.Warrior, 1),
-                out _);
+            // Forza 5 contro forza 5: l'attaccante vince lo scambio ma non
+            // raddoppia il difensore (9 contro 6), quindi niente Overkill e la
+            // carta da 2 vite ne perde una alla volta.
+            var random = QueueFor(
+                IdentityShuffles(),
+                DeploymentAndInitiatives(new[] { 20, 19, 18 }, new[] { 6, 5, 4 }),
+                new[] { 4, 1, 4, 1 }, // due scambi: 5+4=9 vs 5+1=6 (9 < 12: nessun Overkill)
+                Enumerable.Repeat(3, 50));
+            var engine = new PvpMatchEngine(
+                UniformLoadout("p0", HeroClass.Warrior, 5),
+                UniformLoadout("p1", HeroClass.Warrior, 5),
+                PvpMatchRules.CreateDefault(),
+                random);
+            engine.Start();
+            DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 });
 
-            // Prima eliminazione certa: perde una vita ma resta in gioco.
+            // Primo colpo: perde una vita ma resta in gioco.
             var first = engine.Attack(0, 0).OfType<AttackResolvedEvent>().Single();
-            Assert.That(first.Certainty, Is.EqualTo(CombatCertainty.Guaranteed));
+            Assert.That(first.Overkill, Is.False);
             Assert.That(first.DefenderLostLife, Is.True);
             Assert.That(first.DefenderRemainingLives, Is.EqualTo(1));
             Assert.That(first.DefenderEliminated, Is.False);
 
             // Secondo colpo sulla stessa carta: eliminata.
             var second = engine.Attack(0, 0).OfType<AttackResolvedEvent>().Single();
+            Assert.That(second.Overkill, Is.False);
             Assert.That(second.DefenderRemainingLives, Is.EqualTo(0));
             Assert.That(second.DefenderEliminated, Is.True);
+            Assert.That(engine.BoardOf(1)[0].Eliminated, Is.True);
+        }
+
+        [Test]
+        public void Attack_OverkillRemovesBothLivesInOneHit()
+        {
+            // Regola PvP: se l'attaccante totalizza almeno il doppio del
+            // difensore, la carta perde entrambe le vite in un colpo solo.
+            var engine = BattleReadyEngine(
+                UniformLoadout("p0", HeroClass.Warrior, 10),
+                UniformLoadout("p1", HeroClass.Warrior, 1),
+                out _);
+
+            // Forza 10 (+3 dado = 13) contro forza 1 (+3 dado = 4): 13 >= 2*4.
+            var attack = engine.Attack(0, 0).OfType<AttackResolvedEvent>().Single();
+            Assert.That(attack.Overkill, Is.True);
+            Assert.That(attack.DefenderLostLife, Is.True);
+            Assert.That(attack.DefenderRemainingLives, Is.EqualTo(0));
+            Assert.That(attack.DefenderEliminated, Is.True);
             Assert.That(engine.BoardOf(1)[0].Eliminated, Is.True);
         }
 

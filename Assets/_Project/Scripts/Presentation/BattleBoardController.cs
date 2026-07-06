@@ -593,6 +593,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private ScreenOrientation previousScreenOrientation;
 
+	private bool combatChromeVisible;
+
 	private int selectedPlayerIndex = -1;
 
 	private int currentTurnIndex;
@@ -716,7 +718,15 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private void Update()
 	{
-		if ((Object)(object)returnToMenuConfirmPanel != (Object)null && returnToMenuConfirmPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+		if ((Object)(object)hintPanel != (Object)null && hintPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+		{
+			DismissHint();
+		}
+		else if ((Object)(object)auraCodexPanel != (Object)null && auraCodexPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+		{
+			CloseAuraCodex();
+		}
+		else if ((Object)(object)returnToMenuConfirmPanel != (Object)null && returnToMenuConfirmPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
 		{
 			HideReturnToMenuConfirmation();
 		}
@@ -830,7 +840,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		SetRect(optionsTitle.rectTransform, new Vector2(0.06f, 0.87f), new Vector2(0.94f, 0.97f));
 		Button optionsLogButton = CreateButton("Options Open Log", optionsPanel.transform, builtinResource, "LOG");
 		((UnityEvent)optionsLogButton.onClick).AddListener(new UnityAction(OpenLogFromOptions));
-		SetRect((RectTransform)((Component)optionsLogButton).transform, new Vector2(0.06f, 0.72f), new Vector2(0.55f, 0.84f));
+		SetRect((RectTransform)((Component)optionsLogButton).transform, new Vector2(0.06f, 0.72f), new Vector2(0.32f, 0.84f));
+		Button optionsAuraButton = CreateButton("Options Open Aura Codex", optionsPanel.transform, builtinResource, "AURE");
+		((UnityEvent)optionsAuraButton.onClick).AddListener(new UnityAction(OpenAuraCodexFromOptions));
+		SetRect((RectTransform)((Component)optionsAuraButton).transform, new Vector2(0.34f, 0.72f), new Vector2(0.6f, 0.84f));
 		Button optionsTutorialButton = CreateImageButton("Options Tutorial", optionsPanel.transform, builtinResource, LoadSpriteResource("UI/tutorial_button"), string.Empty);
 		((UnityEvent)optionsTutorialButton.onClick).AddListener(new UnityAction(StartTutorialFromOptions));
 		SetRect((RectTransform)((Component)optionsTutorialButton).transform, new Vector2(0.62f, 0.69f), new Vector2(0.94f, 0.86f));
@@ -913,7 +926,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		component.childAlignment = (TextAnchor)4;
 		component.constraint = GridLayoutGroup.Constraint.FixedRowCount;
 		component.constraintCount = 1;
-		Image image7 = CreateImage("Message Panel", (Transform)(object)safeAreaRoot, new Color(0.015f, 0.025f, 0.04f, 0.34f));
+		Image image7 = CreateImage("Message Panel", (Transform)(object)safeAreaRoot, new Color(0.015f, 0.025f, 0.04f, 0.56f));
 		StylePanel(image7);
 		messagePanelRect = image7.rectTransform;
 		SetRect(image7.rectTransform, new Vector2(0.25f, 0.41f), new Vector2(0.75f, 0.555f));
@@ -931,8 +944,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		restartButtonText = ((Component)restartButton).GetComponentInChildren<Text>();
 		((Component)restartButton).gameObject.SetActive(false);
 		RectTransform val2 = (RectTransform)((Component)restartButton).transform;
-		val2.anchorMin = new Vector2(0.69f, 0.16f);
-		val2.anchorMax = new Vector2(0.97f, 0.84f);
+		val2.anchorMin = new Vector2(0.69f, 0.14f);
+		val2.anchorMax = new Vector2(0.97f, 0.58f);
 		val2.offsetMin = Vector2.zero;
 		val2.offsetMax = Vector2.zero;
 		confirmFormationButton = CreateButton("Confirm Formation", ((Component)image7).transform, builtinResource, "CONFERMA FORMAZIONE");
@@ -960,7 +973,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		val5.anchorMax = new Vector2(0.97f, 0.84f);
 		val5.offsetMin = Vector2.zero;
 		val5.offsetMax = Vector2.zero;
-		attachmentButton = CreateButton("Attachment", ((Component)image7).transform, builtinResource, "ATTACH");
+		attachmentButton = CreateButton("Attachment", ((Component)image7).transform, builtinResource, "POTENZIA");
 		((UnityEvent)attachmentButton.onClick).AddListener(new UnityAction(ActivateCurrentAttachment));
 		((Component)attachmentButton).gameObject.SetActive(false);
 		attachmentButtonText = ((Component)attachmentButton).GetComponentInChildren<Text>();
@@ -992,6 +1005,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		CreateCardInspectionOverlay(((Component)val).transform, builtinResource);
 		CreateRoomTransitionOverlay(((Component)val).transform);
 		CreateModeSelectionView(((Component)val).transform, builtinResource);
+		CreateHintOverlay((Transform)(object)safeAreaRoot, builtinResource);
+		CreateAuraCodexView(((Component)val).transform, builtinResource);
 		RefreshPlayerHud();
 		RefreshCpuHud();
 		RefreshRoomHud("PREPARAZIONE", (((Object)(object)currentScenario != (Object)null) ?currentScenario.DisplayName.ToUpperInvariant() : "SCENARIO"));

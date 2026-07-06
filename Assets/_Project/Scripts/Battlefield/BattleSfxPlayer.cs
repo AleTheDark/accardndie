@@ -14,6 +14,7 @@ namespace AccardND.Battlefield
         private bool muted;
         private AudioClip genericButtonClickSfx;
         private AudioClip rollingDiceSfx;
+        private AudioClip drawCardSfx;
         private AudioClip pawnEnteringBattlefieldSfx;
         private AudioClip warriorJoinBattlefieldSfx;
         private AudioClip assassinJoinBattlefieldSfx;
@@ -107,6 +108,8 @@ namespace AccardND.Battlefield
 
         public void PlayRollingDice() => PlayClip(rollingDiceSfx);
 
+        public void PlayDrawCard() => PlayClip(drawCardSfx);
+
         public void PlayJoinBattlefield() => PlayClip(pawnEnteringBattlefieldSfx);
 
         public void PlayJoinBattlefield(CardDefinition definition)
@@ -187,6 +190,7 @@ namespace AccardND.Battlefield
         {
             genericButtonClickSfx = LoadSfx("generic_button_click");
             rollingDiceSfx = LoadSfx("rolling_dice");
+            drawCardSfx = LoadSfx("draw_card");
             pawnEnteringBattlefieldSfx = LoadSfx("pawn_entering_battlefield");
             warriorJoinBattlefieldSfx = LoadSfx("warrior_join_battlefield");
             assassinJoinBattlefieldSfx = LoadSfx("assassin_join_battlefield");

@@ -529,12 +529,17 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		int page = Mathf.Clamp(tutorialPageIndex, 0, 3) + 1;
-		Sprite sprite = LoadSpriteResource($"UI/tutorial-{page}");
+		bool landscape = Screen.width > Screen.height;
+		Sprite sprite = LoadSpriteResource(landscape ?$"UI/tutorial-{page}_landscape" : $"UI/tutorial-{page}");
+		if ((Object)(object)sprite == (Object)null && landscape)
+		{
+			sprite = LoadSpriteResource($"UI/tutorial-{page}");
+		}
 		modeSelectionImage.sprite = sprite;
 		if ((Object)(object)modeSelectionAspectFitter != (Object)null)
 		{
 			modeSelectionAspectFitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
-			modeSelectionAspectFitter.aspectRatio = (Object)(object)sprite != (Object)null ?sprite.rect.width / sprite.rect.height : 941f / 1672f;
+			modeSelectionAspectFitter.aspectRatio = (Object)(object)sprite != (Object)null ?sprite.rect.width / sprite.rect.height : (landscape ?1672f / 941f : 941f / 1672f);
 		}
 	}
 
@@ -609,11 +614,13 @@ public sealed partial class BattleBoardController
 			modeSelectionPanel.SetActive(false);
 		}
 		inputLocked = false;
+		ShowCampaignIntroHint();
 		LoadBattle();
 	}
 
 	private void StartPvpMode()
 	{
+		ReturnToStart(showModeSelection: false);
 		if ((Object)(object)modeSelectionPanel != (Object)null)
 		{
 			modeSelectionPanel.SetActive(false);
@@ -624,8 +631,13 @@ public sealed partial class BattleBoardController
 		}
 		GameObject gameObject = new GameObject("Pvp Mode");
 		AccardND.PvpUi.PvpBootstrap pvpBootstrap = gameObject.AddComponent<AccardND.PvpUi.PvpBootstrap>();
+		activePvpBootstrap = pvpBootstrap;
 		pvpBootstrap.Configure(cardDatabase, delegate
 		{
+			if ((Object)(object)activePvpBootstrap == (Object)(object)pvpBootstrap)
+			{
+				activePvpBootstrap = null;
+			}
 			if ((Object)(object)modeSelectionPanel != (Object)null)
 			{
 				modeSelectionPanel.SetActive(true);

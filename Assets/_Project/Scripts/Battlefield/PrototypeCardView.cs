@@ -57,6 +57,8 @@ namespace AccardND.Presentation
         private GameObject targetHintAuraRoot;
         private RectTransform targetHintAuraRect;
         private Image targetHintAuraImage;
+        private readonly List<Image> defeatEffectImages = new();
+        private readonly List<Transform> defeatEffectLayerAnchors = new();
         private Text statusLabel;
         private RectTransform statusIconRoot;
         private readonly List<GameObject> statusIconViews = new();
@@ -120,9 +122,11 @@ namespace AccardND.Presentation
         private Coroutine pendingDragEndRoutine;
         private bool selectedVisual;
         private Coroutine selectionScaleCoroutine;
+        private GameObject defeatCrackOverlay;
 
         public RectTransform RectTransform => rectTransform != null ? rectTransform : (RectTransform)transform;
         public Button Button { get; private set; }
+        public HeroClass HeroClass => cardHeroClass;
         public bool IsDragging => dragging;
 
         public readonly struct StatusToken
@@ -231,9 +235,11 @@ namespace AccardND.Presentation
             Color backdropColor = ClassColor(definition.HeroClass) * 0.42f;
             backdropColor.a = 1f;
             Image artBackdrop = CreateImage("Artwork Backdrop", artViewport, backdropColor);
+            defeatEffectImages.Add(artBackdrop);
             Stretch(artBackdrop.rectTransform);
 
             Image art = CreateImage("Artwork", artViewport, Color.white);
+            defeatEffectImages.Add(art);
             Sprite resolvedArtwork = ResolveCardArtwork(definition);
             Sprite framedArtwork = CreateCoverArtwork(resolvedArtwork, definition.HeroClass);
             art.sprite = framedArtwork;
@@ -246,6 +252,8 @@ namespace AccardND.Presentation
             Stretch(art.rectTransform);
 
             Image holder = CreateImage("Class Holder", transform, Color.white);
+            defeatEffectImages.Add(holder);
+            defeatEffectLayerAnchors.Add(holder.transform);
             holder.sprite = Resources.Load<Sprite>($"CardBorders/{BorderResourceName(definition.HeroClass)}");
             holder.preserveAspect = true;
             Stretch(holder.rectTransform);
@@ -263,8 +271,8 @@ namespace AccardND.Presentation
             int descriptionFontSize = DescriptionFontSize(definition.HeroClass);
             Text statsText = CreateText("Description", transform, font, descriptionFontSize, FontStyle.Bold, TextAnchor.MiddleCenter);
             statsText.text = string.IsNullOrWhiteSpace(definition.RulesText)
-                ? $"{ClassName(definition.HeroClass)}\n{ClassMechanicText(definition.HeroClass)}"
-                : $"{ClassName(definition.HeroClass)}\n{definition.RulesText}";
+                ? $"{CardRulesGlossary.HeroClassNameUpper(definition.HeroClass)}\n{CardRulesGlossary.ShortAbilityText(definition.HeroClass, configuration?.ClassBalance)}"
+                : $"{CardRulesGlossary.HeroClassNameUpper(definition.HeroClass)}\n{definition.RulesText}";
             statsText.color = DescriptionColor(definition.HeroClass);
             statsText.horizontalOverflow = HorizontalWrapMode.Wrap;
             statsText.verticalOverflow = VerticalWrapMode.Truncate;
@@ -343,6 +351,8 @@ namespace AccardND.Presentation
             EnsureTurnAura();
 
             Image preview = CreateImage("Battle Preview", transform, Color.white);
+            defeatEffectImages.Add(preview);
+            defeatEffectLayerAnchors.Add(preview.transform);
             preview.sprite = ResolveBattlePreviewSprite(definition);
             if (preview.sprite == null)
                 preview.color = Color.clear;
@@ -479,22 +489,42 @@ namespace AccardND.Presentation
 
         public void SetTargetHint(bool highlighted, Color color)
         {
+            EnsureTargetHintAura();
             if (highlighted)
             {
                 selectionOutline.enabled = true;
                 selectionOutline.effectColor = color;
+                SetTargetHintAura(true, color);
                 if (liftShadow != null && !dragging)
                     liftShadow.enabled = true;
                 return;
             }
 
+            SetTargetHintAura(false, Color.clear);
             ApplySelectionChrome(selectedVisual);
+        }
+
+        private Color GetClassColor(HeroClass heroClass)
+        {
+            return heroClass switch
+            {
+                HeroClass.Assassin => new Color(0.15f, 0.85f, 0.35f, 1f),    // Toxic green
+                HeroClass.Warrior => new Color(0.85f, 0.15f, 0.15f, 1f),     // Warrior Crimson
+                HeroClass.Mage => new Color(0.15f, 0.65f, 0.95f, 1f),        // Arcane Blue
+                HeroClass.Paladin => new Color(0.95f, 0.75f, 0.15f, 1f),     // Divine Gold
+                HeroClass.Rogue => new Color(0.45f, 0.45f, 0.5f, 1f),        // Rogue Dark Gray
+                HeroClass.Hunter => new Color(0.92f, 0.45f, 0.08f, 1f),      // Hunter Orange
+                HeroClass.Barbarian => new Color(0.9f, 0.45f, 0.1f, 1f),     // Barbarian Orange
+                HeroClass.Necromancer => new Color(0.65f, 0.15f, 0.85f, 1f),  // Necromancer Purple
+                HeroClass.Priest => new Color(0.9f, 0.9f, 0.95f, 1f),        // Priest Pure White/Silver
+                _ => new Color(0.2f, 1f, 0.65f, 1f)                          // Fallback cyan-green
+            };
         }
 
         private void ApplySelectionChrome(bool selected)
         {
             selectionOutline.enabled = selected;
-            selectionOutline.effectColor = new Color(0.2f, 1f, 0.65f);
+            selectionOutline.effectColor = GetClassColor(cardHeroClass);
             if (liftShadow != null && !dragging)
                 liftShadow.enabled = selected;
         }
@@ -665,7 +695,7 @@ namespace AccardND.Presentation
             transform.SetAsLastSibling();
             canvasGroup.blocksRaycasts = false;
             selectionOutline.enabled = true;
-            selectionOutline.effectColor = new Color(0.45f, 1f, 0.88f, 1f);
+            selectionOutline.effectColor = GetClassColor(cardHeroClass);
             if (liftShadow != null)
                 liftShadow.enabled = true;
             StopSelectionScaleAnimation();
@@ -1254,33 +1284,417 @@ namespace AccardND.Presentation
             duelDetached = false;
         }
 
-        public IEnumerator PlayDefeatAnimation()
+        private static Sprite cachedAnimationCrackSprite;
+        private static Sprite cachedDefeatedCrackSprite;
+        private static Sprite cachedProceduralCrackSprite;
+        private static Sprite cachedAshShardSprite;
+
+        private static Sprite GetAnimationCrackSprite()
         {
+            return LoadCrackSprite(ref cachedAnimationCrackSprite, "UI/glowing_runic_cracks_old", "UI/glowing_runic_cracks");
+        }
+
+        private static Sprite GetDefeatedCrackSprite()
+        {
+            return LoadCrackSprite(ref cachedDefeatedCrackSprite, "UI/glowing_runic_cracks", "UI/glowing_runic_cracks_old");
+        }
+
+        private static Sprite LoadCrackSprite(ref Sprite cachedSprite, string preferredResource, string fallbackResource)
+        {
+            if (cachedSprite != null)
+                return cachedSprite;
+
+            cachedSprite = Resources.Load<Sprite>(preferredResource);
+            if (cachedSprite != null)
+                return cachedSprite;
+
+            cachedSprite = Resources.Load<Sprite>(fallbackResource);
+            if (cachedSprite != null)
+                return cachedSprite;
+
+            cachedSprite = GetProceduralCrackSprite();
+            return cachedSprite;
+        }
+
+        private static Sprite GetProceduralCrackSprite()
+        {
+            if (cachedProceduralCrackSprite != null)
+                return cachedProceduralCrackSprite;
+
+            int width = 128;
+            int height = 128;
+            Texture2D tex = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            {
+                name = "Procedural Crack Texture",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            Color32[] pixels = new Color32[width * height];
+            Color32 clearColor = new Color32(0, 0, 0, 0);
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = clearColor;
+
+            System.Random rand = new System.Random();
+            int startX = width / 2;
+            int startY = height / 2;
+            int numMainBranches = rand.Next(5, 8);
+            for (int b = 0; b < numMainBranches; b++)
+            {
+                float baseAngle = (360f / numMainBranches) * b + rand.Next(-15, 15);
+                DrawProceduralCrackLine(pixels, width, height, startX, startY, baseAngle, 45f, rand);
+            }
+
+            tex.SetPixels32(pixels);
+            tex.Apply(false, true);
+
+            cachedProceduralCrackSprite = Sprite.Create(tex, new Rect(0, 0, width, height), new Vector2(0.5f, 0.5f));
+            cachedProceduralCrackSprite.name = "Procedural Crack Sprite";
+            cachedProceduralCrackSprite.hideFlags = HideFlags.HideAndDontSave;
+            return cachedProceduralCrackSprite;
+        }
+
+        private static void DrawProceduralCrackLine(Color32[] pixels, int width, int height, int x, int y, float angle, float length, System.Random rand)
+        {
+            if (length < 4f) return;
+
+            float rad = angle * Mathf.Deg2Rad;
+            int nextX = Mathf.Clamp((int)(x + Mathf.Cos(rad) * length), 0, width - 1);
+            int nextY = Mathf.Clamp((int)(y + Mathf.Sin(rad) * length), 0, height - 1);
+
+            Color32 crackColor = new Color32(255, 255, 255, 255);
+            DrawBresenhamLine(pixels, width, height, x, y, nextX, nextY, crackColor);
+
+            if (rand.NextDouble() < 0.65)
+            {
+                float branchAngle = angle + rand.Next(-35, 35);
+                DrawProceduralCrackLine(pixels, width, height, nextX, nextY, branchAngle, length * 0.75f, rand);
+            }
+            if (rand.NextDouble() < 0.35)
+            {
+                float branchAngle = angle + rand.Next(-65, 65);
+                DrawProceduralCrackLine(pixels, width, height, nextX, nextY, branchAngle, length * 0.55f, rand);
+            }
+        }
+
+        private static void DrawBresenhamLine(Color32[] pixels, int width, int height, int x0, int y0, int x1, int y1, Color32 color)
+        {
+            int dx = Mathf.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+            int dy = -Mathf.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+            int err = dx + dy, e2;
+
+            while (true)
+            {
+                for (int tx = 0; tx <= 1; tx++)
+                {
+                    for (int ty = 0; ty <= 1; ty++)
+                    {
+                        int px = x0 + tx;
+                        int py = y0 + ty;
+                        if (px >= 0 && px < width && py >= 0 && py < height)
+                        {
+                            pixels[py * width + px] = color;
+                        }
+                    }
+                }
+
+                if (x0 == x1 && y0 == y1) break;
+                e2 = 2 * err;
+                if (e2 >= dy) { err += dy; x0 += sx; }
+                if (e2 <= dx) { err += dx; y0 += sy; }
+            }
+        }
+
+        private static Sprite GetAshShardSprite()
+        {
+            if (cachedAshShardSprite != null)
+                return cachedAshShardSprite;
+
+            const int size = 32;
+            Texture2D tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Procedural Ash Shard Texture",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            Color32[] pixels = new Color32[size * size];
+            Color32 clear = new Color32(0, 0, 0, 0);
+            for (int index = 0; index < pixels.Length; index++)
+                pixels[index] = clear;
+
+            Vector2 a = new Vector2(5f, 26f);
+            Vector2 b = new Vector2(17f, 3f);
+            Vector2 c = new Vector2(28f, 21f);
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    Vector2 p = new Vector2(x + 0.5f, y + 0.5f);
+                    if (!PointInTriangle(p, a, b, c))
+                        continue;
+
+                    float edge = Mathf.Min(
+                        DistanceToSegment(p, a, b),
+                        Mathf.Min(DistanceToSegment(p, b, c), DistanceToSegment(p, c, a)));
+                    byte alpha = (byte)Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(95f, 230f, Mathf.Clamp01(edge / 4f))), 0, 255);
+                    byte value = (byte)Mathf.Clamp(44 + Mathf.RoundToInt((x * 13 + y * 7) % 34), 0, 255);
+                    pixels[y * size + x] = new Color32(value, value, value, alpha);
+                }
+            }
+
+            tex.SetPixels32(pixels);
+            tex.Apply(false, true);
+            cachedAshShardSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+            cachedAshShardSprite.name = "Procedural Ash Shard Sprite";
+            cachedAshShardSprite.hideFlags = HideFlags.HideAndDontSave;
+            return cachedAshShardSprite;
+        }
+
+        private static bool PointInTriangle(Vector2 p, Vector2 a, Vector2 b, Vector2 c)
+        {
+            float d1 = Sign(p, a, b);
+            float d2 = Sign(p, b, c);
+            float d3 = Sign(p, c, a);
+            bool hasNegative = d1 < 0f || d2 < 0f || d3 < 0f;
+            bool hasPositive = d1 > 0f || d2 > 0f || d3 > 0f;
+            return !(hasNegative && hasPositive);
+        }
+
+        private static float Sign(Vector2 p1, Vector2 p2, Vector2 p3)
+        {
+            return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+        }
+
+        private static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float denominator = Vector2.Dot(ab, ab);
+            if (denominator <= 0.0001f)
+                return Vector2.Distance(p, a);
+
+            float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / denominator);
+            return Vector2.Distance(p, a + ab * t);
+        }
+
+        private IEnumerator AnimateShatterParticles(RectTransform sourceRect, Color shardColor, bool isTile = false)
+        {
+            int shardCount = isTile ? 8 : 15;
+            List<RectTransform> shards = new List<RectTransform>();
+            List<Vector2> velocities = new List<Vector2>();
+            List<float> rotSpeeds = new List<float>();
+
+            Vector2 center = sourceRect.anchoredPosition;
+            Transform parent = sourceRect.parent;
+
+            Sprite shardSprite = GetAshShardSprite();
+
+            for (int i = 0; i < shardCount; i++)
+            {
+                GameObject shardObj = new GameObject("Shard", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                shardObj.transform.SetParent(parent, false);
+                Image shardImg = shardObj.GetComponent<Image>();
+                shardImg.sprite = shardSprite;
+                shardImg.color = shardColor;
+                shardImg.raycastTarget = false;
+                shardImg.preserveAspect = true;
+
+                RectTransform sRect = shardObj.GetComponent<RectTransform>();
+                float sizeMin = isTile ? 6f : 12f;
+                float sizeMax = isTile ? 16f : 28f;
+                sRect.sizeDelta = new Vector2(UnityEngine.Random.Range(sizeMin, sizeMax), UnityEngine.Random.Range(sizeMin, sizeMax));
+                
+                float offsetRange = isTile ? 20f : 50f;
+                sRect.anchoredPosition = center + new Vector2(UnityEngine.Random.Range(-offsetRange, offsetRange), UnityEngine.Random.Range(-offsetRange, offsetRange));
+                sRect.localRotation = Quaternion.Euler(0, 0, UnityEngine.Random.Range(0f, 360f));
+
+                shards.Add(sRect);
+
+                float angle = UnityEngine.Random.Range(0f, 360f) * Mathf.Deg2Rad;
+                float speed = isTile ? UnityEngine.Random.Range(100f, 250f) : UnityEngine.Random.Range(180f, 450f);
+                velocities.Add(new Vector2(Mathf.Cos(angle) * speed, Mathf.Sin(angle) * speed + (isTile ? 50f : 120f)));
+                rotSpeeds.Add(UnityEngine.Random.Range(-400f, 400f));
+            }
+
+            float elapsed = 0f;
+            float duration = isTile ? 0.55f : 0.75f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = elapsed / duration;
+                for (int i = 0; i < shards.Count; i++)
+                {
+                    if (shards[i] == null) continue;
+                    Vector2 vel = velocities[i];
+                    vel.y -= (isTile ? 500f : 900f) * Time.unscaledDeltaTime;
+                    velocities[i] = vel;
+
+                    shards[i].anchoredPosition += vel * Time.unscaledDeltaTime;
+                    shards[i].localRotation *= Quaternion.Euler(0, 0, rotSpeeds[i] * Time.unscaledDeltaTime);
+
+                    Image img = shards[i].GetComponent<Image>();
+                    if (img != null)
+                        img.color = new Color(shardColor.r, shardColor.g, shardColor.b, 1f - t);
+                }
+                yield return null;
+            }
+
+            foreach (var shard in shards)
+            {
+                if (shard != null) Destroy(shard.gameObject);
+            }
+        }
+
+        public IEnumerator PlayDefeatAnimation(GameObject timelineTile = null, Action timelineTileHidden = null)
+        {
+            ClearDefeatCrackOverlay();
             SetBattleAura(false, Color.clear, string.Empty);
             if (targetHintAuraRoot != null)
                 SetTargetHintAura(false, Color.clear);
             defeatedLabel.gameObject.SetActive(false);
             SetStatus("MORTE", new Color(0.95f, 0.12f, 0.12f));
-            float elapsed = 0f;
-            float duration = configuration.Animation.DefeatDuration;
-            if (duration <= 0f)
+
+            Color crackColor = Color.white;
+            Color transparentCrackColor = new Color(crackColor.r, crackColor.g, crackColor.b, 0f);
+            Color ashShardColor = new Color(0.16f, 0.15f, 0.14f, 0.95f);
+            Color dissolveEdgeColor = new Color(0.38f, 0.42f, 0.46f, 1f);
+
+            // Instantiate custom burn dissolve material
+            Shader dissolveShader = Shader.Find("Custom/UIDissolve");
+            Material dissolveMat = null;
+            if (dissolveShader != null)
             {
-                canvasGroup.alpha = 0.38f;
-                rectTransform.localScale = initialScale * 0.93f;
-                yield break;
+                dissolveMat = new Material(dissolveShader);
+                    Texture2D noise = Resources.Load<Texture2D>("UI/dissolve_ash_noise");
+                    if (noise != null)
+                    {
+                        dissolveMat.SetTexture("_DissolveTex", noise);
+                    dissolveMat.SetColor("_EdgeColor", dissolveEdgeColor);
+                    dissolveMat.SetFloat("_EdgeWidth", 0.045f);
+                    dissolveMat.SetFloat("_Amount", 0f);
+                }
             }
-            while (elapsed < duration)
+
+            GameObject cardCrackObj = new GameObject("CrackOverlay", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            cardCrackObj.transform.SetParent(transform, false);
+            Image cardCrackImg = cardCrackObj.GetComponent<Image>();
+            cardCrackImg.sprite = GetAnimationCrackSprite();
+            cardCrackImg.color = transparentCrackColor;
+            cardCrackImg.raycastTarget = false;
+            Stretch((RectTransform)cardCrackObj.transform);
+            PlaceDefeatEffectOverlay(cardCrackObj.transform);
+
+            GameObject tileCrackObj = null;
+            Image tileCrackImg = null;
+            if (timelineTile != null)
+            {
+                tileCrackObj = new GameObject("TimelineCrackOverlay", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                tileCrackObj.transform.SetParent(timelineTile.transform, false);
+                tileCrackImg = tileCrackObj.GetComponent<Image>();
+                tileCrackImg.sprite = GetAnimationCrackSprite();
+                tileCrackImg.color = transparentCrackColor;
+                tileCrackImg.raycastTarget = false;
+                Stretch((RectTransform)tileCrackObj.transform);
+            }
+
+            // Apply dissolve material to images
+            List<Image> cardImages = DefeatEffectImages();
+            if (dissolveMat != null)
+            {
+                foreach (var img in cardImages)
+                {
+                    if (img == null || img.gameObject.name == "CrackOverlay") continue;
+                    img.material = dissolveMat;
+                }
+            }
+
+            Image[] tileImages = null;
+            if (timelineTile != null && dissolveMat != null)
+            {
+                tileImages = timelineTile.GetComponentsInChildren<Image>(true);
+                foreach (var img in tileImages)
+                {
+                    if (img.gameObject.name == "TimelineCrackOverlay") continue;
+                    img.material = dissolveMat;
+                }
+            }
+
+            float elapsed = 0f;
+            float crackDuration = 0.45f;
+            Vector3 cardOriginalScale = rectTransform.localScale;
+            Vector3 tileOriginalScale = timelineTile != null ? timelineTile.transform.localScale : Vector3.one;
+
+            while (elapsed < crackDuration)
             {
                 elapsed += Time.unscaledDeltaTime;
-                float progress = Mathf.Clamp01(elapsed / duration);
-                float shake = Mathf.Sin(progress * 60f) * (1f - progress) * 7f;
-                canvasGroup.alpha = Mathf.Lerp(1f, 0.38f, progress);
-                rectTransform.localScale = Vector3.Lerp(rectTransform.localScale, initialScale * 0.93f, progress);
-                rectTransform.localRotation = Quaternion.Euler(0f, 0f, shake);
+                float progress = Mathf.Clamp01(elapsed / crackDuration);
+
+                float crackAlpha = Mathf.Lerp(0f, 1f, progress);
+                cardCrackImg.color = new Color(crackColor.r, crackColor.g, crackColor.b, crackAlpha);
+                if (tileCrackImg != null)
+                    tileCrackImg.color = new Color(crackColor.r, crackColor.g, crackColor.b, crackAlpha);
+
+                float shakeForce = (1f - progress) * 12f;
+                rectTransform.localScale = cardOriginalScale * Mathf.Lerp(1.0f, 1.05f, progress);
+                rectTransform.localRotation = Quaternion.Euler(0f, 0f, UnityEngine.Random.Range(-shakeForce, shakeForce) * 0.4f);
+
+                if (timelineTile != null)
+                {
+                    timelineTile.transform.localScale = tileOriginalScale * Mathf.Lerp(1.0f, 1.08f, progress);
+                    timelineTile.transform.localRotation = Quaternion.Euler(0f, 0f, UnityEngine.Random.Range(-shakeForce, shakeForce) * 0.6f);
+                }
+
                 yield return null;
             }
-            canvasGroup.alpha = 0.38f;
+
+            if (cardCrackObj != null) Destroy(cardCrackObj);
+            if (tileCrackObj != null) Destroy(tileCrackObj);
+            if (timelineTile != null)
+            {
+                timelineTile.transform.localScale = tileOriginalScale;
+                if (tileImages != null)
+                {
+                    foreach (var img in tileImages)
+                    {
+                        if (img != null)
+                            img.material = null;
+                    }
+                }
+                timelineTile.SetActive(false);
+                timelineTileHidden?.Invoke();
+            }
+
+            // Animate beautiful dissolve erosion in parallel with burst shatter particles!
+            float dissolveElapsed = 0f;
+            float dissolveDuration = 0.75f;
+
+            Coroutine cardShatter = StartCoroutine(AnimateShatterParticles(rectTransform, ashShardColor));
+
+            while (dissolveElapsed < dissolveDuration)
+            {
+                dissolveElapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(dissolveElapsed / dissolveDuration);
+                if (dissolveMat != null)
+                {
+                    dissolveMat.SetFloat("_Amount", progress);
+                }
+                yield return null;
+            }
+
+            yield return cardShatter;
+
             rectTransform.localScale = initialScale * 0.93f;
+            canvasGroup.alpha = 0.52f;
+            foreach (var img in cardImages)
+            {
+                if (img != null)
+                    img.material = null;
+            }
+            defeatCrackOverlay = CreateCrackOverlay("DefeatCrackOverlay", transform, crackColor, 0.86f);
+
+            if (dissolveMat != null) Destroy(dissolveMat);
+
             if (duelDetached)
             {
                 rectTransform.anchoredPosition = duelHomeAnchoredPosition;
@@ -1293,6 +1707,14 @@ namespace AccardND.Presentation
 
         public void ResetState()
         {
+            ClearDefeatCrackOverlay();
+            // Reset material back to normal in case the card is revived/recycled
+            List<Image> cardImages = DefeatEffectImages();
+            foreach (var img in cardImages)
+            {
+                img.material = null;
+            }
+
             if (diceCoroutine != null)
             {
                 StopCoroutine(diceCoroutine);
@@ -1576,6 +1998,53 @@ namespace AccardND.Presentation
 
                 targetHintAuraRect.localScale = Vector3.one;
             }
+        }
+
+        private GameObject CreateCrackOverlay(string objectName, Transform parent, Color color, float alpha)
+        {
+            GameObject crackObj = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            crackObj.transform.SetParent(parent, false);
+            Image crackImg = crackObj.GetComponent<Image>();
+            crackImg.sprite = GetDefeatedCrackSprite();
+            crackImg.color = new Color(color.r, color.g, color.b, alpha);
+            crackImg.raycastTarget = false;
+            Stretch((RectTransform)crackObj.transform);
+            PlaceDefeatEffectOverlay(crackObj.transform);
+            return crackObj;
+        }
+
+        private List<Image> DefeatEffectImages()
+        {
+            defeatEffectImages.RemoveAll(image => image == null);
+            return defeatEffectImages;
+        }
+
+        private void PlaceDefeatEffectOverlay(Transform overlay)
+        {
+            if (overlay == null)
+                return;
+
+            int siblingIndex = -1;
+            for (int index = 0; index < defeatEffectLayerAnchors.Count; index++)
+            {
+                Transform anchor = defeatEffectLayerAnchors[index];
+                if (anchor != null && anchor.parent == transform)
+                    siblingIndex = Mathf.Max(siblingIndex, anchor.GetSiblingIndex());
+            }
+
+            if (siblingIndex >= 0)
+                overlay.SetSiblingIndex(Mathf.Min(siblingIndex + 1, transform.childCount - 1));
+            else
+                overlay.SetAsFirstSibling();
+        }
+
+        private void ClearDefeatCrackOverlay()
+        {
+            if (defeatCrackOverlay == null)
+                return;
+
+            Destroy(defeatCrackOverlay);
+            defeatCrackOverlay = null;
         }
 
         private IEnumerator AnimateTurnAura()
@@ -2024,7 +2493,7 @@ namespace AccardND.Presentation
                 return "buff_blessing";
             if (normalized.Contains("FURIA"))
                 return "fury_buff";
-            if (normalized.Contains("ATTACH") || normalized.Contains("ACCORD") || normalized.Contains("AGREEMENT") || normalized.Contains("LEGAME"))
+            if (normalized.Contains("ATTACH") || normalized.Contains("ACCORD") || normalized.Contains("AGREEMENT") || normalized.Contains("LEGAME") || normalized.Contains("POTENZIA") || normalized.Contains("FORZA"))
                 return "agreement_buff";
             if (normalized.Contains("BONUS") || normalized.Contains("FURIA"))
                 return "buff_attack";
@@ -2931,40 +3400,6 @@ namespace AccardND.Presentation
                 .Replace(" ", string.Empty)
                 .Replace("_", string.Empty)
                 .Replace("-", string.Empty);
-        }
-
-        private static string ClassName(HeroClass heroClass)
-        {
-            return heroClass switch
-            {
-                HeroClass.Assassin => "ASSASSINO",
-                HeroClass.Warrior => "GUERRIERO",
-                HeroClass.Mage => "MAGO",
-                HeroClass.Paladin => "PALADINO",
-                HeroClass.Rogue => "LADRO",
-                HeroClass.Hunter => "CACCIATORE",
-                HeroClass.Barbarian => "BARBARO",
-                HeroClass.Necromancer => "NEGROMANTE",
-                HeroClass.Priest => "SACERDOTE",
-                _ => heroClass.ToString().ToUpperInvariant()
-            };
-        }
-
-        private static string ClassMechanicText(HeroClass heroClass)
-        {
-            return heroClass switch
-            {
-                HeroClass.Rogue => "RITIRA GLI 1 IN ATTACCO",
-                HeroClass.Hunter => "+2 CONTRO IL BERSAGLIO MARCATO",
-                HeroClass.Barbarian => "FURIA +2 ATTACCO/DIFESA",
-                HeroClass.Necromancer => "RIALZA UN ALLEATO ELIMINATO",
-                HeroClass.Priest => "BENEDICE L'ALLEATO PIÙ DEBOLE",
-                HeroClass.Assassin => "INIBISCE UN NEMICO",
-                HeroClass.Warrior => "SOMMA DUE DADI VIGORE",
-                HeroClass.Mage => "ABBASSA IL DADO NEMICO",
-                HeroClass.Paladin => "PROTEGGE O SI DIFENDE",
-                _ => string.Empty
-            };
         }
 
         private static Sprite GetAuraSprite()

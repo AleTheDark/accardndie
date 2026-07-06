@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Linq;
 using AccardND.GameData;
 using UnityEngine;
 using UnityEngine.Events;
@@ -17,6 +16,7 @@ public sealed partial class BattleBoardController
 		public Text NameText;
 		public Text LevelText;
 		public Text ExperienceText;
+		public Image ExperienceTrack;
 		public Image ExperienceFill;
 		public Image DiceImage;
 		public Text DiceText;
@@ -45,11 +45,11 @@ public sealed partial class BattleBoardController
 
 	private CombatantHud CreateCombatantHud(string name, Font font, string displayName)
 	{
-		Image panel = CreateImage(name, (Transform)(object)safeAreaRoot, new Color(0.008f, 0.014f, 0.022f, 0.9f));
+		Image panel = CreateImage(name, (Transform)(object)safeAreaRoot, new Color(0.018f, 0.028f, 0.045f, 0.94f));
 		StylePanel(panel);
-		SetRect(panel.rectTransform, new Vector2(0.76f, 0.78f), new Vector2(0.985f, 0.93f));
+		SetRect(panel.rectTransform, new Vector2(0.735f, 0.765f), new Vector2(0.985f, 0.935f));
 
-		Image avatarFrame = CreateImage(name + " Avatar Placeholder", ((Component)panel).transform, new Color(0.08f, 0.12f, 0.15f, 0.98f));
+		Image avatarFrame = CreateImage(name + " Avatar Placeholder", ((Component)panel).transform, new Color(0.065f, 0.105f, 0.13f, 0.98f));
 		StylePanel(avatarFrame);
 		SetRect(avatarFrame.rectTransform, new Vector2(0.035f, 0.16f), new Vector2(0.17f, 0.86f));
 
@@ -65,12 +65,17 @@ public sealed partial class BattleBoardController
 		avatarText.resizeTextMaxSize = 14;
 		Stretch(avatarText.rectTransform, 3f);
 
+		Image progressTrack = CreateImage(name + " Progress Track", ((Component)panel).transform, new Color(0.025f, 0.036f, 0.05f, 0.95f));
+		StylePanel(progressTrack);
+		SetRect(progressTrack.rectTransform, new Vector2(0.36f, 0.47f), new Vector2(0.61f, 0.62f));
+
 		CombatantHud hud = new CombatantHud
 		{
 			Rect = panel.rectTransform,
 			NameText = CreateText(name + " Name", ((Component)panel).transform, font, 21, (FontStyle)1, (TextAnchor)3),
 			LevelText = CreateText(name + " Level", ((Component)panel).transform, font, 16, (FontStyle)1, (TextAnchor)3),
 			ExperienceText = CreateText(name + " Progress Value", ((Component)panel).transform, font, 14, (FontStyle)1, (TextAnchor)5),
+			ExperienceTrack = progressTrack,
 			DiceImage = CreateImage(name + " Dice Icon", ((Component)panel).transform, Color.white),
 			DiceText = CreateText(name + " Dice Value", ((Component)panel).transform, font, 15, (FontStyle)1, (TextAnchor)3),
 			DeckImage = CreateImage(name + " Deck Icon", ((Component)panel).transform, Color.white),
@@ -82,7 +87,7 @@ public sealed partial class BattleBoardController
 		};
 
 		hud.NameText.text = displayName;
-		hud.NameText.color = new Color(0.96f, 0.82f, 0.42f);
+		hud.NameText.color = new Color(1f, 0.78f, 0.28f);
 		hud.NameText.resizeTextForBestFit = true;
 		hud.NameText.resizeTextMinSize = 13;
 		hud.NameText.resizeTextMaxSize = 21;
@@ -91,11 +96,7 @@ public sealed partial class BattleBoardController
 		hud.LevelText.color = new Color(0.87f, 0.92f, 0.94f);
 		SetRect(hud.LevelText.rectTransform, new Vector2(0.205f, 0.43f), new Vector2(0.34f, 0.64f));
 
-		Image progressTrack = CreateImage(name + " Progress Track", ((Component)panel).transform, new Color(0.04f, 0.06f, 0.07f, 0.95f));
-		StylePanel(progressTrack);
-		SetRect(progressTrack.rectTransform, new Vector2(0.36f, 0.47f), new Vector2(0.61f, 0.62f));
-
-		hud.ExperienceFill = CreateImage(name + " Progress Fill", ((Component)progressTrack).transform, new Color(0.72f, 0.48f, 0.12f, 0.95f));
+		hud.ExperienceFill = CreateImage(name + " Progress Fill", ((Component)progressTrack).transform, new Color(0.2f, 0.72f, 0.82f, 0.95f));
 		SetRect(hud.ExperienceFill.rectTransform, Vector2.zero, new Vector2(0f, 1f));
 
 		hud.ExperienceText.color = new Color(0.86f, 0.92f, 0.95f);
@@ -126,10 +127,14 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
-		CreateHudTooltipButton(hud.Rect, new Vector2(0.64f, 0.5f), new Vector2(0.82f, 0.92f), () => ShowHudTooltip(isPlayer ?$"Il tuo dado Vigore: {hud.DiceText.text}." : $"Il dado Vigore del tuo avversario: {hud.DiceText.text}.", hud.Rect));
-		CreateHudTooltipButton(hud.Rect, new Vector2(0.82f, 0.5f), new Vector2(1f, 0.92f), () => ShowHudTooltip(isPlayer ?$"Carte disponibili nel tuo mazzo: {hud.DeckText.text}." : $"Carte dell'avversario in formazione: {hud.DeckText.text}.", hud.Rect));
-		CreateHudTooltipButton(hud.Rect, new Vector2(0.64f, 0.08f), new Vector2(0.82f, 0.5f), () => ShowHudTooltip(isPlayer ?$"Carte in cooldown: {hud.CooldownText.text}." : $"Carte avversarie in cooldown: {hud.CooldownText.text}.", hud.Rect));
-		CreateHudTooltipButton(hud.Rect, new Vector2(0.82f, 0.08f), new Vector2(1f, 0.5f), () => ShowHudTooltip(isPlayer ?$"Carte nel tuo cimitero: {hud.GraveyardText.text}." : $"Carte avversarie eliminate: {hud.GraveyardText.text}.", hud.Rect));
+		CreateHudTooltipButton(hud.Rect, new Vector2(0.64f, 0.5f), new Vector2(0.82f, 0.92f), () => ShowHudTooltip(isPlayer ?$"Il tuo dado Vigore: {hud.DiceText.text}." : $"Dado Vigore del Master in questa stanza: {hud.DiceText.text}.", hud.Rect));
+		if (!isPlayer)
+		{
+			return;
+		}
+		CreateHudTooltipButton(hud.Rect, new Vector2(0.82f, 0.5f), new Vector2(1f, 0.92f), () => ShowHudTooltip($"Carte disponibili nel tuo mazzo: {hud.DeckText.text}.", hud.Rect));
+		CreateHudTooltipButton(hud.Rect, new Vector2(0.64f, 0.08f), new Vector2(0.82f, 0.5f), () => ShowHudTooltip($"Carte in cooldown: {hud.CooldownText.text}.", hud.Rect));
+		CreateHudTooltipButton(hud.Rect, new Vector2(0.82f, 0.08f), new Vector2(1f, 0.5f), () => ShowHudTooltip($"Carte nel tuo cimitero: {hud.GraveyardText.text}.", hud.Rect));
 	}
 
 	private Button CreateHudTooltipButton(RectTransform parent, Vector2 minimum, Vector2 maximum, Action action)
@@ -142,7 +147,7 @@ public sealed partial class BattleBoardController
 
 	private void CreateHudTooltip(Font font)
 	{
-		Image image = CreateImage("HUD Tooltip", (Transform)(object)safeAreaRoot, new Color(0.008f, 0.014f, 0.022f, 0.97f));
+		Image image = CreateImage("HUD Tooltip", (Transform)(object)safeAreaRoot, new Color(0.018f, 0.028f, 0.045f, 0.98f));
 		StylePanel(image);
 		image.raycastTarget = false;
 		hudTooltipRect = image.rectTransform;
@@ -231,21 +236,35 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		int defeatedCount = cpuCards.Count((BattleCardState card) => card != null && card.Eliminated);
-		int activeCount = cpuCards.Count((BattleCardState card) => card != null && !card.Eliminated);
-		int totalCount = cpuCards.Count > 0 ?cpuCards.Count : initialCpuFormation.Count;
-		float progress = totalCount <= 0 ?0f : (float)activeCount / totalCount;
+		string encounterLabel = currentRoomType == RoomType.Boss ?$"BOSS {currentMonsterTier}" : $"MOSTRO {currentMonsterTier}";
+		string scenarioLabel = CurrentScenarioHudLabel();
+		string progressLabel = string.IsNullOrWhiteSpace(scenarioLabel) ?encounterLabel : scenarioLabel;
 
 		RefreshCombatantHud(
 			cpuHud,
-			"CPU MASTER",
-			currentRoomType == RoomType.Boss ?$"BOSS {currentMonsterTier}" : $"MOSTRO {currentMonsterTier}",
-			totalCount > 0 ?$"{activeCount}/{totalCount} ATTIVI" : "AVVERSARIO",
-			progress,
+			$"STANZA {runProgress.RoomsCleared + 1}",
+			encounterLabel,
+			progressLabel,
+			0f,
 			runProgress.MasterVigorDieSides,
-			totalCount,
 			0,
-			defeatedCount);
+			0,
+			0);
+		SetCpuCounterStatsVisible(false);
+		SetCpuProgressBarVisible(false);
+	}
+
+	private string CurrentScenarioHudLabel()
+	{
+		if (!string.IsNullOrWhiteSpace(currentScenarioDisplayOverride))
+		{
+			return currentScenarioDisplayOverride.ToUpperInvariant();
+		}
+		if ((Object)(object)currentScenario != (Object)null && !string.IsNullOrWhiteSpace(currentScenario.DisplayName))
+		{
+			return currentScenario.DisplayName.ToUpperInvariant();
+		}
+		return string.Empty;
 	}
 
 	private static void RefreshCombatantHud(
@@ -268,6 +287,39 @@ public sealed partial class BattleBoardController
 		hud.DeckText.text = deckCount.ToString();
 		hud.CooldownText.text = cooldownCount.ToString();
 		hud.GraveyardText.text = graveyardCount.ToString();
+	}
+
+	private void SetCpuCounterStatsVisible(bool visible)
+	{
+		SetHudStatVisible(cpuHud?.DeckImage, cpuHud?.DeckText, visible);
+		SetHudStatVisible(cpuHud?.CooldownImage, cpuHud?.CooldownText, visible);
+		SetHudStatVisible(cpuHud?.GraveyardImage, cpuHud?.GraveyardText, visible);
+	}
+
+	private void SetCpuProgressBarVisible(bool visible)
+	{
+		SetHudImageVisible(cpuHud?.ExperienceTrack, visible);
+		SetHudImageVisible(cpuHud?.ExperienceFill, visible);
+	}
+
+	private static void SetHudStatVisible(Image image, Text text, bool visible)
+	{
+		if ((Object)(object)image != (Object)null)
+		{
+			((Component)image).gameObject.SetActive(visible);
+		}
+		if ((Object)(object)text != (Object)null)
+		{
+			((Component)text).gameObject.SetActive(visible);
+		}
+	}
+
+	private static void SetHudImageVisible(Image image, bool visible)
+	{
+		if ((Object)(object)image != (Object)null)
+		{
+			((Component)image).gameObject.SetActive(visible);
+		}
 	}
 
 	private void RefreshRoomHud(string phaseLabel, string scenarioLabel)

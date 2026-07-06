@@ -20,6 +20,7 @@ public sealed partial class BattleBoardController
 	private void StartBattle()
 	{
 		SetCombatChromeVisible(visible: true);
+		ShowCombatHint();
 		inputLocked = true;
 		abilityTargetMode = AbilityTargetMode.None;
 		attackTargetingActive = false;
@@ -255,6 +256,7 @@ public sealed partial class BattleBoardController
 			UpdatePostAttackClassState(attacker, defeatedTarget: false);
 			yield return ShowAutomaticOutcome(guaranteedKill: false);
 			PlayAttackResultSfx(attacker, hit: false);
+			yield return PlayHunterMissIfNeeded(attacker, defender);
 			AppendLog(FormatImpossibleAttackDetailed(attacker, defender, attackerDieSides, defenderDieSides, modifiers) + " Turno saltato.");
 			SetBattlefieldMessage("Attacco impossibile: turno saltato.");
 			selectedPlayerIndex = -1;
@@ -263,7 +265,8 @@ public sealed partial class BattleBoardController
 			FinishTurn();
 			yield break;
 		}
-		yield return MoveDuelToCenter(attacker, defender);
+		if (!UsesStationaryClassAttack(attacker))
+			yield return MoveDuelToCenter(attacker, defender);
 		if (certainty == CombatCertainty.Guaranteed)
 		{
 			if (modifiers.SumAttackerVigor)
@@ -276,11 +279,12 @@ public sealed partial class BattleBoardController
 			((Component)attachmentButton).gameObject.SetActive(false);
 			yield return ShowAutomaticOutcome(guaranteedKill: true);
 			PlayAttackResultSfx(attacker, hit: true);
+			yield return PlayHunterRangedAttackIfNeeded(attacker, defender, 6, modifiers.SumAttackerVigor);
 			defender.Eliminated = true;
 			ConsumeVigorPenalties(attacker, defender);
 			UpdatePostAttackClassState(attacker, defeatedTarget: true);
 			PlayDeathCardSfx();
-			yield return defender.View.PlayDefeatAnimation();
+			yield return PlayTimelineAwareDefeatAnimation(defender);
 			yield return ReturnDuelSurvivors(attacker, defender);
 			SetMessage("100%: " + attacker.Card.Name + " elimina direttamente " + defender.Card.Name + ". Nessun dado necessario.");
 			selectedPlayerIndex = -1;
@@ -306,15 +310,21 @@ public sealed partial class BattleBoardController
 		PlayAttackResultSfx(attacker, result.DefenderIsDefeated);
 		if (result.DefenderIsDefeated)
 		{
+			yield return PlayHunterRangedAttackIfNeeded(attacker, defender, result.AttackerTotal - result.DefenderTotal, result.AttackerRoll.SelectionMode == VigorSelectionMode.Sum);
 			defender.Eliminated = true;
 			PlayDeathCardSfx();
-			yield return defender.View.PlayDefeatAnimation();
+			yield return PlayTimelineAwareDefeatAnimation(defender);
+		}
+		else
+		{
+			yield return PlayHunterMissIfNeeded(attacker, defender);
 		}
 		yield return ReturnDuelSurvivors(attacker, defender);
 		string combatLog = FormatResultDetailed("TU", attacker, defender, result, modifiers);
 		ConsumeVigorPenalties(attacker, defender);
 		UpdatePostAttackClassState(attacker, result.DefenderIsDefeated);
-		SetMessage(combatLog);
+		AppendLog(combatLog);
+		SetBattlefieldMessage(FormatResultSummary(attacker, defender, result));
 		selectedPlayerIndex = -1;
 		attacker.View.SetSelected(selected: false);
 		yield return (object)new WaitForSecondsRealtime(configuration.Animation.TurnResultPause);
@@ -378,24 +388,27 @@ public sealed partial class BattleBoardController
 			UpdatePostAttackClassState(attacker, defeatedTarget: false);
 			yield return ShowAutomaticOutcome(guaranteedKill: false);
 			PlayAttackResultSfx(attacker, hit: false);
+			yield return PlayHunterMissIfNeeded(attacker, defender);
 			AppendLog(FormatImpossibleAttackDetailed(attacker, defender, attackerDieSides, defenderDieSides, modifiers) + " La CPU salta il turno.");
 			SetBattlefieldMessage("Attacco CPU impossibile: turno saltato.");
 			yield return (object)new WaitForSecondsRealtime(configuration.Animation.TurnResultPause);
 			FinishTurn();
 			yield break;
 		}
-		yield return MoveDuelToCenter(attacker, defender);
+		if (!UsesStationaryClassAttack(attacker))
+			yield return MoveDuelToCenter(attacker, defender);
 		if (certainty == CombatCertainty.Guaranteed)
 		{
 			yield return ShowAutomaticOutcome(guaranteedKill: true);
 			PlayAttackResultSfx(attacker, hit: true);
+			yield return PlayHunterRangedAttackIfNeeded(attacker, defender, 6, modifiers.SumAttackerVigor);
 			defender.Eliminated = true;
 			ConsumeVigorPenalties(attacker, defender);
 			UpdatePostAttackClassState(attacker, defeatedTarget: true);
 			if (!TryCreateNecromancerSpirit(defender))
 			{
 				PlayDeathCardSfx();
-				yield return defender.View.PlayDefeatAnimation();
+				yield return PlayTimelineAwareDefeatAnimation(defender);
 			}
 			yield return ReturnDuelSurvivors(attacker, defender);
 			SetMessage("100%: " + attacker.Card.Name + " elimina direttamente " + defender.Card.Name + ". Nessun dado necessario.");
@@ -412,12 +425,17 @@ public sealed partial class BattleBoardController
 		PlayAttackResultSfx(attacker, result.DefenderIsDefeated);
 		if (result.DefenderIsDefeated)
 		{
+			yield return PlayHunterRangedAttackIfNeeded(attacker, defender, result.AttackerTotal - result.DefenderTotal, result.AttackerRoll.SelectionMode == VigorSelectionMode.Sum);
 			defender.Eliminated = true;
 			if (!TryCreateNecromancerSpirit(defender))
 			{
 				PlayDeathCardSfx();
-				yield return defender.View.PlayDefeatAnimation();
+				yield return PlayTimelineAwareDefeatAnimation(defender);
 			}
+		}
+		else
+		{
+			yield return PlayHunterMissIfNeeded(attacker, defender);
 		}
 		yield return ReturnDuelSurvivors(attacker, defender);
 		string combatLog = FormatResultDetailed("CPU", attacker, defender, result, modifiers);
@@ -436,7 +454,8 @@ public sealed partial class BattleBoardController
 	{
 		int attackerDieSides = EffectiveVigorDieSides(attacker, runProgress.PlayerVigorDieSides);
 		CombatModifiers modifiers = BuildAttackModifiers(attacker, golemProxy, defenderAdvantage: false, neutralizeAttackerMatchup: true);
-		yield return MoveDuelToCenter(attacker, golemProxy);
+		if (!UsesStationaryClassAttack(attacker))
+			yield return MoveDuelToCenter(attacker, golemProxy);
 		VigorRollResult attackerRoll = RollGolemAttackerVigor(attackerDieSides, modifiers);
 		int attackerTotal = attacker.Card.Strength + attackerRoll.SelectedRoll + modifiers.AttackerFlatBonus;
 		ComposableGolemDefenseResult golemResult = activeComposableGolem.DefendAgainst(attackerTotal);
@@ -456,12 +475,16 @@ public sealed partial class BattleBoardController
 		yield return (object)new WaitForSecondsRealtime(configuration.Animation.DiceRollDuration + configuration.Animation.DiceResultHold);
 		yield return ShowCombatResult(result);
 		PlayAttackResultSfx(attacker, golemResult.Damage > 0);
+		if (golemResult.Damage > 0)
+			yield return PlayHunterRangedAttackIfNeeded(attacker, golemProxy, result.AttackerTotal - result.DefenderTotal, attackerRoll.SelectionMode == VigorSelectionMode.Sum);
+		else
+			yield return PlayHunterMissIfNeeded(attacker, golemProxy);
 		UpdateComposableGolemHealthBar(golemProxy);
 		if (activeComposableGolem.IsDefeated)
 		{
 			golemProxy.Eliminated = true;
 			PlayDeathCardSfx();
-			yield return golemProxy.View.PlayDefeatAnimation();
+			yield return PlayTimelineAwareDefeatAnimation(golemProxy);
 		}
 		else
 		{
@@ -513,7 +536,7 @@ public sealed partial class BattleBoardController
 			if (!TryCreateNecromancerSpirit(defender))
 			{
 				PlayDeathCardSfx();
-				yield return defender.View.PlayDefeatAnimation();
+				yield return PlayTimelineAwareDefeatAnimation(defender);
 			}
 		}
 		yield return ReturnDuelSurvivors(golemProxy, defender);
@@ -554,6 +577,158 @@ public sealed partial class BattleBoardController
 			((MonoBehaviour)this).StartCoroutine(attacker.View.MoveToDuelPoint(worldPosition, 0.34f, 1.16f));
 			((MonoBehaviour)this).StartCoroutine(defender.View.MoveToDuelPoint(worldPosition2, 0.34f, 1.16f));
 			yield return (object)new WaitForSecondsRealtime(0.37f);
+		}
+	}
+
+	private bool UsesHunterRangedAttack(BattleCardState attacker)
+	{
+		return attacker != null
+			&& attacker.Card != null
+			&& attacker.Card.HeroClass == HeroClass.Hunter;
+	}
+
+	private bool UsesMageArcaneAttack(BattleCardState attacker)
+	{
+		return attacker != null
+			&& attacker.Card != null
+			&& attacker.Card.HeroClass == HeroClass.Mage;
+	}
+
+	private bool UsesAssassinShadowAttack(BattleCardState attacker)
+	{
+		return attacker != null
+			&& attacker.Card != null
+			&& attacker.Card.HeroClass == HeroClass.Assassin;
+	}
+
+	private bool UsesBarbarianAxeSmash(BattleCardState attacker)
+	{
+		return attacker != null
+			&& attacker.Card != null
+			&& attacker.Card.HeroClass == HeroClass.Barbarian;
+	}
+
+	private bool UsesWarriorSwordAttack(BattleCardState attacker)
+	{
+		return attacker != null
+			&& attacker.Card != null
+			&& attacker.Card.HeroClass == HeroClass.Warrior;
+	}
+
+	private bool UsesPaladinShieldAttack(BattleCardState attacker)
+	{
+		return attacker != null
+			&& attacker.Card != null
+			&& attacker.Card.HeroClass == HeroClass.Paladin;
+	}
+
+	private bool UsesPriestSacredAttack(BattleCardState attacker)
+	{
+		return attacker != null
+			&& attacker.Card != null
+			&& attacker.Card.HeroClass == HeroClass.Priest;
+	}
+
+	private bool UsesRogueDaggerAttack(BattleCardState attacker)
+	{
+		return attacker != null
+			&& attacker.Card != null
+			&& attacker.Card.HeroClass == HeroClass.Rogue;
+	}
+
+	private bool UsesNecromancerSoulAttack(BattleCardState attacker)
+	{
+		return attacker != null
+			&& attacker.Card != null
+			&& attacker.Card.HeroClass == HeroClass.Necromancer;
+	}
+
+	private bool UsesStationaryClassAttack(BattleCardState attacker)
+	{
+		return UsesHunterRangedAttack(attacker) || UsesMageArcaneAttack(attacker) || UsesAssassinShadowAttack(attacker) || UsesBarbarianAxeSmash(attacker) || UsesWarriorSwordAttack(attacker) || UsesPaladinShieldAttack(attacker) || UsesPriestSacredAttack(attacker) || UsesRogueDaggerAttack(attacker) || UsesNecromancerSoulAttack(attacker);
+	}
+
+	private IEnumerator PlayHunterRangedAttackIfNeeded(BattleCardState attacker, BattleCardState defender, int attackMargin = 1, bool abilityAttack = false)
+	{
+		if (!UsesStationaryClassAttack(attacker)
+			|| attacker.View == null
+			|| defender == null
+			|| defender.View == null)
+			yield break;
+
+		if ((Object)(object)battleAnimationPlayer != (Object)null)
+		{
+			if (UsesAssassinShadowAttack(attacker))
+				yield return battleAnimationPlayer.PlayAssassinShadowStrike(attacker.View, defender.View);
+			else if (UsesBarbarianAxeSmash(attacker))
+				yield return battleAnimationPlayer.PlayBarbarianAxeSmash(attacker.View, defender.View);
+			else if (UsesWarriorSwordAttack(attacker))
+				yield return battleAnimationPlayer.PlayWarriorSwordRush(attacker.View, defender.View, abilityAttack);
+			else if (UsesPaladinShieldAttack(attacker))
+				yield return battleAnimationPlayer.PlayPaladinDivineShieldBash(attacker.View, defender.View);
+			else if (UsesMageArcaneAttack(attacker))
+				yield return battleAnimationPlayer.PlayMageArcaneBoltAttack(attacker.View, defender.View);
+			else if (UsesPriestSacredAttack(attacker))
+				yield return battleAnimationPlayer.PlayPriestSacredJudgement(attacker.View, defender.View);
+			else if (UsesRogueDaggerAttack(attacker))
+				yield return battleAnimationPlayer.PlayRogueDaggerFlurry(attacker.View, defender.View, attackMargin);
+			else if (UsesNecromancerSoulAttack(attacker))
+				yield return battleAnimationPlayer.PlayNecromancerSoulSwarm(attacker.View, defender.View);
+			else
+				yield return battleAnimationPlayer.PlayHunterArrowAttack(attacker.View, defender.View);
+		}
+		else
+		{
+			yield return attacker.View.PlayAttackAnimation();
+		}
+	}
+
+	private IEnumerator PlayHunterMissIfNeeded(BattleCardState attacker, BattleCardState defender = null)
+	{
+		if ((!UsesHunterRangedAttack(attacker) && !UsesWarriorSwordAttack(attacker) && !UsesPaladinShieldAttack(attacker) && !UsesMageArcaneAttack(attacker) && !UsesPriestSacredAttack(attacker) && !UsesRogueDaggerAttack(attacker) && !UsesNecromancerSoulAttack(attacker))
+			|| attacker.View == null)
+			yield break;
+
+		if ((Object)(object)battleAnimationPlayer != (Object)null)
+		{
+			if (UsesWarriorSwordAttack(attacker))
+			{
+				if (defender != null && defender.View != null)
+					yield return battleAnimationPlayer.PlayWarriorSwordBlocked(attacker.View, defender.View);
+			}
+			else if (UsesPaladinShieldAttack(attacker))
+			{
+				if (defender != null && defender.View != null)
+					yield return battleAnimationPlayer.PlayPaladinAegisBlocked(attacker.View, defender.View);
+			}
+			else if (UsesPriestSacredAttack(attacker))
+			{
+				if (defender != null && defender.View != null)
+					yield return battleAnimationPlayer.PlayPriestJudgementBlocked(attacker.View, defender.View);
+			}
+			else if (UsesMageArcaneAttack(attacker))
+			{
+				if (defender != null && defender.View != null)
+					yield return battleAnimationPlayer.PlayMageArcaneBoltBlocked(attacker.View, defender.View);
+			}
+			else if (UsesRogueDaggerAttack(attacker))
+			{
+				if (defender != null && defender.View != null)
+					yield return battleAnimationPlayer.PlayRogueDaggerBlocked(attacker.View, defender.View);
+			}
+			else if (UsesNecromancerSoulAttack(attacker))
+			{
+				if (defender != null && defender.View != null)
+					yield return battleAnimationPlayer.PlayNecromancerSoulWardBlocked(attacker.View, defender.View);
+			}
+			else
+			{
+				yield return battleAnimationPlayer.PlayHunterArrowMiss(attacker.View);
+			}
+		}
+		else
+		{
+			yield return attacker.View.PlayAttackAnimation();
 		}
 	}
 
@@ -799,7 +974,7 @@ public sealed partial class BattleBoardController
 		{
 			target.Eliminated = true;
 			PlayDeathCardSfx();
-			yield return target.View.PlayDefeatAnimation();
+			yield return PlayTimelineAwareDefeatAnimation(target);
 		}
 		ConsumeVigorPenalties(paladin, target);
 	}
@@ -943,7 +1118,7 @@ public sealed partial class BattleBoardController
 		}
 		if (card.PermanentCombatBonus > 0)
 		{
-			list.Add(new PrototypeCardView.StatusToken($"ATTACH +{card.PermanentCombatBonus}", new Color(0.7f, 1f, 0.45f)));
+			list.Add(new PrototypeCardView.StatusToken($"FORZA +{card.PermanentCombatBonus}", new Color(0.7f, 1f, 0.45f)));
 		}
 		if (card.PermanentCombatBonus < 0)
 		{
@@ -956,7 +1131,7 @@ public sealed partial class BattleBoardController
 		int num = HunterMarkBonusForTarget(card);
 		if (num > 0)
 		{
-			list.Add(new PrototypeCardView.StatusToken($"MARCATO +{num}", new Color(1f, 0.65f, 0.2f)));
+			list.Add(new PrototypeCardView.StatusToken($"BERSAGLIO MARCATO +{num}", new Color(1f, 0.65f, 0.2f)));
 		}
 		card.View.SetStatuses(list.ToArray());
 	}
@@ -1066,7 +1241,7 @@ public sealed partial class BattleBoardController
 			}
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.NecromancerAlly;
-			SetMessage("ABILITA NEGROMANTE: scegli una carta alleata eliminata da rialzare.");
+			SetMessage("ABILITA NECROMANTE: scegli una carta alleata eliminata da rialzare.");
 			UpdateInteractions();
 			break;
 		case HeroClass.Priest:
@@ -1112,7 +1287,8 @@ public sealed partial class BattleBoardController
 				attachmentButton.interactable = false;
 				((Component)abilityButton).gameObject.SetActive(false);
 				ClearTargetHints();
-				SetMessage($"ATTACH: sacrifica {battleCardState.Card.Name} per dare +{AttachmentBonus(battleCardState)} a una carta alleata.");
+				SetActiveTurnAura(null);
+				SetMessage($"POTENZIA: sacrifica {battleCardState.Card.Name} per dare +{AttachmentBonus(battleCardState)} a una carta alleata.");
 				UpdateInteractions();
 			}
 		}
@@ -1258,7 +1434,7 @@ public sealed partial class BattleBoardController
 		card.AbilityUsed = true;
 		RefreshPersistentStatus(battleCardState);
 		PlayClassAbilitySfx(HeroClass.Hunter);
-		message = $"CPU CACCIATORE: {card.Card.Name} marca {battleCardState.Card.Name}. Preda persistente: chi lo attacca prende +{HunterMarkValueFor(card)}.";
+		message = $"CPU CACCIATORE: {card.Card.Name} marca {battleCardState.Card.Name}. Bersaglio marcato: chi lo attacca prende +{HunterMarkValueFor(card)}.";
 		return true;
 	}
 
@@ -1281,7 +1457,7 @@ public sealed partial class BattleBoardController
 		ApplyCpuAuraVisuals(appendLog: false);
 		card.AbilityUsed = true;
 		PlayClassAbilitySfx(HeroClass.Necromancer);
-		message = "CPU NEGROMANTE: " + card.Card.Name + " rialza " + battleCardState.Card.Name + ".";
+		message = "CPU NECROMANTE: " + card.Card.Name + " rialza " + battleCardState.Card.Name + ".";
 		return true;
 	}
 
@@ -1332,6 +1508,7 @@ public sealed partial class BattleBoardController
 		abilityTargetMode = AbilityTargetMode.None;
 		((Component)attachmentButton).gameObject.SetActive(false);
 		((Component)cancelActionButton).gameObject.SetActive(false);
+		ClearTargetHints();
 		RefreshCardActionOverlays();
 		UpdateInteractions();
 		int num = AttachmentBonus(source);
@@ -1341,10 +1518,10 @@ public sealed partial class BattleBoardController
 		source.IsAttachment = true;
 		source.AttachedTo = target;
 		source.View.SetSelected(selected: false);
-		SetMessage($"ATTACH: {source.Card.Name} viene sacrificata e potenzia {target.Card.Name} di +{num} per tutto il fight.");
-		AppendLog($"ATTACH - {source.Card.Name} sacrificata: {target.Card.Name} ottiene +{num} permanente.");
+		SetMessage($"POTENZIA: {source.Card.Name} viene sacrificata e potenzia {target.Card.Name} di +{num} per tutta la battaglia.");
+		AppendLog($"POTENZIA - {source.Card.Name} sacrificata: {target.Card.Name} ottiene +{num} permanente.");
 		PlayAttachmentSfx();
-		yield return source.View.PlayDefeatAnimation();
+		yield return PlayTimelineAwareDefeatAnimation(source);
 		yield return (object)new WaitForSecondsRealtime(configuration.Animation.TurnResultPause);
 		selectedPlayerIndex = -1;
 		FinishTurn();
@@ -1359,10 +1536,10 @@ public sealed partial class BattleBoardController
 		source.IsAttachment = true;
 		source.AttachedTo = target;
 		source.View.SetSelected(selected: false);
-		SetMessage($"CPU ATTACH: {source.Card.Name} viene sacrificata e potenzia {target.Card.Name} di +{num} per tutto il fight.");
-		AppendLog($"CPU ATTACH - {source.Card.Name} sacrificata: {target.Card.Name} ottiene +{num} permanente.");
+		SetMessage($"CPU POTENZIA: {source.Card.Name} viene sacrificata e potenzia {target.Card.Name} di +{num} per tutta la battaglia.");
+		AppendLog($"CPU POTENZIA - {source.Card.Name} sacrificata: {target.Card.Name} ottiene +{num} permanente.");
 		PlayAttachmentSfx();
-		yield return source.View.PlayDefeatAnimation();
+		yield return PlayTimelineAwareDefeatAnimation(source);
 		yield return (object)new WaitForSecondsRealtime(configuration.Animation.TurnResultPause);
 		FinishTurn();
 	}
@@ -1618,26 +1795,25 @@ public sealed partial class BattleBoardController
 
 	private void ApplyPlayerAuraVisuals(bool appendLog)
 	{
-		Color color = AuraColor(playerAura);
 		bool flag = playerAura != BattleAuraType.None;
 		foreach (BattleCardState playerCard in playerCards)
 		{
-			playerCard.View.SetBattleAura(flag && !playerCard.Eliminated, color, string.Empty);
+			playerCard.View.SetBattleAura(false, Color.clear, string.Empty);
 			RefreshPersistentStatus(playerCard);
 		}
 		if (flag && appendLog)
 		{
 			AppendLog("AURA ATTIVA - " + AuraDisplayName(playerAura));
+			ShowFirstAuraHint(playerAura);
 		}
 	}
 
 	private void ApplyCpuAuraVisuals(bool appendLog)
 	{
-		Color color = AuraColor(cpuAura);
 		bool flag = cpuAura != BattleAuraType.None;
 		foreach (BattleCardState cpuCard in cpuCards)
 		{
-			cpuCard.View.SetBattleAura(flag && !cpuCard.Eliminated, color, string.Empty);
+			cpuCard.View.SetBattleAura(false, Color.clear, string.Empty);
 			RefreshPersistentStatus(cpuCard);
 		}
 		if (flag && appendLog)
@@ -1778,13 +1954,13 @@ public sealed partial class BattleBoardController
 				if (IsComposableGolemProxy(battleCardState) && activeComposableGolem != null)
 				{
 					ComposableGolemFormStats activeForm = activeComposableGolem.ActiveForm;
-					text7.text = $"GOLEM\n{GolemFormName(activeForm.Form)}\n{battleCardState.Initiative}";
+					text7.text = $"GOLEM\n{GolemFormName(activeForm.Form)}";
 					text7.fontSize = 13;
 					image.color = GolemFormColor(activeForm.Form);
 				}
 				else
 				{
-					text7.text = $"{arg}\n{battleCardState.Initiative}";
+					text7.text = $"{arg}";
 				}
 				text7.color = Color.white;
 				SetRect(text7.rectTransform, new Vector2(0.38f, 0.02f), new Vector2(0.98f, 0.98f));
@@ -1797,6 +1973,35 @@ public sealed partial class BattleBoardController
 			}
 		}
 		ResizeTimelineTiles(visibleTimelineTileCount);
+	}
+
+	private GameObject FindTimelineTileForCard(BattleCardState card)
+	{
+		if ((Object)(object)initiativeTimelineRoot == (Object)null || card == null || card.Card == null)
+		{
+			return null;
+		}
+		Transform val = ((Transform)initiativeTimelineRoot).Find("Timeline " + card.Card.Name);
+		if (!((Object)(object)val != (Object)null))
+		{
+			return null;
+		}
+		return ((Component)val).gameObject;
+	}
+
+	private IEnumerator PlayTimelineAwareDefeatAnimation(BattleCardState card)
+	{
+		if (card == null || (Object)(object)card.View == (Object)null)
+		{
+			yield break;
+		}
+
+		GameObject timelineTile = FindTimelineTileForCard(card);
+		yield return card.View.PlayDefeatAnimation(timelineTile, () =>
+		{
+			ResizeTimelineTiles();
+			Canvas.ForceUpdateCanvases();
+		});
 	}
 
 	private static string GolemFormName(ComposableGolemForm form)
@@ -1927,6 +2132,10 @@ public sealed partial class BattleBoardController
 		bool vertical = IsTimelineVerticalLayout();
 		float spacing = (Object)(object)grid != (Object)null ?(vertical ?grid.spacing.y : grid.spacing.x) :6f;
 		float neededPixels = timelineTileSize * visibleTileCount + spacing * Mathf.Max(0, visibleTileCount - 1);
+		if (vertical)
+		{
+			neededPixels += 14f;
+		}
 		RectTransform parent = (RectTransform)(object)((Transform)timelineBackgroundRect).parent;
 		Rect parentRect = parent.rect;
 		float parentLength = Mathf.Max(1f, vertical ?parentRect.height : parentRect.width);
@@ -1935,7 +2144,7 @@ public sealed partial class BattleBoardController
 		if (vertical)
 		{
 			float parentWidth = Mathf.Max(1f, parentRect.width);
-			float neededWidth = timelineTileSize;
+			float neededWidth = timelineTileSize + 14f;
 			float normalizedWidth = Mathf.Clamp(neededWidth / parentWidth, 0.01f, timelineBackgroundBaseMax.x - timelineBackgroundBaseMin.x);
 			float right = Mathf.Min(0.998f, timelineBackgroundBaseMax.x);
 			float center = (timelineBackgroundBaseMin.y + timelineBackgroundBaseMax.y) * 0.5f;

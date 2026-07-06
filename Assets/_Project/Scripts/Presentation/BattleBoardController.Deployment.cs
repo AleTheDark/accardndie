@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -65,6 +65,7 @@ public sealed partial class BattleBoardController
 		{
 			draftCandidates.AddRange(formationDraftService.DrawCandidates(cardDatabase.Cards, configuration.Gameplay.DraftCandidateCount));
 		}
+		ShowFormationDraftHint();
 		for (int num = 0; num < draftCandidates.Count; num++)
 		{
 			int capturedIndex = num;
@@ -217,6 +218,7 @@ public sealed partial class BattleBoardController
 			((Transform)animatedRect).localRotation = Quaternion.identity;
 			((Transform)animatedRect).localScale = Vector3.one * 0.82f;
 			overlayView.SetAlpha(0f);
+			PlayDrawCardSfx();
 			float elapsed = 0f;
 			while (elapsed < enterDuration)
 			{
@@ -449,10 +451,10 @@ public sealed partial class BattleBoardController
 		{
 			AppendLog(string.Format("INIZIATIVA SCHIERAMENTO {0} - D{1} = {2}", item.BelongsToPlayer ?"TU" : "CPU", initiativeDieSides, item.Initiative));
 		}
-		SetTurnBanner(playerTurn: true, "SCHIERAMENTO  -  DAL PIU BASSO AL PIU ALTO");
+		SetTurnBanner(playerTurn: true, "SCHIERAMENTO");
 		RefreshInitiativeDisplay();
 		ClearDeploymentTimeline();
-		SetMessage("Tiro iniziativa: 3 D20 per te e 3 D20 per il Master.");
+		SetMessage($"Tiro iniziativa: {formationSize} D20 per te e {num} D20 per il Master.");
 		yield return PlayDeploymentInitiativeDiceRoll(initiativeDieSides);
 		RefreshDeploymentTimeline();
 		SetMessage("Iniziative di schieramento: i valori piu bassi calano per primi.");
@@ -497,7 +499,7 @@ public sealed partial class BattleBoardController
 			{
 				draftViews[i].SetInteractable(!selectedDraftCards.Contains(i));
 			}
-			SetMessage($"INIZIATIVA {deploymentToken.Initiative}: scegli una carta dalla tua mano da schierare.");
+			SetMessage("Scegli una carta dalla tua mano da schierare.");
 		}
 		else
 		{
@@ -658,7 +660,7 @@ public sealed partial class BattleBoardController
 				LayoutElement layoutElement = ((Component)image).gameObject.AddComponent<LayoutElement>();
 				ConfigureTimelineTileLayout(layoutElement, timelineTileSize);
 				Text text = CreateText("Token", ((Component)image).transform, builtinResource, 18, (FontStyle)1, (TextAnchor)4);
-				text.text = string.Format("{0}\n{1}", deploymentToken.BelongsToPlayer ?"TU" : "CPU", deploymentToken.Initiative);
+				text.text = deploymentToken.BelongsToPlayer ?"TU" : "CPU";
 				Stretch(text.rectTransform, 2f);
 			}
 			ResizeTimelineTiles(deploymentOrder.Count);
@@ -1218,6 +1220,7 @@ public sealed partial class BattleBoardController
 			abilityTargetMode = AbilityTargetMode.None;
 			((Component)cancelActionButton).gameObject.SetActive(false);
 			SetMessage("Attachment annullato: " + battleCardState3.Card.Name + " torna alla scelta del bersaglio.");
+			SetActiveTurnAura(battleCardState3);
 			RefreshAttachmentButton(battleCardState3);
 			UpdateInteractions();
 		}

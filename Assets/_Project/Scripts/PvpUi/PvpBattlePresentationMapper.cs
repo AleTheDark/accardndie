@@ -24,21 +24,25 @@ namespace AccardND.PvpUi
                 HeroClass = (HeroClass)source.heroClass,
                 HasAbilityClass = source.ability > 0,
                 AbilityClass = (HeroClass)source.ability,
+                Certainty = ParseCombatCertainty(source.certainty),
                 AttackerDieSides = source.attackerDieSides,
                 DefenderDieSides = source.defenderDieSides,
                 AttackerRollFirst = source.attackerRollFirst,
                 AttackerRollSecond = source.attackerRollSecond,
                 AttackerRollHasSecond = source.attackerRollHasSecond,
                 AttackerRollSelected = source.attackerRollSelected,
+                AttackerRollSelectionMode = (VigorSelectionMode)source.attackerRollSelectionMode,
                 AttackerTotal = source.attackerTotal,
                 DefenderRollFirst = source.defenderRollFirst,
                 DefenderRollSecond = source.defenderRollSecond,
                 DefenderRollHasSecond = source.defenderRollHasSecond,
                 DefenderRollSelected = source.defenderRollSelected,
+                DefenderRollSelectionMode = (VigorSelectionMode)source.defenderRollSelectionMode,
                 DefenderTotal = source.defenderTotal,
                 DefenderLostLife = source.defenderLostLife,
                 DefenderEliminated = source.defenderEliminated,
-                BecameSpirit = source.becameSpirit
+                BecameSpirit = source.becameSpirit,
+                Overkill = source.overkill
             };
 
             if (!target.HasHeroClass
@@ -50,6 +54,13 @@ namespace AccardND.PvpUi
             }
 
             return target;
+        }
+
+        private static CombatCertainty ParseCombatCertainty(string value)
+        {
+            return System.Enum.TryParse(value, out CombatCertainty certainty)
+                ? certainty
+                : CombatCertainty.RollRequired;
         }
 
         private static bool TryFindHeroClass(

@@ -282,6 +282,11 @@ public sealed partial class BattleBoardController
 		battleSfx?.PlayRollingDice();
 	}
 
+	private void PlayDrawCardSfx()
+	{
+		battleSfx?.PlayDrawCard();
+	}
+
 	private void PlayPawnEnteringBattlefieldSfx()
 	{
 		battleSfx?.PlayJoinBattlefield();
@@ -352,6 +357,10 @@ public sealed partial class BattleBoardController
 	private void PlayAttackResultSfx(BattleCardState attacker, bool hit)
 	{
 		if (attacker == null)
+		{
+			return;
+		}
+		if (hit && attacker.Card.HeroClass == HeroClass.Rogue)
 		{
 			return;
 		}

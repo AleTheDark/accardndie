@@ -402,18 +402,16 @@ namespace AccardND.NetProtocol
             }
 
             string prefix = e.isCounter ? "CONTRATTACCO: " : string.Empty;
-            string outcome = e.certainty switch
-            {
-                "Impossible" => "attacco impossibile, turno perso",
-                "Guaranteed" => "eliminazione automatica",
-                _ => $"{e.attackerTotal} contro {e.defenderTotal} (D{e.attackerDieSides}/D{e.defenderDieSides})"
-            };
+            string outcome = e.certainty == "Impossible"
+                ? "attacco impossibile, turno perso"
+                : $"{e.attackerTotal} contro {e.defenderTotal} (D{e.attackerDieSides}/D{e.defenderDieSides})";
+            string overkillTag = e.overkill ? " OVERKILL!" : string.Empty;
             string effect = !e.defenderLostLife
                 ? defender != null ? $" {defender.CardName} resiste." : string.Empty
                 : e.becameSpirit
-                    ? $" {defender?.CardName} resta come spirito!"
+                    ? $"{overkillTag} {defender?.CardName} resta come spirito!"
                     : e.defenderEliminated
-                        ? $" {defender?.CardName} eliminato!"
+                        ? $"{overkillTag} {defender?.CardName} eliminato!"
                         : $" {defender?.CardName} perde una vita ({e.defenderRemainingLives}).";
             AddLog($"{prefix}{attacker?.CardName} attacca {defender?.CardName}: {outcome}.{effect}");
         }

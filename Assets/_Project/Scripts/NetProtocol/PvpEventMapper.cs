@@ -107,16 +107,19 @@ namespace AccardND.NetProtocol
                         attackerRollSecond = e.AttackerRoll.SecondRoll,
                         attackerRollHasSecond = e.AttackerRoll.HasSecondRoll,
                         attackerRollSelected = e.AttackerRoll.SelectedRoll,
+                        attackerRollSelectionMode = (int)e.AttackerRoll.SelectionMode,
                         defenderRollFirst = e.DefenderRoll.FirstRoll,
                         defenderRollSecond = e.DefenderRoll.SecondRoll,
                         defenderRollHasSecond = e.DefenderRoll.HasSecondRoll,
                         defenderRollSelected = e.DefenderRoll.SelectedRoll,
+                        defenderRollSelectionMode = (int)e.DefenderRoll.SelectionMode,
                         attackerTotal = e.AttackerTotal,
                         defenderTotal = e.DefenderTotal,
                         defenderLostLife = e.DefenderLostLife,
                         defenderRemainingLives = e.DefenderRemainingLives,
                         defenderEliminated = e.DefenderEliminated,
                         becameSpirit = e.BecameSpirit,
+                        overkill = e.Overkill,
                         isCounter = e.IsCounter
                     };
                 case AttachmentAppliedEvent e:

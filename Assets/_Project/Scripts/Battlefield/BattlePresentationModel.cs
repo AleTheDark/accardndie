@@ -40,20 +40,24 @@ namespace AccardND.Battlefield
         public bool HasAbilityClass { get; set; }
         public HeroClass AbilityClass { get; set; }
         public int Initiative { get; set; }
+        public CombatCertainty Certainty { get; set; }
         public int AttackerDieSides { get; set; }
         public int DefenderDieSides { get; set; }
         public int AttackerRollFirst { get; set; }
         public int AttackerRollSecond { get; set; }
         public bool AttackerRollHasSecond { get; set; }
         public int AttackerRollSelected { get; set; }
+        public VigorSelectionMode AttackerRollSelectionMode { get; set; }
         public int AttackerTotal { get; set; }
         public int DefenderRollFirst { get; set; }
         public int DefenderRollSecond { get; set; }
         public bool DefenderRollHasSecond { get; set; }
         public int DefenderRollSelected { get; set; }
+        public VigorSelectionMode DefenderRollSelectionMode { get; set; }
         public int DefenderTotal { get; set; }
         public bool DefenderLostLife { get; set; }
         public bool DefenderEliminated { get; set; }
         public bool BecameSpirit { get; set; }
+        public bool Overkill { get; set; }
     }
 }

@@ -24,6 +24,7 @@ public sealed partial class BattleBoardController
 			selectedMerchantSaleCard = null;
 			RefreshMerchantPanel();
 			merchantPanel.SetActive(true);
+			ShowMerchantHint();
 		}
 	}
 

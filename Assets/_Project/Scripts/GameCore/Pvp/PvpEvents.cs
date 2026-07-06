@@ -228,6 +228,7 @@ namespace AccardND.GameCore.Pvp
             int defenderRemainingLives,
             bool defenderEliminated,
             bool becameSpirit,
+            bool overkill,
             bool isCounter)
         {
             AttackerPlayer = attackerPlayer;
@@ -245,6 +246,7 @@ namespace AccardND.GameCore.Pvp
             DefenderRemainingLives = defenderRemainingLives;
             DefenderEliminated = defenderEliminated;
             BecameSpirit = becameSpirit;
+            Overkill = overkill;
             IsCounter = isCounter;
         }
 
@@ -263,6 +265,9 @@ namespace AccardND.GameCore.Pvp
         public int DefenderRemainingLives { get; }
         public bool DefenderEliminated { get; }
         public bool BecameSpirit { get; }
+        /// <summary>Overkill PvP: l'attaccante ha totalizzato almeno il doppio
+        /// del difensore, che perde entrambe le vite in un colpo solo.</summary>
+        public bool Overkill { get; }
         public bool IsCounter { get; }
     }
 

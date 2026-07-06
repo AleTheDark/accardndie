@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -222,6 +222,7 @@ public sealed partial class BattleBoardController
 	{
 		image.sprite = GetRuntimePanelSprite();
 		image.type = Image.Type.Sliced;
+		image.color = new Color(1f, 1f, 1f, image.color.a);
 	}
 
 	private static Sprite GetRuntimePanelSprite()
@@ -238,17 +239,67 @@ public sealed partial class BattleBoardController
 			hideFlags = (HideFlags)61
 		};
 		Color32[] array = (Color32[])(object)new Color32[1024];
+		Color baseBottom = new Color(0.04f, 0.06f, 0.10f); // #0a101a
+		Color baseTop = new Color(0.08f, 0.12f, 0.18f);    // #141f2e
+		Color goldPeak = new Color(0.85f, 0.65f, 0.18f);   // #d9a62e
+		Color goldShadow = new Color(0.45f, 0.32f, 0.08f); // #735214
+		Color bevelLight = new Color(0.18f, 0.25f, 0.35f); // #2e4059
+		Color shadowGroove = new Color(0.01f, 0.02f, 0.04f); // #03050a
+
 		for (int i = 0; i < 32; i++)
 		{
+			float grad = (float)i / 31.0f;
 			for (int j = 0; j < 32; j++)
 			{
-				float num = Mathf.Max(7f - (float)j, (float)j - 24f);
-				float num2 = Mathf.Max(7f - (float)i, (float)i - 24f);
-				float num3 = Mathf.Max(0f, num);
-				float num4 = Mathf.Max(0f, num2);
-				float num5 = Mathf.Sqrt(num3 * num3 + num4 * num4);
-				byte b = (byte)Mathf.RoundToInt(255f * Mathf.Clamp01(7.5f - num5));
-				array[i * 32 + j] = new Color32(byte.MaxValue, byte.MaxValue, byte.MaxValue, b);
+				float cx = j - 15.5f;
+				float cy = i - 15.5f;
+				float ax = Mathf.Abs(cx);
+				float ay = Mathf.Abs(cy);
+
+				float d_edge;
+				if (ax > 8.5f && ay > 8.5f)
+				{
+					float dist = Mathf.Sqrt((ax - 8.5f) * (ax - 8.5f) + (ay - 8.5f) * (ay - 8.5f));
+					d_edge = 7.0f - dist;
+				}
+				else
+				{
+					d_edge = 15.5f - Mathf.Max(ax, ay);
+				}
+
+				Color color;
+				if (d_edge < 0.0f)
+				{
+					color = Color.clear;
+				}
+				else if (d_edge < 1.0f)
+				{
+					float t = d_edge;
+					Color col = Color.Lerp(goldShadow, goldPeak, t);
+					color = new Color(col.r, col.g, col.b, t);
+				}
+				else if (d_edge < 2.0f)
+				{
+					float t = d_edge - 1.0f;
+					color = Color.Lerp(goldPeak, goldShadow, t);
+				}
+				else if (d_edge < 3.0f)
+				{
+					float t = d_edge - 2.0f;
+					color = Color.Lerp(shadowGroove, bevelLight, t);
+				}
+				else if (d_edge < 4.0f)
+				{
+					float t = d_edge - 3.0f;
+					Color bodyBase = Color.Lerp(baseBottom, baseTop, grad);
+					color = Color.Lerp(bevelLight, bodyBase, t);
+				}
+				else
+				{
+					color = Color.Lerp(baseBottom, baseTop, grad);
+				}
+
+				array[i * 32 + j] = color;
 			}
 		}
 		val.SetPixels32(array);

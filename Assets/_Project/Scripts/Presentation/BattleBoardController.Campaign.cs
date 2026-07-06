@@ -116,7 +116,7 @@ public sealed partial class BattleBoardController
 		((MonoBehaviour)this).StopAllCoroutines();
 		ClearDraftEntranceState();
 		StopMusic();
-		SetCombatChromeVisible(visible: true);
+		SetBattlefieldSurfaceVisible(visible: true);
 		inputLocked = true;
 		gameFinished = true;
 		canAdvanceToNextRoom = false;
@@ -154,6 +154,7 @@ public sealed partial class BattleBoardController
 		}
 		SetTurnBanner(playerTurn: true, "SCELTA DELLA VIA");
 		SetMessage("Scegli una delle tre porte per proseguire nella campagna.");
+		ShowRoomChoiceHint();
 		RefreshInitiativeDisplay();
 		ApplyResponsiveLayout();
 		if (ShouldForceFirstRoomComposableGolem())
@@ -288,6 +289,10 @@ public sealed partial class BattleBoardController
 
 	private bool IsCampaignRoomRollAllowed(CampaignRoomRoll roomRoll)
 	{
+		if (runProgress != null && runProgress.RoomsCleared == 0 && roomRoll.RoomType == RoomType.Merchant)
+		{
+			return false;
+		}
 		if (merchantRoomsBlockedUntilMonster && roomRoll.RoomType == RoomType.Merchant)
 		{
 			return false;

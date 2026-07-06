@@ -1,0 +1,12 @@
+{
+    "asset": "ae83456196d48214cb0a51d6d1022c0a",
+    "fileName": "019f31af-940f-7ecd-abe0-b9e0f3beb958_Preview.jpg",
+    "prompt": "Stylized dark fantasy seamless burn noise, high contrast black and white organic ash noise map, grunge transition texture, tileable",
+    "negativePrompt": "",
+    "model": "realistic-textures-3-0",
+    "modelName": "Realistic Textures 3.0",
+    "customSeed": 1161229697,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "refinementMode": "Generation"
+}

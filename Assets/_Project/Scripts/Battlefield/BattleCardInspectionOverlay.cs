@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using AccardND.GameCore;
 using AccardND.GameData;
 using AccardND.Presentation;
 using UnityEngine;
@@ -52,16 +53,104 @@ namespace AccardND.Battlefield
             view.SetInteractable(false);
             view.ClearActionOverlay();
 
-            string classText = definition.HasHeroClass ? definition.HeroClass.ToString() : definition.Category.ToString();
-            string rules = string.IsNullOrWhiteSpace(definition.RulesText) ? string.Empty : "\n\n" + definition.RulesText;
+            string rules = BuildCardRulesSummary(definition);
             string extra = string.IsNullOrWhiteSpace(extraSummary) ? string.Empty : "\n\n" + extraSummary;
-            summaryText.text = $"{definition.DisplayName}\nForza {definition.Strength} - {classText}{rules}{extra}";
+            summaryText.text = $"{definition.DisplayName}\n{rules}{extra}";
 
             if (statuses == null)
                 return;
 
             foreach (PrototypeCardView.StatusToken status in statuses)
                 AddStatusRow(status);
+        }
+
+        private string BuildCardRulesSummary(CardDefinition definition)
+        {
+            if (!definition.HasHeroClass)
+            {
+                string rules = string.IsNullOrWhiteSpace(definition.RulesText)
+                    ? "Abilita:\nNessuna abilita di combattimento."
+                    : "Abilita:\n" + definition.RulesText;
+                return $"Forza: {definition.Strength}\nCategoria: {definition.Category}\n{rules}";
+            }
+
+            ClassFamily family = HeroClassFamily.Of(definition.HeroClass);
+            var lines = new List<string>
+            {
+                $"Forza: {definition.Strength}",
+                "Classe: " + CardRulesGlossary.HeroClassName(definition.HeroClass),
+                "Famiglia: " + CardRulesGlossary.ClassFamilyName(family),
+                "Vantaggio contro: " + CardRulesGlossary.ClassFamilyName(StrongAgainst(family)),
+                "Svantaggio contro: " + CardRulesGlossary.ClassFamilyName(WeakAgainst(family)),
+                "Aura di famiglia: " + CardRulesGlossary.ClassFamilyName(family) + " - " + FamilyAuraDescription(family),
+                "Aura di classe: " + CardRulesGlossary.HeroClassName(definition.HeroClass) + " - " + ClassAuraDescription(definition.HeroClass),
+                CardRulesGlossary.AbilityTitle(definition.HeroClass) + ":\n" + CardRulesGlossary.AbilityDescription(definition.HeroClass, configuration.ClassBalance)
+            };
+
+            if (CanBeEquipped(definition))
+            {
+                lines.Add($"EQUIPAGGIA: questa carta puo essere sacrificata per potenziare un alleato di +{AttachmentBonus(definition)} permanentemente.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(definition.RulesText))
+                lines.Add("Regole:\n" + definition.RulesText);
+
+            return string.Join("\n", lines);
+        }
+
+        private static bool CanBeEquipped(CardDefinition definition) =>
+            definition != null && definition.CanEnterCombat && definition.Strength >= 2 && definition.Strength < 5;
+
+        private static int AttachmentBonus(CardDefinition definition) => definition != null ? 5 - definition.Strength : 0;
+
+        private static ClassFamily StrongAgainst(ClassFamily family)
+        {
+            return family switch
+            {
+                ClassFamily.Might => ClassFamily.Cunning,
+                ClassFamily.Cunning => ClassFamily.Magic,
+                ClassFamily.Magic => ClassFamily.Might,
+                _ => ClassFamily.Might
+            };
+        }
+
+        private static ClassFamily WeakAgainst(ClassFamily family)
+        {
+            return family switch
+            {
+                ClassFamily.Might => ClassFamily.Magic,
+                ClassFamily.Cunning => ClassFamily.Might,
+                ClassFamily.Magic => ClassFamily.Cunning,
+                _ => ClassFamily.Might
+            };
+        }
+
+        private static string FamilyAuraDescription(ClassFamily family)
+        {
+            return family switch
+            {
+                ClassFamily.Might => "la prima carta Forza che non elimina il bersaglio ottiene +1 permanente.",
+                ClassFamily.Cunning => "le carte Astuzia hanno vantaggio contro nemici marcati o inibiti.",
+                ClassFamily.Magic => "le carte Magia difendono con il dado Vigore aumentato di una taglia.",
+                _ => "nessun effetto."
+            };
+        }
+
+        private static string ClassAuraDescription(HeroClass heroClass)
+        {
+            return heroClass switch
+            {
+                HeroClass.Warrior => "i Guerrieri con abilita pronta attaccano con +1.",
+                HeroClass.Barbarian => "Furia del Barbaro vale +1 extra.",
+                HeroClass.Paladin => "la protezione del Paladino diventa piu efficace.",
+                HeroClass.Rogue => "i Ladri possono ritirare anche i 2 in attacco.",
+                HeroClass.Assassin => "gli Assassini controllano meglio i bersagli inibiti.",
+                HeroClass.Hunter => "i Bersagli marcati dal Cacciatore hanno un bonus maggiore.",
+                HeroClass.Mage => "il Mago riduce di una taglia extra il dado Vigore nemico.",
+                HeroClass.Necromancer => "i caduti restano in campo per un ultimo turno.",
+                HeroClass.Priest => "le Benedizioni del Sacerdote danno un bonus maggiore.",
+                _ => "nessun effetto."
+            };
         }
 
         public void Close()
@@ -113,13 +202,13 @@ namespace AccardND.Battlefield
             cardSlot = new GameObject("Inspection Card Slot", typeof(RectTransform)).GetComponent<RectTransform>();
             cardSlot.SetParent(bookRoot, false);
 
-            summaryText = CreateText("Inspection Summary", bookRoot, 22, FontStyle.Bold, TextAnchor.UpperLeft);
+            summaryText = CreateText("Inspection Summary", bookRoot, 26, FontStyle.Bold, TextAnchor.UpperLeft);
             summaryText.color = new Color(0.16f, 0.085f, 0.025f);
             summaryText.horizontalOverflow = HorizontalWrapMode.Wrap;
             summaryText.verticalOverflow = VerticalWrapMode.Truncate;
             summaryText.resizeTextForBestFit = true;
-            summaryText.resizeTextMinSize = 12;
-            summaryText.resizeTextMaxSize = 22;
+            summaryText.resizeTextMinSize = 16;
+            summaryText.resizeTextMaxSize = 26;
 
             statusRoot = new GameObject("Inspection Status Rows", typeof(RectTransform), typeof(VerticalLayoutGroup)).GetComponent<RectTransform>();
             statusRoot.SetParent(bookRoot, false);
@@ -154,11 +243,11 @@ namespace AccardND.Battlefield
                 landscape ? new Vector2(0.115f, 0.12f) : new Vector2(0.235f, 0.57f),
                 landscape ? new Vector2(0.485f, 0.9f) : new Vector2(0.765f, 0.885f));
             SetAnchors(summaryText.rectTransform,
-                landscape ? new Vector2(0.51f, 0.55f) : new Vector2(0.18f, 0.34f),
-                landscape ? new Vector2(0.89f, 0.82f) : new Vector2(0.82f, 0.54f));
+                landscape ? new Vector2(0.51f, 0.50f) : new Vector2(0.16f, 0.315f),
+                landscape ? new Vector2(0.91f, 0.83f) : new Vector2(0.84f, 0.55f));
             SetAnchors(statusRoot,
-                landscape ? new Vector2(0.515f, 0.19f) : new Vector2(0.16f, 0.12f),
-                landscape ? new Vector2(0.905f, 0.505f) : new Vector2(0.84f, 0.31f));
+                landscape ? new Vector2(0.515f, 0.16f) : new Vector2(0.16f, 0.105f),
+                landscape ? new Vector2(0.905f, 0.475f) : new Vector2(0.84f, 0.295f));
         }
 
         private void AddStatusRow(PrototypeCardView.StatusToken status)
@@ -180,12 +269,12 @@ namespace AccardND.Battlefield
             iconLayout.preferredWidth = 34f;
             iconLayout.preferredHeight = 34f;
 
-            Text label = CreateText("Status Label", row.transform, 18, FontStyle.Bold, TextAnchor.MiddleLeft);
+            Text label = CreateText("Status Label", row.transform, 20, FontStyle.Bold, TextAnchor.MiddleLeft);
             label.text = status.Label;
             label.color = new Color(0.16f, 0.085f, 0.025f);
             LayoutElement textLayout = label.gameObject.AddComponent<LayoutElement>();
             textLayout.flexibleWidth = 1f;
-            textLayout.preferredHeight = 36f;
+            textLayout.preferredHeight = 42f;
             statusRows.Add(row);
         }
 

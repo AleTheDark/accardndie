@@ -36,6 +36,9 @@ namespace AccardND.GameCore.Pvp
             public IReadOnlyList<int> Round1Hand;
             public IReadOnlyList<int> Round1Unseen;
             public readonly List<int> Round1Deployed = new();
+            // Indici loadout delle carte morte in un round qualunque del match:
+            // servono a comporre la mano del round decisivo (le sopravvissute).
+            public readonly HashSet<int> DiedLoadout = new();
             public int[] DecisiveChoice;
             public PvpAuraType Aura;
             public bool NecromancerSpiritUsed;
@@ -422,9 +425,27 @@ namespace AccardND.GameCore.Pvp
             }
             else
             {
-                Phase = PvpMatchPhase.DecisiveSelection;
-                events.Add(new DecisiveSelectionStartedEvent(rules.DecisiveHandSize));
+                // Round decisivo: la mano è composta dalle sole carte mai morte nei
+                // round precedenti (sopravvissute in campo + mai schierate). Poi si
+                // schiera normalmente come nei round 1 e 2. Si arriva qui solo sull'1-1,
+                // quindi ogni giocatore ha perso un round (3 carte morte) e ne ha 6-4
+                // di scorta: mai meno di FormationSize.
+                foreach (PlayerState state in players)
+                    state.Hand = BuildSurvivorHand(state);
+                BeginDeployment(events);
             }
+        }
+
+        private List<int> BuildSurvivorHand(PlayerState state)
+        {
+            var hand = new List<int>();
+            for (int index = 0; index < state.Loadout.Length; index++)
+            {
+                if (!state.DiedLoadout.Contains(index))
+                    hand.Add(index);
+            }
+            hand.Sort();
+            return hand;
         }
 
         private void BeginDeployment(List<PvpEvent> events)
@@ -572,6 +593,7 @@ namespace AccardND.GameCore.Pvp
             players[winner].RoundWins++;
             events.Add(new RoundEndedEvent(
                 MatchRound, winner, players[0].RoundWins, players[1].RoundWins));
+            RecordRoundCasualties();
 
             if (players[winner].RoundWins >= rules.RoundsToWin)
             {
@@ -585,6 +607,20 @@ namespace AccardND.GameCore.Pvp
                 StartRound(events);
             }
             return true;
+        }
+
+        // Segna come morte, per il round decisivo, tutte le carte eliminate nel
+        // round appena concluso (va chiamato prima che StartRound svuoti le board).
+        private void RecordRoundCasualties()
+        {
+            foreach (PlayerState state in players)
+            {
+                foreach (PvpCardState card in state.Board)
+                {
+                    if (card.Eliminated || card.Lives <= 0)
+                        state.DiedLoadout.Add(card.LoadoutIndex);
+                }
+            }
         }
 
         // --- Risoluzione attacco ---
@@ -616,18 +652,17 @@ namespace AccardND.GameCore.Pvp
                 attacker.Card, defender.Card, attackerDie, defenderDie, modifiers);
 
             bool defenderLostLife = false;
+            bool overkill = false;
             var emptyRoll = default(VigorRollResult);
             VigorRollResult attackerRoll = emptyRoll;
             VigorRollResult defenderRoll = emptyRoll;
             int attackerTotal = 0;
             int defenderTotal = 0;
 
-            if (certainty == CombatCertainty.Guaranteed)
-            {
-                defenderLostLife = true;
-                ConsumeWarriorArm(attacker, modifiers);
-            }
-            else if (certainty == CombatCertainty.RollRequired)
+            // In PvP si tirano sempre i dadi quando l'attaccante può vincere
+            // (Guaranteed o RollRequired): anche con la vittoria matematicamente
+            // certa serve il numero reale per stabilire se scatta l'Overkill.
+            if (certainty != CombatCertainty.Impossible)
             {
                 CombatResult result = resolver.ResolveAttack(
                     attacker.Card, defender.Card, attackerDie, defenderDie, modifiers);
@@ -637,6 +672,9 @@ namespace AccardND.GameCore.Pvp
                 attackerTotal = result.AttackerTotal;
                 defenderTotal = result.DefenderTotal;
                 defenderLostLife = result.DefenderIsDefeated;
+                // Overkill: se l'attaccante totalizza almeno il doppio del
+                // difensore, la carta perde entrambe le vite in un colpo solo.
+                overkill = defenderLostLife && attackerTotal >= 2 * defenderTotal;
             }
 
             bool defenderEliminated = false;
@@ -651,7 +689,7 @@ namespace AccardND.GameCore.Pvp
                 }
                 else
                 {
-                    defender.Lives--;
+                    defender.Lives -= overkill ? 2 : 1;
                     if (defender.Lives <= 0)
                     {
                         if (TryBecomeSpirit(defender))
@@ -687,6 +725,7 @@ namespace AccardND.GameCore.Pvp
                 Math.Max(defender.Lives, 0),
                 defenderEliminated,
                 becameSpirit,
+                overkill,
                 isCounter));
         }
 
