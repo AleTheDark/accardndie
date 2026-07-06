@@ -24,6 +24,16 @@ public sealed partial class BattleBoardController
 			select card.CampaignCard).ToList();
 	}
 
+	/// <summary>Segna le famiglie dei mostri appena sconfitti per lo sblocco icone PvP.</summary>
+	private void RecordCampaignMonsterKills()
+	{
+		foreach (BattleCardState card in cpuCards)
+		{
+			if (card.Eliminated && card.Definition != null && card.Definition.Category == CardCategory.Monster)
+				AccardND.PvpUi.PvpCampaignKillTracker.RecordDefeatFromCardId(card.Definition.Id);
+		}
+	}
+
 	private bool CheckEndGame()
 	{
 		if (gameFinished)
@@ -50,16 +60,14 @@ public sealed partial class BattleBoardController
 				campaignDeck.CompleteCombat(campaignDefeatedCards, skipNextCombatCooldown);
 				AppendLog($"ZONE MAZZO - disponibili {campaignDeck.AvailableCount}, " + $"cooldown {campaignDeck.CooldownCount}, cimitero {campaignDeck.GraveyardCount}.");
 			}
+			RecordCampaignMonsterKills();
 			SetTurnBanner(playerTurn: true, "VITTORIA  -  STANZA SUPERATA");
 			int num = (nextCombatFallenHeroesGrantExperience ?playerCards.Where(IsCampaignDefeated).Sum((BattleCardState card) => card.Card.Strength) : 0);
 			RoomReward roomReward = runProgress.CompleteMonsterRoom((from card in cpuCards
 				where card.Eliminated
 				select card.Card.Strength).Concat((num <= 0) ?((IEnumerable<int>)Array.Empty<int>()) : ((IEnumerable<int>)new int[1] { num })));
-			string text = ((roomReward.LevelsGained > 0) ?$" LEVEL UP! Ora sei livello {runProgress.PlayerLevel}: D{runProgress.PlayerVigorDieSides}." : string.Empty);
-			string text2 = ((num > 0) ?$" +{num} EXP eroi caduti." : string.Empty);
-			string arg = ((num > 0) ?"EXP combattimento" : "EXP mostri");
-			SetMessage($"STANZA SUPERATA! +{roomReward.RoomExperience} EXP stanza + " + $"{roomReward.DefeatedMonsterExperience} {arg} = +{roomReward.TotalExperience} EXP." + text2 + text);
-			restartButtonText.text = "STANZA SUCCESSIVA";
+			SetMessage($"Hai guadagnato {roomReward.TotalExperience} punti esperienza!");
+			restartButtonText.text = "VAI AVANTI!";
 			canAdvanceToNextRoom = true;
 		}
 		else
@@ -85,6 +93,7 @@ public sealed partial class BattleBoardController
 					SetMessage($"SCONFITTA. Puoi continuare: hai {combatReadyCount}/" + $"{formationSize} carte disponibili. Restano {survivingCpuFormation.Count} mostri nella stanza.");
 					restartButtonText.text = "RIPROVA STANZA";
 					((Component)restartButton).gameObject.SetActive(true);
+					ShowFirstDefeatHint();
 					RefreshInitiativeDisplay();
 					UpdateInteractions();
 					ClearConsumedCombatRules();
@@ -97,7 +106,7 @@ public sealed partial class BattleBoardController
 			((MonoBehaviour)this).StartCoroutine(ReturnToStartAfterGameOver());
 		}
 		RefreshInitiativeDisplay();
-		((Component)restartButton).gameObject.SetActive(flag);
+		((Component)restartButton).gameObject.SetActive(canAdvanceToNextRoom || flag);
 		UpdateInteractions();
 		ClearConsumedCombatRules();
 		return true;
@@ -172,6 +181,12 @@ public sealed partial class BattleBoardController
 
 	private void ReturnToStart()
 	{
+		ReturnToStart(showModeSelection: true);
+	}
+
+	private void ReturnToStart(bool showModeSelection)
+	{
+		AbandonActivePvpSession();
 		((MonoBehaviour)this).StopAllCoroutines();
 		ClearDraftEntranceState();
 		StopMusic();
@@ -250,9 +265,29 @@ public sealed partial class BattleBoardController
 		SetTurnBanner(playerTurn: true, "PREPARAZIONE");
 		SetMessage("Scegli una modalita' per iniziare.");
 		playerTitleText.text = "LA TUA FORMAZIONE";
-		SetCombatChromeVisible(visible: true);
-		ShowModeSelection();
+		SetBattlefieldSurfaceVisible(showModeSelection);
+		if (showModeSelection)
+		{
+			ShowModeSelection();
+		}
 		ApplyResponsiveLayout();
+	}
+
+	private void SetBattlefieldSurfaceVisible(bool visible)
+	{
+		SetCombatChromeVisible(visible);
+		if ((Object)(object)topInfoBarRect != (Object)null)
+			((Component)topInfoBarRect).gameObject.SetActive(false);
+		if ((Object)(object)cpuTitleText != (Object)null)
+			((Component)cpuTitleText).gameObject.SetActive(false);
+		if ((Object)(object)roundText != (Object)null)
+			((Component)roundText).gameObject.SetActive(false);
+		if ((Object)(object)messagePanelRect != (Object)null)
+			((Component)messagePanelRect).gameObject.SetActive(visible);
+		if ((Object)(object)campaignZoneRect != (Object)null)
+			((Component)campaignZoneRect).gameObject.SetActive(visible && campaignDeck != null);
+		if ((Object)(object)combatResultRoot != (Object)null)
+			combatResultRoot.SetActive(false);
 	}
 
 	private static void DestroyCardViews(List<BattleCardState> cards)
@@ -383,6 +418,8 @@ public sealed partial class BattleBoardController
 		playerCards.Clear();
 		cpuCards.Clear();
 		turnOrder.Clear();
+		ClearInitiativeTimeline();
+		ResizeTimelineTiles(0);
 		if (roomType == RoomType.Merchant && IsGodMerchantRoom())
 		{
 			text = GrantGodMerchantWelcomeGift();
@@ -439,10 +476,12 @@ public sealed partial class BattleBoardController
 		RefreshInitiativeDisplay();
 		SetCombatChromeVisible(showCombatChrome);
 		ApplyResponsiveLayout();
+		SetCombatChromeVisible(showCombatChrome);
 	}
 
 	private void SetCombatChromeVisible(bool visible)
 	{
+		combatChromeVisible = visible;
 		if (playerHud != null && (Object)(object)playerHud.Rect != (Object)null)
 		{
 			((Component)playerHud.Rect).gameObject.SetActive(visible);

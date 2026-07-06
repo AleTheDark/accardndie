@@ -36,6 +36,10 @@ _Recovery/
 [Bb]in/
 Server/**/appsettings.Development.json
 Server/AccardND.Server/accounts.json
+# Database SQLite locale (dati runtime, non versionati)
+Server/AccardND.Server/*.db
+Server/AccardND.Server/*.db-wal
+Server/AccardND.Server/*.db-shm
 
 # Il vecchio progetto archiviato mantiene tutto com'era
 !old_project/**

@@ -3,7 +3,7 @@ using AccardND.Server.Sessions;
 
 namespace AccardND.Server.Rooms;
 
-public sealed record QueueEntry(ClientConnection Connection, PvpLoadout Loadout);
+public sealed record QueueEntry(ClientConnection Connection, PvpLoadout Loadout, int Mmr);
 
 public sealed class MatchmakingQueue
 {
@@ -11,18 +11,27 @@ public sealed class MatchmakingQueue
     private readonly List<QueueEntry> waiting = new();
 
     /// <summary>
-    /// Accoda il giocatore; se c'è già qualcuno in attesa ritorna la coppia da avviare.
+    /// Accoda il giocatore; se c'è già qualcuno in attesa ritorna la coppia da avviare,
+    /// scegliendo l'avversario con l'MMR più vicino.
     /// </summary>
-    public (QueueEntry First, QueueEntry Second)? Enqueue(ClientConnection connection, PvpLoadout loadout)
+    public (QueueEntry First, QueueEntry Second)? Enqueue(
+        ClientConnection connection, PvpLoadout loadout, int mmr)
     {
         lock (gate)
         {
-            waiting.RemoveAll(entry => entry.Connection == connection || !entry.Connection.IsOpen);
-            var candidate = new QueueEntry(connection, loadout);
+            string playerId = connection.Identity?.PlayerId;
+            waiting.RemoveAll(entry =>
+                entry.Connection == connection
+                || !entry.Connection.IsOpen
+                || (!string.IsNullOrEmpty(playerId)
+                    && entry.Connection.Identity?.PlayerId == playerId));
+            var candidate = new QueueEntry(connection, loadout, mmr);
             if (waiting.Count > 0)
             {
-                QueueEntry opponent = waiting[0];
-                waiting.RemoveAt(0);
+                QueueEntry opponent = waiting
+                    .OrderBy(entry => Math.Abs(entry.Mmr - mmr))
+                    .First();
+                waiting.Remove(opponent);
                 return (opponent, candidate);
             }
             waiting.Add(candidate);

@@ -1,5 +1,7 @@
 using AccardND.Server;
 using AccardND.Server.Accounts;
+using AccardND.Server.Data;
+using AccardND.Server.Progression;
 using AccardND.Server.Rooms;
 using AccardND.Server.Sessions;
 
@@ -20,8 +22,20 @@ builder.Services.AddSingleton(provider =>
     return AccardND.Server.Match.PvpCardCatalog.Load(
         catalogPath, provider.GetRequiredService<ILogger<AccardND.Server.Match.PvpCardCatalog>>());
 });
+builder.Services.AddSingleton<AccardDatabase>();
 builder.Services.AddSingleton<AccountService>();
 builder.Services.AddSingleton<UgsAuthService>();
+builder.Services.AddSingleton<SeasonService>();
+builder.Services.AddSingleton<StatsService>();
+builder.Services.AddSingleton<RankedService>();
+builder.Services.AddSingleton<UnlockService>();
+builder.Services.AddSingleton<ProfileService>();
+builder.Services.AddSingleton<HallOfFameService>();
+builder.Services.AddSingleton<AchievementService>();
+builder.Services.AddSingleton<PresenceRegistry>();
+builder.Services.AddSingleton<FriendService>();
+builder.Services.AddSingleton<MatchResultRecorder>();
+builder.Services.AddHostedService<SeasonRolloverService>();
 builder.Services.AddSingleton<RoomManager>();
 builder.Services.AddSingleton<MatchmakingQueue>();
 builder.Services.AddSingleton<MessageRouter>();

@@ -23,6 +23,9 @@ public sealed class Room
     public MatchSession Session { get; set; }
     public bool IsFull => Guest != null;
 
+    /// <summary>true se la partita è di matchmaking (conta per l'MMR); false per le stanze con codice.</summary>
+    public bool Ranked { get; set; }
+
     public bool TrySeatGuest(ClientConnection guest, PvpLoadout loadout)
     {
         lock (gate)

@@ -13,6 +13,9 @@ public sealed class ServerConfig
     public string Urls { get; set; } = "http://localhost:5017";
     public string AccountsFilePath { get; set; } = "accounts.json";
 
+    /// <summary>File SQLite (relativo alla cartella del binario se non assoluto).</summary>
+    public string DatabaseFilePath { get; set; } = "accardnd.db";
+
     /// <summary>Project ID di Unity (dashboard UGS). Vuoto = auth UGS disattivata.</summary>
     public string UgsProjectId { get; set; } = string.Empty;
     public string UgsIssuer { get; set; } = "https://player-auth.services.api.unity.com";
@@ -62,6 +65,16 @@ public sealed class ServerConfig
     public int ForfeitAfterConsecutiveTimeouts { get; set; } = 3;
     public int DisconnectTimeoutSeconds { get; set; } = 120;
     public string CardCatalogPath { get; set; } = "cardcatalog.json";
+
+    /// <summary>Parametri del sistema ranked (MMR nascosto + tier a leghe).</summary>
+    public RankedConfig Ranked { get; set; } = new();
+
+    /// <summary>Parametri delle stagioni (durata, soft reset).</summary>
+    public SeasonConfig Season { get; set; } = new();
+
+    /// <summary>Famiglie di mostri della campagna: sconfiggerle sblocca l'icona corrispondente.</summary>
+    public string[] CampaignMonsters { get; set; } =
+        { "goblin", "skeleton", "animal", "darkelf", "chimera", "alien", "whitealien", "spirit", "faceless", "champion" };
 
     public static ServerConfig Load(string path)
     {

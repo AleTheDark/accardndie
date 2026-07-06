@@ -22,5 +22,19 @@
   "TurnTimerSeconds": 60,
   "ForfeitAfterConsecutiveTimeouts": 3,
   "DisconnectTimeoutSeconds": 120,
-  "CardCatalogPath": "cardcatalog.json"
+  "CardCatalogPath": "cardcatalog.json",
+  "Ranked": {
+    "StartMmr": 1000,
+    "PlacementMatches": 5,
+    "PlacementK": 40,
+    "StandardK": 24,
+    "DivisionWidth": 100,
+    "TierFloor": 800,
+    "DivisionsPerTier": 4,
+    "Tiers": ["Nabbo", "Apprendista", "Esperto", "Divino", "Onnipotente"]
+  },
+  "Season": {
+    "DurationDays": 90,
+    "SoftResetFactor": 0.5
+  }
 }

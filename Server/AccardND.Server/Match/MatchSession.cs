@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using AccardND.GameCore;
 using AccardND.GameCore.Pvp;
 using AccardND.NetProtocol;
+using AccardND.Server.Accounts;
+using AccardND.Server.Progression;
 using AccardND.Server.Rooms;
 using AccardND.Server.Sessions;
 
@@ -21,14 +23,25 @@ public sealed class MatchSession
     private readonly int turnTimerSeconds;
     private readonly int forfeitAfterTimeouts;
     private readonly int[] consecutiveTimeouts = new int[2];
+    private readonly MatchResultRecorder resultRecorder;
+    private readonly AccountIdentity[] identities;
+    private readonly string roomCode;
+    private readonly bool ranked;
     private CancellationTokenSource turnTimer;
+    private DateTime startedAt;
+    private bool resultRecorded;
+    private string endedReason = "normal";
 
-    public MatchSession(Room room, ServerConfig config)
+    public MatchSession(Room room, ServerConfig config, MatchResultRecorder resultRecorder)
     {
         ArgumentNullException.ThrowIfNull(room);
         ArgumentNullException.ThrowIfNull(config);
+        this.resultRecorder = resultRecorder;
         connections = new[] { room.Host, room.Guest };
         loadouts = new[] { room.HostLoadout, room.GuestLoadout };
+        identities = new[] { room.Host.Identity, room.Guest.Identity };
+        roomCode = room.Code;
+        ranked = room.Ranked;
         turnTimerSeconds = config.TurnTimerSeconds;
         forfeitAfterTimeouts = config.ForfeitAfterConsecutiveTimeouts;
         engine = new PvpMatchEngine(
@@ -45,6 +58,7 @@ public sealed class MatchSession
         await gate.WaitAsync(cancellation);
         try
         {
+            startedAt = DateTime.UtcNow;
             for (int player = 0; player < 2; player++)
             {
                 await connections[player].SendAsync(MessageTypes.MatchStart, new MatchStart
@@ -196,6 +210,7 @@ public sealed class MatchSession
                 winner = 1 - player,
                 reason = "timeout"
             }, CancellationToken.None);
+            endedReason = "timeout";
             await DispatchAsync(engine.Forfeit(player), CancellationToken.None);
             break;
         }
@@ -231,7 +246,92 @@ public sealed class MatchSession
             await BroadcastAsync(PvpEventMapper.ToDto(gameEvent), cancellation);
         }
         if (engine.Phase == PvpMatchPhase.Finished)
+        {
             turnTimer?.Cancel();
+            await RecordResultAsync(engine.MatchWinner, endedReason);
+        }
+    }
+
+    /// <summary>Registra l'esito una sola volta. Chiamato a fine motore o alla disconnessione.</summary>
+    private async Task RecordResultAsync(int winner, string reason)
+    {
+        if (resultRecorded || resultRecorder == null || startedAt == default)
+            return;
+        MatchRecordResult result;
+        try
+        {
+            result = await resultRecorder.RecordAsync(new MatchOutcome(
+                identities[0], identities[1], winner,
+                engine.WinsOf(0), engine.WinsOf(1),
+                ranked, reason, roomCode, startedAt, DateTime.UtcNow));
+        }
+        catch (Exception)
+        {
+            return;
+        }
+        resultRecorded = true;
+
+        for (int player = 0; player < 2; player++)
+        {
+            if (!connections[player].IsOpen)
+                continue;
+            await connections[player].SendAsync(
+                MessageTypes.MatchResult, BuildResultData(player, winner, reason, result), CancellationToken.None);
+        }
+    }
+
+    private MatchResultData BuildResultData(int player, int winner, string reason, MatchRecordResult result)
+    {
+        PlayerRankedDelta delta = player == 0 ? result.A : result.B;
+        IReadOnlyList<string> unlocked = player == 0 ? result.AchievementsA : result.AchievementsB;
+        var data = new MatchResultData
+        {
+            youWon = winner == player,
+            ranked = result.Ranked && delta != null,
+            endedReason = reason,
+            scoreYou = engine.WinsOf(player),
+            scoreOpponent = engine.WinsOf(1 - player),
+            unlockedAchievements = unlocked?.ToArray() ?? Array.Empty<string>()
+        };
+        if (data.ranked)
+        {
+            data.tier = delta.After.TierName;
+            data.division = delta.After.Division;
+            data.leaguePoints = delta.After.LeaguePoints;
+            data.lpDelta = delta.LpDelta;
+            data.promoted = delta.Promoted;
+            data.demoted = delta.Demoted;
+            data.placement = delta.Placement;
+            data.placementRemaining = delta.PlacementRemaining;
+        }
+        return data;
+    }
+
+    /// <summary>
+    /// Un giocatore ha lasciato prima della fine: assegna la vittoria all'avversario.
+    /// No-op se il match è già concluso o già registrato.
+    /// </summary>
+    public async Task RecordDisconnectAsync(ClientConnection leaver)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            if (resultRecorded)
+                return;
+            if (engine.Phase == PvpMatchPhase.Finished)
+            {
+                await RecordResultAsync(engine.MatchWinner, endedReason);
+                return;
+            }
+            int loser = PlayerIndexOf(leaver);
+            if (loser < 0)
+                return;
+            await RecordResultAsync(1 - loser, "disconnect");
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     private async Task BroadcastAsync(MatchEventDto dto, CancellationToken cancellation)
