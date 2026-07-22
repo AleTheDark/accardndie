@@ -15,6 +15,7 @@ MonoBehaviour:
   id: ghost
   displayName: Spettrale
   background: {fileID: 21300000, guid: 67fd35a408ebc024db57b330e5c46a9b, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: 26b9552f3de32904bbcab999c40704cf, type: 3}
   roomType: 2
   difficulty: 0
   bossId: 

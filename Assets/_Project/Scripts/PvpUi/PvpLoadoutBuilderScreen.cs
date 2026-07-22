@@ -91,24 +91,30 @@ namespace AccardND.PvpUi
         private void BuildStaticUi()
         {
             RectTransform titleBand = PvpUiFactory.CreateTitleBand(
-                root, "FORGIA LOADOUT", "9 evocazioni, budget limitato, identita da arena");
-            PvpUiFactory.SetAnchors(titleBand, new Vector2(0.03f, 0.89f), new Vector2(0.74f, 0.985f));
+                root, "ARSENALE", "Componi una squadra equilibrata per l'arena");
+            PvpUiFactory.SetAnchors(titleBand, new Vector2(0.04f, 0.9f), new Vector2(0.76f, 0.985f));
 
             Button cancel = PvpUiFactory.CreateButton(
-                root, "Cancel", "INDIETRO", new Color(0.5f, 0.12f, 0.12f, 0.98f), onCancelled, 20);
-            PvpUiFactory.SetAnchors((RectTransform)cancel.transform, new Vector2(0.78f, 0.925f), new Vector2(0.97f, 0.985f));
+                root, "Cancel", "INDIETRO", new Color(0.5f, 0.12f, 0.12f, 0.98f), onCancelled, 24);
+            PvpUiFactory.SetAnchors((RectTransform)cancel.transform, new Vector2(0.79f, 0.92f), new Vector2(0.96f, 0.975f));
 
-            summaryText = PvpUiFactory.CreateText(root, "Summary", string.Empty, 20, TextAnchor.MiddleLeft, FontStyle.Normal);
+            RectTransform summaryPanel = PvpUiFactory.CreateSoftPanel(root, "Loadout Summary", new Color(0.035f, 0.06f, 0.09f, 0.96f));
+            PvpUiFactory.SetAnchors(summaryPanel, new Vector2(0.04f, 0.79f), new Vector2(0.76f, 0.885f));
+            summaryText = PvpUiFactory.CreateText(summaryPanel, "Summary", string.Empty, 25, TextAnchor.MiddleLeft, FontStyle.Bold);
             summaryText.color = PvpUiFactory.TextMuted;
-            PvpUiFactory.SetAnchors((RectTransform)summaryText.transform, new Vector2(0.04f, 0.815f), new Vector2(0.75f, 0.875f));
+            PvpUiFactory.Stretch((RectTransform)summaryText.transform, 18f, 8f);
 
             confirmButton = PvpUiFactory.CreateButton(
-                root, "Confirm", "CONFERMA", new Color(0.1f, 0.55f, 0.25f, 0.98f), Confirm, 20);
-            PvpUiFactory.SetAnchors((RectTransform)confirmButton.transform, new Vector2(0.78f, 0.815f), new Vector2(0.97f, 0.895f));
+                root, "Confirm", "SALVA", new Color(0.1f, 0.55f, 0.25f, 0.98f), Confirm, 28);
+            PvpUiFactory.SetAnchors((RectTransform)confirmButton.transform, new Vector2(0.79f, 0.79f), new Vector2(0.96f, 0.885f));
+
+            Text catalogTitle = PvpUiFactory.CreateTitleText(root, "Catalog Title", "CATALOGO CARTE", 22, TextAnchor.MiddleLeft);
+            catalogTitle.color = PvpUiFactory.Gold;
+            PvpUiFactory.SetAnchors((RectTransform)catalogTitle.transform, new Vector2(0.05f, 0.745f), new Vector2(0.95f, 0.785f));
 
             // Griglia scorrevole del catalogo.
             RectTransform scrollPanel = PvpUiFactory.CreateSoftPanel(root, "Scroll", new Color(0.018f, 0.028f, 0.045f, 0.92f));
-            PvpUiFactory.SetAnchors(scrollPanel, new Vector2(0.02f, 0.2f), new Vector2(0.98f, 0.8f));
+            PvpUiFactory.SetAnchors(scrollPanel, new Vector2(0.04f, 0.31f), new Vector2(0.96f, 0.745f));
             var scroll = scrollPanel.gameObject.AddComponent<ScrollRect>();
             scrollPanel.gameObject.AddComponent<RectMask2D>();
 
@@ -121,9 +127,9 @@ namespace AccardND.PvpUi
             gridContent.offsetMin = Vector2.zero;
             gridContent.offsetMax = Vector2.zero;
             var grid = contentHolder.GetComponent<GridLayoutGroup>();
-            grid.cellSize = new Vector2(190f, 226f);
-            grid.spacing = new Vector2(12f, 12f);
-            grid.padding = new RectOffset(14, 14, 14, 14);
+            grid.cellSize = new Vector2(220f, 275f);
+            grid.spacing = new Vector2(16f, 16f);
+            grid.padding = new RectOffset(18, 18, 18, 18);
             grid.childAlignment = TextAnchor.UpperCenter;
             var fitter = contentHolder.GetComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
@@ -134,7 +140,7 @@ namespace AccardND.PvpUi
             scroll.scrollSensitivity = 30f;
 
             selectionBar = PvpUiFactory.CreateSoftPanel(root, "Selection", new Color(0.025f, 0.04f, 0.065f, 0.95f));
-            PvpUiFactory.SetAnchors(selectionBar, new Vector2(0.02f, 0.015f), new Vector2(0.98f, 0.185f));
+            PvpUiFactory.SetAnchors(selectionBar, new Vector2(0.04f, 0.025f), new Vector2(0.96f, 0.29f));
 
             BuildInspectionOverlay();
         }
@@ -161,7 +167,7 @@ namespace AccardND.PvpUi
                 ? $"scegli ancora {rules.RequiredCardCount - selection.Count} carte"
                 : result.IsValid ? "loadout valido!" : result.Errors[0].Message;
             summaryText.text =
-                $"CARTE {selection.Count}/{rules.RequiredCardCount}    BUDGET {result.TotalCost}/{rules.Budget}    {state.ToUpperInvariant()}";
+                $"{selection.Count}/{rules.RequiredCardCount} CARTE     {result.TotalCost}/{rules.Budget} BUDGET\n{state.ToUpperInvariant()}";
             summaryText.color = result.IsValid && selection.Count == rules.RequiredCardCount
                 ? PvpUiFactory.Good
                 : PvpUiFactory.Gold;
@@ -171,6 +177,7 @@ namespace AccardND.PvpUi
         private void RefreshGrid()
         {
             PvpUiFactory.Clear(gridContent);
+            bool isLandscape = Screen.width > Screen.height;
             if (catalog.Count == 0)
             {
                 Text warning = PvpUiFactory.CreateText(
@@ -188,9 +195,12 @@ namespace AccardND.PvpUi
                     gridContent, $"Card {card.Id}",
                     selected ? new Color(0.65f, 0.45f, 0.12f, 0.98f) : new Color(0.075f, 0.12f, 0.17f, 0.96f));
 
-                Text cost = PvpUiFactory.CreateBadge(
-                    cell, "Cost", card.Strength.ToString(), selected ? PvpUiFactory.Gold : PvpUiFactory.Copper, 18);
-                PvpUiFactory.SetAnchors((RectTransform)cost.transform.parent, new Vector2(0.72f, 0.82f), new Vector2(0.96f, 0.97f));
+                if (!isLandscape)
+                {
+                    Text cost = PvpUiFactory.CreateBadge(
+                        cell, "Cost", card.Strength.ToString(), selected ? PvpUiFactory.Gold : PvpUiFactory.Copper, 18);
+                    PvpUiFactory.SetAnchors((RectTransform)cost.transform.parent, new Vector2(0.72f, 0.82f), new Vector2(0.96f, 0.97f));
+                }
 
                 if (card.Artwork != null)
                 {
@@ -203,10 +213,14 @@ namespace AccardND.PvpUi
                     PvpUiFactory.SetAnchors((RectTransform)artHolder.transform, new Vector2(0.05f, 0.33f), new Vector2(0.95f, 0.98f));
                 }
 
+                string selectedSuffix = selected ? "  - SCELTA" : string.Empty;
+                string labelText = isLandscape
+                    ? $"{card.DisplayName}  {card.Strength}{selectedSuffix}\n{card.HeroClass}"
+                    : $"{card.DisplayName}\n{card.HeroClass}{selectedSuffix}";
                 Text label = PvpUiFactory.CreateText(
                     cell, "Label",
-                    $"{card.DisplayName}\n{card.HeroClass}" + (selected ? "  - SCELTA" : string.Empty),
-                    15, TextAnchor.MiddleCenter, FontStyle.Bold);
+                    labelText,
+                    20, TextAnchor.MiddleCenter, FontStyle.Bold);
                 label.raycastTarget = false;
                 label.color = selected ? Color.white : new Color(0.88f, 0.94f, 0.98f);
                 PvpUiFactory.SetAnchors((RectTransform)label.transform, new Vector2(0.04f, 0.04f), new Vector2(0.96f, 0.31f));
@@ -285,7 +299,7 @@ namespace AccardND.PvpUi
             inspectionTitle.text = card != null ? card.DisplayName : string.Empty;
             inspectionBody.text = card == null
                 ? string.Empty
-                : $"Classe: {className}\nForza: {card.Strength}\nCosto loadout: {card.Strength}\n\n{CardRulesText(card)}";
+                : $"Classe: {className}\nPotenza: {card.Strength}\nCosto loadout: {card.Strength}\n\n{CardRulesText(card)}";
             RefreshInspectionBuyState();
             inspectionOverlay.gameObject.SetActive(true);
             inspectionOverlay.SetAsLastSibling();
@@ -331,22 +345,31 @@ namespace AccardND.PvpUi
         {
             PvpUiFactory.Clear(selectionBar);
             Text caption = PvpUiFactory.CreateText(
-                selectionBar, "Caption", "LOADOUT - TOCCA UNA CARTA PER RIMUOVERLA", 15, TextAnchor.MiddleLeft);
-            caption.color = PvpUiFactory.Arcane;
-            PvpUiFactory.SetAnchors((RectTransform)caption.transform, new Vector2(0.015f, 0.7f), new Vector2(0.75f, 0.96f));
+                selectionBar, "Caption", "IL TUO LOADOUT", 22, TextAnchor.MiddleLeft);
+            caption.color = PvpUiFactory.Gold;
+            PvpUiFactory.SetAnchors((RectTransform)caption.transform, new Vector2(0.025f, 0.82f), new Vector2(0.52f, 0.98f));
+            Text hint = PvpUiFactory.CreateLabel(
+                selectionBar, "Hint", "Tocca una carta per rimuoverla", 18, TextAnchor.MiddleRight);
+            PvpUiFactory.SetAnchors((RectTransform)hint.transform, new Vector2(0.48f, 0.82f), new Vector2(0.975f, 0.98f));
 
             for (int index = 0; index < rules.RequiredCardCount; index++)
             {
-                float xMin = 0.01f + index * (0.98f / rules.RequiredCardCount);
+                const int columns = 3;
+                int column = index % columns;
+                int row = index / columns;
+                float xMin = 0.02f + column * 0.326f;
+                float xMax = xMin + 0.306f;
+                float yMax = 0.79f - row * 0.245f;
+                float yMin = yMax - 0.215f;
                 var slot = PvpUiFactory.CreatePanel(
                     selectionBar, $"Slot{index}",
                     index < selection.Count ? new Color(0.07f, 0.26f, 0.32f, 0.95f) : new Color(0.075f, 0.09f, 0.12f, 0.9f));
                 PvpUiFactory.SetAnchors(
-                    slot, new Vector2(xMin, 0.08f), new Vector2(xMin + 0.98f / rules.RequiredCardCount - 0.005f, 0.66f));
+                    slot, new Vector2(xMin, yMin), new Vector2(xMax, yMax));
 
                 if (index >= selection.Count)
                 {
-                    Text empty = PvpUiFactory.CreateText(slot, "Empty", "+", 20);
+                    Text empty = PvpUiFactory.CreateText(slot, "Empty", "+", 30);
                     empty.color = new Color(0.42f, 0.5f, 0.58f);
                     continue;
                 }
@@ -360,12 +383,12 @@ namespace AccardND.PvpUi
                     art.sprite = card.Artwork;
                     art.preserveAspect = true;
                     art.raycastTarget = false;
-                    PvpUiFactory.SetAnchors((RectTransform)artHolder.transform, new Vector2(0.04f, 0.12f), new Vector2(0.36f, 0.88f));
+                    PvpUiFactory.SetAnchors((RectTransform)artHolder.transform, new Vector2(0.04f, 0.1f), new Vector2(0.29f, 0.9f));
                 }
                 Text label = PvpUiFactory.CreateText(
-                    slot, "Label", $"{card.DisplayName}\n[{card.Strength}]", 11, TextAnchor.MiddleLeft, FontStyle.Normal);
+                    slot, "Label", $"{card.DisplayName}\nPOTENZA {card.Strength}", 17, TextAnchor.MiddleLeft, FontStyle.Bold);
                 label.raycastTarget = false;
-                PvpUiFactory.SetAnchors((RectTransform)label.transform, new Vector2(card.Artwork != null ? 0.39f : 0.08f, 0.08f), new Vector2(0.96f, 0.92f));
+                PvpUiFactory.SetAnchors((RectTransform)label.transform, new Vector2(card.Artwork != null ? 0.32f : 0.08f, 0.08f), new Vector2(0.96f, 0.92f));
 
                 int captured = index;
                 slot.gameObject.AddComponent<Button>().onClick.AddListener(() => RemoveAt(captured));

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -81,8 +81,13 @@ public sealed partial class BattleBoardController
 		}
 		if (card.PermanentCombatBonus != 0)
 		{
-			parts.Add(FormatSignedBonus("Permanente", card.PermanentCombatBonus));
+			parts.Add(FormatSignedBonus("Equip/Malus", card.PermanentCombatBonus));
 			described += card.PermanentCombatBonus;
+		}
+		if (card.MightAuraCombatBonus != 0)
+		{
+			parts.Add(FormatSignedBonus("Aura Forzuta", card.MightAuraCombatBonus));
+			described += card.MightAuraCombatBonus;
 		}
 		if (described != flatBonus)
 		{
@@ -168,7 +173,7 @@ public sealed partial class BattleBoardController
 			}
 			return;
 		}
-		bool flag = IsActionButtonVisible(restartButton) || IsActionButtonVisible(confirmFormationButton) || IsActionButtonVisible(cancelActionButton) || IsActionButtonVisible(abilityButton) || IsActionButtonVisible(attachmentButton) || IsActionButtonVisible(merchantBuyButton);
+		bool flag = IsActionButtonVisible(restartButton) || IsActionButtonVisible(confirmActionButton) || IsActionButtonVisible(cancelActionButton) || IsActionButtonVisible(abilityButton) || IsActionButtonVisible(attachmentButton) || IsActionButtonVisible(merchantBuyButton);
 		bool flag2 = IsMerchantActionHudVisible();
 		bool flag3 = IsSingleActionNonCombatHudVisible();
 		if (deploymentDraftActive)
@@ -277,10 +282,41 @@ public sealed partial class BattleBoardController
 	{
 		if (!((Object)(object)logText == (Object)null))
 		{
-			int num = Mathf.Max(1, configuration.Logging.VisibleEntries);
+			ConfigureLogTextRect();
+			int num = Mathf.Max(configuration.Logging.VisibleEntries, EstimateVisibleLogEntries());
 			int count = Mathf.Max(0, gameLogEntries.Count - num);
 			logText.text = string.Join("\n", gameLogEntries.Skip(count));
 		}
+	}
+
+	private void ConfigureLogTextRect()
+	{
+		if ((Object)(object)logText == (Object)null)
+		{
+			return;
+		}
+
+		logText.horizontalOverflow = HorizontalWrapMode.Wrap;
+		logText.verticalOverflow = VerticalWrapMode.Truncate;
+		SetRect(logText.rectTransform, new Vector2(0.035f, 0.035f), new Vector2(0.965f, 0.895f));
+	}
+
+	private int EstimateVisibleLogEntries()
+	{
+		if ((Object)(object)logText == (Object)null)
+		{
+			return Mathf.Max(1, configuration.Logging.VisibleEntries);
+		}
+
+		float height = logText.rectTransform.rect.height;
+		if (height <= 1f && (Object)(object)logPanel != (Object)null)
+		{
+			RectTransform panelRect = (RectTransform)logPanel.transform;
+			height = panelRect.rect.height * 0.86f;
+		}
+
+		float lineHeight = Mathf.Max(1f, logText.fontSize * 1.12f);
+		return Mathf.Max(1, Mathf.FloorToInt(height / lineHeight));
 	}
 
 	private void ToggleLogPanel()
@@ -291,7 +327,7 @@ public sealed partial class BattleBoardController
 			logPanel.SetActive(flag);
 			if (flag && (Object)(object)optionsPanel != (Object)null)
 			{
-				optionsPanel.SetActive(false);
+				CloseOptionsPanel();
 			}
 			if (flag)
 			{
@@ -307,7 +343,7 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		bool show = !optionsPanel.activeSelf;
-		optionsPanel.SetActive(show);
+		SetOptionsPanelVisible(show);
 		if (show)
 		{
 			if ((Object)(object)logPanel != (Object)null)
@@ -318,11 +354,36 @@ public sealed partial class BattleBoardController
 		}
 	}
 
+	private void CloseOptionsPanel()
+	{
+		SetOptionsPanelVisible(false);
+	}
+
+	private void SetOptionsPanelVisible(bool visible)
+	{
+		if ((Object)(object)optionsBackdropPanel != (Object)null)
+		{
+			optionsBackdropPanel.SetActive(visible);
+			if (visible)
+			{
+				optionsBackdropPanel.transform.SetAsLastSibling();
+			}
+		}
+		if ((Object)(object)optionsPanel != (Object)null)
+		{
+			optionsPanel.SetActive(visible);
+			if (visible)
+			{
+				optionsPanel.transform.SetAsLastSibling();
+			}
+		}
+	}
+
 	private void OpenLogFromOptions()
 	{
 		if ((Object)(object)optionsPanel != (Object)null)
 		{
-			optionsPanel.SetActive(false);
+			CloseOptionsPanel();
 		}
 		if ((Object)(object)logPanel != (Object)null)
 		{
@@ -353,6 +414,7 @@ public sealed partial class BattleBoardController
 		SetRect(dialog.rectTransform, new Vector2(0.18f, 0.34f), new Vector2(0.82f, 0.66f));
 
 		Text title = CreateText("Return To Menu Title", ((Component)dialog).transform, font, 29, (FontStyle)1, (TextAnchor)4);
+		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(title);
 		title.text = "USCIRE AL MENU?";
 		title.color = new Color(0.95f, 0.79f, 0.34f);
 		SetRect(title.rectTransform, new Vector2(0.06f, 0.68f), new Vector2(0.94f, 0.9f));
@@ -387,7 +449,7 @@ public sealed partial class BattleBoardController
 		}
 		if ((Object)(object)optionsPanel != (Object)null)
 		{
-			optionsPanel.SetActive(false);
+			CloseOptionsPanel();
 		}
 		if ((Object)(object)logPanel != (Object)null)
 		{
@@ -409,7 +471,7 @@ public sealed partial class BattleBoardController
 	{
 		if ((Object)(object)optionsPanel != (Object)null)
 		{
-			optionsPanel.SetActive(false);
+			CloseOptionsPanel();
 		}
 		if ((Object)(object)logPanel != (Object)null)
 		{
@@ -425,7 +487,7 @@ public sealed partial class BattleBoardController
 		}
 		if ((Object)(object)implementationArchivePanel != (Object)null)
 		{
-			implementationArchivePanel.SetActive(false);
+			SetImplementationArchiveVisible(false);
 		}
 		HideReturnToMenuConfirmation();
 		if ((Object)(object)hintPanel != (Object)null)

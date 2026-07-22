@@ -117,11 +117,14 @@ public sealed class ProfileService
         return true;
     }
 
-    public IReadOnlyList<string> ReportCampaignKills(AccountIdentity identity, IEnumerable<string> monsters)
+    public IReadOnlyList<string> ReportCampaignKills(
+        AccountIdentity identity,
+        IEnumerable<string> monsters,
+        IEnumerable<string> bosses)
     {
         using (SqliteConnection connection = database.Open())
             EnsureProfile(connection, identity);
-        return unlocks.GrantCampaignIcons(identity.PlayerId, monsters);
+        return unlocks.GrantCampaignIcons(identity.PlayerId, monsters, bosses);
     }
 
     /// <summary>Crea il profilo (con icone gratuite e icona di default) se manca.</summary>

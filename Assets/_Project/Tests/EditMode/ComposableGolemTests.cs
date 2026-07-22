@@ -33,11 +33,14 @@ namespace AccardND.GameCore.Tests
             var golem = CreateOrderedGolem(new FixedRandomSource());
 
             Assert.That(golem.ActiveForm.Form, Is.EqualTo(ComposableGolemForm.Iron));
+            Assert.That(golem.ActiveForm.Power, Is.EqualTo(8));
             Assert.That(golem.EndRound(), Is.False);
             Assert.That(golem.ActiveForm.Form, Is.EqualTo(ComposableGolemForm.Iron));
 
             Assert.That(golem.EndRound(), Is.True);
             Assert.That(golem.ActiveForm.Form, Is.EqualTo(ComposableGolemForm.Crystal));
+            Assert.That(golem.ActiveForm.Power, Is.EqualTo(7));
+            Assert.That(golem.ActiveForm.PowerBonus, Is.EqualTo(1));
         }
 
         [Test]
@@ -47,10 +50,10 @@ namespace AccardND.GameCore.Tests
 
             ComposableGolemDefenseResult result = golem.DefendAgainst(10);
 
-            Assert.That(result.DefenseTotal, Is.EqualTo(7));
-            Assert.That(result.Damage, Is.EqualTo(3));
+            Assert.That(result.DefenseTotal, Is.EqualTo(10));
+            Assert.That(result.Damage, Is.Zero);
             Assert.That(result.Healing, Is.Zero);
-            Assert.That(golem.HitPoints, Is.EqualTo(27));
+            Assert.That(golem.HitPoints, Is.EqualTo(30));
         }
 
         [Test]
@@ -69,7 +72,20 @@ namespace AccardND.GameCore.Tests
 
             Assert.That(result.DefenseTotal, Is.EqualTo(10));
             Assert.That(result.Healing, Is.EqualTo(3));
-            Assert.That(golem.HitPoints, Is.EqualTo(28));
+            Assert.That(golem.HitPoints, Is.EqualTo(30));
+        }
+
+        [Test]
+        public void ReturningToAFormStacksItsPowerBonus()
+        {
+            var golem = CreateOrderedGolem(new FixedRandomSource());
+
+            for (int index = 0; index < 6; index++)
+                golem.EndRound();
+
+            Assert.That(golem.ActiveForm.Form, Is.EqualTo(ComposableGolemForm.Iron));
+            Assert.That(golem.ActiveForm.PowerBonus, Is.EqualTo(1));
+            Assert.That(golem.ActiveForm.Power, Is.EqualTo(9));
         }
 
         [Test]

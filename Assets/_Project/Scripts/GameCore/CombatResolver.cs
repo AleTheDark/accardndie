@@ -47,13 +47,14 @@ namespace AccardND.GameCore
                     ? MatchupResult.Neutral
                     : ClassMatchup.Compare(attacker.HeroClass, defender.HeroClass);
 
-            bool attackerRerollsOnes = modifiers.RerollAttackerOnes || attacker.HeroClass == HeroClass.Rogue;
+            var attackerReroll = new RerollRule(modifiers.RerollAttackerOnes, modifiers.RerollAttackerTwos);
+            var defenderReroll = new RerollRule(modifiers.RerollDefenderOnes, modifiers.RerollDefenderTwos);
             VigorRollResult attackerRoll = modifiers.SumAttackerVigor
-                ? RollTwoAndSum(attackerVigorDieSides, attackerRerollsOnes, modifiers.RerollAttackerTwos)
-                : RollVigor(attackerVigorDieSides, attackerMatchup, attackerRerollsOnes, modifiers.RerollAttackerTwos);
+                ? RollTwoAndSum(attackerVigorDieSides, attackerReroll)
+                : RollVigor(attackerVigorDieSides, attackerMatchup, attackerReroll);
             VigorRollResult defenderRoll = modifiers.DefenderAdvantage
-                ? RollTwoAndTakeHighest(defenderVigorDieSides)
-                : RollVigor(defenderVigorDieSides, MatchupResult.Neutral, false, false);
+                ? RollTwoAndTakeHighest(defenderVigorDieSides, defenderReroll)
+                : RollVigor(defenderVigorDieSides, MatchupResult.Neutral, defenderReroll);
 
             return new CombatResult(
                 attackerRoll,
@@ -62,69 +63,103 @@ namespace AccardND.GameCore
                 defender.Strength + defenderRoll.SelectedRoll + modifiers.DefenderFlatBonus);
         }
 
-        private VigorRollResult RollVigor(int dieSides, MatchupResult matchup, bool rerollOnes, bool rerollTwos)
+        private VigorRollResult RollVigor(int dieSides, MatchupResult matchup, RerollRule reroll)
         {
-            int firstRoll = RollSingle(dieSides, rerollOnes, rerollTwos);
+            RollOutcome first = RollSingle(dieSides, reroll);
             if (matchup == MatchupResult.Neutral)
                 return new VigorRollResult(
                     dieSides,
-                    firstRoll,
+                    first.Result,
                     0,
                     false,
-                    firstRoll,
+                    first.Result,
                     matchup,
-                    VigorSelectionMode.Single);
+                    VigorSelectionMode.Single,
+                    first.BeforeReroll);
 
-            int secondRoll = RollSingle(dieSides, rerollOnes, rerollTwos);
+            RollOutcome second = RollSingle(dieSides, reroll);
             int selectedRoll = matchup == MatchupResult.Advantage
-                ? Math.Max(firstRoll, secondRoll)
-                : Math.Min(firstRoll, secondRoll);
+                ? Math.Max(first.Result, second.Result)
+                : Math.Min(first.Result, second.Result);
             return new VigorRollResult(
                 dieSides,
-                firstRoll,
-                secondRoll,
+                first.Result,
+                second.Result,
                 true,
                 selectedRoll,
                 matchup,
                 matchup == MatchupResult.Advantage
                     ? VigorSelectionMode.Highest
-                    : VigorSelectionMode.Lowest);
+                    : VigorSelectionMode.Lowest,
+                first.BeforeReroll,
+                second.BeforeReroll);
         }
 
-        private VigorRollResult RollTwoAndSum(int dieSides, bool rerollOnes, bool rerollTwos)
+        private VigorRollResult RollTwoAndSum(int dieSides, RerollRule reroll)
         {
-            int first = RollSingle(dieSides, rerollOnes, rerollTwos);
-            int second = RollSingle(dieSides, rerollOnes, rerollTwos);
+            RollOutcome first = RollSingle(dieSides, reroll);
+            RollOutcome second = RollSingle(dieSides, reroll);
             return new VigorRollResult(
                 dieSides,
-                first,
-                second,
+                first.Result,
+                second.Result,
                 true,
-                first + second,
+                first.Result + second.Result,
                 MatchupResult.Neutral,
-                VigorSelectionMode.Sum);
+                VigorSelectionMode.Sum,
+                first.BeforeReroll,
+                second.BeforeReroll);
         }
 
-        private int RollSingle(int dieSides, bool rerollOnes, bool rerollTwos)
+        private RollOutcome RollSingle(int dieSides, RerollRule reroll)
         {
             int result = random.NextInclusive(1, dieSides);
-            return (rerollOnes && result == 1) || (rerollTwos && result == 2)
-                ? random.NextInclusive(1, dieSides)
-                : result;
+            return reroll.ShouldReroll(result)
+                ? new RollOutcome(random.NextInclusive(1, dieSides), result)
+                : new RollOutcome(result, 0);
         }
 
-        private VigorRollResult RollTwoAndTakeHighest(int dieSides)
+        private VigorRollResult RollTwoAndTakeHighest(int dieSides, RerollRule reroll)
         {
-            int first = random.NextInclusive(1, dieSides);
-            int second = random.NextInclusive(1, dieSides);
+            RollOutcome first = RollSingle(dieSides, reroll);
+            RollOutcome second = RollSingle(dieSides, reroll);
             return new VigorRollResult(
                 dieSides,
-                first,
-                second,
+                first.Result,
+                second.Result,
                 true,
-                Math.Max(first, second),
+                Math.Max(first.Result, second.Result),
                 MatchupResult.Advantage,
-                VigorSelectionMode.Highest);
+                VigorSelectionMode.Highest,
+                first.BeforeReroll,
+                second.BeforeReroll);
+        }
+
+        private readonly struct RollOutcome
+        {
+            public RollOutcome(int result, int beforeReroll)
+            {
+                Result = result;
+                BeforeReroll = beforeReroll;
+            }
+
+            public int Result { get; }
+            public int BeforeReroll { get; }
+        }
+
+        private readonly struct RerollRule
+        {
+            private readonly bool ones;
+            private readonly bool twos;
+
+            public RerollRule(bool ones, bool twos)
+            {
+                this.ones = ones;
+                this.twos = twos;
+            }
+
+            public bool ShouldReroll(int roll) =>
+                (ones && roll == 1) || (twos && roll == 2);
         }
     }
 }

@@ -8,17 +8,11 @@ using UnityEngine;
 
 namespace AccardND.Editor
 {
-    [InitializeOnLoad]
     public static class ScenarioCatalogBuilder
     {
         private const string ArtFolder = "Assets/_Project/Art/Scenarios";
         private const string DataFolder = "Assets/_Project/Data/Scenarios";
         private const string CatalogPath = "Assets/_Project/Resources/ScenarioCatalog.asset";
-
-        static ScenarioCatalogBuilder()
-        {
-            EditorApplication.delayCall += ReimportAndRebuild;
-        }
 
         [MenuItem("Accard N' Die/Reimport Scenario Backgrounds", priority = 39)]
         public static void ReimportAndRebuild()
@@ -42,15 +36,28 @@ namespace AccardND.Editor
             EnsureFolder(DataFolder);
             var definitions = new List<ScenarioDefinition>();
             string[] guids = AssetDatabase.FindAssets("t:Sprite", new[] { ArtFolder });
+            var spritesByName = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
 
             foreach (string guid in guids)
             {
                 string artPath = AssetDatabase.GUIDToAssetPath(guid);
+                if (artPath.Contains("/old_background/", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(artPath);
                 if (sprite == null)
                     continue;
 
-                ScenarioImport imported = Parse(Path.GetFileNameWithoutExtension(artPath));
+                spritesByName[Path.GetFileNameWithoutExtension(artPath)] = sprite;
+            }
+
+            foreach ((string rawName, Sprite sprite) in spritesByName)
+            {
+                if (rawName.EndsWith("_landscape", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                ScenarioImport imported = Parse(rawName);
+                spritesByName.TryGetValue(rawName + "_landscape", out Sprite landscapeSprite);
                 string definitionPath = $"{DataFolder}/{imported.Id}.asset";
                 ScenarioDefinition definition = AssetDatabase.LoadAssetAtPath<ScenarioDefinition>(definitionPath);
                 bool isNew = definition == null;
@@ -64,6 +71,7 @@ namespace AccardND.Editor
                     imported.Id,
                     imported.DisplayName,
                     sprite,
+                    landscapeSprite,
                     imported.RoomType,
                     imported.Difficulty,
                     imported.BossId,
@@ -108,18 +116,16 @@ namespace AccardND.Editor
             return id switch
             {
                 "default" => new(id, "Dungeon", RoomType.Any, RoomDifficulty.Any, string.Empty),
-                "monster_2" => new(id, "Mostri - Facile", RoomType.Monster, RoomDifficulty.Easy, string.Empty),
-                "monster_3" => new(id, "Mostri - Normale", RoomType.Monster, RoomDifficulty.Normal, string.Empty),
-                "monster_4" => new(id, "Mostri - Difficile", RoomType.Monster, RoomDifficulty.Hard, string.Empty),
                 "low_merchant" => new(id, "Mercante", RoomType.Merchant, RoomDifficulty.Easy, string.Empty),
                 "god_merchant" => new(id, "Mercante Divino", RoomType.Merchant, RoomDifficulty.Hard, string.Empty),
                 "loot" => new(id, "Ricompensa", RoomType.Loot, RoomDifficulty.Any, string.Empty),
                 "unexpected_opportunity" => new(id, "Imprevisto o Opportunità", RoomType.UnexpectedOpportunity, RoomDifficulty.Any, string.Empty),
-                "climbing" => new(id, "Rampicanti", RoomType.Boss, RoomDifficulty.Any, "salazar"),
+                "climbing" => new(id, "Rampicanti", RoomType.Boss, RoomDifficulty.Any, "trentor"),
                 "toxic" => new(id, "Esalazioni Tossiche", RoomType.Boss, RoomDifficulty.Any, "kronn"),
                 "infested" => new(id, "Infestata", RoomType.Boss, RoomDifficulty.Any, "draktharr"),
                 "lux" => new(id, "Illuminata", RoomType.Boss, RoomDifficulty.Any, "zakhar"),
-                "fog" => new(id, "Nebbia", RoomType.Boss, RoomDifficulty.Any, string.Empty),
+                "cosmic" => new(id, "Cosmica", RoomType.Boss, RoomDifficulty.Any, "boss-palatir"),
+                "fog" => new(id, "Nebbia", RoomType.Boss, RoomDifficulty.Any, "boss-bragus"),
                 "ghost" => new(id, "Spettrale", RoomType.Boss, RoomDifficulty.Any, string.Empty),
                 "mirror" => new(id, "Specchi", RoomType.Boss, RoomDifficulty.Any, string.Empty),
                 "rainbow" => new(id, "Arcobaleno", RoomType.Boss, RoomDifficulty.Any, string.Empty),

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -35,28 +35,48 @@ public sealed partial class BattleBoardController
 		}
 		currentScenario = scenario;
 		currentScenarioDisplayOverride = null;
-		if ((Object)(object)backgroundFillImage != (Object)null)
-		{
-			backgroundFillImage.sprite = scenario.Background;
-		}
-		if ((Object)(object)terrainImage != (Object)null)
-		{
-			terrainImage.sprite = scenario.Background;
-		}
-		if ((Object)(object)terrainAspectFitter != (Object)null)
-		{
-			AspectRatioFitter aspectRatioFitter = terrainAspectFitter;
-			Rect rect = scenario.Background.rect;
-			float width = rect.width;
-			rect = scenario.Background.rect;
-			aspectRatioFitter.aspectRatio = width / rect.height;
-		}
+		RefreshScenarioBackground();
 		if ((Object)(object)cpuTitleText != (Object)null)
 		{
 			cpuTitleText.text = "CPU - IL MASTER   *   " + scenario.DisplayName.ToUpperInvariant();
 		}
 		AppendLog("SCENARIO - " + scenario.DisplayName + " [" + scenario.Id + "]");
 		return true;
+	}
+
+	private Sprite CurrentScenarioBackgroundSprite()
+	{
+		if ((Object)(object)currentScenario == (Object)null)
+		{
+			return Resources.Load<Sprite>("Backgrounds/Background_terrain");
+		}
+		if (Screen.width > Screen.height && (Object)(object)currentScenario.BackgroundLandscape != (Object)null)
+		{
+			return currentScenario.BackgroundLandscape;
+		}
+		return currentScenario.Background;
+	}
+
+	private void RefreshScenarioBackground()
+	{
+		Sprite sprite = CurrentScenarioBackgroundSprite();
+		if ((Object)(object)sprite == (Object)null)
+		{
+			return;
+		}
+		if ((Object)(object)backgroundFillImage != (Object)null)
+		{
+			backgroundFillImage.sprite = sprite;
+		}
+		if ((Object)(object)terrainImage != (Object)null)
+		{
+			terrainImage.sprite = sprite;
+		}
+		if ((Object)(object)terrainAspectFitter != (Object)null)
+		{
+			Rect rect = sprite.rect;
+			terrainAspectFitter.aspectRatio = rect.width / rect.height;
+		}
 	}
 
 	private bool ApplyScenario(ScenarioDefinition scenario, string displayOverride)
@@ -77,38 +97,14 @@ public sealed partial class BattleBoardController
 	{
 		if (currentRoomType == RoomType.Monster)
 		{
-			return LoadMonsterScenarioForTier(currentMonsterTier);
+			string activeScenarioId = ActiveCampaignScenarioId();
+			return LoadScenario(
+				RoomType.Any,
+				RoomDifficulty.Any,
+				null,
+				string.IsNullOrWhiteSpace(activeScenarioId) ? "default" : activeScenarioId);
 		}
 		return LoadScenario(currentRoomType, pendingRoomDifficulty, null, pendingScenarioId);
-	}
-
-	private bool LoadMonsterScenarioForTier(int tier)
-	{
-		if ((Object)(object)scenarioCatalog == (Object)null)
-		{
-			scenarioCatalog = Resources.Load<ScenarioCatalog>("ScenarioCatalog");
-		}
-		string displayOverride = $"Mostro {Mathf.Clamp(tier, 1, 4)}";
-		string[] array = Mathf.Clamp(tier, 1, 4) switch
-		{
-			1 => new string[3] { "monster_1", "default", "monster_2" }, 
-			2 => new string[2] { "monster_2", "default" }, 
-			3 => new string[3] { "monster_3", "monster_2", "default" }, 
-			_ => new string[3] { "monster_4", "monster_3", "default" }, 
-		};
-		if ((Object)(object)scenarioCatalog != (Object)null)
-		{
-			string[] array2 = array;
-			foreach (string id in array2)
-			{
-				ScenarioDefinition scenarioDefinition = scenarioCatalog.FindById(id);
-				if ((Object)(object)scenarioDefinition != (Object)null && ApplyScenario(scenarioDefinition, displayOverride))
-				{
-					return true;
-				}
-			}
-		}
-		return LoadScenario(RoomType.Monster, pendingRoomDifficulty);
 	}
 
 	private void BeginRoomChoice()
@@ -125,12 +121,15 @@ public sealed partial class BattleBoardController
 		pendingRoomDifficulty = RoomDifficulty.Normal;
 		currentScenarioDisplayOverride = null;
 		activeComposableGolem = null;
+		activeMedusaBoss = null;
+		activeTrentorBoss = null;
+		activeBragusBoss = null;
+		activePalatirBoss = null;
 		playerAura = BattleAuraType.None;
 		cpuAura = BattleAuraType.None;
 		formationAuraUsed = false;
-		ResetRoundAuraUsage();
 		((Component)restartButton).gameObject.SetActive(false);
-		((Component)confirmFormationButton).gameObject.SetActive(false);
+		((Component)confirmActionButton).gameObject.SetActive(false);
 		((Component)cancelActionButton).gameObject.SetActive(false);
 		((Component)abilityButton).gameObject.SetActive(false);
 		((Component)attachmentButton).gameObject.SetActive(false);
@@ -146,6 +145,9 @@ public sealed partial class BattleBoardController
 		initialPlayerFormation.Clear();
 		initialPlayerCampaignFormation.Clear();
 		initialCpuFormation.Clear();
+		roomChoiceBackgroundIndex = random != null ? random.NextInclusive(1, 5) : UnityEngine.Random.Range(1, 6);
+		// Punto di salvataggio autorevole: lo stato tra le stanze è coerente qui.
+		SaveCurrentRun();
 		PrepareCampaignDoors();
 		RefreshRoomChoiceLayout();
 		if ((Object)(object)roomChoicePanel != (Object)null)
@@ -157,7 +159,7 @@ public sealed partial class BattleBoardController
 		ShowRoomChoiceHint();
 		RefreshInitiativeDisplay();
 		ApplyResponsiveLayout();
-		if (ShouldForceFirstRoomComposableGolem())
+		if (ShouldForceFirstRoomComposableGolem() || ShouldForceFirstRoomMedusa() || ShouldForceFirstRoomTrentor() || ShouldForceFirstRoomBragus() || ShouldForceFirstRoomPalatir())
 		{
 			((MonoBehaviour)this).StartCoroutine(ChooseDebugMinibossDoor());
 		}
@@ -195,8 +197,92 @@ public sealed partial class BattleBoardController
 		}
 		foreach (CampaignDoorDifficulty item in list)
 		{
-			campaignDoors.Add(new CampaignDoor(item));
+			campaignDoors.Add(nextDoorChoiceRevealed
+				? new CampaignDoor(item, RollCampaignRoomPreview(item))
+				: new CampaignDoor(item));
 		}
+		nextDoorChoiceRevealed = false;
+		RefreshRoomChoiceRevealLabels();
+	}
+
+	private void RefreshRoomChoiceRevealLabels()
+	{
+		for (int i = 0; i < roomChoiceRevealLabels.Count; i++)
+		{
+			Text label = roomChoiceRevealLabels[i];
+			if ((Object)(object)label == (Object)null)
+			{
+				continue;
+			}
+			bool revealed = i < campaignDoors.Count && campaignDoors[i].RevealedRoom.HasValue;
+			((Component)label).gameObject.SetActive(revealed);
+			if (revealed)
+			{
+				label.text = DescribeRoomRoll(campaignDoors[i].RevealedRoom.Value).ToUpperInvariant();
+			}
+		}
+	}
+
+	private void RevealCurrentCampaignDoorsWithDetector()
+	{
+		if (campaignDoors.Count == 0)
+		{
+			nextDoorChoiceRevealed = true;
+			return;
+		}
+		for (int i = 0; i < campaignDoors.Count; i++)
+		{
+			CampaignDoor door = campaignDoors[i];
+			if (!door.RevealedRoom.HasValue)
+			{
+				campaignDoors[i] = new CampaignDoor(door.Difficulty, RollCampaignRoomPreview(door.Difficulty));
+			}
+		}
+		RefreshRoomChoiceRevealLabels();
+		((MonoBehaviour)this).StartCoroutine(AnimateRoomChoiceRevealLabels());
+	}
+
+	private IEnumerator AnimateRoomChoiceRevealLabels()
+	{
+		for (int i = 0; i < roomChoiceRevealLabels.Count; i++)
+		{
+			Text label = roomChoiceRevealLabels[i];
+			if ((Object)(object)label == (Object)null || !((Component)label).gameObject.activeSelf)
+			{
+				continue;
+			}
+			RectTransform rect = label.rectTransform;
+			rect.localScale = new Vector3(0.82f, 0.82f, 1f);
+			label.canvasRenderer.SetAlpha(0f);
+			label.CrossFadeAlpha(1f, 0.28f, true);
+			((MonoBehaviour)this).StartCoroutine(PopRoomChoiceRevealLabel(rect));
+			yield return WaitForCardInspectionPause(0.12f);
+		}
+	}
+
+	private IEnumerator PopRoomChoiceRevealLabel(RectTransform rect)
+	{
+		float elapsed = 0f;
+		const float duration = 0.28f;
+		while (elapsed < duration)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			float t = Mathf.Clamp01(elapsed / duration);
+			float scale = Mathf.Lerp(0.82f, 1.08f, Mathf.Sin(t * Mathf.PI * 0.5f));
+			rect.localScale = new Vector3(scale, scale, 1f);
+			yield return null;
+		}
+		elapsed = 0f;
+		const float settleDuration = 0.12f;
+		while (elapsed < settleDuration)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			float t = Mathf.Clamp01(elapsed / settleDuration);
+			float scale = Mathf.Lerp(1.08f, 1f, t);
+			rect.localScale = new Vector3(scale, scale, 1f);
+			yield return null;
+		}
+		rect.localScale = Vector3.one;
 	}
 
 	private void ChooseCampaignDoor(int index)
@@ -204,18 +290,22 @@ public sealed partial class BattleBoardController
 		if (index >= 0 && index < campaignDoors.Count && !((Object)(object)roomTransition == (Object)null) && !roomTransition.IsPlaying)
 		{
 			CampaignDoor campaignDoor = campaignDoors[index];
-			CampaignRoomRoll roomRoll = RollCampaignRoom(campaignDoor.Difficulty);
+			CampaignRoomRoll roomRoll = campaignDoor.RevealedRoom ?? RollCampaignRoom(campaignDoor.Difficulty);
+			if (campaignDoor.RevealedRoom.HasValue)
+			{
+				RegisterCampaignRoomRoll(roomRoll);
+			}
 			currentRoomType = roomRoll.RoomType;
 			currentMonsterTier = ((roomRoll.RoomType == RoomType.Monster) ?Mathf.Clamp(roomRoll.MonsterTier + ConsumeNextMonsterTierBonus(), 1, 4) : roomRoll.MonsterTier);
 			pendingScenarioId = roomRoll.ScenarioId;
 			pendingRoomDifficulty = ((currentRoomType == RoomType.Monster) ?DifficultyForMonsterTier(currentMonsterTier) : roomRoll.Difficulty);
 			if (currentRoomType == RoomType.Monster)
 			{
-				pendingScenarioId = ScenarioIdForMonsterTier(currentMonsterTier);
+				pendingScenarioId = ActiveCampaignScenarioId();
 			}
 			AppendLog($"PORTA SCELTA - slot {index + 1}, difficolta nascosta {campaignDoor.Difficulty}, stanza {DescribeRoomRoll(roomRoll)}");
 			AnimationConfiguration animation = configuration.Animation;
-			PlayTransitionSfx();
+			PlayFootstepSfx();
 			roomTransition.Play(EnterChosenCampaignRoom, animation.RoomFadeOutDuration, animation.RoomBlackHoldDuration, animation.RoomFadeInDuration);
 		}
 	}
@@ -228,9 +318,30 @@ public sealed partial class BattleBoardController
 		{
 			return new CampaignRoomRoll(RoomType.Boss, 4, null, RoomDifficulty.Hard);
 		}
+		if (ShouldForceFirstRoomMedusa())
+		{
+			return new CampaignRoomRoll(RoomType.Boss, 4, "mirror", RoomDifficulty.Hard);
+		}
+		if (ShouldForceFirstRoomTrentor())
+		{
+			return new CampaignRoomRoll(RoomType.Boss, 4, "climbing", RoomDifficulty.Hard);
+		}
+		if (ShouldForceFirstRoomBragus())
+		{
+			return new CampaignRoomRoll(RoomType.Boss, 4, "fog", RoomDifficulty.Hard);
+		}
+		if (ShouldForceFirstRoomPalatir())
+		{
+			return new CampaignRoomRoll(RoomType.Boss, 4, "cosmic", RoomDifficulty.Hard);
+		}
 		if (num == progression.FinalBossRoom || (progression.MinibossEveryRooms > 0 && num % progression.MinibossEveryRooms == 0))
 		{
-			return new CampaignRoomRoll(RoomType.Boss, 4, null, RoomDifficulty.Hard);
+			string bossScenarioId = ActiveCampaignScenarioId();
+			if (string.IsNullOrWhiteSpace(bossScenarioId) && num == progression.FinalBossRoom)
+			{
+				bossScenarioId = "mirror";
+			}
+			return new CampaignRoomRoll(RoomType.Boss, 4, bossScenarioId, RoomDifficulty.Hard);
 		}
 		return difficulty switch
 		{
@@ -325,8 +436,7 @@ public sealed partial class BattleBoardController
 	private static CampaignRoomRoll MonsterRoomRoll(int tier)
 	{
 		int num = Mathf.Clamp(tier, 1, 4);
-		string scenarioId = ScenarioIdForMonsterTier(num);
-		return new CampaignRoomRoll(RoomType.Monster, num, scenarioId, num switch
+		return new CampaignRoomRoll(RoomType.Monster, num, null, num switch
 		{
 			1 => RoomDifficulty.Easy, 
 			2 => RoomDifficulty.Easy, 
@@ -344,16 +454,6 @@ public sealed partial class BattleBoardController
 			AppendLog($"PRESAGIO - il prossimo mostro sale di {num} tier.");
 		}
 		return num;
-	}
-
-	private static string ScenarioIdForMonsterTier(int tier)
-	{
-		return Mathf.Clamp(tier, 1, 4) switch
-		{
-			3 => "monster_3", 
-			4 => "monster_4", 
-			_ => "monster_2", 
-		};
 	}
 
 	private static RoomDifficulty DifficultyForMonsterTier(int tier)
@@ -381,6 +481,7 @@ public sealed partial class BattleBoardController
 
 	private void EnterChosenCampaignRoom()
 	{
+		retryComposableGolemForms = null;
 		if ((Object)(object)roomChoicePanel != (Object)null)
 		{
 			roomChoicePanel.SetActive(false);
@@ -393,6 +494,7 @@ public sealed partial class BattleBoardController
 			currentScenarioDisplayOverride = DescribeRoomRoll(new CampaignRoomRoll(currentRoomType, currentMonsterTier, pendingScenarioId, pendingRoomDifficulty));
 			AppendLog("SCENARIO - fallback nome stanza: scenario non trovato o non valido.");
 		}
+		RefreshPlayerHud();
 		PlayCurrentRoomEnterSfx();
 		ActivateMinibossForCurrentRoom();
 		if (currentRoomType != RoomType.Monster && currentRoomType != RoomType.Boss)
@@ -406,26 +508,28 @@ public sealed partial class BattleBoardController
 			PrepareNextCampaignCombatDraft();
 			return;
 		}
-		if (currentRoomType == RoomType.Boss)
-		{
-			List<CardDefinition> list = DrawBossFormationForCurrentCombat();
-			initialCpuFormation.AddRange(list);
-			if (list.All((CardDefinition card) => card.Category != CardCategory.Boss))
-			{
-				AppendLog("BOSS FALLBACK - nessuna carta Boss disponibile; usato un Mostro come sostituto.");
-			}
-		}
-		else
-		{
-			initialCpuFormation.AddRange(DrawMonsterFormationForCurrentTier());
-		}
+		initialCpuFormation.AddRange(BuildCpuFormationForCurrentCombat());
 		ResetBattle();
+	}
+
+	private CampaignRoomRoll RollCampaignRoomPreview(CampaignDoorDifficulty difficulty)
+	{
+		bool merchantBlocked = merchantRoomsBlockedUntilMonster;
+		bool rewardBlocked = rewardRoomsBlockedUntilMonster;
+		CampaignRoomRoll roomRoll = RollCampaignRoom(difficulty);
+		merchantRoomsBlockedUntilMonster = merchantBlocked;
+		rewardRoomsBlockedUntilMonster = rewardBlocked;
+		AppendLog($"DETECTOR - porta {difficulty}: {DescribeRoomRoll(roomRoll)}");
+		return roomRoll;
 	}
 
 	private void ActivateMinibossForCurrentRoom()
 	{
 		activeComposableGolem = null;
-		activeComposableGolemPreview = null;
+		activeMedusaBoss = null;
+		activeTrentorBoss = null;
+		activeBragusBoss = null;
+		activePalatirBoss = null;
 		if (currentRoomType != RoomType.Boss || !IsCurrentRoomMinibossRoom())
 		{
 			return;
@@ -439,10 +543,33 @@ public sealed partial class BattleBoardController
 		switch (miniboss)
 		{
 		case MinibossKind.ComposableGolem:
-			activeComposableGolem = new ComposableGolem(random);
+			activeComposableGolem = CreateComposableGolemForCurrentRoom();
 			AppendLog("MINIBOSS - Golem Componibile entra nella stanza.");
 			break;
 		}
+	}
+
+	private ComposableGolem CreateComposableGolemForCurrentRoom()
+	{
+		if (retryComposableGolemForms == null || retryComposableGolemForms.Length == 0)
+			return new ComposableGolem(random);
+
+		return new ComposableGolem(
+			random,
+			ComposableGolem.DefaultHitPoints,
+			ComposableGolem.DefaultRoundsPerForm,
+			retryComposableGolemForms);
+	}
+
+	private static ComposableGolemFormStats[] SnapshotComposableGolemForms(ComposableGolem golem)
+	{
+		if (golem == null || golem.Forms == null || golem.Forms.Count == 0)
+			return null;
+
+		var snapshot = new ComposableGolemFormStats[golem.Forms.Count];
+		for (int index = 0; index < golem.Forms.Count; index++)
+			snapshot[index] = golem.Forms[index];
+		return snapshot;
 	}
 
 	private bool IsCurrentRoomMinibossRoom()
@@ -472,19 +599,180 @@ public sealed partial class BattleBoardController
 		return pool[random.NextInclusive(0, pool.Length - 1)];
 	}
 
-	private List<CardDefinition> DrawBossFormationForCurrentCombat()
+	private CpuEncounterKind CurrentCpuEncounterKind()
 	{
 		if (activeComposableGolem != null)
 		{
-			CardDefinition golemProxy = FindCardDefinition(ComposableGolemCardId);
-			if ((Object)(object)golemProxy != (Object)null)
-			{
-				return new List<CardDefinition> { golemProxy };
-			}
-			AppendLog("MINIBOSS - carta proxy Golem Componibile non trovata; disattivo il Golem e uso fallback Boss.");
-			activeComposableGolem = null;
+			return CpuEncounterKind.ComposableGolem;
 		}
-		return formationDraftService.DrawBossCandidates(cardDatabase.Cards, configuration.Progression.BossFormationSize);
+		if (activeMedusaBoss != null)
+		{
+			return CpuEncounterKind.Medusa;
+		}
+		if (activeTrentorBoss != null)
+		{
+			return CpuEncounterKind.Trentor;
+		}
+		if (activeBragusBoss != null)
+		{
+			return CpuEncounterKind.Bragus;
+		}
+		if (activePalatirBoss != null)
+		{
+			return CpuEncounterKind.Palatir;
+		}
+		return currentRoomType == RoomType.Boss
+			?CpuEncounterKind.BossFormation
+			:CpuEncounterKind.MonsterFormation;
+	}
+
+	private bool UsesBossStyleDeployment()
+	{
+		CpuEncounterKind kind = CurrentCpuEncounterKind();
+		return kind == CpuEncounterKind.BossFormation
+			|| kind == CpuEncounterKind.ComposableGolem
+			|| kind == CpuEncounterKind.Medusa
+			|| kind == CpuEncounterKind.Trentor
+			|| kind == CpuEncounterKind.Bragus
+			|| kind == CpuEncounterKind.Palatir;
+	}
+
+	private List<CardDefinition> BuildCpuFormationForCurrentCombat()
+	{
+		return CurrentCpuEncounterKind() switch
+		{
+			CpuEncounterKind.ComposableGolem => BuildComposableGolemFormation(),
+			CpuEncounterKind.Medusa => BuildMedusaFormation(),
+			CpuEncounterKind.Trentor => BuildTrentorFormation(),
+			CpuEncounterKind.Bragus => BuildBragusFormation(),
+			CpuEncounterKind.Palatir => BuildPalatirFormation(),
+			CpuEncounterKind.BossFormation => DrawStandardBossFormationForCurrentCombat(),
+			_ => DrawMonsterFormationForCurrentTier(),
+		};
+	}
+
+	private List<CardDefinition> BuildComposableGolemFormation()
+	{
+		CardDefinition golemProxy = FindCardDefinition(ComposableGolemCardId);
+		if ((Object)(object)golemProxy != (Object)null)
+		{
+			return new List<CardDefinition> { golemProxy };
+		}
+		AppendLog("MINIBOSS - carta proxy Golem Componibile non trovata; disattivo il Golem e uso fallback Boss.");
+		activeComposableGolem = null;
+		return DrawStandardBossFormationForCurrentCombat();
+	}
+
+	private List<CardDefinition> BuildMedusaFormation()
+	{
+		CardDefinition medusa = FindCardDefinition(MedusaBossCardId);
+		if ((Object)(object)medusa != (Object)null)
+		{
+			activeMedusaBoss ??= new MedusaBoss(random);
+			return new List<CardDefinition> { medusa };
+		}
+		AppendLog("BOSS MEDUSA - carta boss-medusa non trovata; uso fallback Boss.");
+		activeMedusaBoss = null;
+		return DrawStandardBossFormationForCurrentCombat();
+	}
+
+	private List<CardDefinition> BuildTrentorFormation()
+	{
+		CardDefinition trentor = FindCardDefinition(TrentorBossCardId);
+		if ((Object)(object)trentor != (Object)null)
+		{
+			activeTrentorBoss ??= new TrentorBoss(random);
+			return new List<CardDefinition> { trentor };
+		}
+		AppendLog("BOSS TRENTOR - carta trentor non trovata; uso fallback Boss.");
+		activeTrentorBoss = null;
+		return DrawStandardBossFormationForCurrentCombat();
+	}
+
+	private List<CardDefinition> BuildBragusFormation()
+	{
+		CardDefinition bragus = FindCardDefinition(BragusBossCardId);
+		if ((Object)(object)bragus != (Object)null)
+		{
+			activeBragusBoss ??= new BragusBoss(random);
+			return new List<CardDefinition> { bragus };
+		}
+		AppendLog("BOSS BRAGUS - carta boss-bragus non trovata; uso fallback Boss.");
+		activeBragusBoss = null;
+		return DrawStandardBossFormationForCurrentCombat();
+	}
+
+	private List<CardDefinition> BuildPalatirFormation()
+	{
+		CardDefinition palatir = FindCardDefinition(PalatirBossCardId);
+		if ((Object)(object)palatir != (Object)null)
+		{
+			activePalatirBoss ??= new PalatirBoss(random);
+			return new List<CardDefinition> { palatir };
+		}
+		AppendLog("BOSS PALATIR - carta boss-palatir non trovata; uso fallback Boss.");
+		activePalatirBoss = null;
+		return DrawStandardBossFormationForCurrentCombat();
+	}
+
+	private List<CardDefinition> DrawStandardBossFormationForCurrentCombat()
+	{
+		if (!string.IsNullOrWhiteSpace(campaignScenarioBossId))
+		{
+			CardDefinition scenarioBoss = FindCardDefinition(campaignScenarioBossId);
+			if ((Object)(object)scenarioBoss != (Object)null)
+			{
+				AppendLog($"BOSS SCENARIO - {scenarioBoss.DisplayName} emerge da {ActiveCampaignScenarioLabel()}.");
+				if (string.Equals(scenarioBoss.Id, TrentorBossCardId, StringComparison.OrdinalIgnoreCase))
+				{
+					activeTrentorBoss = new TrentorBoss(random);
+					return BuildTrentorFormation();
+				}
+				if (string.Equals(scenarioBoss.Id, BragusBossCardId, StringComparison.OrdinalIgnoreCase))
+				{
+					activeBragusBoss = new BragusBoss(random);
+					return BuildBragusFormation();
+				}
+				if (string.Equals(scenarioBoss.Id, PalatirBossCardId, StringComparison.OrdinalIgnoreCase))
+				{
+					activePalatirBoss = new PalatirBoss(random);
+					return BuildPalatirFormation();
+				}
+				return new List<CardDefinition> { scenarioBoss };
+			}
+			AppendLog($"BOSS SCENARIO - carta '{campaignScenarioBossId}' non trovata; uso fallback Boss.");
+		}
+		if (runProgress != null && runProgress.RoomsCleared + 1 == configuration.Progression.FinalBossRoom)
+		{
+			activeMedusaBoss = new MedusaBoss(random);
+			return BuildMedusaFormation();
+		}
+		if (ShouldForceFirstRoomMedusa())
+		{
+			activeMedusaBoss = new MedusaBoss(random);
+			return BuildMedusaFormation();
+		}
+		if (ShouldForceFirstRoomTrentor())
+		{
+			activeTrentorBoss = new TrentorBoss(random);
+			return BuildTrentorFormation();
+		}
+		if (ShouldForceFirstRoomBragus())
+		{
+			activeBragusBoss = new BragusBoss(random);
+			return BuildBragusFormation();
+		}
+		if (ShouldForceFirstRoomPalatir())
+		{
+			activePalatirBoss = new PalatirBoss(random);
+			return BuildPalatirFormation();
+		}
+		List<CardDefinition> result = formationDraftService.DrawBossCandidates(cardDatabase.Cards, configuration.Progression.BossFormationSize);
+		if (result.All((CardDefinition card) => card.Category != CardCategory.Boss))
+		{
+			AppendLog("BOSS FALLBACK - nessuna carta Boss disponibile; usato un Mostro come sostituto.");
+		}
+		return result;
 	}
 
 	private CardDefinition FindCardDefinition(string id)
@@ -496,12 +784,85 @@ public sealed partial class BattleBoardController
 		return cardDatabase.Cards.FirstOrDefault((CardDefinition card) => (Object)(object)card != (Object)null && string.Equals(card.Id, id, StringComparison.OrdinalIgnoreCase));
 	}
 
+	private string ActiveCampaignScenarioId()
+	{
+		return string.IsNullOrWhiteSpace(campaignScenarioId) ? null : campaignScenarioId;
+	}
+
+	private string ActiveCampaignScenarioLabel()
+	{
+		if ((Object)(object)scenarioCatalog == (Object)null)
+		{
+			scenarioCatalog = Resources.Load<ScenarioCatalog>("ScenarioCatalog");
+		}
+		ScenarioDefinition scenario = (Object)(object)scenarioCatalog != (Object)null
+			?scenarioCatalog.FindById(campaignScenarioId)
+			:null;
+		if ((Object)(object)scenario != (Object)null && !string.IsNullOrWhiteSpace(scenario.DisplayName))
+		{
+			return scenario.DisplayName;
+		}
+		return string.IsNullOrWhiteSpace(campaignScenarioId) ? "scenario ignoto" : campaignScenarioId;
+	}
+
 	private bool IsComposableGolemProxy(BattleCardState card)
 	{
 		return activeComposableGolem != null
 			&& card != null
 			&& !card.BelongsToPlayer
 			&& string.Equals(card.Definition.Id, ComposableGolemCardId, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private bool ShouldForceFirstRoomMedusa()
+	{
+		return debugForceFirstRoomMedusa && runProgress != null && runProgress.RoomsCleared == 0;
+	}
+
+	private bool ShouldForceFirstRoomTrentor()
+	{
+		return debugForceFirstRoomTrentor && runProgress != null && runProgress.RoomsCleared == 0;
+	}
+
+	private bool ShouldForceFirstRoomBragus()
+	{
+		return debugForceFirstRoomBragus && runProgress != null && runProgress.RoomsCleared == 0;
+	}
+
+	private bool ShouldForceFirstRoomPalatir()
+	{
+		return debugForceFirstRoomPalatir && runProgress != null && runProgress.RoomsCleared == 0;
+	}
+
+	private bool IsMedusaBossProxy(BattleCardState card)
+	{
+		return activeMedusaBoss != null
+			&& card != null
+			&& !card.BelongsToPlayer
+			&& string.Equals(card.Definition.Id, MedusaBossCardId, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private bool IsTrentorBossProxy(BattleCardState card)
+	{
+		return activeTrentorBoss != null
+			&& card != null
+			&& !card.BelongsToPlayer
+			&& string.Equals(card.Definition.Id, TrentorBossCardId, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private bool IsBragusBossProxy(BattleCardState card)
+	{
+		return activeBragusBoss != null
+			&& card != null
+			&& !card.BelongsToPlayer
+			&& string.Equals(card.Definition.Id, BragusBossCardId, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private bool IsPalatirBossProxy(BattleCardState card)
+	{
+		return activePalatirBoss != null
+			&& card != null
+			&& !card.BelongsToPlayer
+			&& string.Equals(card.Definition.Id, PalatirBossCardId, StringComparison.OrdinalIgnoreCase);
 	}
 }
 }

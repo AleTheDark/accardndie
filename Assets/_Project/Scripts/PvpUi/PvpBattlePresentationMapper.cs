@@ -24,6 +24,7 @@ namespace AccardND.PvpUi
                 HeroClass = (HeroClass)source.heroClass,
                 HasAbilityClass = source.ability > 0,
                 AbilityClass = (HeroClass)source.ability,
+                AbilityMagnitude = source.magnitude,
                 Certainty = ParseCombatCertainty(source.certainty),
                 AttackerDieSides = source.attackerDieSides,
                 DefenderDieSides = source.defenderDieSides,
@@ -32,21 +33,25 @@ namespace AccardND.PvpUi
                 AttackerRollHasSecond = source.attackerRollHasSecond,
                 AttackerRollSelected = source.attackerRollSelected,
                 AttackerRollSelectionMode = (VigorSelectionMode)source.attackerRollSelectionMode,
+                AttackerRollFirstBeforeReroll = source.attackerRollFirstBeforeReroll,
+                AttackerRollSecondBeforeReroll = source.attackerRollSecondBeforeReroll,
                 AttackerTotal = source.attackerTotal,
                 DefenderRollFirst = source.defenderRollFirst,
                 DefenderRollSecond = source.defenderRollSecond,
                 DefenderRollHasSecond = source.defenderRollHasSecond,
                 DefenderRollSelected = source.defenderRollSelected,
                 DefenderRollSelectionMode = (VigorSelectionMode)source.defenderRollSelectionMode,
+                DefenderRollFirstBeforeReroll = source.defenderRollFirstBeforeReroll,
+                DefenderRollSecondBeforeReroll = source.defenderRollSecondBeforeReroll,
                 DefenderTotal = source.defenderTotal,
                 DefenderLostLife = source.defenderLostLife,
                 DefenderEliminated = source.defenderEliminated,
                 BecameSpirit = source.becameSpirit,
-                Overkill = source.overkill
+                Overkill = source.overkill,
+                Redirected = source.redirected
             };
 
-            if (!target.HasHeroClass
-                && string.Equals(source.type, "AttackResolved", System.StringComparison.Ordinal)
+            if (string.Equals(source.type, "AttackResolved", System.StringComparison.Ordinal)
                 && TryFindHeroClass(state, source.player, source.slot, out HeroClass attackerClass))
             {
                 target.HasHeroClass = true;

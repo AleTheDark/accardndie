@@ -9,7 +9,9 @@ namespace AccardND.GameCore
             bool hasSecondRoll,
             int selectedRoll,
             MatchupResult matchup,
-            VigorSelectionMode selectionMode)
+            VigorSelectionMode selectionMode,
+            int firstRollBeforeReroll = 0,
+            int secondRollBeforeReroll = 0)
         {
             DieSides = dieSides;
             FirstRoll = firstRoll;
@@ -18,6 +20,8 @@ namespace AccardND.GameCore
             SelectedRoll = selectedRoll;
             Matchup = matchup;
             SelectionMode = selectionMode;
+            FirstRollBeforeReroll = firstRollBeforeReroll;
+            SecondRollBeforeReroll = secondRollBeforeReroll;
         }
 
         public int DieSides { get; }
@@ -27,5 +31,7 @@ namespace AccardND.GameCore
         public int SelectedRoll { get; }
         public MatchupResult Matchup { get; }
         public VigorSelectionMode SelectionMode { get; }
+        public int FirstRollBeforeReroll { get; }
+        public int SecondRollBeforeReroll { get; }
     }
 }

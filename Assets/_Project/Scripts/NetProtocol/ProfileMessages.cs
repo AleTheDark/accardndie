@@ -64,6 +64,7 @@ namespace AccardND.NetProtocol
     public sealed class CampaignKillsRequest
     {
         public string[] monsters;
+        public string[] bosses;
     }
 
     /// <summary>Icone appena sbloccate grazie ai mostri riportati.</summary>

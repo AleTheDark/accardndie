@@ -32,6 +32,7 @@ namespace AccardND.NetProtocol
         public bool AbilityUsed;
         public bool AbilityArmed;
         public int PermanentBonus;
+        public int MightAuraBonus;
         public int PendingBonus;
         public PvpPendingBonusKind PendingBonusKind;
         public int DiePenaltySteps;
@@ -268,6 +269,7 @@ namespace AccardND.NetProtocol
                     if (card != null)
                     {
                         card.PermanentBonus++;
+                        card.MightAuraBonus++;
                         AddLog($"Aura Might: {card.CardName} guadagna +1 permanente.");
                     }
                     break;
@@ -404,7 +406,7 @@ namespace AccardND.NetProtocol
             string prefix = e.isCounter ? "CONTRATTACCO: " : string.Empty;
             string outcome = e.certainty == "Impossible"
                 ? "attacco impossibile, turno perso"
-                : $"{e.attackerTotal} contro {e.defenderTotal} (D{e.attackerDieSides}/D{e.defenderDieSides})";
+                : $"{e.attackerTotal} contro {e.defenderTotal} ({FormatCombatantRoll(attacker, e.attackerDieSides, e.attackerRollFirst, e.attackerRollSecond, e.attackerRollHasSecond, e.attackerRollSelected, e.attackerRollSelectionMode)}; {FormatCombatantRoll(defender, e.defenderDieSides, e.defenderRollFirst, e.defenderRollSecond, e.defenderRollHasSecond, e.defenderRollSelected, e.defenderRollSelectionMode)})";
             string overkillTag = e.overkill ? " OVERKILL!" : string.Empty;
             string effect = !e.defenderLostLife
                 ? defender != null ? $" {defender.CardName} resiste." : string.Empty
@@ -416,12 +418,39 @@ namespace AccardND.NetProtocol
             AddLog($"{prefix}{attacker?.CardName} attacca {defender?.CardName}: {outcome}.{effect}");
         }
 
+        private static string FormatCombatantRoll(
+            PvpClientCard card,
+            int dieSides,
+            int firstRoll,
+            int secondRoll,
+            bool hasSecondRoll,
+            int selectedRoll,
+            int selectionMode)
+        {
+            string name = card?.CardName ?? "Carta";
+            string die = dieSides > 0 ? $"D{dieSides}" : "D?";
+            if (!hasSecondRoll)
+            {
+                int roll = selectedRoll > 0 ? selectedRoll : firstRoll;
+                return $"{name} {die}:{roll}";
+            }
+
+            string mode = ((VigorSelectionMode)selectionMode) switch
+            {
+                VigorSelectionMode.Highest => "max",
+                VigorSelectionMode.Lowest => "min",
+                VigorSelectionMode.Sum => "somma",
+                _ => "risultato"
+            };
+            return $"{name} {die}[{firstRoll},{secondRoll}] {mode}:{selectedRoll}";
+        }
+
         private static void MarkAbilityState(PvpClientCard actor, HeroClass ability)
         {
             if (actor == null)
                 return;
 
-            if (ability is HeroClass.Warrior or HeroClass.Paladin)
+            if (ability is HeroClass.Warrior or HeroClass.Rogue or HeroClass.Paladin)
                 actor.AbilityArmed = true;
             else
                 actor.AbilityUsed = true;

@@ -15,6 +15,7 @@ MonoBehaviour:
   id: god_merchant
   displayName: Mercante Divino
   background: {fileID: 21300000, guid: 75d349bf95279984782c3562ab6f8988, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: 4c11b3621173e8b4192da02097c39a7c, type: 3}
   roomType: 3
   difficulty: 3
   bossId: 

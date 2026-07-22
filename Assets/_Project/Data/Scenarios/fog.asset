@@ -15,6 +15,7 @@ MonoBehaviour:
   id: fog
   displayName: Nebbia
   background: {fileID: 21300000, guid: 57a9f416dfdd43e4cb220366f9d9b8c3, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: 4281d6d4c7a65e54a92110716c927c12, type: 3}
   roomType: 2
   difficulty: 0
-  bossId: 
+  bossId: boss-bragus

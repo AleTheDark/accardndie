@@ -143,14 +143,14 @@ namespace AccardND.GameCore
                 : modifiers.NeutralizeAttackerMatchup
                     ? MatchupResult.Neutral
                     : ClassMatchup.Compare(attacker.HeroClass, defender.HeroClass);
-            bool attackerRerollsOnes = modifiers.RerollAttackerOnes || attacker.HeroClass == HeroClass.Rogue;
             List<int> attackerOutcomes = modifiers.SumAttackerVigor
-                ? EnumerateSumOutcomes(attackerVigorDieSides, attackerRerollsOnes, modifiers.RerollAttackerTwos)
-                : EnumerateVigorOutcomes(attackerVigorDieSides, attackerMatchup, attackerRerollsOnes, modifiers.RerollAttackerTwos);
+                ? EnumerateSumOutcomes(attackerVigorDieSides, modifiers.RerollAttackerOnes, modifiers.RerollAttackerTwos)
+                : EnumerateVigorOutcomes(attackerVigorDieSides, attackerMatchup, modifiers.RerollAttackerOnes, modifiers.RerollAttackerTwos);
             List<int> defenderOutcomes = EnumerateVigorOutcomes(
                 defenderVigorDieSides,
                 modifiers.DefenderAdvantage ? MatchupResult.Advantage : MatchupResult.Neutral,
-                false);
+                modifiers.RerollDefenderOnes,
+                modifiers.RerollDefenderTwos);
 
             long victories = 0;
             long combinations = (long)attackerOutcomes.Count * defenderOutcomes.Count;
@@ -223,9 +223,7 @@ namespace AccardND.GameCore
             List<int> rolls = EnumerateSingleDieOutcomes(dieSides, rerollOnes, rerollTwos);
             var outcomes = new List<int>();
             if (matchup == MatchupResult.Neutral)
-            {
                 return rolls;
-            }
 
             foreach (int first in rolls)
             {

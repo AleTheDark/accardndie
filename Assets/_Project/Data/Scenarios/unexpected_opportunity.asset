@@ -15,6 +15,7 @@ MonoBehaviour:
   id: unexpected_opportunity
   displayName: "Imprevisto o Opportunit\xE0"
   background: {fileID: 21300000, guid: 19957878fadd5b14c8b4a723da4d5720, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: 221ab01fb7761c04ca97401168c6dc2d, type: 3}
   roomType: 5
   difficulty: 0
   bossId: 

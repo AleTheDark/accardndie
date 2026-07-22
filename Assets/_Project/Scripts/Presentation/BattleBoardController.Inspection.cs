@@ -41,6 +41,7 @@ public sealed partial class BattleBoardController
 			ClearInspectionStatusRows();
 			inspectedCardView = PrototypeCardView.Create((Transform)(object)cardInspectionSlot, definition, configuration);
 			inspectedCardView.SetInteractable(interactable: false);
+			inspectedCardView.ClearActionOverlay();
 			Stretch(inspectedCardView.RectTransform);
 			AspectRatioFitter aspectRatioFitter = ((Component)inspectedCardView).gameObject.AddComponent<AspectRatioFitter>();
 			aspectRatioFitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
@@ -50,6 +51,8 @@ public sealed partial class BattleBoardController
 				inspectedCardView.SetStrengthValue(DisplayStrength(state));
 			}
 			UpdateCardInspectionSummary(definition, state);
+			HideCardInspectionDraftConfirm();
+			PauseGameForCardInspection();
 			cardInspectionPanel.SetActive(true);
 			PlayCardInspectionOpenSfx();
 			if ((Object)(object)cardInspectionCloseButton != (Object)null)
@@ -66,28 +69,87 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		int num = ((state != null) ?DisplayStrength(state) : definition.Strength);
-		string text = ((state != null && num != definition.Strength) ?$"Forza: {definition.Strength} -> {num}" : $"Forza: {definition.Strength}");
-		string text2 = (definition.HasHeroClass ?CardRulesGlossary.HeroClassName(definition.HeroClass) : "Nessuna");
-		string text3 = "Famiglia: Nessuna";
-		string auraText = "Aura di famiglia: Nessuna\nAura di classe: Nessuna";
+		string strengthText = ((state != null && num != definition.Strength) ?$"Potenza: {definition.Strength} -> {num}" : $"Potenza: {definition.Strength}");
+		string familyText = "Famiglia: Nessuna";
+		string classText = "Classe: Nessuna";
+		string advantageText = "Vantaggio contro Nessuno";
+		string disadvantageText = "Svantaggio contro Nessuno";
+		string familyAuraLabel = "AURA FAMIGLIA NESSUNA";
+		string familyAuraDescription = "Nessuna aura di famiglia.";
+		string classAuraLabel = "AURA CLASSE NESSUNA";
+		string classAuraDescription = "Nessuna aura di classe.";
+		BattleAuraType familyAura = BattleAuraType.None;
+		BattleAuraType classAura = BattleAuraType.None;
+		bool isBossOrMiniboss = IsBossOrMinibossInspectionCard(definition);
 		if (definition.HasHeroClass)
 		{
 			ClassFamily classFamily = HeroClassFamily.Of(definition.HeroClass);
-			text3 = "Famiglia: " + CardRulesGlossary.ClassFamilyName(classFamily) + "\nVantaggio contro: " + CardRulesGlossary.ClassFamilyName(StrongAgainst(classFamily)) + "\nSvantaggio contro: " + CardRulesGlossary.ClassFamilyName(WeakAgainst(classFamily));
-			auraText = "Aura di famiglia: " + CardRulesGlossary.ClassFamilyName(classFamily) + " - " + FamilyAuraSummary(classFamily) + "\nAura di classe: " + CardRulesGlossary.HeroClassName(definition.HeroClass) + " - " + ClassAuraSummary(definition.HeroClass);
+			familyAura = FamilyAuraFor(classFamily);
+			classAura = ClassAuraFor(definition.HeroClass);
+			familyText = "Famiglia: " + CardRulesGlossary.ClassFamilyName(classFamily);
+			classText = "Classe: " + CardRulesGlossary.HeroClassName(definition.HeroClass);
+			advantageText = "Vantaggio contro " + CardRulesGlossary.ClassFamilyName(StrongAgainst(classFamily));
+			ClassFamily weakAgainst = IsBragusInspectionCard(definition) ? ClassFamily.Cunning : WeakAgainst(classFamily);
+			disadvantageText = "Svantaggio contro " + CardRulesGlossary.ClassFamilyName(weakAgainst);
+			familyAuraLabel = AuraInspectionLabel(familyAura);
+			familyAuraDescription = FamilyAuraSummary(classFamily);
+			classAuraLabel = AuraInspectionLabel(classAura);
+			classAuraDescription = ClassAuraSummary(definition.HeroClass);
 		}
+		List<InspectionStatusDetail> ruleDetails = new List<InspectionStatusDetail>();
 		List<InspectionStatusDetail> statusDetails = BuildInspectionStatusDetails(state);
-		string equipText = ShouldShowEquipSummary(definition, state)
-			?$"\n\nEQUIPAGGIA: questa carta puo essere sacrificata per potenziare un alleato di +{AttachmentBonusForInspection(definition, state)} permanentemente."
-			:string.Empty;
-		string rulesText = definition.HasHeroClass && !string.IsNullOrWhiteSpace(definition.RulesText)
+		bool fieldInspection = state != null;
+		bool showPrintedRules = !string.IsNullOrWhiteSpace(definition.RulesText)
+			&& (!fieldInspection || isBossOrMiniboss);
+		string rulesText = showPrintedRules
 			?"\n\nRegole:\n" + definition.RulesText
 			:string.Empty;
-		cardInspectionSummaryText.text = definition.DisplayName + "\n" + text + "\nClasse: " + text2 + "\n" + text3 + "\n" + auraText + "\n\n" + CardAbilitySummary(definition) + equipText + rulesText + (statusDetails.Count > 0 ? "\n\nStatus attivi:" : string.Empty);
+		cardInspectionSummaryText.resizeTextMinSize = isBossOrMiniboss ? 15 : 20;
+		cardInspectionSummaryText.resizeTextMaxSize = isBossOrMiniboss ? 30 : 34;
+		if (!fieldInspection && !isBossOrMiniboss)
+		{
+			ruleDetails.Add(new InspectionStatusDetail(familyAuraLabel, familyAuraDescription, AuraColor(familyAura)));
+			ruleDetails.Add(new InspectionStatusDetail(classAuraLabel, classAuraDescription, AuraColor(classAura)));
+			ruleDetails.Add(new InspectionStatusDetail(CardAbilityInspectionLabel(definition), CardAbilityInspectionDescription(definition), new Color(1f, 0.78f, 0.24f)));
+		}
+		else if (fieldInspection && ShouldShowFieldAbilitySummary(definition, state))
+		{
+			ruleDetails.Add(new InspectionStatusDetail(CardAbilityInspectionLabel(definition), CardAbilityInspectionDescription(definition), new Color(1f, 0.78f, 0.24f)));
+		}
+		if (ShouldShowEquipSummary(definition, state))
+		{
+			ruleDetails.Add(new InspectionStatusDetail(
+				"EQUIPAGGIA",
+				$"Questa carta puo essere sacrificata per potenziare un alleato di +{AttachmentBonusForInspection(definition, state)} permanentemente. Se l'alleato equipaggiato muore, muore anche questa carta.",
+				new Color(1f, 0.62f, 0.2f)));
+		}
+		cardInspectionSummaryText.text = strengthText + "\n" + familyText + "\n" + classText
+			+ "\n\n" + advantageText + "\n" + disadvantageText
+			+ rulesText;
+		foreach (InspectionStatusDetail item in ruleDetails)
+		{
+			CreateInspectionStatusRow(item);
+		}
+		if (statusDetails.Count > 0)
+		{
+			CreateInspectionStatusHeader();
+		}
 		foreach (InspectionStatusDetail item in statusDetails)
 		{
 			CreateInspectionStatusRow(item);
 		}
+	}
+
+	private static bool IsBossOrMinibossInspectionCard(CardDefinition definition)
+	{
+		return (Object)(object)definition != (Object)null
+			&& definition.Category == CardCategory.Boss;
+	}
+
+	private static bool IsBragusInspectionCard(CardDefinition definition)
+	{
+		return (Object)(object)definition != (Object)null
+			&& string.Equals(definition.Id, BragusBossCardId, StringComparison.OrdinalIgnoreCase);
 	}
 
 	private string CardAbilitySummary(CardDefinition definition)
@@ -102,6 +164,43 @@ public sealed partial class BattleBoardController
 		}
 		string description = CardRulesGlossary.AbilityDescription(definition.HeroClass, configuration.ClassBalance);
 		return CardRulesGlossary.AbilityTitle(definition.HeroClass) + ":\n" + description;
+	}
+
+	private static string CardAbilityInspectionLabel(CardDefinition definition)
+	{
+		if ((Object)(object)definition == (Object)null || !definition.HasHeroClass)
+		{
+			return "ABILITA'";
+		}
+		string prefix = IsPassiveClassAbility(definition.HeroClass) ? "ABILITA' PASSIVA " : "ABILITA' ";
+		return prefix + CardRulesGlossary.HeroClassName(definition.HeroClass).ToUpperInvariant();
+	}
+
+	private string CardAbilityInspectionDescription(CardDefinition definition)
+	{
+		if ((Object)(object)definition == (Object)null || !definition.HasHeroClass)
+		{
+			return !string.IsNullOrWhiteSpace(definition?.RulesText)
+				? definition.RulesText
+				: "Nessuna abilita di combattimento.";
+		}
+		if (definition.HeroClass == HeroClass.Assassin)
+		{
+			return "Fai saltare il turno di gioco ad una carta avversaria";
+		}
+		string description = CardRulesGlossary.AbilityDescription(definition.HeroClass, configuration.ClassBalance);
+		const string passivePrefix = "Abilita passiva: ";
+		if (IsPassiveClassAbility(definition.HeroClass) && description.StartsWith(passivePrefix, StringComparison.OrdinalIgnoreCase))
+		{
+			description = description.Substring(passivePrefix.Length);
+		}
+		return description;
+	}
+
+	private static bool IsPassiveClassAbility(HeroClass heroClass)
+	{
+		return heroClass == HeroClass.Barbarian
+			|| heroClass == HeroClass.Rogue;
 	}
 
 	private static string HeroClassDisplayName(HeroClass heroClass)
@@ -178,18 +277,36 @@ public sealed partial class BattleBoardController
 	{
 		if (state != null)
 		{
-			return CanUseAttachment(state);
+			return CanUseAttachment(state) || IsEquipCapableInspectionCard(definition, state);
 		}
-		return definition != null && definition.CanEnterCombat && definition.Strength >= 2 && definition.Strength < 5;
+		return IsEquipCapableInspectionCard(definition, state);
 	}
 
 	private static int AttachmentBonusForInspection(CardDefinition definition, BattleCardState state)
 	{
 		if (state != null)
 		{
-			return AttachmentBonus(state);
+			return state.Card != null ?5 - state.Card.Strength : 0;
 		}
 		return definition != null ?5 - definition.Strength : 0;
+	}
+
+	private bool ShouldShowFieldAbilitySummary(CardDefinition definition, BattleCardState state)
+	{
+		if ((Object)(object)definition == (Object)null || state == null || IsBossOrMinibossInspectionCard(definition))
+		{
+			return false;
+		}
+		return definition.HasHeroClass && (state.Eliminated || IsPassiveClassAbility(definition.HeroClass) || IsClassAbilityActionAvailable(state));
+	}
+
+	private static bool IsEquipCapableInspectionCard(CardDefinition definition, BattleCardState state)
+	{
+		if (state != null && state.Card != null)
+		{
+			return state.Card.Strength >= 2 && state.Card.Strength < 5;
+		}
+		return definition != null && definition.CanEnterCombat && definition.Strength >= 2 && definition.Strength < 5;
 	}
 
 	private List<InspectionStatusDetail> BuildInspectionStatusDetails(BattleCardState state)
@@ -235,11 +352,15 @@ public sealed partial class BattleBoardController
 		}
 		if (state.PermanentCombatBonus > 0)
 		{
-			list.Add(new InspectionStatusDetail($"FORZA +{state.PermanentCombatBonus}", "Bonus permanente alla Forza in questa battaglia.", new Color(0.7f, 1f, 0.45f)));
+			list.Add(new InspectionStatusDetail($"POTENZA AGGIUNTIVA DA EQUIPAGGIAMENTO +{state.PermanentCombatBonus}", "Bonus permanente ottenuto equipaggiando una carta sacrificata.", new Color(0.7f, 1f, 0.45f)));
+		}
+		if (state.MightAuraCombatBonus > 0)
+		{
+			list.Add(new InspectionStatusDetail($"AURA FORZUTA DA MORTE +{state.MightAuraCombatBonus}", "Bonus permanente ottenuto perche una pedina e morta mentre questa carta e sotto aura Forzuta.", new Color(1f, 0.16f, 0.12f)));
 		}
 		if (state.PermanentCombatBonus < 0)
 		{
-			list.Add(new InspectionStatusDetail(state.PermanentCombatBonus.ToString(), "Malus permanente alla forza in questa battaglia.", new Color(1f, 0.42f, 0.42f)));
+			list.Add(new InspectionStatusDetail($"FORZA {state.PermanentCombatBonus}", "Malus permanente alla forza in questa battaglia.", new Color(1f, 0.42f, 0.42f)));
 		}
 		if (state.PendingAttackBonus > 0)
 		{
@@ -277,20 +398,41 @@ public sealed partial class BattleBoardController
 	{
 		return aura switch
 		{
-			BattleAuraType.Might => "Se un eroe Forza attacca e non elimina il bersaglio, ottiene +1 permanente.", 
-			BattleAuraType.Cunning => "Gli eroi Astuzia hanno vantaggio contro nemici marcati o inibiti.", 
-			BattleAuraType.Magic => "Gli eroi Magia difendono con il dado Vigore aumentato di una taglia.", 
+			BattleAuraType.Might => "Quando muore una pedina qualsiasi, ogni carta con aura Forzuta attiva acquisisce +1 permanente.",
+			BattleAuraType.Cunning => "Le tue carte Astuta attaccano sempre con vantaggio i nemici che hanno bonus o malus.",
+			BattleAuraType.Magic => "Le tue carte Magica si difendono con un dado piu forte, esempio: Se ho un D6 mi difendo con un D8.",
 			BattleAuraType.Formation => "Annulla lo svantaggio in attacco.", 
 			BattleAuraType.Warrior => "I Guerrieri con abilita pronta attaccano con +1.", 
 			BattleAuraType.Barbarian => "Furia del Barbaro vale +1 extra.", 
-			BattleAuraType.Paladin => "La protezione del Paladino diventa piu efficace.", 
-			BattleAuraType.Rogue => "I Ladri possono ritirare anche i 2 in attacco.", 
-			BattleAuraType.Assassin => "Gli Assassini controllano meglio i bersagli inibiti.", 
+			BattleAuraType.Paladin => "Quando un Paladino sopravvive ad una difesa, contrattacca con +1.",
+			BattleAuraType.Rogue => "I Ladri ritirano una volta per dado se esce 1 o 2, in attacco e in difesa.",
+			BattleAuraType.Assassin => "Quando un Assassino inibisce un nemico, quel nemico subisce anche -1 permanente.",
 			BattleAuraType.Hunter => "I Bersagli marcati dal Cacciatore valgono +4. Il bonus non si somma.", 
 			BattleAuraType.Mage => "Il Mago riduce di una taglia il dado Vigore nemico.", 
-			BattleAuraType.Necromancer => "I caduti restano Spiriti fino al loro turno, prima di essere eliminati.", 
+			BattleAuraType.Necromancer => "La prima volta che un tuo alleato viene ucciso, resta in campo per un ultimo turno.",
 			BattleAuraType.Priest => "Le Benedizioni del Sacerdote danno un bonus maggiore.", 
 			_ => "Aura attiva sulla carta.", 
+		};
+	}
+
+	private static string AuraInspectionLabel(BattleAuraType aura)
+	{
+		return aura switch
+		{
+			BattleAuraType.Might => "AURA FAMIGLIA FORTUZA",
+			BattleAuraType.Cunning => "AURA FAMIGLIA ASTUTA",
+			BattleAuraType.Magic => "AURA FAMIGLIA MAGICA",
+			BattleAuraType.Formation => "AURA FORMAZIONE",
+			BattleAuraType.Warrior => "AURA CLASSE GUERRIERO",
+			BattleAuraType.Barbarian => "AURA CLASSE BARBARO",
+			BattleAuraType.Paladin => "AURA CLASSE PALADINO",
+			BattleAuraType.Rogue => "AURA CLASSE LADRO",
+			BattleAuraType.Assassin => "AURA CLASSE ASSASSINO",
+			BattleAuraType.Hunter => "AURA CLASSE CACCIATORE",
+			BattleAuraType.Mage => "AURA CLASSE MAGO",
+			BattleAuraType.Necromancer => "AURA CLASSE NECROMANTE",
+			BattleAuraType.Priest => "AURA CLASSE SACERDOTE",
+			_ => "AURA",
 		};
 	}
 
@@ -306,8 +448,8 @@ public sealed partial class BattleBoardController
 			});
 			val.transform.SetParent((Transform)(object)cardInspectionStatusRoot, false);
 			LayoutElement component = val.GetComponent<LayoutElement>();
-			component.minHeight = 74f;
-			component.preferredHeight = 88f;
+			component.minHeight = 82f;
+			component.preferredHeight = 96f;
 			HorizontalLayoutGroup component2 = val.GetComponent<HorizontalLayoutGroup>();
 			component2.spacing = 10f;
 			component2.childAlignment = (TextAnchor)0;
@@ -321,24 +463,44 @@ public sealed partial class BattleBoardController
 			image.preserveAspect = true;
 			image.raycastTarget = false;
 			LayoutElement layoutElement = ((Component)image).gameObject.AddComponent<LayoutElement>();
-			layoutElement.minWidth = 50f;
-			layoutElement.preferredWidth = 50f;
-			layoutElement.minHeight = 50f;
-			layoutElement.preferredHeight = 50f;
-			Text text = CreateText("Description", val.transform, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), 18, (FontStyle)1, (TextAnchor)0);
+			bool abilityRow = status.Label.StartsWith("ABILITA", StringComparison.OrdinalIgnoreCase);
+			bool attachmentRow = status.Label.StartsWith("EQUIPAGGIA", StringComparison.OrdinalIgnoreCase);
+			float iconSize = (abilityRow || attachmentRow) ?54f :44f;
+			layoutElement.minWidth = iconSize;
+			layoutElement.preferredWidth = iconSize;
+			layoutElement.minHeight = iconSize;
+			layoutElement.preferredHeight = iconSize;
+			Text text = CreateText("Description", val.transform, AccardND.Battlefield.MmoUiTheme.BodyFont, 30, (FontStyle)1, (TextAnchor)0);
 			text.color = new Color(0.16f, 0.085f, 0.025f);
 			text.horizontalOverflow = (HorizontalWrapMode)0;
 			text.verticalOverflow = (VerticalWrapMode)0;
 			text.resizeTextForBestFit = true;
-			text.resizeTextMinSize = 13;
-			text.resizeTextMaxSize = 18;
-			text.text = status.Label + ": " + status.Description;
+			text.resizeTextMinSize = 20;
+			text.resizeTextMaxSize = 30;
+			text.text = status.Label + ":\n" + status.Description;
 			LayoutElement layoutElement2 = ((Component)text).gameObject.AddComponent<LayoutElement>();
 			layoutElement2.minWidth = 0f;
 			layoutElement2.preferredWidth = 620f;
 			layoutElement2.flexibleWidth = 1f;
 			cardInspectionStatusRows.Add(val);
 		}
+	}
+
+	private void CreateInspectionStatusHeader()
+	{
+		if ((Object)(object)cardInspectionStatusRoot == (Object)null)
+		{
+			return;
+		}
+		Text text = CreateText("Inspection Status Header", (Transform)(object)cardInspectionStatusRoot, AccardND.Battlefield.MmoUiTheme.BodyFont, 30, (FontStyle)1, (TextAnchor)0);
+		text.color = new Color(0.16f, 0.085f, 0.025f);
+		text.horizontalOverflow = (HorizontalWrapMode)0;
+		text.verticalOverflow = (VerticalWrapMode)1;
+		text.text = "Status attivi:";
+		LayoutElement layoutElement = ((Component)text).gameObject.AddComponent<LayoutElement>();
+		layoutElement.minHeight = 34f;
+		layoutElement.preferredHeight = 40f;
+		cardInspectionStatusRows.Add(((Component)text).gameObject);
 	}
 
 	private void ClearInspectionStatusRows()
@@ -355,7 +517,15 @@ public sealed partial class BattleBoardController
 
 	private void CloseCardInspection()
 	{
+		CloseCardInspection(playSfx: true);
+	}
+
+	private void CloseCardInspection(bool playSfx)
+	{
 		bool wasOpen = (Object)(object)cardInspectionPanel != (Object)null && cardInspectionPanel.activeSelf;
+		inspectedInitialDraftOfferIndex = -1;
+		inspectedCampaignConsumableActive = false;
+		HideCardInspectionDraftConfirm();
 		if ((Object)(object)inspectedCardView != (Object)null)
 		{
 			Object.Destroy((Object)(object)((Component)inspectedCardView).gameObject);
@@ -366,10 +536,11 @@ public sealed partial class BattleBoardController
 		{
 			cardInspectionPanel.SetActive(false);
 		}
-		if (wasOpen)
+		if (wasOpen && playSfx)
 		{
-			PlayCardInspectionCloseSfx();
+			PlayCardInspectionOpenSfx();
 		}
+		ResumeGameAfterCardInspection();
 		if (pvpPresentationActive)
 		{
 			RenderPvpMatch();
@@ -377,6 +548,50 @@ public sealed partial class BattleBoardController
 		else if (playerCards.Count > 0 || cpuCards.Count > 0)
 		{
 			UpdateInteractions();
+		}
+	}
+
+	private void HideCardInspectionDraftConfirm()
+	{
+		if ((Object)(object)cardInspectionDraftConfirmButton != (Object)null)
+		{
+			((Component)cardInspectionDraftConfirmButton).gameObject.SetActive(false);
+		}
+	}
+
+	private void PauseGameForCardInspection()
+	{
+		if (cardInspectionPausedGame)
+		{
+			return;
+		}
+
+		cardInspectionPreviousTimeScale = Time.timeScale;
+		Time.timeScale = 0f;
+		cardInspectionPausedGame = true;
+	}
+
+	private void ResumeGameAfterCardInspection()
+	{
+		if (!cardInspectionPausedGame)
+		{
+			return;
+		}
+
+		Time.timeScale = cardInspectionPreviousTimeScale;
+		cardInspectionPausedGame = false;
+	}
+
+	private IEnumerator WaitForCardInspectionPause(float seconds)
+	{
+		float elapsed = 0f;
+		while (elapsed < seconds)
+		{
+			if (!cardInspectionPausedGame)
+			{
+				elapsed += Time.unscaledDeltaTime;
+			}
+			yield return null;
 		}
 	}
 }

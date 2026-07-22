@@ -15,6 +15,7 @@ MonoBehaviour:
   id: loot
   displayName: Ricompensa
   background: {fileID: 21300000, guid: 94b16812bc0f965498f46cbb9005c9fa, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: 4719d6413334a8e4bb9575fac964f578, type: 3}
   roomType: 4
   difficulty: 0
   bossId: 

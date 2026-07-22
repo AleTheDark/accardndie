@@ -19,15 +19,30 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void CompleteMinibossRoom_AwardsOnlyTheFlatReward()
+        {
+            var progress = CreateProgress();
+
+            RoomReward reward = progress.CompleteMinibossRoom(50);
+
+            Assert.That(reward.RoomExperience, Is.EqualTo(50));
+            Assert.That(reward.DefeatedMonsterExperience, Is.Zero);
+            Assert.That(reward.TotalExperience, Is.EqualTo(50));
+            Assert.That(progress.CurrentExperience, Is.EqualTo(50));
+            Assert.That(progress.RoomsCleared, Is.EqualTo(1));
+        }
+
+        [Test]
         public void ExperienceLevelsUpAndChangesVigorDie()
         {
             var progress = CreateProgress();
 
-            progress.CompleteMonsterRoom(new[] { 90 });
+            progress.CompleteMonsterRoom(new[] { 40 });
 
             Assert.That(progress.PlayerLevel, Is.EqualTo(2));
             Assert.That(progress.CurrentExperience, Is.Zero);
             Assert.That(progress.PlayerVigorDieSides, Is.EqualTo(6));
+            Assert.That(progress.ExperiencePerLevel, Is.EqualTo(75));
         }
 
         [Test]
@@ -58,12 +73,12 @@ namespace AccardND.GameCore.Tests
         public void SpendableExperienceCanBeAddedWithoutReducingLevelProgress()
         {
             var progress = CreateProgress();
-            progress.CompleteNonCombatRoom(50);
+            progress.CompleteNonCombatRoom(40);
 
             progress.AddSpendableExperience(12);
 
-            Assert.That(progress.AvailableExperience, Is.EqualTo(62));
-            Assert.That(progress.CurrentExperience, Is.EqualTo(50));
+            Assert.That(progress.AvailableExperience, Is.EqualTo(52));
+            Assert.That(progress.CurrentExperience, Is.EqualTo(40));
             Assert.That(progress.PlayerLevel, Is.EqualTo(1));
         }
 
@@ -71,15 +86,29 @@ namespace AccardND.GameCore.Tests
         public void AddedExperienceIncreasesSpendableAndCanLevelUpWithoutClearingRoom()
         {
             var progress = CreateProgress();
-            progress.CompleteNonCombatRoom(90);
+            progress.CompleteNonCombatRoom(40);
 
             int levelsGained = progress.AddExperience(12);
 
             Assert.That(levelsGained, Is.EqualTo(1));
             Assert.That(progress.PlayerLevel, Is.EqualTo(2));
             Assert.That(progress.CurrentExperience, Is.EqualTo(2));
-            Assert.That(progress.AvailableExperience, Is.EqualTo(102));
+            Assert.That(progress.AvailableExperience, Is.EqualTo(52));
             Assert.That(progress.RoomsCleared, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void VariableExperienceThresholdsLevelUpInOrder()
+        {
+            var progress = CreateProgress();
+
+            int levelsGained = progress.AddExperience(127);
+
+            Assert.That(levelsGained, Is.EqualTo(2));
+            Assert.That(progress.PlayerLevel, Is.EqualTo(3));
+            Assert.That(progress.CurrentExperience, Is.EqualTo(2));
+            Assert.That(progress.ExperiencePerLevel, Is.EqualTo(100));
+            Assert.That(progress.PlayerVigorDieSides, Is.EqualTo(8));
         }
 
         [Test]
@@ -87,9 +116,9 @@ namespace AccardND.GameCore.Tests
         {
             var progression = new ProgressionConfiguration();
 
-            int[] dice = progression.BuildVigorDiceByLevel(6);
+            int[] dice = progression.BuildVigorDiceByLevel(4);
 
-            Assert.That(dice[0], Is.EqualTo(6));
+            Assert.That(dice[0], Is.EqualTo(4));
             Assert.That(dice[1], Is.EqualTo(6));
             Assert.That(dice[2], Is.EqualTo(8));
         }
@@ -109,7 +138,7 @@ namespace AccardND.GameCore.Tests
 
         private static RunProgressState CreateProgress()
         {
-            return new RunProgressState(100, 10, 6, 5, new[] { 4, 6, 8, 10, 12, 20 });
+            return new RunProgressState(new[] { 50, 75, 100, 125, 150 }, 10, 6, 5, new[] { 4, 6, 8, 10, 12, 20 });
         }
     }
 }

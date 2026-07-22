@@ -82,11 +82,15 @@ namespace AccardND.NetProtocol
         public bool attackerRollHasSecond;
         public int attackerRollSelected;
         public int attackerRollSelectionMode;
+        public int attackerRollFirstBeforeReroll;
+        public int attackerRollSecondBeforeReroll;
         public int defenderRollFirst;
         public int defenderRollSecond;
         public bool defenderRollHasSecond;
         public int defenderRollSelected;
         public int defenderRollSelectionMode;
+        public int defenderRollFirstBeforeReroll;
+        public int defenderRollSecondBeforeReroll;
         public int attackerTotal;
         public int defenderTotal;
         public bool defenderLostLife;

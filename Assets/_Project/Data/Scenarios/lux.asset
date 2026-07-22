@@ -15,6 +15,7 @@ MonoBehaviour:
   id: lux
   displayName: Illuminata
   background: {fileID: 21300000, guid: 12a48bcf46517f8459a652e80eaabb8d, type: 3}
+  backgroundLandscape: {fileID: 0}
   roomType: 2
   difficulty: 0
   bossId: zakhar

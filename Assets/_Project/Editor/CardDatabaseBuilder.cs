@@ -10,18 +10,12 @@ using UnityEngine;
 
 namespace AccardND.Editor
 {
-    [InitializeOnLoad]
     public static class CardDatabaseBuilder
     {
         private const string ArtRoot = "Assets/_Project/Art/Cards";
         private const string DataRoot = "Assets/_Project/Data/Cards";
         private const string ResourcesRoot = "Assets/_Project/Resources";
         private const string DatabasePath = ResourcesRoot + "/CardDatabase.asset";
-
-        static CardDatabaseBuilder()
-        {
-            EditorApplication.delayCall += Rebuild;
-        }
 
         [MenuItem("Accard N' Die/Rebuild Card Database", priority = 20)]
         public static void Rebuild()
@@ -184,7 +178,14 @@ namespace AccardND.Editor
             }
 
             bool hasClass = TryParseHeroClass(tokens.LastOrDefault(), out HeroClass heroClass);
-            int lastNameToken = hasClass ? tokens.Length - 1 : tokens.Length;
+            bool classComesFromToken = hasClass;
+            if (string.Equals(id, "boss-medusa", StringComparison.OrdinalIgnoreCase))
+            {
+                hasClass = true;
+                classComesFromToken = false;
+                heroClass = HeroClass.Mage;
+            }
+            int lastNameToken = classComesFromToken ? tokens.Length - 1 : tokens.Length;
             string displayName = BuildDisplayName(tokens, firstNameToken, lastNameToken, rawName, category);
 
             return new ImportedCard(id, displayName, category, artwork, strength, hasClass, heroClass);

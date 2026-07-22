@@ -214,6 +214,32 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void MightAura_WhenAnyPawnDiesBoostsAllActiveMightAuraCards()
+        {
+            var engine = BattleReadyEngine(
+                UniformLoadout("p0", HeroClass.Warrior, 10),
+                UniformLoadout("p1", HeroClass.Warrior, 1),
+                out var setupEvents);
+            Assert.That(setupEvents.OfType<BattleStartedEvent>().Single().AuraPlayer0,
+                Is.EqualTo(PvpAuraType.Might));
+            Assert.That(setupEvents.OfType<BattleStartedEvent>().Single().AuraPlayer1,
+                Is.EqualTo(PvpAuraType.Might));
+
+            var events = engine.Attack(0, 0).ToList();
+            Assert.That(events.OfType<AttackResolvedEvent>().Single().DefenderEliminated, Is.True);
+
+            CollectionAssert.AreEquivalent(
+                new[] { (0, 0), (0, 1), (0, 2), (1, 1), (1, 2) },
+                events.OfType<MightAuraBonusEvent>().Select(e => (e.Player, e.Slot)));
+            Assert.That(engine.BoardOf(0)[0].PermanentCombatBonus, Is.EqualTo(1));
+            Assert.That(engine.BoardOf(0)[1].PermanentCombatBonus, Is.EqualTo(1));
+            Assert.That(engine.BoardOf(0)[2].PermanentCombatBonus, Is.EqualTo(1));
+            Assert.That(engine.BoardOf(1)[0].PermanentCombatBonus, Is.EqualTo(0));
+            Assert.That(engine.BoardOf(1)[1].PermanentCombatBonus, Is.EqualTo(1));
+            Assert.That(engine.BoardOf(1)[2].PermanentCombatBonus, Is.EqualTo(1));
+        }
+
+        [Test]
         public void Battle_UsesDeploymentInitiativesInDescendingOrderWithoutReroll()
         {
             var random = QueueFor(
@@ -278,6 +304,58 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void CunningAura_AttacksWithAdvantageAgainstEnemiesWithBonusOrMalus()
+        {
+            // P0: Rogue, Assassin, Hunter -> aura famiglia Astuzia.
+            var loadout0 = UniformLoadout("p0", HeroClass.Rogue, 5);
+            loadout0[1] = Card(HeroClass.Assassin, 5, "p0-assassin");
+            loadout0[2] = Card(HeroClass.Hunter, 5, "p0-hunter");
+            var loadout1 = UniformLoadout("p1", HeroClass.Warrior, 5);
+            loadout1[0] = Card(HeroClass.Warrior, 2, "p1-attachment-source");
+            var random = QueueFor(
+                IdentityShuffles(),
+                DeploymentAndInitiatives(new[] { 20, 19, 18 }, new[] { 21, 5, 4 }),
+                Enumerable.Repeat(3, 100));
+            var engine = new PvpMatchEngine(loadout0, loadout1, PvpMatchRules.CreateDefault(), random);
+            var events = new List<PvpEvent>(engine.Start());
+            events.AddRange(DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 }));
+
+            Assert.That(events.OfType<BattleStartedEvent>().Single().AuraPlayer0, Is.EqualTo(PvpAuraType.Cunning));
+            engine.Attach(1, 1);
+            Assert.That(engine.BoardOf(1)[1].PermanentCombatBonus, Is.EqualTo(3));
+
+            var attack = engine.Attack(0, 1).OfType<AttackResolvedEvent>().First(e => !e.IsCounter);
+            Assert.That(attack.AttackerRoll.Matchup, Is.EqualTo(MatchupResult.Advantage));
+            Assert.That(attack.AttackerRoll.SelectionMode, Is.EqualTo(VigorSelectionMode.Highest));
+            Assert.That(attack.AttackerRoll.HasSecondRoll, Is.True);
+        }
+
+        [Test]
+        public void RogueAura_RerollsFirstDefenderTwoOncePerExchange()
+        {
+            var random = QueueFor(
+                IdentityShuffles(),
+                DeploymentAndInitiatives(new[] { 20, 19, 18 }, new[] { 6, 5, 4 }),
+                new[] { 3, 2, 6 },
+                Enumerable.Repeat(3, 100));
+            var engine = new PvpMatchEngine(
+                UniformLoadout("p0", HeroClass.Warrior, 5),
+                UniformLoadout("p1", HeroClass.Rogue, 5),
+                PvpMatchRules.CreateDefault(),
+                random);
+            var events = new List<PvpEvent>(engine.Start());
+            events.AddRange(DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 }));
+
+            Assert.That(events.OfType<BattleStartedEvent>().Single().AuraPlayer1, Is.EqualTo(PvpAuraType.Rogue));
+
+            var attack = engine.Attack(0, 0).OfType<AttackResolvedEvent>().Single();
+            Assert.That(attack.DefenderRoll.FirstRoll, Is.EqualTo(6));
+            Assert.That(attack.DefenderRoll.FirstRollBeforeReroll, Is.EqualTo(2));
+            Assert.That(attack.DefenderRoll.HasSecondRoll, Is.False);
+            Assert.That(attack.DefenderLostLife, Is.False);
+        }
+
+        [Test]
         public void MageAbility_LowersEnemyVigorDieForOneExchange()
         {
             var loadout0 = UniformLoadout("p0", HeroClass.Mage, 5);
@@ -320,6 +398,30 @@ namespace AccardND.GameCore.Tests
             Assert.That(fury.Amount, Is.EqualTo(2));
             Assert.That(engine.BoardOf(0)[0].PendingAttackBonus, Is.EqualTo(2));
             Assert.That(engine.BoardOf(0)[0].PendingDefenseBonus, Is.EqualTo(2), "la Furia vale anche in difesa");
+        }
+
+        [Test]
+        public void BarbarianFury_TriggersOnSuccessfulDefense()
+        {
+            var loadout1 = UniformLoadout("p1", HeroClass.Barbarian, 5);
+            loadout1[2] = Card(HeroClass.Priest, 5, "p1-priest"); // niente aura Barbarian
+            var random = QueueFor(
+                IdentityShuffles(),
+                DeploymentAndInitiatives(new[] { 20, 19, 18 }, new[] { 6, 5, 4 }),
+                new[] { 1, 4 },   // attacco fallito: 5+1 vs Barbarian 5+4
+                Enumerable.Repeat(3, 100));
+            var engine = new PvpMatchEngine(
+                UniformLoadout("p0", HeroClass.Warrior, 5), loadout1, PvpMatchRules.CreateDefault(), random);
+            engine.Start();
+            DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 });
+
+            var events = engine.Attack(0, 0);
+            var fury = events.OfType<FuryGainedEvent>().Single();
+            Assert.That(fury.Player, Is.EqualTo(1));
+            Assert.That(fury.Slot, Is.EqualTo(0));
+            Assert.That(fury.Amount, Is.EqualTo(2));
+            Assert.That(engine.BoardOf(1)[0].PendingAttackBonus, Is.EqualTo(2));
+            Assert.That(engine.BoardOf(1)[0].PendingDefenseBonus, Is.EqualTo(2));
         }
 
         [Test]

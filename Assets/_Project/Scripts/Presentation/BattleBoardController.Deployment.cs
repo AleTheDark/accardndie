@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using AccardND.Battlefield;
 using AccardND.GameCore;
 using AccardND.GameData;
 using AccardND.NetProtocol;
@@ -43,7 +44,6 @@ public sealed partial class BattleBoardController
 		playerAura = BattleAuraType.None;
 		cpuAura = BattleAuraType.None;
 		formationAuraUsed = false;
-		ResetRoundAuraUsage();
 		draftCandidates.Clear();
 		draftCampaignCards.Clear();
 		if (campaignDeck != null)
@@ -85,12 +85,12 @@ public sealed partial class BattleBoardController
 		{
 			playerTitleText.text = string.Empty;
 		}
-		((Component)confirmFormationButton).gameObject.SetActive(!flag);
-		if ((Object)(object)confirmFormationButtonText != (Object)null)
+		((Component)confirmActionButton).gameObject.SetActive(!flag);
+		if ((Object)(object)confirmActionButtonText != (Object)null)
 		{
-			confirmFormationButtonText.text = "CONFERMA FORMAZIONE";
+			confirmActionButtonText.text = "CONFERMA";
 		}
-		confirmFormationButton.interactable = false;
+		confirmActionButton.interactable = false;
 		RefreshInitiativeDisplay();
 		if (flag)
 		{
@@ -137,6 +137,7 @@ public sealed partial class BattleBoardController
 
 	private IEnumerator PlayDraftHandEntrance(bool beginInitiativeDeploymentAfterEntrance)
 	{
+		yield return WaitForHintToClose();
 		draftEntranceAnimatingViews.Clear();
 		if (draftViews.Count == 0 || (Object)(object)playerHandRow == (Object)null || (Object)(object)safeAreaRoot == (Object)null)
 		{
@@ -185,7 +186,7 @@ public sealed partial class BattleBoardController
 		}
 		if (initialDelay > 0f)
 		{
-			yield return (object)new WaitForSecondsRealtime(initialDelay);
+			yield return WaitForCardInspectionPause(initialDelay);
 		}
 		for (int i = 0; i < count; i++)
 		{
@@ -236,7 +237,7 @@ public sealed partial class BattleBoardController
 			overlayView.SetAlpha(1f);
 			if (holdDuration > 0f)
 			{
-				yield return (object)new WaitForSecondsRealtime(holdDuration);
+				yield return WaitForCardInspectionPause(holdDuration);
 			}
 			elapsed = 0f;
 			while (elapsed < settleDuration)
@@ -258,7 +259,7 @@ public sealed partial class BattleBoardController
 			Object.Destroy((Object)(object)overlayObject);
 			if (betweenCardsDelay > 0f && i < count - 1)
 			{
-				yield return (object)new WaitForSecondsRealtime(betweenCardsDelay);
+				yield return WaitForCardInspectionPause(betweenCardsDelay);
 			}
 		}
 		draftEntranceOverlayObjects.Clear();
@@ -281,6 +282,7 @@ public sealed partial class BattleBoardController
 					view.SetInteractable(!selectedDraftCards.Contains(i));
 				}
 			}
+			NotifyAdventureTutorial(AdventureTutorialAction.DraftReady);
 		}
 	}
 
@@ -340,11 +342,12 @@ public sealed partial class BattleBoardController
 				for (int i = 0; i < draftViews.Count; i++)
 				{
 					bool flag = selectedDraftCards.Contains(i);
-					draftViews[i].SetSelected(i == pendingDeploymentIndex);
+					draftViews[i].SetDraftSelected(i == pendingDeploymentIndex);
 					draftViews[i].SetInteractable(!flag);
 				}
 				RefreshCardActionOverlays();
 				SetMessage($"INIZIATIVA {deploymentToken.Initiative}: confermi {draftCandidates[index].DisplayName} in campo?");
+				NotifyAdventureTutorial(AdventureTutorialAction.DeploymentCardSelected);
 			}
 			return;
 		}
@@ -358,10 +361,11 @@ public sealed partial class BattleBoardController
 		}
 		for (int j = 0; j < draftViews.Count; j++)
 		{
-			draftViews[j].SetSelected(selectedDraftCards.Contains(j));
+			draftViews[j].SetDraftSelected(selectedDraftCards.Contains(j));
 		}
-		confirmFormationButton.interactable = selectedDraftCards.Count == configuration.Gameplay.FormationSize;
+		confirmActionButton.interactable = selectedDraftCards.Count == configuration.Gameplay.FormationSize;
 		SetMessage($"Formazione: {selectedDraftCards.Count}/{configuration.Gameplay.FormationSize} carte selezionate.");
+		NotifyAdventureTutorial(AdventureTutorialAction.DraftCardSelected);
 	}
 
 	private int RollUniqueInitiative(int dieSides, HashSet<int> usedInitiatives)
@@ -412,14 +416,17 @@ public sealed partial class BattleBoardController
 		deploymentDraftActive = true;
 		inputLocked = true;
 		int formationSize = configuration.Gameplay.FormationSize;
-		int num = ((survivingCpuFormation.Count > 0) ?survivingCpuFormation.Count : ((currentRoomType == RoomType.Boss) ?configuration.Progression.BossFormationSize : formationSize));
+		BuildCpuDeploymentHand();
+		int cpuDeploymentCount = UsesBossStyleDeployment() || survivingCpuFormation.Count > 0
+			?cpuDeploymentHand.Count
+			:formationSize;
 		int initiativeDieSides = configuration.Gameplay.InitiativeDieSides;
 		HashSet<int> usedInitiatives = new HashSet<int>();
 		for (int i = 0; i < formationSize; i++)
 		{
 			deploymentOrder.Add(new DeploymentToken(belongsToPlayer: true, RollUniqueInitiative(initiativeDieSides, usedInitiatives), random.NextInclusive(1, 10000)));
 		}
-		for (int j = 0; j < num; j++)
+		for (int j = 0; j < cpuDeploymentCount; j++)
 		{
 			deploymentOrder.Add(new DeploymentToken(belongsToPlayer: false, RollUniqueInitiative(initiativeDieSides, usedInitiatives), random.NextInclusive(1, 10000)));
 		}
@@ -428,24 +435,6 @@ public sealed partial class BattleBoardController
 			int num3 = left.Initiative.CompareTo(right.Initiative);
 			return (num3 == 0) ?left.TieBreaker.CompareTo(right.TieBreaker) : num3;
 		});
-		int num2 = (from card in cardDatabase.Cards
-			where (Object)(object)card != (Object)null && card.Category == CardCategory.Monster && card.CanEnterCombat
-			select card.Id into id
-			where !string.IsNullOrWhiteSpace(id)
-			select id).Distinct().Count();
-		cpuDeploymentHand.Clear();
-		if (survivingCpuFormation.Count > 0)
-		{
-			cpuDeploymentHand.AddRange(survivingCpuFormation);
-		}
-		else if (currentRoomType == RoomType.Boss)
-		{
-			cpuDeploymentHand.AddRange(DrawBossFormationForCurrentCombat());
-		}
-		else
-		{
-			cpuDeploymentHand.AddRange(formationDraftService.DrawCandidates(cardDatabase.Cards, Mathf.Min(configuration.DeckBuilding.CombatHandSize, num2)));
-		}
 		currentDeploymentIndex = 0;
 		foreach (DeploymentToken item in deploymentOrder)
 		{
@@ -454,12 +443,39 @@ public sealed partial class BattleBoardController
 		SetTurnBanner(playerTurn: true, "SCHIERAMENTO");
 		RefreshInitiativeDisplay();
 		ClearDeploymentTimeline();
-		SetMessage($"Tiro iniziativa: {formationSize} D20 per te e {num} D20 per il Master.");
+		ShowDeploymentInitiativeHint();
+		yield return WaitForHintToClose();
+		SetMessage($"Tiro iniziativa: {formationSize} D20 per te e {cpuDeploymentCount} D20 per il Master.");
 		yield return PlayDeploymentInitiativeDiceRoll(initiativeDieSides);
 		RefreshDeploymentTimeline();
 		SetMessage("Iniziative di schieramento: i valori piu bassi calano per primi.");
-		yield return (object)new WaitForSecondsRealtime(Mathf.Max(0.2f, configuration.Animation.DiceResultHold * 0.45f));
+		yield return WaitForCardInspectionPause(Mathf.Max(0.2f, configuration.Animation.DiceResultHold * 0.45f));
 		ProcessNextDeploymentToken();
+	}
+
+	private void BuildCpuDeploymentHand()
+	{
+		cpuDeploymentHand.Clear();
+		if (survivingCpuFormation.Count > 0)
+		{
+			cpuDeploymentHand.AddRange(survivingCpuFormation);
+			return;
+		}
+
+		if (UsesBossStyleDeployment())
+		{
+			cpuDeploymentHand.AddRange(BuildCpuFormationForCurrentCombat());
+			return;
+		}
+
+		int monsterPoolCount = (from card in cardDatabase.Cards
+			where (Object)(object)card != (Object)null && card.Category == CardCategory.Monster && card.CanEnterCombat
+			select card.Id into id
+			where !string.IsNullOrWhiteSpace(id)
+			select id).Distinct().Count();
+		cpuDeploymentHand.AddRange(formationDraftService.DrawCandidates(
+			cardDatabase.Cards,
+			Mathf.Min(configuration.DeckBuilding.CombatHandSize, monsterPoolCount)));
 	}
 
 	private void ProcessNextDeploymentToken()
@@ -473,9 +489,9 @@ public sealed partial class BattleBoardController
 		{
 			((Component)cancelActionButton).gameObject.SetActive(false);
 		}
-		if ((Object)(object)confirmFormationButton != (Object)null)
+		if ((Object)(object)confirmActionButton != (Object)null)
 		{
-			((Component)confirmFormationButton).gameObject.SetActive(false);
+			((Component)confirmActionButton).gameObject.SetActive(false);
 		}
 		RefreshCardActionOverlays();
 		if (currentDeploymentIndex >= deploymentOrder.Count)
@@ -487,7 +503,7 @@ public sealed partial class BattleBoardController
 				Object.Destroy((Object)(object)((Component)cpuDeploymentPreviewView).gameObject);
 			}
 			cpuDeploymentPreviewViews.Clear();
-			ConfirmFormation();
+			FinalizeDeploymentAndStartBattle();
 			return;
 		}
 		DeploymentToken deploymentToken = deploymentOrder[currentDeploymentIndex];
@@ -511,7 +527,14 @@ public sealed partial class BattleBoardController
 
 	private IEnumerator ExecuteCpuDeployment(DeploymentToken token)
 	{
-		yield return (object)new WaitForSecondsRealtime(configuration.Animation.CpuDecisionReveal);
+		yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
+		if (cpuDeploymentHand.Count == 0)
+		{
+			AppendLog($"SCHIERAMENTO CPU - nessuna carta disponibile per iniziativa {token.Initiative}; token saltato.");
+			currentDeploymentIndex++;
+			ProcessNextDeploymentToken();
+			yield break;
+		}
 		CardDefinition cardDefinition = ChooseAdaptiveCpuDeploymentCard();
 		selectedCpuDeploymentCards.Add(cardDefinition);
 		selectedCpuDeploymentInitiatives.Add(token.Initiative);
@@ -524,14 +547,18 @@ public sealed partial class BattleBoardController
 		Canvas.ForceUpdateCanvases();
 		PlayPawnEnteringBattlefieldSfx(cardDefinition);
 		prototypeCardView.PlayRevealAnimation(configuration.Animation.CpuCardRevealDuration);
-		yield return (object)new WaitForSecondsRealtime(configuration.Animation.CpuCardRevealDuration);
+		yield return WaitForCardInspectionPause(Mathf.Min(configuration.Animation.CpuCardRevealDuration, 0.35f));
 		currentDeploymentIndex++;
+		if (currentDeploymentIndex >= deploymentOrder.Count)
+		{
+			SetMessage("Schieramento completato: inizia il combattimento.");
+		}
 		ProcessNextDeploymentToken();
 	}
 
 	private IEnumerator ContinueDeploymentAfterDelay(float delay)
 	{
-		yield return (object)new WaitForSecondsRealtime(delay);
+		yield return WaitForCardInspectionPause(delay);
 		ProcessNextDeploymentToken();
 	}
 
@@ -650,7 +677,7 @@ public sealed partial class BattleBoardController
 		{
 			RestoreTimelineBaseRect();
 			ClearDeploymentTimeline();
-			Font builtinResource = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+			Font builtinResource = AccardND.Battlefield.MmoUiTheme.BodyFont;
 			float timelineTileSize = GetTimelineTileSize(deploymentOrder.Count);
 			for (int i = 0; i < deploymentOrder.Count; i++)
 			{
@@ -675,7 +702,9 @@ public sealed partial class BattleBoardController
 		}
 		for (int num = ((Transform)initiativeTimelineRoot).childCount - 1; num >= 0; num--)
 		{
-			Object.Destroy((Object)(object)((Component)((Transform)initiativeTimelineRoot).GetChild(num)).gameObject);
+			GameObject childObject = ((Component)((Transform)initiativeTimelineRoot).GetChild(num)).gameObject;
+			childObject.SetActive(false);
+			Object.Destroy((Object)(object)childObject);
 		}
 	}
 
@@ -686,7 +715,7 @@ public sealed partial class BattleBoardController
 			yield break;
 		}
 		Canvas.ForceUpdateCanvases();
-		Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+		Font font = AccardND.Battlefield.MmoUiTheme.BodyFont;
 		List<RectTransform> diceRects = new List<RectTransform>();
 		List<Image> diceImages = new List<Image>();
 		List<Text> diceTexts = new List<Text>();
@@ -717,12 +746,18 @@ public sealed partial class BattleBoardController
 		float width = Mathf.Max(1f, safeRect.width);
 		float height = Mathf.Max(1f, safeRect.height);
 		float diceSize = Mathf.Clamp(Mathf.Min(width, height) * 0.105f, 54f, 92f);
+		if (Dice3DRollView.IsSupported(dieSides))
+		{
+			yield return PlayDeploymentInitiativeDiceRoll3D(dieSides, opponentLabel, diceSize, width, height);
+			yield break;
+		}
 		List<DeploymentToken> playerTokens = deploymentOrder.Where((DeploymentToken token) => token.BelongsToPlayer).ToList();
 		List<DeploymentToken> cpuTokens = deploymentOrder.Where((DeploymentToken token) => !token.BelongsToPlayer).ToList();
 		Dictionary<DeploymentToken, RectTransform> rectByToken = new Dictionary<DeploymentToken, RectTransform>();
 		Dictionary<DeploymentToken, Image> imageByToken = new Dictionary<DeploymentToken, Image>();
 		CreateDeploymentInitiativeDice(playerTokens, belongsToPlayer: true);
 		CreateDeploymentInitiativeDice(cpuTokens, belongsToPlayer: false);
+		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
 		float rollDuration = Mathf.Max(0.65f, configuration.Animation.DiceRollDuration * 0.72f);
 		float elapsed = 0f;
@@ -748,6 +783,7 @@ public sealed partial class BattleBoardController
 			}
 			yield return null;
 		}
+		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		for (int i = 0; i < deploymentOrder.Count; i++)
 		{
 			DeploymentToken token = deploymentOrder[i];
@@ -769,7 +805,7 @@ public sealed partial class BattleBoardController
 				text.gameObject.SetActive(true);
 			}
 		}
-		yield return (object)new WaitForSecondsRealtime(1f);
+		yield return WaitForCardInspectionPause(1f);
 		ResizeTimelineTiles(deploymentOrder.Count);
 		Canvas.ForceUpdateCanvases();
 		Vector2[] targetPositions = GetDeploymentTimelineTargetPositions(deploymentOrder.Count);
@@ -778,24 +814,29 @@ public sealed partial class BattleBoardController
 		{
 			starts.Add(rectByToken.TryGetValue(deploymentOrder[i], out RectTransform rectTransform) && (Object)(object)rectTransform != (Object)null ?rectTransform.anchoredPosition : Vector2.zero);
 		}
-		float flyDuration = 0.46f;
-		elapsed = 0f;
-		while (elapsed < flyDuration)
+		float flyDuration = 0.32f;
+		for (int i = 0; i < deploymentOrder.Count; i++)
 		{
-			elapsed += Time.unscaledDeltaTime;
-			float t = Mathf.Clamp01(elapsed / flyDuration);
-			float eased = 1f - Mathf.Pow(1f - t, 3f);
-			for (int i = 0; i < deploymentOrder.Count; i++)
+			if (!rectByToken.TryGetValue(deploymentOrder[i], out RectTransform rectTransform) || (Object)(object)rectTransform == (Object)null)
 			{
-				if (!rectByToken.TryGetValue(deploymentOrder[i], out RectTransform rectTransform) || (Object)(object)rectTransform == (Object)null)
-				{
-					continue;
-				}
-				rectTransform.anchoredPosition = Vector2.LerpUnclamped(starts[i], targetPositions[i], eased);
+				continue;
+			}
+			Vector2 start = i < starts.Count ?starts[i] : rectTransform.anchoredPosition;
+			Vector2 target = i < targetPositions.Length ?targetPositions[i] : start;
+			elapsed = 0f;
+			while (elapsed < flyDuration)
+			{
+				elapsed += Time.unscaledDeltaTime;
+				float t = Mathf.Clamp01(elapsed / flyDuration);
+				float eased = 1f - Mathf.Pow(1f - t, 3f);
+				rectTransform.anchoredPosition = Vector2.LerpUnclamped(start, target, eased);
 				rectTransform.sizeDelta = Vector2.LerpUnclamped(new Vector2(diceSize, diceSize), new Vector2(GetTimelineTileSize(), GetTimelineTileSize()), eased);
 				rectTransform.localScale = Vector3.one * Mathf.Lerp(1f, 0.58f, eased);
+				yield return null;
 			}
-			yield return null;
+			rectTransform.anchoredPosition = target;
+			rectTransform.sizeDelta = new Vector2(GetTimelineTileSize(), GetTimelineTileSize());
+			rectTransform.localScale = Vector3.one * 0.58f;
 		}
 		foreach (RectTransform rectTransform in diceRects)
 		{
@@ -858,6 +899,135 @@ public sealed partial class BattleBoardController
 		}
 	}
 
+	private IEnumerator PlayDeploymentInitiativeDiceRoll3D(int dieSides, string opponentLabel, float diceSize, float width, float height)
+	{
+		// D20 d'iniziativa più grandi del tiro standard: il risultato si legge
+		// direttamente sulla faccia del dado, senza testo di appoggio.
+		diceSize = Mathf.Clamp(Mathf.Min(width, height) * 0.16f, 84f, 150f);
+		List<RectTransform> diceRects = new List<RectTransform>();
+		List<Dice3DRollView> diceViews = new List<Dice3DRollView>();
+		Dictionary<DeploymentToken, RectTransform> rectByToken = new Dictionary<DeploymentToken, RectTransform>();
+		Dictionary<DeploymentToken, Dice3DRollView> viewByToken = new Dictionary<DeploymentToken, Dice3DRollView>();
+		RectTransform playerBoard = CreateInvisibleDiceBoard("Player Initiative Dice Board", new Vector2(0.05f, 0.04f), new Vector2(0.95f, 0.48f));
+		RectTransform opponentBoard = CreateInvisibleDiceBoard("Opponent Initiative Dice Board", new Vector2(0.05f, 0.52f), new Vector2(0.95f, 0.96f));
+
+		CreateDeploymentInitiativeDice3D(deploymentOrder.Where((DeploymentToken token) => token.BelongsToPlayer).ToList(), belongsToPlayer: true, playerBoard);
+		CreateDeploymentInitiativeDice3D(deploymentOrder.Where((DeploymentToken token) => !token.BelongsToPlayer).ToList(), belongsToPlayer: false, opponentBoard);
+
+		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
+		PlayRollingDiceSfx();
+		float rollDuration = Mathf.Max(0.75f, configuration.Animation.DiceRollDuration * 0.9f);
+		for (int i = 0; i < deploymentOrder.Count; i++)
+		{
+			DeploymentToken token = deploymentOrder[i];
+			if (viewByToken.TryGetValue(token, out Dice3DRollView diceView) && (Object)(object)diceView != (Object)null)
+			{
+				HeroClass tint = token.BelongsToPlayer ? HeroClass.Mage : HeroClass.Assassin;
+				diceView.StartScriptedRoll(dieSides, tint, token.Initiative, rollDuration);
+				// Tinte dedicate all'iniziativa: blu pieno per il giocatore,
+				// rosso pieno per l'avversario.
+				diceView.OverrideGlow(
+					token.BelongsToPlayer ? new Color(0.15f, 0.4f, 1f) : new Color(0.95f, 0.12f, 0.15f),
+					token.BelongsToPlayer ? "iniziativa-blu" : "iniziativa-rosso");
+			}
+		}
+		yield return WaitForCardInspectionPause(rollDuration);
+		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
+
+		yield return WaitForCardInspectionPause(1f);
+
+		ResizeTimelineTiles(deploymentOrder.Count);
+		Canvas.ForceUpdateCanvases();
+		Vector2[] targetPositions = GetDeploymentTimelineTargetPositions(deploymentOrder.Count);
+		List<Vector2> starts = new List<Vector2>(deploymentOrder.Count);
+		for (int i = 0; i < deploymentOrder.Count; i++)
+		{
+			starts.Add(rectByToken.TryGetValue(deploymentOrder[i], out RectTransform rectTransform) && (Object)(object)rectTransform != (Object)null
+				? rectTransform.anchoredPosition
+				: Vector2.zero);
+		}
+
+		float flyDuration = 0.32f;
+		float elapsed = 0f;
+		for (int i = 0; i < deploymentOrder.Count; i++)
+		{
+			if (!rectByToken.TryGetValue(deploymentOrder[i], out RectTransform rectTransform) || (Object)(object)rectTransform == (Object)null)
+				continue;
+
+			Vector2 start = i < starts.Count ? starts[i] : rectTransform.anchoredPosition;
+			Vector2 target = i < targetPositions.Length ? targetPositions[i] : start;
+			elapsed = 0f;
+			while (elapsed < flyDuration)
+			{
+				elapsed += Time.unscaledDeltaTime;
+				float t = Mathf.Clamp01(elapsed / flyDuration);
+				float eased = 1f - Mathf.Pow(1f - t, 3f);
+				rectTransform.anchoredPosition = Vector2.LerpUnclamped(start, target, eased);
+				rectTransform.sizeDelta = Vector2.LerpUnclamped(new Vector2(diceSize, diceSize), new Vector2(GetTimelineTileSize(), GetTimelineTileSize()), eased);
+				rectTransform.localScale = Vector3.one * Mathf.Lerp(1f, 0.58f, eased);
+				yield return null;
+			}
+			rectTransform.anchoredPosition = target;
+			rectTransform.sizeDelta = new Vector2(GetTimelineTileSize(), GetTimelineTileSize());
+			rectTransform.localScale = Vector3.one * 0.58f;
+		}
+
+		foreach (RectTransform rectTransform in diceRects)
+		{
+			if ((Object)(object)rectTransform != (Object)null)
+				Object.Destroy((Object)(object)((Component)rectTransform).gameObject);
+		}
+		if ((Object)(object)playerBoard != (Object)null)
+			Object.Destroy((Object)(object)((Component)playerBoard).gameObject);
+		if ((Object)(object)opponentBoard != (Object)null)
+			Object.Destroy((Object)(object)((Component)opponentBoard).gameObject);
+
+		void CreateDeploymentInitiativeDice3D(List<DeploymentToken> tokens, bool belongsToPlayer, RectTransform board)
+		{
+			int count = tokens.Count;
+			if (count <= 0)
+				return;
+
+			float rowY = belongsToPlayer ? 0.405f : 0.565f;
+			float startX = 0.5f - Mathf.Min(0.24f, 0.085f * (count - 1));
+			float stepX = count <= 1 ? 0f : Mathf.Min(0.17f, 0.48f / (count - 1));
+			for (int i = 0; i < count; i++)
+			{
+				DeploymentToken token = tokens[i];
+				GameObject diceObject = new GameObject((belongsToPlayer ? "Player" : "Opponent") + " Initiative Die 3D", typeof(RectTransform));
+				diceObject.transform.SetParent((Transform)(object)safeAreaRoot, false);
+				diceObject.transform.SetAsLastSibling();
+				RectTransform rectTransform = (RectTransform)diceObject.transform;
+				rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+				rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+				rectTransform.pivot = new Vector2(0.5f, 0.5f);
+				rectTransform.sizeDelta = new Vector2(diceSize, diceSize);
+				rectTransform.anchoredPosition = AnchorToSafeAreaPosition(new Vector2(startX + stepX * i, rowY));
+
+				Dice3DRollView diceView = Dice3DRollView.Create(rectTransform);
+				diceView.SetBounceArea(board, null);
+
+				diceRects.Add(rectTransform);
+				diceViews.Add(diceView);
+				rectByToken[token] = rectTransform;
+				viewByToken[token] = diceView;
+			}
+		}
+
+		RectTransform CreateInvisibleDiceBoard(string name, Vector2 minimum, Vector2 maximum)
+		{
+			RectTransform board = new GameObject(name, typeof(RectTransform)).GetComponent<RectTransform>();
+			board.SetParent((Transform)(object)safeAreaRoot, false);
+			SetRect(board, minimum, maximum);
+			return board;
+		}
+
+		Vector2 AnchorToSafeAreaPosition(Vector2 anchor)
+		{
+			return new Vector2((anchor.x - 0.5f) * width, (anchor.y - 0.5f) * height);
+		}
+	}
+
 	private Vector2[] GetDeploymentTimelineTargetPositions(int count)
 	{
 		Vector2[] positions = new Vector2[Mathf.Max(0, count)];
@@ -869,33 +1039,11 @@ public sealed partial class BattleBoardController
 		{
 			return positions;
 		}
-		GridLayoutGroup grid = ((Component)initiativeTimelineRoot).GetComponent<GridLayoutGroup>();
-		RectOffset padding = (Object)(object)grid != (Object)null ?grid.padding : new RectOffset();
 		float tileSize = GetTimelineTileSize(count);
-		bool vertical = IsTimelineVerticalLayout();
-		float spacing = (Object)(object)grid != (Object)null ?(vertical ?grid.spacing.y : grid.spacing.x) :6f;
-		float totalLength = tileSize * count + spacing * Mathf.Max(0, count - 1);
-		Rect rect = initiativeTimelineRoot.rect;
-		float availableLength = Mathf.Max(0f, (vertical ?rect.height : rect.width) - (vertical ?padding.vertical : padding.horizontal));
-		float availableCross = Mathf.Max(0f, (vertical ?rect.width : rect.height) - (vertical ?padding.horizontal : padding.vertical));
-		float startOffset = Mathf.Max(0f, (availableLength - totalLength) * 0.5f);
-		float crossOffset = Mathf.Max(0f, (availableCross - tileSize) * 0.5f);
+		Vector2[] localPositions = GetTimelineLocalPositions(count, tileSize);
 		for (int i = 0; i < count; i++)
 		{
-			Vector2 localCenter;
-			if (vertical)
-			{
-				localCenter = new Vector2(
-					rect.xMin + padding.left + crossOffset + tileSize * 0.5f,
-					rect.yMax - padding.top - startOffset - tileSize * 0.5f - (tileSize + spacing) * i);
-			}
-			else
-			{
-				localCenter = new Vector2(
-					rect.xMin + padding.left + startOffset + tileSize * 0.5f + (tileSize + spacing) * i,
-					rect.yMax - padding.top - crossOffset - tileSize * 0.5f);
-			}
-			Vector3 worldPosition = ((Transform)initiativeTimelineRoot).TransformPoint(localCenter);
+			Vector3 worldPosition = ((Transform)initiativeTimelineRoot).TransformPoint(localPositions[i]);
 			positions[i] = (Object)(object)safeAreaRoot != (Object)null
 				?(Vector2)((Transform)safeAreaRoot).InverseTransformPoint(worldPosition)
 				: (Vector2)worldPosition;
@@ -905,77 +1053,17 @@ public sealed partial class BattleBoardController
 
 	private static Sprite[] LoadDiceUiRollFrames(string prefix)
 	{
-		string[] names =
-		{
-			$"{prefix}_Roll_1",
-			$"{prefix}_Roll_2",
-			$"{prefix}_Roll_3",
-			$"{prefix}_Roll_4",
-			$"{prefix}_Roll_5",
-			$"{prefix}_Roll_6_2",
-			$"{prefix}_Roll_6_3",
-			$"{prefix}_Roll_6_4",
-			$"{prefix}_Roll_6_5",
-			$"{prefix}_Roll_6_6",
-			$"{prefix}_Roll_6_7",
-			$"{prefix}_Roll_7_1",
-			$"{prefix}_Roll_7_2",
-			$"{prefix}_Roll_7_3",
-			$"{prefix}_Roll_7_4",
-			$"{prefix}_Roll_7_5",
-			$"{prefix}_Roll_7_6",
-			$"{prefix}_Roll_8_1",
-			$"{prefix}_Roll_8_2",
-			$"{prefix}_Roll_8_3",
-			$"{prefix}_Roll_8_4",
-			$"{prefix}_Roll_8_5",
-			$"{prefix}_Roll_8_6"
-		};
-		List<Sprite> frames = new List<Sprite>(names.Length);
-		foreach (string name in names)
-		{
-			Sprite sprite = LoadDiceUiSprite(name);
-			if ((Object)(object)sprite != (Object)null)
-			{
-				frames.Add(sprite);
-			}
-		}
-		return frames.ToArray();
+		return Array.Empty<Sprite>();
 	}
 
 	private static Sprite LoadDiceUiSprite(string spriteName)
 	{
-		string resourcePath = "DiceUI/DiceSprites/" + spriteName;
-		if (spriteResourceCache.TryGetValue(resourcePath, out Sprite cached) && (Object)(object)cached != (Object)null)
-		{
-			return cached;
-		}
-		Sprite sprite = Resources.Load<Sprite>(resourcePath);
-		if ((Object)(object)sprite != (Object)null)
-		{
-			spriteResourceCache[resourcePath] = sprite;
-			return sprite;
-		}
-		Texture2D texture = Resources.Load<Texture2D>(resourcePath);
-		if ((Object)(object)texture != (Object)null)
-		{
-			Sprite generated = Sprite.Create(texture, new Rect(0f, 0f, ((Texture)texture).width, ((Texture)texture).height), new Vector2(0.5f, 0.5f), 100f);
-			generated.name = texture.name;
-			generated.hideFlags = HideFlags.DontSave;
-			spriteResourceCache[resourcePath] = generated;
-			return generated;
-		}
-#if UNITY_EDITOR
-		return UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>($"Assets/DiceUI/DiceSprites/{spriteName}.png");
-#else
 		return null;
-#endif
 	}
 
 	private static Sprite LoadCatalogDiceSprite(int sides, int result)
 	{
-		DiceSpriteCatalog catalog = Resources.Load<DiceSpriteCatalog>("DiceSpriteCatalog");
-		return catalog != null ? catalog.FindResult(sides, Mathf.Clamp(result, 1, Mathf.Max(1, sides))) : null;
+		return null;
 	}
 
 	private void ConfirmPendingDeployment()
@@ -1018,10 +1106,11 @@ public sealed partial class BattleBoardController
 		{
 			draftView.SetInteractable(interactable: false);
 		}
-		((Component)confirmFormationButton).gameObject.SetActive(false);
+		((Component)confirmActionButton).gameObject.SetActive(false);
 		((Component)cancelActionButton).gameObject.SetActive(false);
 		RefreshCardActionOverlays();
 		AppendLog($"SCHIERAMENTO TU - {draftCandidates[num].DisplayName}, iniziativa {deploymentToken.Initiative}");
+		NotifyAdventureTutorial(AdventureTutorialAction.DeploymentConfirmed);
 		inputLocked = true;
 		ApplyResponsiveLayout();
 		Canvas.ForceUpdateCanvases();
@@ -1178,7 +1267,7 @@ public sealed partial class BattleBoardController
 				draftView.SetSelected(selected: false);
 				draftView.SetInteractable(!flag);
 			}
-			((Component)confirmFormationButton).gameObject.SetActive(false);
+			((Component)confirmActionButton).gameObject.SetActive(false);
 			((Component)cancelActionButton).gameObject.SetActive(false);
 			RefreshCardActionOverlays();
 			ProcessNextDeploymentToken();
@@ -1188,7 +1277,7 @@ public sealed partial class BattleBoardController
 			BattleCardState battleCardState = pendingAbilityUser;
 			pendingAbilityUser = null;
 			activeAttachmentSource = null;
-			((Component)confirmFormationButton).gameObject.SetActive(false);
+			((Component)confirmActionButton).gameObject.SetActive(false);
 			((Component)cancelActionButton).gameObject.SetActive(false);
 			SetMessage("Abilita annullata: " + battleCardState.Card.Name + " non usa nulla.");
 			RefreshAbilityButton(battleCardState);
@@ -1260,7 +1349,7 @@ public sealed partial class BattleBoardController
 		}
 	}
 
-	private void ConfirmFormation()
+	private void HandleConfirmAction()
 	{
 		if (pvpPresentationActive && pvpState != null && pvpState.Phase == PvpClientPhase.DecisiveSelection)
 		{
@@ -1270,105 +1359,123 @@ public sealed partial class BattleBoardController
 		if (pendingDeploymentIndex >= 0)
 		{
 			ConfirmPendingDeployment();
+			return;
 		}
-		else if (pendingAbilityUser != null)
+		if (pendingAbilityUser != null)
 		{
 			ConfirmPendingAbility();
+			return;
+		}
+		ConfirmDraftSelection();
+	}
+
+	private void ConfirmDraftSelection()
+	{
+		if (!draftActive
+			|| deploymentDraftActive
+			|| selectedDraftCards.Count != configuration.Gameplay.FormationSize)
+		{
+			return;
+		}
+		NotifyAdventureTutorial(AdventureTutorialAction.DraftConfirmed);
+		List<CardDefinition> list = new List<CardDefinition>();
+		IEnumerable<int> enumerable2;
+		if (!deploymentInitiativesReady)
+		{
+			IEnumerable<int> enumerable = selectedDraftCards.OrderBy((int index) => index);
+			enumerable2 = enumerable;
 		}
 		else
 		{
-			if (!draftActive || selectedDraftCards.Count != configuration.Gameplay.FormationSize)
+			IEnumerable<int> enumerable = selectedPlayerDeploymentIndices;
+			enumerable2 = enumerable;
+		}
+		IEnumerable<int> enumerable3 = enumerable2;
+		foreach (int item in enumerable3)
+		{
+			list.Add(draftCandidates[item]);
+		}
+		List<CampaignCardInstance> list2 = new List<CampaignCardInstance>();
+		if (campaignDeck != null)
+		{
+			foreach (int item2 in enumerable3)
 			{
-				return;
+				list2.Add(draftCampaignCards[item2]);
 			}
-			List<CardDefinition> list = new List<CardDefinition>();
-			IEnumerable<int> enumerable2;
-			if (!deploymentInitiativesReady)
+		}
+		playerReserve.Clear();
+		for (int num = 0; num < draftCandidates.Count; num++)
+		{
+			if (!selectedDraftCards.Contains(num))
 			{
-				IEnumerable<int> enumerable = selectedDraftCards.OrderBy((int index) => index);
-				enumerable2 = enumerable;
+				playerReserve.Add(draftCandidates[num]);
 			}
-			else
+		}
+		initialPlayerReserve.Clear();
+		initialPlayerReserve.AddRange(playerReserve);
+		initialPlayerFormation.Clear();
+		initialPlayerFormation.AddRange(list);
+		initialPlayerCampaignFormation.Clear();
+		initialPlayerCampaignFormation.AddRange(list2);
+		if (campaignDeck != null)
+		{
+			foreach (int item3 in enumerable3)
 			{
-				IEnumerable<int> enumerable = selectedPlayerDeploymentIndices;
-				enumerable2 = enumerable;
+				campaignDeck.Deploy(draftCampaignCards[item3]);
 			}
-			IEnumerable<int> enumerable3 = enumerable2;
-			foreach (int item in enumerable3)
+			campaignDeck.ReturnHandToDeck();
+		}
+		foreach (PrototypeCardView draftView in draftViews)
+		{
+			Object.Destroy((Object)(object)((Component)draftView).gameObject);
+		}
+		draftViews.Clear();
+		foreach (PrototypeCardView playerDeploymentPreviewView in playerDeploymentPreviewViews)
+		{
+			if ((Object)(object)playerDeploymentPreviewView != (Object)null)
 			{
-				list.Add(draftCandidates[item]);
+				Object.Destroy((Object)(object)((Component)playerDeploymentPreviewView).gameObject);
 			}
-			List<CampaignCardInstance> list2 = new List<CampaignCardInstance>();
-			if (campaignDeck != null)
+		}
+		playerDeploymentPreviewViews.Clear();
+		draftCandidates.Clear();
+		draftCampaignCards.Clear();
+		selectedDraftCards.Clear();
+		draftActive = false;
+		((Component)confirmActionButton).gameObject.SetActive(false);
+		playerTitleText.text = ((campaignDeck != null) ?string.Empty : "LA TUA FORMAZIONE");
+		DestroyCardViews(playerCards);
+		DestroyCardViews(cpuCards);
+		ClearCardRowChildren(playerRow);
+		ClearCardRowChildren(cpuRow);
+		for (int num2 = 0; num2 < list.Count; num2++)
+		{
+			BattleCardState battleCardState = AddCard(playerCards, playerRow, list[num2], belongsToPlayer: true, num2, (num2 < list2.Count) ?list2[num2] : null);
+			if (battleCardState != null && deploymentInitiativesReady && num2 < selectedPlayerDeploymentInitiatives.Count)
 			{
-				foreach (int item2 in enumerable3)
-				{
-					list2.Add(draftCampaignCards[item2]);
-				}
+				battleCardState.Initiative = selectedPlayerDeploymentInitiatives[num2];
 			}
-			playerReserve.Clear();
-			for (int num = 0; num < draftCandidates.Count; num++)
+			else if (battleCardState == null)
 			{
-				if (!selectedDraftCards.Contains(num))
-				{
-					playerReserve.Add(draftCandidates[num]);
-				}
+				AppendLog($"SCHIERAMENTO - impossibile creare la pedina player per {list[num2]?.DisplayName ?? "carta sconosciuta"}.");
 			}
-			initialPlayerReserve.Clear();
-			initialPlayerReserve.AddRange(playerReserve);
-			initialPlayerFormation.Clear();
-			initialPlayerFormation.AddRange(list);
-			initialPlayerCampaignFormation.Clear();
-			initialPlayerCampaignFormation.AddRange(list2);
-			if (campaignDeck != null)
-			{
-				foreach (int item3 in enumerable3)
-				{
-					campaignDeck.Deploy(draftCampaignCards[item3]);
-				}
-				campaignDeck.ReturnHandToDeck();
-			}
-			foreach (PrototypeCardView draftView in draftViews)
-			{
-				Object.Destroy((Object)(object)((Component)draftView).gameObject);
-			}
-			draftViews.Clear();
-			foreach (PrototypeCardView playerDeploymentPreviewView in playerDeploymentPreviewViews)
-			{
-				if ((Object)(object)playerDeploymentPreviewView != (Object)null)
-				{
-					Object.Destroy((Object)(object)((Component)playerDeploymentPreviewView).gameObject);
-				}
-			}
-			playerDeploymentPreviewViews.Clear();
-			draftCandidates.Clear();
-			draftCampaignCards.Clear();
-			selectedDraftCards.Clear();
-			draftActive = false;
-			((Component)confirmFormationButton).gameObject.SetActive(false);
-			playerTitleText.text = ((campaignDeck != null) ?string.Empty : "LA TUA FORMAZIONE");
-			DestroyCardViews(playerCards);
-			DestroyCardViews(cpuCards);
-			ClearCardRowChildren(playerRow);
-			ClearCardRowChildren(cpuRow);
-			for (int num2 = 0; num2 < list.Count; num2++)
-			{
-				BattleCardState battleCardState = AddCard(playerCards, playerRow, list[num2], belongsToPlayer: true, num2, (num2 < list2.Count) ?list2[num2] : null);
-				if (deploymentInitiativesReady && num2 < selectedPlayerDeploymentInitiatives.Count)
-				{
-					battleCardState.Initiative = selectedPlayerDeploymentInitiatives[num2];
-				}
-			}
-			List<CardDefinition> list3 = (deploymentInitiativesReady ?new List<CardDefinition>(selectedCpuDeploymentCards) : ((currentRoomType == RoomType.Boss) ?DrawBossFormationForCurrentCombat() : DrawMonsterFormationForCurrentCombat()));
+		}
+		List<CardDefinition> list3 = deploymentInitiativesReady
+				?new List<CardDefinition>(selectedCpuDeploymentCards)
+				:BuildCpuFormationForCurrentCombat();
 			initialCpuFormation.Clear();
 			initialCpuFormation.AddRange(list3);
 			survivingCpuFormation.Clear();
 			for (int num3 = 0; num3 < list3.Count; num3++)
 			{
 				BattleCardState battleCardState2 = AddCard(cpuCards, cpuRow, list3[num3], belongsToPlayer: false, num3);
-				if (deploymentInitiativesReady && num3 < selectedCpuDeploymentInitiatives.Count)
+				if (battleCardState2 != null && deploymentInitiativesReady && num3 < selectedCpuDeploymentInitiatives.Count)
 				{
 					battleCardState2.Initiative = selectedCpuDeploymentInitiatives[num3];
+				}
+				else if (battleCardState2 == null)
+				{
+					AppendLog($"SCHIERAMENTO - impossibile creare la pedina CPU per {list3[num3]?.DisplayName ?? "carta sconosciuta"}.");
 				}
 			}
 			bool animatePlayerRowToBattlePosition = deploymentInitiativesReady && (Object)(object)playerRow != (Object)null;
@@ -1387,7 +1494,113 @@ public sealed partial class BattleBoardController
 			}
 			RestoreBattlefieldCardVisibility();
 			StartBattle();
+	}
+
+	private void FinalizeDeploymentAndStartBattle()
+	{
+		if (!draftActive || selectedPlayerDeploymentIndices.Count != configuration.Gameplay.FormationSize)
+		{
+			AppendLog("SCHIERAMENTO - impossibile iniziare: formazione player incompleta.");
+			return;
 		}
+
+		List<CardDefinition> playerFormation = new List<CardDefinition>();
+		List<CampaignCardInstance> campaignFormation = new List<CampaignCardInstance>();
+		foreach (int index in selectedPlayerDeploymentIndices)
+		{
+			if (index < 0 || index >= draftCandidates.Count)
+				continue;
+
+			playerFormation.Add(draftCandidates[index]);
+			if (campaignDeck != null && index < draftCampaignCards.Count)
+				campaignFormation.Add(draftCampaignCards[index]);
+		}
+
+		if (playerFormation.Count != configuration.Gameplay.FormationSize)
+		{
+			AppendLog("SCHIERAMENTO - impossibile iniziare: indici player non validi.");
+			return;
+		}
+
+		playerReserve.Clear();
+		for (int index = 0; index < draftCandidates.Count; index++)
+		{
+			if (!selectedDraftCards.Contains(index))
+				playerReserve.Add(draftCandidates[index]);
+		}
+		initialPlayerReserve.Clear();
+		initialPlayerReserve.AddRange(playerReserve);
+		initialPlayerFormation.Clear();
+		initialPlayerFormation.AddRange(playerFormation);
+		initialPlayerCampaignFormation.Clear();
+		initialPlayerCampaignFormation.AddRange(campaignFormation);
+
+		if (campaignDeck != null)
+		{
+			foreach (int index in selectedPlayerDeploymentIndices)
+			{
+				if (index >= 0 && index < draftCampaignCards.Count)
+					campaignDeck.Deploy(draftCampaignCards[index]);
+			}
+			campaignDeck.ReturnHandToDeck();
+		}
+
+		DestroyPrototypeViews(draftViews);
+		draftViews.Clear();
+		DestroyPrototypeViews(playerDeploymentPreviewViews);
+		playerDeploymentPreviewViews.Clear();
+		draftCandidates.Clear();
+		draftCampaignCards.Clear();
+		selectedDraftCards.Clear();
+		draftActive = false;
+		((Component)confirmActionButton).gameObject.SetActive(false);
+		playerTitleText.text = campaignDeck != null ?string.Empty : "LA TUA FORMAZIONE";
+
+		DestroyCardViews(playerCards);
+		DestroyCardViews(cpuCards);
+		ClearCardRowChildren(playerRow);
+		ClearCardRowChildren(cpuRow);
+
+		for (int index = 0; index < playerFormation.Count; index++)
+		{
+			BattleCardState state = AddCard(
+				playerCards,
+				playerRow,
+				playerFormation[index],
+				belongsToPlayer: true,
+				index,
+				index < campaignFormation.Count ?campaignFormation[index] : null);
+			if (state != null && index < selectedPlayerDeploymentInitiatives.Count)
+				state.Initiative = selectedPlayerDeploymentInitiatives[index];
+		}
+
+		List<CardDefinition> cpuFormation = new List<CardDefinition>(selectedCpuDeploymentCards);
+		initialCpuFormation.Clear();
+		initialCpuFormation.AddRange(cpuFormation);
+		survivingCpuFormation.Clear();
+		for (int index = 0; index < cpuFormation.Count; index++)
+		{
+			BattleCardState state = AddCard(cpuCards, cpuRow, cpuFormation[index], belongsToPlayer: false, index);
+			if (state != null && index < selectedCpuDeploymentInitiatives.Count)
+				state.Initiative = selectedCpuDeploymentInitiatives[index];
+		}
+
+		bool animatePlayerRowToBattlePosition = (Object)(object)playerRow != (Object)null;
+		Vector2 playerRowStartAnchorMin = animatePlayerRowToBattlePosition ?playerRow.anchorMin : Vector2.zero;
+		Vector2 playerRowStartAnchorMax = animatePlayerRowToBattlePosition ?playerRow.anchorMax : Vector2.zero;
+		Vector2 playerRowStartSize = animatePlayerRowToBattlePosition ?playerRow.sizeDelta : Vector2.zero;
+		Vector2 playerRowStartPosition = animatePlayerRowToBattlePosition ?playerRow.anchoredPosition : Vector2.zero;
+		ApplyResponsiveLayout();
+		if (animatePlayerRowToBattlePosition)
+		{
+			StartPlayerBattlefieldRowTransition(
+				playerRowStartAnchorMin,
+				playerRowStartAnchorMax,
+				playerRowStartSize,
+				playerRowStartPosition);
+		}
+		RestoreBattlefieldCardVisibility();
+		StartBattle();
 	}
 
 	private void StartPlayerBattlefieldRowTransition(Vector2 startAnchorMin, Vector2 startAnchorMax, Vector2 startSize, Vector2 startPosition)

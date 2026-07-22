@@ -15,6 +15,7 @@ MonoBehaviour:
   id: climbing
   displayName: Rampicanti
   background: {fileID: 21300000, guid: 4fe2af63d0aeaf045b2fd003690aece3, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: da2a39879f954864da5784894f3fe21e, type: 3}
   roomType: 2
   difficulty: 0
-  bossId: salazar
+  bossId: trentor

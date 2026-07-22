@@ -120,13 +120,18 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
-        public void Probability_TreatsRogueRerollOnesAsPassive()
+        public void Probability_AppliesRogueRerollOnesOnlyWhenAbilityIsActive()
         {
             var service = new CpuDecisionService(new FixedRandomSource());
             var attacker = new CombatCard("rogue", "Ladro", HeroClass.Rogue, 5);
             var defender = new CombatCard("assassin", "Assassino", HeroClass.Assassin, 8);
 
-            double probability = service.EstimateDefeatProbability(attacker, defender, 6);
+            double probability = service.EstimateDefeatProbability(
+                attacker,
+                defender,
+                6,
+                6,
+                new CombatModifiers(false, false, rerollAttackerOnes: true));
 
             Assert.That(probability, Is.EqualTo(21d / 216d).Within(0.0001d));
         }

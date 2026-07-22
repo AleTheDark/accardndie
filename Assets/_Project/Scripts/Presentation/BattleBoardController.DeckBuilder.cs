@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -104,7 +104,7 @@ public sealed partial class BattleBoardController
 
 	private IEnumerator HideDeckBuilderToastAfterDelay()
 	{
-		yield return (object)new WaitForSecondsRealtime(2.2f);
+		yield return WaitForCardInspectionPause(2.2f);
 		if ((Object)(object)deckBuilderToastRoot != (Object)null)
 		{
 			deckBuilderToastRoot.SetActive(false);
@@ -203,18 +203,21 @@ public sealed partial class BattleBoardController
 		float aspect = width / height;
 		bool compact = IsCompactLayout(aspect, configuration.ResponsiveLayout);
 		bool wide = !compact && aspect >= 1.65f;
+		RefreshResponsiveDeckBuilderFrame(deckBuilderFrameImage, deckBuilderFrameAspectFitter, compact);
 
 		SetRect(deckBuilderHeadingText.rectTransform,
 			compact ? new Vector2(0.08f, 0.862f) : new Vector2(0.12f, 0.852f),
 			compact ? new Vector2(0.92f, 0.94f) : new Vector2(0.88f, 0.938f));
-		deckBuilderHeadingText.fontSize = compact ? 38 : 42;
+		deckBuilderHeadingText.fontSize = compact ? 46 : 42;
 		deckBuilderHeadingText.resizeTextMaxSize = deckBuilderHeadingText.fontSize;
+		deckBuilderHeadingText.resizeTextMinSize = compact ?34 : 30;
 
 		SetRect(deckBuilderStatusText.rectTransform,
 			compact ? new Vector2(0.08f, 0.79f) : new Vector2(0.18f, 0.776f),
 			compact ? new Vector2(0.92f, 0.852f) : new Vector2(0.82f, 0.84f));
-		deckBuilderStatusText.fontSize = compact ? 24 : 25;
+		deckBuilderStatusText.fontSize = compact ? 31 : 25;
 		deckBuilderStatusText.resizeTextMaxSize = deckBuilderStatusText.fontSize;
+		deckBuilderStatusText.resizeTextMinSize = compact ?23 : 18;
 
 		SetRect(deckBuilderCardsRoot,
 			compact ? new Vector2(0.06f, 0.43f) : new Vector2(wide ? 0.12f : 0.08f, 0.405f),
@@ -223,8 +226,9 @@ public sealed partial class BattleBoardController
 		SetRect(deckBuilderCardsText.rectTransform,
 			compact ? new Vector2(0.1f, 0.535f) : new Vector2(0.22f, 0.545f),
 			compact ? new Vector2(0.9f, 0.665f) : new Vector2(0.78f, 0.665f));
-		deckBuilderCardsText.fontSize = compact ? 20 : 24;
+		deckBuilderCardsText.fontSize = compact ? 28 : 24;
 		deckBuilderCardsText.resizeTextMaxSize = deckBuilderCardsText.fontSize;
+		deckBuilderCardsText.resizeTextMinSize = compact ?22 : 17;
 
 		Vector2 buttonSize = compact ? new Vector2(0.26f, 0.118f) : new Vector2(wide ? 0.18f : 0.22f, 0.14f);
 		float buttonYMin = compact ? 0.245f : 0.255f;
@@ -241,8 +245,9 @@ public sealed partial class BattleBoardController
 		float strengthMaxX = rightCenter + buttonSize.x * 0.5f;
 		if ((Object)(object)deckBuilderClassText != (Object)null)
 		{
-			deckBuilderClassText.fontSize = compact ? 18 : 22;
+			deckBuilderClassText.fontSize = compact ? 23 : 22;
 			deckBuilderClassText.resizeTextMaxSize = deckBuilderClassText.fontSize;
+			deckBuilderClassText.resizeTextMinSize = compact ?17 : 15;
 		}
 
 		float arrowWidth = compact ? 0.135f : 0.12f;
@@ -280,8 +285,9 @@ public sealed partial class BattleBoardController
 		float arrowYMin = Mathf.Max(0.02f, yMin - (compact ? 0.074f : 0.08f));
 		float costYMin = arrowYMin + (arrowHeight - costHeight) * 0.5f;
 		SetRect(costText.rectTransform, new Vector2(centerX - costWidth * 0.5f, costYMin), new Vector2(centerX + costWidth * 0.5f, costYMin + costHeight));
-		costText.fontSize = compact ? 28 : 34;
+		costText.fontSize = compact ? 32 : 34;
 		costText.resizeTextMaxSize = costText.fontSize;
+		costText.resizeTextMinSize = compact ?24 : 24;
 	}
 
 	private static void PlaceDeckBuilderArrowInside(RectTransform button, float minimumX, float maximumX, bool rightAligned, float width, float yMin, float yMax)
@@ -355,12 +361,14 @@ public sealed partial class BattleBoardController
 		if (initialDeckBuilder != null && initialDeckBuilder.CanStartCampaign)
 		{
 			campaignDeck = new CampaignDeckState(initialDeckBuilder.Deck);
+			GrantStartingCampaignConsumablesForTesting();
 			initialDeckBuilder = null;
 			ResetScenarioRuleState();
 			deckBuilderPanel.SetActive(false);
 			DestroyPrototypeViews(deckBuilderCardViews);
 			((Component)campaignZoneRect).gameObject.SetActive(false);
 			AppendLog($"CAMPAGNA AVVIATA - {campaignDeck.Cards.Count} carte nel mazzo.");
+			PlayTransitionSfx();
 			BeginRoomChoice();
 		}
 	}
@@ -373,12 +381,13 @@ public sealed partial class BattleBoardController
 	private RunProgressState CreateRunProgress()
 	{
 		ProgressionConfiguration progression = configuration.Progression;
+		int startingVigorDieSides = debugForceFirstRoomMedusa ? 12 : configuration.Gameplay.VigorDieSides;
 		return new RunProgressState(
-			progression.ExperiencePerLevel,
+			progression.ExperienceThresholdsByLevel,
 			progression.MonsterRoomClearExperience,
 			progression.MaximumLevel,
 			progression.RoomsPerMasterLevel,
-			progression.BuildVigorDiceByLevel(configuration.Gameplay.VigorDieSides));
+			progression.BuildVigorDiceByLevel(startingVigorDieSides));
 	}
 }
 }

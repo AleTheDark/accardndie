@@ -162,7 +162,7 @@ namespace AccardND.Network
                     throw new InvalidOperationException("Connessione al server fallita.");
                 if (Time.realtimeSinceStartup - start > 10f)
                     throw new TimeoutException("Timeout di connessione al server.");
-                await Task.Yield();
+                await PvpAsync.NextFrameAsync();
             }
         }
 

@@ -8,6 +8,7 @@ namespace AccardND.GameData
         [SerializeField] private string id;
         [SerializeField] private string displayName;
         [SerializeField] private Sprite background;
+        [SerializeField] private Sprite backgroundLandscape;
         [SerializeField] private RoomType roomType;
         [SerializeField] private RoomDifficulty difficulty;
         [SerializeField] private string bossId;
@@ -15,6 +16,7 @@ namespace AccardND.GameData
         public string Id => id;
         public string DisplayName => displayName;
         public Sprite Background => background;
+        public Sprite BackgroundLandscape => backgroundLandscape;
         public RoomType RoomType => roomType;
         public RoomDifficulty Difficulty => difficulty;
         public string BossId => bossId;
@@ -24,6 +26,7 @@ namespace AccardND.GameData
             string importedId,
             string importedDisplayName,
             Sprite importedBackground,
+            Sprite importedLandscapeBackground,
             RoomType importedRoomType,
             RoomDifficulty importedDifficulty,
             string importedBossId,
@@ -31,6 +34,7 @@ namespace AccardND.GameData
         {
             id = importedId;
             background = importedBackground;
+            backgroundLandscape = importedLandscapeBackground;
             if (!initializeRules)
                 return;
 

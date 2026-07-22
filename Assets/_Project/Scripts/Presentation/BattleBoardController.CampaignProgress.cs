@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -61,12 +61,26 @@ public sealed partial class BattleBoardController
 				AppendLog($"ZONE MAZZO - disponibili {campaignDeck.AvailableCount}, " + $"cooldown {campaignDeck.CooldownCount}, cimitero {campaignDeck.GraveyardCount}.");
 			}
 			RecordCampaignMonsterKills();
+			if (IsFinalBossRoom())
+				RecordCampaignBossVictory();
 			SetTurnBanner(playerTurn: true, "VITTORIA  -  STANZA SUPERATA");
-			int num = (nextCombatFallenHeroesGrantExperience ?playerCards.Where(IsCampaignDefeated).Sum((BattleCardState card) => card.Card.Strength) : 0);
-			RoomReward roomReward = runProgress.CompleteMonsterRoom((from card in cpuCards
-				where card.Eliminated
-				select card.Card.Strength).Concat((num <= 0) ?((IEnumerable<int>)Array.Empty<int>()) : ((IEnumerable<int>)new int[1] { num })));
+			RoomReward roomReward;
+			if (activeComposableGolem != null)
+			{
+				roomReward = runProgress.CompleteMinibossRoom(configuration.Progression.MinibossClearExperience, ConsumeNextRoomExperienceMultiplier());
+			}
+			else
+			{
+				int num = (nextCombatFallenHeroesGrantExperience ?playerCards.Where(IsCampaignDefeated).Sum((BattleCardState card) => card.Card.Strength) : 0);
+				roomReward = runProgress.CompleteMonsterRoom((from card in cpuCards
+					where card.Eliminated
+					select card.Card.Strength).Concat((num <= 0) ?((IEnumerable<int>)Array.Empty<int>()) : ((IEnumerable<int>)new int[1] { num })), ConsumeNextRoomExperienceMultiplier());
+			}
 			SetMessage($"Hai guadagnato {roomReward.TotalExperience} punti esperienza!");
+			if (roomReward.LevelsGained > 0)
+			{
+				ShowLevelUpVigorHint();
+			}
 			restartButtonText.text = "VAI AVANTI!";
 			canAdvanceToNextRoom = true;
 		}
@@ -109,6 +123,7 @@ public sealed partial class BattleBoardController
 		((Component)restartButton).gameObject.SetActive(canAdvanceToNextRoom || flag);
 		UpdateInteractions();
 		ClearConsumedCombatRules();
+		NotifyAdventureTutorial(AdventureTutorialAction.BattleFinished);
 		return true;
 	}
 
@@ -119,12 +134,17 @@ public sealed partial class BattleBoardController
 		nextCombatAssassinsActLast = false;
 		nextCombatWarriorsLowerVigor = false;
 		nextCombatTankDuel = false;
+		nextRoomEmpowered = false;
+		RefreshPlayerHud();
 	}
 
 	private void ResetScenarioRuleState()
 	{
 		ClearConsumedCombatRules();
 		nextMonsterTierBonus = 0;
+		nextDoorChoiceRevealed = false;
+		nextRoomEmpowered = false;
+		nextRoomDoubleExperience = false;
 		merchantRoomsBlockedUntilMonster = false;
 		rewardRoomsBlockedUntilMonster = false;
 	}
@@ -134,7 +154,7 @@ public sealed partial class BattleBoardController
 		if (!returningToStartAfterGameOver)
 		{
 			returningToStartAfterGameOver = true;
-			yield return (object)new WaitForSecondsRealtime(5f);
+			yield return WaitForCardInspectionPause(5f);
 			returningToStartAfterGameOver = false;
 			if ((Object)(object)roomTransition != (Object)null && !roomTransition.IsPlaying)
 			{
@@ -163,6 +183,12 @@ public sealed partial class BattleBoardController
 	private void RetryCurrentCampaignRoom()
 	{
 		AppendLog("RIPROVA STANZA - " + DescribeRoomRoll(new CampaignRoomRoll(currentRoomType, currentMonsterTier, pendingScenarioId, pendingRoomDifficulty)));
+		retryComposableGolemForms = SnapshotComposableGolemForms(activeComposableGolem);
+		if (retryComposableGolemForms != null)
+		{
+			activeComposableGolem = CreateComposableGolemForCurrentRoom();
+			AppendLog("GOLEM - bonus Potenza delle forme conservati per il nuovo tentativo.");
+		}
 		if (!LoadCampaignRoomScenario())
 		{
 			currentScenarioDisplayOverride = DescribeRoomRoll(new CampaignRoomRoll(currentRoomType, currentMonsterTier, pendingScenarioId, pendingRoomDifficulty));
@@ -174,9 +200,43 @@ public sealed partial class BattleBoardController
 
 	private void StartNextRoom()
 	{
+		if (IsCampaignComplete())
+		{
+			CompleteCampaign();
+			return;
+		}
 		survivingCpuFormation.Clear();
 		canRetryCampaignRoom = false;
 		BeginRoomChoice();
+	}
+
+	private bool IsFinalBossRoom()
+	{
+		return runProgress != null
+			&& currentRoomType == RoomType.Boss
+			&& runProgress.RoomsCleared + 1 == configuration.Progression.FinalBossRoom;
+	}
+
+	private bool IsCampaignComplete()
+	{
+		return runProgress != null
+			&& runProgress.RoomsCleared >= configuration.Progression.FinalBossRoom;
+	}
+
+	private void RecordCampaignBossVictory()
+	{
+		AccardND.PvpUi.PvpCampaignKillTracker.RecordBossDefeat(MedusaBossCardId);
+		AppendLog("CAMPAGNA - boss finale battuto: achievement/icona boss registrati per il profilo.");
+	}
+
+	private void CompleteCampaign()
+	{
+		canAdvanceToNextRoom = false;
+		canRetryCampaignRoom = false;
+		SetTurnBanner(playerTurn: true, "CAMPAGNA COMPLETATA");
+		SetMessage("CAMPAGNA COMPLETATA. Boss finale sconfitto: icona achievement sbloccata. Ritorno all'inizio tra 5 secondi.");
+		((Component)restartButton).gameObject.SetActive(false);
+		((MonoBehaviour)this).StartCoroutine(ReturnToStartAfterGameOver());
 	}
 
 	private void ReturnToStart()
@@ -187,6 +247,7 @@ public sealed partial class BattleBoardController
 	private void ReturnToStart(bool showModeSelection)
 	{
 		AbandonActivePvpSession();
+		ClearRuntimeSessionVisuals();
 		((MonoBehaviour)this).StopAllCoroutines();
 		ClearDraftEntranceState();
 		StopMusic();
@@ -205,6 +266,12 @@ public sealed partial class BattleBoardController
 		pendingRoomDifficulty = RoomDifficulty.Normal;
 		currentScenarioDisplayOverride = null;
 		activeComposableGolem = null;
+		retryComposableGolemForms = null;
+		activeMedusaBoss = null;
+		activeTrentorBoss = null;
+		activeBragusBoss = null;
+		campaignScenarioId = null;
+		campaignScenarioBossId = null;
 		inputLocked = true;
 		gameFinished = false;
 		draftActive = false;
@@ -215,6 +282,9 @@ public sealed partial class BattleBoardController
 		currentRoomType = configuration.StartingRoom.RoomType;
 		campaignDeck = null;
 		initialDeckBuilder = null;
+		campaignConsumables.Clear();
+		// La run è terminata (sconfitta/completata/abbandono): via il salvataggio.
+		ClearSavedRun();
 		ResetScenarioRuleState();
 		selectedDraftCards.Clear();
 		selectedPlayerDeploymentIndices.Clear();
@@ -238,21 +308,37 @@ public sealed partial class BattleBoardController
 		DestroyPrototypeViews(playerDeploymentPreviewViews);
 		DestroyPrototypeViews(cpuDeploymentPreviewViews);
 		DestroyPrototypeViews(deckBuilderCardViews);
+		DestroyPrototypeViews(initialDraftOfferViews);
+		DestroyPrototypeViews(initialDraftDeckViews);
+		initialDraftOffers.Clear();
+		initialDraftDeck.Clear();
+		initialDraftSelectedIndices.Clear();
+		initialDraftCaptainClass = null;
 		DestroyPrototypeViews(merchantOwnedCardViews);
 		ClearImplementationArchiveCards();
+		ClearImplementationConsumables();
 		CloseCardInspection();
 		ClearCardRowChildren(playerRow);
 		ClearCardRowChildren(cpuRow);
 		ClearCardRowChildren(playerHandRow);
 		ClearInitiativeTimeline();
+		ClearRuntimeSessionVisuals();
 		((Component)restartButton).gameObject.SetActive(false);
-		((Component)confirmFormationButton).gameObject.SetActive(false);
+		((Component)confirmActionButton).gameObject.SetActive(false);
 		((Component)cancelActionButton).gameObject.SetActive(false);
 		((Component)abilityButton).gameObject.SetActive(false);
 		((Component)attachmentButton).gameObject.SetActive(false);
 		((Component)merchantBuyButton).gameObject.SetActive(false);
 		CloseMerchantPanel();
 		deckBuilderPanel.SetActive(false);
+		if ((Object)(object)initialDraftPanel != (Object)null)
+		{
+			initialDraftPanel.SetActive(false);
+		}
+		if ((Object)(object)campaignModeSelectionPanel != (Object)null)
+		{
+			campaignModeSelectionPanel.SetActive(false);
+		}
 		if ((Object)(object)roomChoicePanel != (Object)null)
 		{
 			roomChoicePanel.SetActive(false);
@@ -271,6 +357,42 @@ public sealed partial class BattleBoardController
 			ShowModeSelection();
 		}
 		ApplyResponsiveLayout();
+	}
+
+	private void ClearRuntimeSessionVisuals()
+	{
+		foreach (AccardND.Battlefield.Dice3DRollView diceView in ((Component)this).GetComponentsInChildren<AccardND.Battlefield.Dice3DRollView>(true))
+		{
+			if ((Object)(object)diceView == (Object)null)
+				continue;
+
+			GameObject viewObject = ((Component)diceView).gameObject;
+			viewObject.SetActive(false);
+			Object.Destroy((Object)(object)viewObject);
+		}
+
+		DestroySafeAreaChildrenNamed(
+			"Medusa Gaze Group Roll",
+			"Player Initiative Die 3D",
+			"Opponent Initiative Die 3D",
+			"Player Initiative Dice Board",
+			"Opponent Initiative Dice Board");
+	}
+
+	private void DestroySafeAreaChildrenNamed(params string[] names)
+	{
+		if ((Object)(object)safeAreaRoot == (Object)null || names == null || names.Length == 0)
+			return;
+
+		for (int index = ((Transform)safeAreaRoot).childCount - 1; index >= 0; index--)
+		{
+			Transform child = ((Transform)safeAreaRoot).GetChild(index);
+			if (Array.IndexOf(names, child.name) < 0)
+				continue;
+
+			((Component)child).gameObject.SetActive(false);
+			Object.Destroy((Object)(object)((Component)child).gameObject);
+		}
 	}
 
 	private void SetBattlefieldSurfaceVisible(bool visible)
@@ -371,15 +493,28 @@ public sealed partial class BattleBoardController
 		{
 		case RoomType.UnexpectedOpportunity:
 		{
+			(string scenarioText, int scenarioExperience) = RevealCampaignScenario();
+			if (!string.IsNullOrWhiteSpace(scenarioText))
+			{
+				text += scenarioText;
+				num += scenarioExperience;
+			}
 			int eventRoll = random.NextInclusive(1, 12);
 			AppendLog($"EVENTO - D12 = {eventRoll}");
 			if (playerCards.Count > 0)
 			{
+				bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 				PlayRollingDiceSfx();
 				playerCards[0].View.PlayDiceRoll(diceCatalog, 12, eventRoll, "IMPREVISTO / OPPORTUNITA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-				yield return (object)new WaitForSecondsRealtime(configuration.Animation.DiceRollDuration + configuration.Animation.DiceResultHold);
+				yield return WaitForCardInspectionPause(configuration.Animation.DiceRollDuration + configuration.Animation.DiceResultHold);
+				RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 			}
-			(text, num) = ResolveOpportunity(eventRoll);
+			(string eventText, int eventExperience) = ResolveOpportunity(eventRoll);
+			if (!string.IsNullOrWhiteSpace(eventText))
+			{
+				text += eventText;
+				num += eventExperience;
+			}
 			break;
 		}
 		case RoomType.Loot:
@@ -432,7 +567,7 @@ public sealed partial class BattleBoardController
 			RoomType.UnexpectedOpportunity => progression.OpportunityRoomExperience, 
 			_ => 0, 
 		};
-		RoomReward roomReward = runProgress.CompleteNonCombatRoom(num2 + num);
+		RoomReward roomReward = runProgress.CompleteNonCombatRoom(num2 + num, ConsumeNextRoomExperienceMultiplier());
 		int num3 = campaignDeck?.ReleaseCooldown() ?? 0;
 		if (num3 > 0)
 		{
@@ -459,6 +594,10 @@ public sealed partial class BattleBoardController
 		string text3 = ((roomReward.TotalExperience > 0) ?$" +{roomReward.TotalExperience} EXP." : string.Empty);
 		string text4 = ((roomReward.LevelsGained > 0) ?$" LEVEL UP: livello {runProgress.PlayerLevel}, D{runProgress.PlayerVigorDieSides}!" : string.Empty);
 		SetMessage(text2 + text + text3 + text4);
+		if (roomReward.LevelsGained > 0)
+		{
+			ShowLevelUpVigorHint();
+		}
 		restartButtonText.text = "CONTINUA";
 		((Component)restartButton).gameObject.SetActive(true);
 		if (roomType == RoomType.Merchant)

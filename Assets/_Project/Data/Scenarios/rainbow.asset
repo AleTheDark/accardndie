@@ -15,6 +15,7 @@ MonoBehaviour:
   id: rainbow
   displayName: Arcobaleno
   background: {fileID: 21300000, guid: 397e5652801dfe5468b395cc39202888, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: cbcbf09540b7c0a4283410ea4dbb30a7, type: 3}
   roomType: 2
   difficulty: 0
   bossId: 

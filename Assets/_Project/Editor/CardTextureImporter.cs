@@ -16,10 +16,8 @@ namespace AccardND.Editor
         }
     }
 
-    [InitializeOnLoad]
     public static class AndroidTextureOptimizer
     {
-        private const string SessionKey = "AccardND.AndroidTexturesOptimized.v1";
         private static readonly string[] TextureFolders =
         {
             "Assets/_Project/Art/Cards",
@@ -31,11 +29,6 @@ namespace AccardND.Editor
             "Assets/_Project/Resources/StatusIcons",
             "Assets/_Project/Resources/UI"
         };
-
-        static AndroidTextureOptimizer()
-        {
-            EditorApplication.delayCall += OptimizeOnce;
-        }
 
         [MenuItem("Accard N' Die/Optimize Android Textures", priority = 50)]
         public static void OptimizeAndroidTextures()
@@ -50,14 +43,6 @@ namespace AccardND.Editor
             }
             AssetDatabase.SaveAssets();
             Debug.Log($"[Accard N' Die] Ottimizzate {count} texture per Android (ASTC).");
-        }
-
-        private static void OptimizeOnce()
-        {
-            if (SessionState.GetBool(SessionKey, false))
-                return;
-            SessionState.SetBool(SessionKey, true);
-            OptimizeAndroidTextures();
         }
     }
 
@@ -113,15 +98,9 @@ namespace AccardND.Editor
         }
     }
 
-    [InitializeOnLoad]
     public static class CardBorderImportInitializer
     {
         private const string BorderFolder = "Assets/_Project/Resources/CardBorders";
-
-        static CardBorderImportInitializer()
-        {
-            EditorApplication.delayCall += ReimportBorders;
-        }
 
         [MenuItem("Accard N' Die/Reimport Card Holders", priority = 22)]
         public static void ReimportBorders()
@@ -213,6 +192,8 @@ namespace AccardND.Editor
                 || fileName.StartsWith("selection_mode_screen", System.StringComparison.Ordinal)
                 || fileName.StartsWith("tutorial-", System.StringComparison.Ordinal)
                 || fileName.StartsWith("card_inspection", System.StringComparison.Ordinal)
+                || fileName.StartsWith("deck_builder_frame", System.StringComparison.Ordinal)
+                || fileName.EndsWith("_overlay", System.StringComparison.Ordinal)
                 || fileName == "card_inspection_book";
         }
     }

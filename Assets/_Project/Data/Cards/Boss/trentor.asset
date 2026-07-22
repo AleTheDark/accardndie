@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d42e105f465d48f43a32e6d78f6b8cf6, type: 3}
+  m_Name: trentor
+  m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
+  id: trentor
+  displayName: Trentor
+  category: 1
+  artwork: {fileID: 21300000, guid: 18feb9d7ee924206a8314e5b50cf695d, type: 3}
+  strength: 12
+  hasHeroClass: 1
+  heroClass: 5
+  rulesText: "Marchio dei Rami: all'inizio del suo turno marca la tua carta con piu Potenza non ancora marcata.\nPredatore Rampicante: quando attacca un bersaglio marcato ottiene +2 al totale d'attacco.\nRampicanti Avvolgenti: ogni secondo turno intrappola il bersaglio marcato, abbassando di 1 step il suo prossimo dado Vigore difensivo.\nRadici Reattive: quando subisce danno, marca l'attaccante."

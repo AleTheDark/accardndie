@@ -60,6 +60,41 @@ public sealed class AccardDatabase
             CREATE UNIQUE INDEX IF NOT EXISTS ux_accounts_username_ci
                 ON accounts(username_ci) WHERE source='password';
 
+            CREATE TABLE IF NOT EXISTS external_identities (
+                provider      TEXT NOT NULL,
+                external_id   TEXT NOT NULL,
+                player_id     TEXT NOT NULL,
+                created_at    TEXT NOT NULL,
+                last_login_at TEXT,
+                PRIMARY KEY (provider, external_id),
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+            CREATE INDEX IF NOT EXISTS ix_external_identities_player
+                ON external_identities(player_id);
+
+            -- Preserve existing IDs because all progression tables reference them.
+            INSERT OR IGNORE INTO external_identities
+                (provider, external_id, player_id, created_at, last_login_at)
+            SELECT 'ugs', substr(player_id, 5), player_id, created_at, last_login_at
+            FROM accounts
+            WHERE source='ugs' AND player_id LIKE 'ugs:%';
+
+            CREATE TABLE IF NOT EXISTS account_nicknames (
+                player_id   TEXT PRIMARY KEY,
+                nickname    TEXT NOT NULL,
+                nickname_ci TEXT NOT NULL UNIQUE,
+                updated_at  TEXT NOT NULL,
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+
+            -- Duplicate historical display names are intentionally skipped.
+            -- Those players will choose a unique nickname at their next login.
+            INSERT OR IGNORE INTO account_nicknames
+                (player_id, nickname, nickname_ci, updated_at)
+            SELECT player_id, username, username_ci, COALESCE(last_login_at, created_at)
+            FROM accounts
+            WHERE length(username) BETWEEN 3 AND 18;
+
             CREATE TABLE IF NOT EXISTS seasons (
                 season_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name      TEXT NOT NULL,
@@ -168,6 +203,49 @@ public sealed class AccardDatabase
                 unlocked_at    TEXT,
                 PRIMARY KEY (player_id, achievement_id)
             );
+
+            -- Progressione permanente single player. Il client puo cacheare questi dati,
+            -- ma la copia autoritativa vive qui.
+            CREATE TABLE IF NOT EXISTS single_player_progress (
+                player_id          TEXT PRIMARY KEY,
+                honey              INTEGER NOT NULL DEFAULT 0,
+                tutorial_completed INTEGER NOT NULL DEFAULT 0,
+                hardcore_unlocked  INTEGER NOT NULL DEFAULT 0,
+                updated_at         TEXT NOT NULL,
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS single_player_unlocks (
+                player_id   TEXT NOT NULL,
+                unlock_type TEXT NOT NULL,
+                unlock_id   TEXT NOT NULL,
+                unlocked_at TEXT NOT NULL,
+                PRIMARY KEY (player_id, unlock_type, unlock_id),
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+
+            -- Ricompense in miele riscattate (tutorial/morte). Il server calcola e possiede
+            -- l'importo; la riga serve per l'idempotenza e per applicare in seguito il
+            -- moltiplicatore pubblicitario a una specifica reward gia concessa.
+            -- reward_type: 'tutorial' | 'death'. multiplier parte da 1 e diventa 3 con l'ad.
+            -- source_ref: tutorialRunId/runId per l'idempotenza. ad_impression_id: unico se non nullo.
+            CREATE TABLE IF NOT EXISTS single_player_reward_claims (
+                claim_id         TEXT PRIMARY KEY,
+                player_id        TEXT NOT NULL,
+                reward_type      TEXT NOT NULL,
+                base_honey       INTEGER NOT NULL,
+                multiplier       INTEGER NOT NULL DEFAULT 1,
+                ad_impression_id TEXT,
+                source_ref       TEXT,
+                created_at       TEXT NOT NULL,
+                multiplied_at    TEXT,
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+            CREATE INDEX IF NOT EXISTS ix_reward_claims_player
+                ON single_player_reward_claims(player_id, reward_type, source_ref);
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_reward_claims_ad
+                ON single_player_reward_claims(ad_impression_id)
+                WHERE ad_impression_id IS NOT NULL;
 
             -- Amicizie a righe speculari (una per prospettiva) per liste O(1).
             -- status: requested (inviata da me) | incoming (ricevuta) | accepted | blocked.

@@ -12,6 +12,7 @@ namespace AccardND.PvpUi
     public static class PvpCampaignKillTracker
     {
         private const string Key = "pvp-campaign-kills";
+        private const string BossKey = "pvp-campaign-bosses";
         private const char Separator = ',';
 
         /// <summary>Registra la famiglia di un mostro sconfitto (es. "goblin").</summary>
@@ -38,17 +39,35 @@ namespace AccardND.PvpUi
         /// <summary>Tutte le famiglie sconfitte finora.</summary>
         public static string[] All() => Load().ToArray();
 
-        private static HashSet<string> Load()
+        /// <summary>Registra un boss sconfitto in campagna per gli sblocchi profilo.</summary>
+        public static void RecordBossDefeat(string bossId)
         {
-            string raw = PlayerPrefs.GetString(Key, string.Empty);
+            if (string.IsNullOrWhiteSpace(bossId))
+                return;
+            string id = bossId.Trim().ToLowerInvariant();
+            HashSet<string> defeated = Load(BossKey);
+            if (defeated.Add(id))
+                Save(BossKey, defeated);
+        }
+
+        /// <summary>Tutti i boss sconfitti finora.</summary>
+        public static string[] AllBosses() => Load(BossKey).ToArray();
+
+        private static HashSet<string> Load() => Load(Key);
+
+        private static HashSet<string> Load(string key)
+        {
+            string raw = PlayerPrefs.GetString(key, string.Empty);
             return string.IsNullOrEmpty(raw)
                 ? new HashSet<string>()
                 : new HashSet<string>(raw.Split(Separator));
         }
 
-        private static void Save(HashSet<string> defeated)
+        private static void Save(HashSet<string> defeated) => Save(Key, defeated);
+
+        private static void Save(string key, HashSet<string> defeated)
         {
-            PlayerPrefs.SetString(Key, string.Join(Separator, defeated));
+            PlayerPrefs.SetString(key, string.Join(Separator, defeated));
             PlayerPrefs.Save();
         }
     }

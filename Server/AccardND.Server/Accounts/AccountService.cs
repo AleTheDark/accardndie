@@ -6,6 +6,9 @@ using Microsoft.Data.Sqlite;
 namespace AccardND.Server.Accounts;
 
 public sealed record AccountIdentity(string PlayerId, string Username);
+public sealed record ExternalAccountResult(
+    AccountIdentity Identity, bool IsNewAccount, bool RequiresNickname, string Error);
+public sealed record NicknameChangeResult(AccountIdentity Identity, string Error);
 
 public sealed class AccountService
 {
@@ -65,6 +68,7 @@ public sealed class AccountService
             return (null, null, "Nome utente già in uso.");
         }
 
+        SetNickname(new AccountIdentity(playerId, username), username);
         return IssueSession(new AccountIdentity(playerId, username));
     }
 
@@ -108,25 +112,176 @@ public sealed class AccountService
     /// Crea o aggiorna la riga di un account esterno (UGS) così che profili,
     /// statistiche e rank possano agganciarsi al suo player_id.
     /// </summary>
-    public void EnsureExternalAccount(AccountIdentity identity)
+    public ExternalAccountResult ResolveExternalAccount(VerifiedExternalIdentity external)
     {
-        if (identity == null)
-            return;
+        if (external == null || string.IsNullOrWhiteSpace(external.Provider)
+            || string.IsNullOrWhiteSpace(external.ExternalId))
+            return new ExternalAccountResult(null, false, false, "Identita esterna non valida.");
+
         string now = DateTime.UtcNow.ToString("O");
         using SqliteConnection connection = database.Open();
-        using SqliteCommand upsert = connection.CreateCommand();
-        upsert.CommandText = @"
-            INSERT INTO accounts (player_id, source, username, username_ci, created_at, last_login_at)
-            VALUES ($id, 'ugs', $username, $ci, $now, $now)
-            ON CONFLICT(player_id) DO UPDATE SET
-                username = excluded.username,
-                username_ci = excluded.username_ci,
-                last_login_at = excluded.last_login_at";
-        upsert.Parameters.AddWithValue("$id", identity.PlayerId);
-        upsert.Parameters.AddWithValue("$username", identity.Username);
-        upsert.Parameters.AddWithValue("$ci", identity.Username.ToLowerInvariant());
-        upsert.Parameters.AddWithValue("$now", now);
-        upsert.ExecuteNonQuery();
+        using SqliteTransaction transaction = connection.BeginTransaction();
+
+        string playerId = FindExternalAccount(
+            connection, transaction, external.Provider, external.ExternalId);
+        bool isNew = false;
+        if (playerId == null)
+        {
+            string legacyId = external.Provider == "ugs" ? $"ugs:{external.ExternalId}" : null;
+            playerId = AccountExists(connection, transaction, legacyId)
+                ? legacyId
+                : Guid.NewGuid().ToString("N");
+
+            if (playerId != legacyId)
+            {
+                using SqliteCommand create = connection.CreateCommand();
+                create.Transaction = transaction;
+                create.CommandText = @"
+                    INSERT INTO accounts
+                        (player_id, source, username, username_ci, created_at, last_login_at)
+                    VALUES ($id, 'external', $username, $ci, $now, $now)";
+                create.Parameters.AddWithValue("$id", playerId);
+                create.Parameters.AddWithValue("$username", external.DisplayName);
+                create.Parameters.AddWithValue("$ci", external.DisplayName.ToLowerInvariant());
+                create.Parameters.AddWithValue("$now", now);
+                create.ExecuteNonQuery();
+                isNew = true;
+            }
+
+            using SqliteCommand link = connection.CreateCommand();
+            link.Transaction = transaction;
+            link.CommandText = @"
+                INSERT INTO external_identities
+                    (provider, external_id, player_id, created_at, last_login_at)
+                VALUES ($provider, $external, $player, $now, $now)";
+            link.Parameters.AddWithValue("$provider", external.Provider);
+            link.Parameters.AddWithValue("$external", external.ExternalId);
+            link.Parameters.AddWithValue("$player", playerId);
+            link.Parameters.AddWithValue("$now", now);
+            link.ExecuteNonQuery();
+        }
+
+        using (SqliteCommand update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText = @"
+                UPDATE accounts SET last_login_at=$now WHERE player_id=$id;
+                UPDATE external_identities SET last_login_at=$now
+                WHERE provider=$provider AND external_id=$external;";
+            update.Parameters.AddWithValue("$now", now);
+            update.Parameters.AddWithValue("$id", playerId);
+            update.Parameters.AddWithValue("$provider", external.Provider);
+            update.Parameters.AddWithValue("$external", external.ExternalId);
+            update.ExecuteNonQuery();
+        }
+
+        string username;
+        using (SqliteCommand query = connection.CreateCommand())
+        {
+            query.Transaction = transaction;
+            query.CommandText = "SELECT username FROM accounts WHERE player_id=$id";
+            query.Parameters.AddWithValue("$id", playerId);
+            username = Convert.ToString(query.ExecuteScalar());
+        }
+
+        transaction.Commit();
+        bool requiresNickname = !HasNickname(connection, playerId);
+        return new ExternalAccountResult(
+            new AccountIdentity(playerId, username), isNew, requiresNickname, null);
+    }
+
+    public NicknameChangeResult SetNickname(AccountIdentity current, string nickname)
+    {
+        if (current == null)
+            return new NicknameChangeResult(null, "Account non autenticato.");
+
+        nickname = nickname?.Trim() ?? string.Empty;
+        if (nickname.Length is < 3 or > 18)
+            return new NicknameChangeResult(null, "Il nickname deve avere 3-18 caratteri.");
+        if (nickname.Any(character =>
+                !char.IsLetterOrDigit(character) && character != '_' && character != '-'))
+            return new NicknameChangeResult(
+                null, "Usa solo lettere, numeri, trattino e underscore.");
+
+        string nicknameCi = nickname.ToLowerInvariant();
+        if (nicknameCi is "admin" or "administrator" or "moderator" or "support" or "system")
+            return new NicknameChangeResult(null, "Questo nickname e riservato.");
+
+        string now = DateTime.UtcNow.ToString("O");
+        using SqliteConnection connection = database.Open();
+        using SqliteTransaction transaction = connection.BeginTransaction();
+        try
+        {
+            using (SqliteCommand upsert = connection.CreateCommand())
+            {
+                upsert.Transaction = transaction;
+                upsert.CommandText = @"
+                    INSERT INTO account_nicknames
+                        (player_id, nickname, nickname_ci, updated_at)
+                    VALUES ($id, $nickname, $ci, $now)
+                    ON CONFLICT(player_id) DO UPDATE SET
+                        nickname=excluded.nickname,
+                        nickname_ci=excluded.nickname_ci,
+                        updated_at=excluded.updated_at";
+                upsert.Parameters.AddWithValue("$id", current.PlayerId);
+                upsert.Parameters.AddWithValue("$nickname", nickname);
+                upsert.Parameters.AddWithValue("$ci", nicknameCi);
+                upsert.Parameters.AddWithValue("$now", now);
+                upsert.ExecuteNonQuery();
+            }
+
+            using (SqliteCommand update = connection.CreateCommand())
+            {
+                update.Transaction = transaction;
+                update.CommandText = @"
+                    UPDATE accounts SET username=$nickname, username_ci=$ci
+                    WHERE player_id=$id";
+                update.Parameters.AddWithValue("$id", current.PlayerId);
+                update.Parameters.AddWithValue("$nickname", nickname);
+                update.Parameters.AddWithValue("$ci", nicknameCi);
+                update.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+            return new NicknameChangeResult(new AccountIdentity(current.PlayerId, nickname), null);
+        }
+        catch (SqliteException exception) when (exception.SqliteErrorCode == SqliteConstraintViolation)
+        {
+            return new NicknameChangeResult(null, "Nickname gia in uso.");
+        }
+    }
+
+    private static bool HasNickname(SqliteConnection connection, string playerId)
+    {
+        using SqliteCommand query = connection.CreateCommand();
+        query.CommandText = "SELECT 1 FROM account_nicknames WHERE player_id=$id LIMIT 1";
+        query.Parameters.AddWithValue("$id", playerId);
+        return query.ExecuteScalar() != null;
+    }
+
+    private static string FindExternalAccount(
+        SqliteConnection connection, SqliteTransaction transaction, string provider, string externalId)
+    {
+        using SqliteCommand query = connection.CreateCommand();
+        query.Transaction = transaction;
+        query.CommandText = @"
+            SELECT player_id FROM external_identities
+            WHERE provider=$provider AND external_id=$external LIMIT 1";
+        query.Parameters.AddWithValue("$provider", provider);
+        query.Parameters.AddWithValue("$external", externalId);
+        return query.ExecuteScalar() as string;
+    }
+
+    private static bool AccountExists(
+        SqliteConnection connection, SqliteTransaction transaction, string playerId)
+    {
+        if (string.IsNullOrEmpty(playerId))
+            return false;
+        using SqliteCommand query = connection.CreateCommand();
+        query.Transaction = transaction;
+        query.CommandText = "SELECT 1 FROM accounts WHERE player_id=$id LIMIT 1";
+        query.Parameters.AddWithValue("$id", playerId);
+        return query.ExecuteScalar() != null;
     }
 
     public AccountIdentity ValidateToken(string token)

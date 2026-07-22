@@ -47,6 +47,28 @@ public sealed partial class BattleBoardController
 
 	private AudioClip monster4RoomEnterSfx;
 
+	private AudioClip bossBragusSoundtrack;
+
+	private AudioClip bossMedusaSoundtrack;
+
+	private AudioClip bossPalantirSoundtrack;
+
+	private AudioClip bossMedusaAttackSfx;
+
+	private AudioClip bossMedusaDeathSfx;
+
+	private AudioClip bossTrentorJoinBattlefieldSfx;
+
+	private AudioClip bossTrentorAttackSfx;
+
+	private AudioClip[] bossBragusAttackSfx;
+
+	private AudioClip bossBragusAttackHitSfx;
+
+	private AudioClip[] bossBragusTakeDamageSfx;
+
+	private AudioClip bossBragusDeathSfx;
+
 	private void InitializeAudio()
 	{
 		battleSfx = new BattleSfxPlayer();
@@ -74,11 +96,32 @@ public sealed partial class BattleBoardController
 		monster2RoomEnterSfx = LoadSfx("monster_2_room");
 		monster3RoomEnterSfx = LoadSfx("monster_3_room_enter");
 		monster4RoomEnterSfx = LoadSfx("monster_4_room");
+		bossBragusSoundtrack = LoadSfx("boss_bragus_soundtrack");
+		bossMedusaSoundtrack = LoadSfx("boss_medusa_soundtrack");
+		bossPalantirSoundtrack = LoadSfx("boss_palantir_soundtrack");
+		bossMedusaAttackSfx = LoadSfx("boss_medusa_attack");
+		bossMedusaDeathSfx = LoadSfx("boss_medusa_death");
+		bossTrentorJoinBattlefieldSfx = LoadSfx("boss_trentor_join_battlefield");
+		bossTrentorAttackSfx = LoadSfx("boss_trentor_attack");
+		bossBragusAttackSfx = LoadSfxSet("boss_bragus_attack", 3);
+		bossBragusAttackHitSfx = LoadSfx("boss_bragus_attack_hit");
+		bossBragusTakeDamageSfx = LoadSfxSet("boss_bragus_takedamage", 3);
+		bossBragusDeathSfx = LoadSfx("boss_bragus_death");
 	}
 
 	private static AudioClip LoadSfx(string clipName)
 	{
 		return Resources.Load<AudioClip>("SFX/" + clipName);
+	}
+
+	private static AudioClip[] LoadSfxSet(string clipNamePrefix, int count)
+	{
+		AudioClip[] clips = new AudioClip[Mathf.Max(0, count)];
+		for (int index = 0; index < clips.Length; index++)
+		{
+			clips[index] = LoadSfx($"{clipNamePrefix}_{index + 1}");
+		}
+		return clips;
 	}
 
 	private void PlaySfx(AudioClip clip, float volume = 1f)
@@ -287,6 +330,11 @@ public sealed partial class BattleBoardController
 		battleSfx?.PlayDrawCard();
 	}
 
+	private void PlayFootstepSfx()
+	{
+		battleSfx?.PlayFootstep();
+	}
+
 	private void PlayPawnEnteringBattlefieldSfx()
 	{
 		battleSfx?.PlayJoinBattlefield();
@@ -327,9 +375,88 @@ public sealed partial class BattleBoardController
 		battleSfx?.PlayBarbarianFury();
 	}
 
+	private void PlayDetectorItemUseSfx()
+	{
+		battleSfx?.PlayDetectorItemUse();
+	}
+
+	private void PlayEmpowerItemUseSfx()
+	{
+		battleSfx?.PlayEmpowerItemUse();
+	}
+
 	private void PlayClassAbilitySfx(HeroClass heroClass)
 	{
 		battleSfx?.PlayClassAbility(heroClass);
+	}
+
+	private void PlayComposableGolemAttackSfx(ComposableGolemForm form)
+	{
+		battleSfx?.PlayComposableGolemAttack(form);
+	}
+
+	private void PlayMedusaPetrifyingGazeSfx()
+	{
+		PlaySfx(bossMedusaAttackSfx);
+	}
+
+	private void PlayMedusaDeathSfx()
+	{
+		PlaySfx(bossMedusaDeathSfx);
+	}
+
+	private void PlayTrentorJoinBattlefieldSfx()
+	{
+		PlaySfx(bossTrentorJoinBattlefieldSfx);
+	}
+
+	private void PlayTrentorAttackSfx()
+	{
+		PlaySfx(bossTrentorAttackSfx);
+	}
+
+	private void PlayBragusAttackSfx()
+	{
+		PlayRandomSfx(bossBragusAttackSfx);
+	}
+
+	private void PlayBragusAttackHitSfx()
+	{
+		PlaySfx(bossBragusAttackHitSfx);
+	}
+
+	private void PlayBragusTakeDamageSfx()
+	{
+		PlayRandomSfx(bossBragusTakeDamageSfx);
+	}
+
+	private void PlayBragusDeathSfx()
+	{
+		PlaySfx(bossBragusDeathSfx);
+	}
+
+	private void PlayPalatirCosmicAttackSfx()
+	{
+		battleSfx?.PlayClassAbility(HeroClass.Mage);
+	}
+
+	private void PlayRandomSfx(AudioClip[] clips)
+	{
+		if (clips == null || clips.Length == 0)
+		{
+			return;
+		}
+
+		int startIndex = random != null ? random.NextInclusive(0, clips.Length - 1) : Random.Range(0, clips.Length);
+		for (int offset = 0; offset < clips.Length; offset++)
+		{
+			AudioClip clip = clips[(startIndex + offset) % clips.Length];
+			if ((Object)(object)clip != (Object)null)
+			{
+				PlaySfx(clip);
+				return;
+			}
+		}
 	}
 
 	private void PlayLootRoomEnterSfx()
@@ -339,6 +466,21 @@ public sealed partial class BattleBoardController
 
 	private void PlayCurrentRoomEnterSfx()
 	{
+		if (currentRoomType == RoomType.Boss && IsMedusaMusicRoom())
+		{
+			PlayMusic(bossMedusaSoundtrack);
+			return;
+		}
+		if (currentRoomType == RoomType.Boss && IsPalatirMusicRoom())
+		{
+			PlayMusic(bossPalantirSoundtrack);
+			return;
+		}
+		if (currentRoomType == RoomType.Boss && IsBragusMusicRoom())
+		{
+			PlayMusic(bossBragusSoundtrack);
+			return;
+		}
 		if (currentRoomType != RoomType.Monster)
 		{
 			StopMusic();
@@ -354,6 +496,40 @@ public sealed partial class BattleBoardController
 		});
 	}
 
+	private bool IsMedusaMusicRoom()
+	{
+		if (activeMedusaBoss != null)
+		{
+			return true;
+		}
+		if (IsFinalBossRoom())
+		{
+			return true;
+		}
+		return (Object)(object)currentScenario != (Object)null
+			&& string.Equals(currentScenario.BossId, MedusaBossCardId, System.StringComparison.OrdinalIgnoreCase);
+	}
+
+	private bool IsPalatirMusicRoom()
+	{
+		if (activePalatirBoss != null)
+		{
+			return true;
+		}
+		return (Object)(object)currentScenario != (Object)null
+			&& string.Equals(currentScenario.BossId, PalatirBossCardId, System.StringComparison.OrdinalIgnoreCase);
+	}
+
+	private bool IsBragusMusicRoom()
+	{
+		if (activeBragusBoss != null)
+		{
+			return true;
+		}
+		return (Object)(object)currentScenario != (Object)null
+			&& string.Equals(currentScenario.BossId, BragusBossCardId, System.StringComparison.OrdinalIgnoreCase);
+	}
+
 	private void PlayAttackResultSfx(BattleCardState attacker, bool hit)
 	{
 		if (attacker == null)
@@ -365,6 +541,16 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		battleSfx?.PlayAttackResult(attacker.Card.HeroClass, hit);
+	}
+
+	private void PlayResolvedAttackSfx(BattleCardState attacker, bool hit, bool abilityAttack)
+	{
+		if (abilityAttack && hit && attacker?.Card.HeroClass == HeroClass.Warrior)
+		{
+			PlayClassAbilitySfx(HeroClass.Warrior);
+			return;
+		}
+		PlayAttackResultSfx(attacker, hit);
 	}
 }
 }

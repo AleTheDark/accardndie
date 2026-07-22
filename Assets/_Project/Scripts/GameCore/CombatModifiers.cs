@@ -17,7 +17,9 @@ namespace AccardND.GameCore
             int attackerFlatBonus = 0,
             int defenderFlatBonus = 0,
             bool neutralizeAttackerMatchup = false,
-            bool forceAttackerAdvantage = false)
+            bool forceAttackerAdvantage = false,
+            bool rerollDefenderOnes = false,
+            bool rerollDefenderTwos = false)
         {
             SumAttackerVigor = sumAttackerVigor;
             DefenderAdvantage = defenderAdvantage;
@@ -27,12 +29,16 @@ namespace AccardND.GameCore
             DefenderFlatBonus = defenderFlatBonus;
             NeutralizeAttackerMatchup = neutralizeAttackerMatchup;
             ForceAttackerAdvantage = forceAttackerAdvantage;
+            RerollDefenderOnes = rerollDefenderOnes;
+            RerollDefenderTwos = rerollDefenderTwos;
         }
 
         public bool SumAttackerVigor { get; }
         public bool DefenderAdvantage { get; }
         public bool RerollAttackerOnes { get; }
         public bool RerollAttackerTwos { get; }
+        public bool RerollDefenderOnes { get; }
+        public bool RerollDefenderTwos { get; }
         public int AttackerFlatBonus { get; }
         public int DefenderFlatBonus { get; }
         public bool NeutralizeAttackerMatchup { get; }

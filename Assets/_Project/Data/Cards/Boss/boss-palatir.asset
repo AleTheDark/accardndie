@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d42e105f465d48f43a32e6d78f6b8cf6, type: 3}
+  m_Name: boss-palatir
+  m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
+  id: boss-palatir
+  displayName: Palatir
+  category: 1
+  artwork: {fileID: 21300000, guid: b8c3d40e5f607189a2b3c4d5e6f71829, type: 3}
+  strength: 7
+  hasHeroClass: 0
+  heroClass: 0
+  rulesText: "Scudi Di Famiglia: Palatir ha tre scudi orbitanti Might, Cunning e Magic. Finche almeno uno scudo e attivo non perde HP. Ogni scudo si rompe solo con un attacco riuscito di una famiglia che ha vantaggio su quello scudo. Distrutti tutti gli scudi, Palatir puo perdere HP."

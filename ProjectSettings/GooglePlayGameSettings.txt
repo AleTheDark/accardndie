@@ -1,0 +1,6 @@
+proj.AppId=866249556431
+and.ClientId=866249556431-mgdm97uvov7mjvect4bp453dpp2oe48u.apps.googleusercontent.com
+and.BundleId=com.apesolution.accardndie
+android.SetupDone=true
+proj.pluginVersion=2.1.0
+lastUpgrade=20100

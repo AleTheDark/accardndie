@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d42e105f465d48f43a32e6d78f6b8cf6, type: 3}
+  m_Name: boss-bragus
+  m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
+  id: boss-bragus
+  displayName: Bragus
+  category: 1
+  artwork: {fileID: 21300000, guid: dd17eeb6009246b1b415ae13b6fb2bc2, type: 3}
+  strength: 10
+  hasHeroClass: 1
+  heroClass: 6
+  rulesText: "HP 45: Bragus Reattivo: Bragus non attacca nel suo turno. Quando viene attaccato si difende; se l'attaccante non supera la sua difesa, Bragus contrattacca subito. Presa Brutale: finche Bragus e vivo, gli avversari non possono usare equipaggiamenti."

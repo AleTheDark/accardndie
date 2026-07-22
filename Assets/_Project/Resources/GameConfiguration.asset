@@ -38,7 +38,7 @@ MonoBehaviour:
     roomFadeInDuration: 0.42
   gameplay:
     initiativeDieSides: 20
-    vigorDieSides: 6
+    vigorDieSides: 4
     randomSeed: 20260620
     useRandomSeedEachSession: 1
     draftCandidateCount: 6
@@ -81,12 +81,14 @@ MonoBehaviour:
     scenarioId: 
   progression:
     experiencePerLevel: 100
+    experienceThresholdsByLevel: 320000004b000000640000007d00000096000000
     monsterRoomClearExperience: 10
+    minibossClearExperience: 50
     maximumLevel: 6
     roomsPerMasterLevel: 5
     vigorDiceByLevel: 0400000006000000080000000a0000000c00000014000000
     minibossEveryRooms: 10
-    finalBossRoom: 25
+    finalBossRoom: 20
     bossFormationSize: 1
     monsterRoomWeight: 60
     merchantRoomWeight: 15

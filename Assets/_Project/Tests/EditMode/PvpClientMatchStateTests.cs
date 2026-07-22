@@ -239,6 +239,63 @@ namespace AccardND.GameCore.Tests
             Assert.That(dto.defenderTotal, Is.EqualTo(9));
         }
 
+        [Test]
+        public void AttackResolvedLog_IncludesDetailedVigorRolls()
+        {
+            var client = new PvpClientMatchState();
+            client.Apply(new MatchEventDto
+            {
+                type = "CardDeployed",
+                player = 0,
+                slot = 0,
+                cardId = "champion",
+                cardName = "Champion",
+                heroClass = (int)HeroClass.Warrior,
+                strength = 10,
+                lives = 2
+            });
+            client.Apply(new MatchEventDto
+            {
+                type = "CardDeployed",
+                player = 1,
+                slot = 0,
+                cardId = "golem",
+                cardName = "Golem",
+                heroClass = (int)HeroClass.Mage,
+                strength = 5,
+                lives = 2
+            });
+
+            client.Apply(new MatchEventDto
+            {
+                type = "AttackResolved",
+                player = 0,
+                slot = 0,
+                targetPlayer = 1,
+                targetSlot = 0,
+                certainty = "RollRequired",
+                attackerDieSides = 6,
+                defenderDieSides = 4,
+                attackerRollFirst = 2,
+                attackerRollSecond = 5,
+                attackerRollHasSecond = true,
+                attackerRollSelected = 7,
+                attackerRollSelectionMode = (int)VigorSelectionMode.Sum,
+                defenderRollFirst = 3,
+                defenderRollSelected = 3,
+                defenderRollSelectionMode = (int)VigorSelectionMode.Single,
+                attackerTotal = 17,
+                defenderTotal = 8,
+                defenderLostLife = true,
+                defenderRemainingLives = 1
+            });
+
+            string lastLog = client.Log.Last();
+            Assert.That(lastLog, Does.Contain("Champion D6[2,5] somma:7"));
+            Assert.That(lastLog, Does.Contain("Golem D4:3"));
+            Assert.That(lastLog, Does.Contain("17 contro 8"));
+        }
+
         private static void Feed(
             PvpClientMatchState[] clients, PvpMatchEngine engine, IReadOnlyList<PvpEvent> events)
         {

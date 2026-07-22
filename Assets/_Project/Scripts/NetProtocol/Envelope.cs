@@ -21,6 +21,8 @@ namespace AccardND.NetProtocol
         public const string AuthLogin = "auth.login";
         public const string AuthUgs = "auth.ugs";
         public const string AuthResponse = "auth.response";
+        public const string NicknameSet = "account.nickname.set";
+        public const string NicknameResponse = "account.nickname.response";
 
         public const string RulesGet = "rules.get";
         public const string RulesData = "rules.data";
@@ -75,6 +77,14 @@ namespace AccardND.NetProtocol
 
         public const string AchievementsGet = "achievements.get";
         public const string AchievementsData = "achievements.data";
+
+        public const string SinglePlayerProgressGet = "singleplayer.progress.get";
+        public const string SinglePlayerProgressData = "singleplayer.progress.data";
+        public const string SinglePlayerPurchaseUnlock = "singleplayer.unlock.purchase";
+        public const string SinglePlayerClaimTutorialReward = "singleplayer.reward.tutorial";
+        public const string SinglePlayerClaimDeathReward = "singleplayer.reward.death";
+        public const string SinglePlayerClaimAdMultiplier = "singleplayer.reward.ad_multiplier";
+        public const string SinglePlayerRewardResult = "singleplayer.reward.result";
     }
 
     public static class ErrorCodes
@@ -89,5 +99,9 @@ namespace AccardND.NetProtocol
         public const string InvalidLoadout = "invalid_loadout";
         public const string InvalidAction = "invalid_action";
         public const string NotInMatch = "not_in_match";
+        public const string InvalidProgressionRequest = "invalid_progression_request";
+        public const string InsufficientHoney = "insufficient_honey";
+        public const string RewardClaimNotFound = "reward_claim_not_found";
+        public const string AdAlreadyUsed = "ad_already_used";
     }
 }

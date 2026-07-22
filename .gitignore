@@ -22,6 +22,8 @@ WebGLBuild/
 webgl.zip
 .utmp/
 _Recovery/
+tmp/
+nul+
 
 # Progetti generati da Unity (rigenerati a ogni apertura)
 *.csproj

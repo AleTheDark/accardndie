@@ -15,6 +15,7 @@ MonoBehaviour:
   id: infested
   displayName: Infestata
   background: {fileID: 21300000, guid: 89a27a78b8106074db7c4ea17351c46d, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: ea710999d62f5da48a50ea88bfe6dab2, type: 3}
   roomType: 2
   difficulty: 0
-  bossId: draktharr
+  bossId: boss-drakktharr

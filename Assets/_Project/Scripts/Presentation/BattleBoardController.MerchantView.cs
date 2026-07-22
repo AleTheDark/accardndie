@@ -17,6 +17,8 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	private const float MerchantCardSize = 72f;
+
 	private void CreateMerchantView(Transform canvasTransform, Font font)
 	{
 		Image image = CreateImage("Merchant Panel", canvasTransform, new Color(0.008f, 0.016f, 0.024f, 0.96f));
@@ -28,6 +30,7 @@ public sealed partial class BattleBoardController
 		obj.sortingOrder = 420;
 		merchantPanel.AddComponent<GraphicRaycaster>();
 		Text text = CreateText("Merchant Title", ((Component)image).transform, font, 38, (FontStyle)1, (TextAnchor)4);
+		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(text);
 		text.text = "MERCANTE";
 		text.color = new Color(0.95f, 0.79f, 0.34f);
 		SetRect(text.rectTransform, new Vector2(0.05f, 0.9f), new Vector2(0.95f, 0.98f));
@@ -96,7 +99,7 @@ public sealed partial class BattleBoardController
 		});
 		val.transform.SetParent(((Component)image).transform, false);
 		RectTransform val2 = (RectTransform)val.transform;
-		SetRect(val2, new Vector2(0.035f, 0.07f), new Vector2(0.965f, 0.765f));
+		SetRect(val2, new Vector2(0.035f, 0.04f), new Vector2(0.965f, 0.765f));
 		Image component = val.GetComponent<Image>();
 		component.color = new Color(1f, 1f, 1f, 0.02f);
 		component.raycastTarget = true;
@@ -117,9 +120,9 @@ public sealed partial class BattleBoardController
 		component2.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
 		component2.constraintCount = 6;
 		component2.spacing = new Vector2(10f, 8f);
-		component2.padding = new RectOffset(8, 8, 4, 4);
+		component2.padding = new RectOffset(14, 14, 8, 8);
 		component2.childAlignment = (TextAnchor)1;
-		component2.cellSize = new Vector2(ImplementationArchiveCardSize, ImplementationArchiveCardSize);
+		component2.cellSize = new Vector2(MerchantCardSize, MerchantCardSize);
 		((Component)cardRoot).GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 		ScrollRect scrollRect = ((Component)image).gameObject.AddComponent<ScrollRect>();
 		scrollRect.viewport = val2;

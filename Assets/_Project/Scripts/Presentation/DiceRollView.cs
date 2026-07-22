@@ -14,7 +14,7 @@ namespace AccardND.Presentation
 
         public static DiceRollView Create(Transform parent)
         {
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Font font = AccardND.Battlefield.MmoUiTheme.BodyFont;
             Image backdrop = CreateImage("Dice Roll Overlay", parent, new Color(0.01f, 0.018f, 0.03f, 0.82f));
             Stretch(backdrop.rectTransform);
             backdrop.raycastTarget = true;
@@ -103,6 +103,7 @@ namespace AccardND.Presentation
             text.alignment = alignment;
             text.color = Color.white;
             text.raycastTarget = false;
+            global::AccardND.Battlefield.EditableRuntimeText.Bind(text);
             return text;
         }
 

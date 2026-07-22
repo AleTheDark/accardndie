@@ -34,6 +34,8 @@ public sealed partial class BattleBoardController
     private readonly Dictionary<BattleCardState, int> pvpCardLives = new();
     private readonly Dictionary<BattleCardState, string> pvpCardIds = new();
     private PvpPresentationTargetMode pvpTargetMode = PvpPresentationTargetMode.None;
+    private readonly List<string> pvpTimelineOrderKeys = new();
+    private Coroutine pvpTimelineSlideRoutine;
 
     // Regia: gli eventi del server vengono recitati in sequenza dalle stesse
     // animazioni della campagna, poi lo stato autoritativo riallinea la scena.
@@ -44,6 +46,8 @@ public sealed partial class BattleBoardController
     private string pvpHandSignature = string.Empty;
     private int pvpPendingDeployHandIndex = -1;
     private string pvpPendingDeployCardName = string.Empty;
+    private int pvpPendingPaladinRedirectPlayer = -1;
+    private int pvpPendingPaladinRedirectSlot = -1;
 
     // Selezione del round decisivo: il giocatore sceglie N carte fra tutte quelle
     // del loadout (indici loadout). Restano selezionate finché non conferma.
@@ -75,6 +79,7 @@ public sealed partial class BattleBoardController
         pvpTargetMode = PvpPresentationTargetMode.None;
         pvpPendingDeployHandIndex = -1;
         pvpPendingDeployCardName = string.Empty;
+        ClearPendingPaladinRedirect();
         ResetPvpDecisiveSelection();
         StopPvpRegia();
         pvpDeploymentIntroPlayed = false;
@@ -90,6 +95,10 @@ public sealed partial class BattleBoardController
             roomChoicePanel.SetActive(false);
         if ((Object)(object)deckBuilderPanel != (Object)null)
             deckBuilderPanel.SetActive(false);
+        if ((Object)(object)initialDraftPanel != (Object)null)
+            initialDraftPanel.SetActive(false);
+        if ((Object)(object)campaignModeSelectionPanel != (Object)null)
+            campaignModeSelectionPanel.SetActive(false);
 
         SetBattlefieldSurfaceVisible(true);
         // La label formazione è parte della chrome campagna: nel PvP resta vuota.
@@ -290,7 +299,8 @@ public sealed partial class BattleBoardController
                 existing.InhibitedTurns = source.Inhibited ? 1 : 0;
                 existing.AbilityArmed = source.AbilityArmed;
                 existing.AbilityUsed = source.AbilityUsed;
-                existing.PermanentCombatBonus = source.PermanentBonus + source.Strength - existing.Definition.Strength;
+                existing.MightAuraCombatBonus = source.MightAuraBonus;
+                existing.PermanentCombatBonus = source.PermanentBonus - source.MightAuraBonus + source.Strength - existing.Definition.Strength;
                 existing.PendingAttackBonus = source.PendingBonus;
                 existing.PendingAttackBonusKind = ToPendingAttackBonusKind(source.PendingBonusKind);
                 existing.PendingVigorStepPenalty = source.DiePenaltySteps;
@@ -314,7 +324,8 @@ public sealed partial class BattleBoardController
                 InhibitedTurns = source.Inhibited ? 1 : 0,
                 AbilityArmed = source.AbilityArmed,
                 AbilityUsed = source.AbilityUsed,
-                PermanentCombatBonus = source.PermanentBonus + source.Strength - definition.Strength,
+                PermanentCombatBonus = source.PermanentBonus - source.MightAuraBonus + source.Strength - definition.Strength,
+                MightAuraCombatBonus = source.MightAuraBonus,
                 PendingAttackBonus = source.PendingBonus,
                 PendingAttackBonusKind = ToPendingAttackBonusKind(source.PendingBonusKind),
                 PendingVigorStepPenalty = source.DiePenaltySteps
@@ -394,7 +405,7 @@ public sealed partial class BattleBoardController
                 if ((Object)(object)existing != (Object)null)
                 {
                     existing.SetInteractable(myTurn && !hideUntilIntro);
-                    existing.SetSelected(myTurn && !hideUntilIntro && pvpPendingDeployHandIndex >= 0
+                    existing.SetDraftSelected(myTurn && !hideUntilIntro && pvpPendingDeployHandIndex >= 0
                         && pvpHandViews.IndexOf(existing) == pvpPendingDeployHandIndex);
                     if (hideUntilIntro)
                         existing.SetAlpha(0f);
@@ -518,17 +529,17 @@ public sealed partial class BattleBoardController
 
             int loadoutIndex = index < pvpDecisiveViewIndices.Count ? pvpDecisiveViewIndices[index] : -1;
             view.ClearActionOverlay();
-            view.SetSelected(pvpDecisiveSelection.Contains(loadoutIndex));
+            view.SetDraftSelected(pvpDecisiveSelection.Contains(loadoutIndex));
             view.SetInteractable(!pvpDecisiveSubmitted);
         }
 
         bool ready = !pvpDecisiveSubmitted && pvpDecisiveSelection.Count == required;
-        if ((Object)(object)confirmFormationButton != (Object)null)
+        if ((Object)(object)confirmActionButton != (Object)null)
         {
-            ((Component)confirmFormationButton).gameObject.SetActive(!pvpDecisiveSubmitted);
-            confirmFormationButton.interactable = ready;
-            if ((Object)(object)confirmFormationButtonText != (Object)null)
-                confirmFormationButtonText.text = "CONFERMA SCELTA";
+            ((Component)confirmActionButton).gameObject.SetActive(!pvpDecisiveSubmitted);
+            confirmActionButton.interactable = ready;
+            if ((Object)(object)confirmActionButtonText != (Object)null)
+                confirmActionButtonText.text = "CONFERMA SCELTA";
         }
         if ((Object)(object)cancelActionButton != (Object)null)
             ((Component)cancelActionButton).gameObject.SetActive(!pvpDecisiveSubmitted && pvpDecisiveSelection.Count > 0);
@@ -621,7 +632,7 @@ public sealed partial class BattleBoardController
             if ((Object)(object)handView == (Object)null)
                 continue;
 
-            handView.SetSelected(index == pvpPendingDeployHandIndex);
+            handView.SetDraftSelected(index == pvpPendingDeployHandIndex);
             handView.SetInteractable(true);
         }
 
@@ -711,10 +722,10 @@ public sealed partial class BattleBoardController
 
     private void HidePvpSharedPendingActionButtons()
     {
-        if ((Object)(object)confirmFormationButton != (Object)null)
+        if ((Object)(object)confirmActionButton != (Object)null)
         {
-            ((Component)confirmFormationButton).gameObject.SetActive(false);
-            confirmFormationButton.interactable = false;
+            ((Component)confirmActionButton).gameObject.SetActive(false);
+            confirmActionButton.interactable = false;
         }
         if ((Object)(object)cancelActionButton != (Object)null)
             ((Component)cancelActionButton).gameObject.SetActive(false);
@@ -739,11 +750,26 @@ public sealed partial class BattleBoardController
         if ((Object)(object)selected == (Object)null)
             return;
 
-        selected.ShowConfirmCancelActions(
+        selected.ShowConfirmInfoActions(
             confirmActionSprite,
-            cancelActionSprite,
+            infoActionSprite,
             new UnityAction(() => TryConfirmPvpPendingDeployment()),
-            new UnityAction(() => TryCancelPvpPendingDeployment()));
+            new UnityAction(() => ShowPvpPendingDeploymentInspection()));
+    }
+
+    private void ShowPvpPendingDeploymentInspection()
+    {
+        if (!pvpPresentationActive
+            || pvpState == null
+            || pvpPendingDeployHandIndex < 0
+            || pvpPendingDeployHandIndex >= pvpState.Hand.Count)
+        {
+            return;
+        }
+
+        CardDefinition definition = FindPvpDefinition(pvpState.Hand[pvpPendingDeployHandIndex].DefinitionId);
+        if ((Object)(object)definition != (Object)null)
+            ShowCardInspection(definition);
     }
 
     private string BuildPvpHandSignature()
@@ -958,9 +984,12 @@ public sealed partial class BattleBoardController
         if (playerHud == null || cpuHud == null || pvpState == null)
             return;
 
+        ConfigurePlayerHudStandardPresentation(playerHud);
+
         RefreshCombatantHud(
             playerHud,
-            "PLAYER",
+            isPlayer: true,
+            ResolvePlayerHudDisplayName(),
             pvpState.MyIndex >= 0 ? $"G{pvpState.MyIndex}" : "PVP",
             $"{PvpActiveCount(playerCards)}/{playerCards.Count} ATTIVI",
             playerCards.Count == 0 ? 0f : (float)PvpActiveCount(playerCards) / playerCards.Count,
@@ -971,6 +1000,7 @@ public sealed partial class BattleBoardController
 
         RefreshCombatantHud(
             cpuHud,
+            isPlayer: false,
             string.IsNullOrWhiteSpace(pvpState.OpponentName) ? "AVVERSARIO" : pvpState.OpponentName.ToUpperInvariant(),
             $"G{OpponentIndex()}",
             $"{PvpActiveCount(cpuCards)}/{cpuCards.Count} ATTIVI",
@@ -987,22 +1017,31 @@ public sealed partial class BattleBoardController
     private void RefreshPvpTimeline()
     {
         RestoreTimelineBaseRect();
-        ClearInitiativeTimeline();
+        List<string> previousTimelineOrder = new List<string>(pvpTimelineOrderKeys);
         if ((Object)(object)initiativeTimelineRoot == (Object)null || pvpState == null)
         {
+            StopTimelineSlideAnimation();
+            ClearInitiativeTimeline();
+            pvpTimelineOrderKeys.Clear();
             ResizeTimelineTiles(0);
             return;
         }
 
         if (pvpState.Phase == PvpClientPhase.Deployment)
         {
+            StopTimelineSlideAnimation();
+            ClearInitiativeTimeline();
+            pvpTimelineOrderKeys.Clear();
             List<PvpClientDeploymentToken> deploymentTokens = pvpState.DeploymentOrder
                 .OrderBy(token => token.Order)
                 .ToList();
             int activeOrder = CurrentPvpDeploymentOrder(deploymentTokens);
             float timelineTileSize = GetTimelineTileSize(deploymentTokens.Count);
             foreach (PvpClientDeploymentToken token in deploymentTokens)
+            {
                 AddPvpTimelineTile(token.Player, token.Initiative, token.Order == activeOrder, timelineTileSize);
+                pvpTimelineOrderKeys.Add($"deploy:{token.Player}:{token.Order}:{token.Initiative}");
+            }
             ResizeTimelineTiles(deploymentTokens.Count);
             return;
         }
@@ -1013,12 +1052,25 @@ public sealed partial class BattleBoardController
             .OrderByDescending(card => card.Initiative)
             .ThenByDescending(card => PvpTieBreakerFor(card))
             .ToList();
+        List<BattleCardState> rotatedTimelineCards = RotatePvpTimelineFromActive(timelineCards).ToList();
+        List<string> currentTimelineOrder = rotatedTimelineCards.Select(PvpTimelineKeyFor).ToList();
+        if (pvpTimelineSlideRoutine != null && previousTimelineOrder.SequenceEqual(currentTimelineOrder))
+            return;
+
+        StopTimelineSlideAnimation();
+        ClearInitiativeTimeline();
+        pvpTimelineOrderKeys.Clear();
+
         float battleTileSize = GetTimelineTileSize(timelineCards.Count);
-        foreach (BattleCardState card in RotatePvpTimelineFromActive(timelineCards))
+        foreach (BattleCardState card in rotatedTimelineCards)
         {
-            AddPvpTimelineTile(card.BelongsToPlayer ?pvpState.MyIndex : OpponentIndex(), card.Initiative, IsPvpActiveCard(card), battleTileSize);
+            AddPvpTimelineTile(card.BelongsToPlayer ?pvpState.MyIndex : OpponentIndex(), card.Initiative, IsPvpActiveCard(card), battleTileSize, card);
+            string timelineKey = PvpTimelineKeyFor(card);
+            currentTimelineOrder.Add(timelineKey);
+            pvpTimelineOrderKeys.Add(timelineKey);
         }
         ResizeTimelineTiles(timelineCards.Count);
+        TryPlayPvpTimelineSlide(previousTimelineOrder, currentTimelineOrder);
     }
 
     private int CurrentPvpDeploymentOrder(IReadOnlyList<PvpClientDeploymentToken> deploymentTokens)
@@ -1061,15 +1113,263 @@ public sealed partial class BattleBoardController
         return player * 100 + slot;
     }
 
-    private void AddPvpTimelineTile(int player, int initiative, bool active, float timelineTileSize)
+    private string PvpTimelineKeyFor(BattleCardState card)
     {
+        if (card == null)
+            return string.Empty;
+
+        int player = pvpState != null && card.BelongsToPlayer ? pvpState.MyIndex : OpponentIndex();
+        int slot = pvpCardSlots.TryGetValue(card, out int serverSlot) ? serverSlot : 0;
+        string cardId = pvpCardIds.TryGetValue(card, out string id) ? id : card.Card?.Name ?? "card";
+        return $"{player}:{slot}:{cardId}";
+    }
+
+    private void TryPlayPvpTimelineSlide(IReadOnlyList<string> previousOrder, IReadOnlyList<string> currentOrder)
+    {
+        if ((Object)(object)initiativeTimelineRoot == (Object)null || previousOrder == null || currentOrder == null)
+            return;
+        if (previousOrder.Count < 2 || currentOrder.Count < 1 || currentOrder.Count > previousOrder.Count)
+            return;
+        if (previousOrder.SequenceEqual(currentOrder) || previousOrder[0] == currentOrder[0])
+            return;
+
+        int finishedNewIndex = IndexOfTimelineKey(currentOrder, previousOrder[0]);
+        if (finishedNewIndex != currentOrder.Count - 1)
+            return;
+
+        pvpTimelineSlideRoutine = StartCoroutine(PlayPvpTimelineSlide(previousOrder.ToList(), currentOrder.ToList()));
+    }
+
+    private void StopTimelineSlideAnimation()
+    {
+        if (pvpTimelineSlideRoutine != null)
+        {
+            StopCoroutine(pvpTimelineSlideRoutine);
+            pvpTimelineSlideRoutine = null;
+        }
+
+        RestoreTimelineLayoutAfterSlide();
+    }
+
+    private void RestoreTimelineLayoutAfterSlide()
+    {
+        if ((Object)(object)initiativeTimelineRoot == (Object)null)
+            return;
+
+        for (int index = ((Transform)initiativeTimelineRoot).childCount - 1; index >= 0; index--)
+        {
+            Transform child = ((Transform)initiativeTimelineRoot).GetChild(index);
+            if (child.name == "Timeline Slide VFX")
+            {
+                ((Component)child).gameObject.SetActive(false);
+                Object.Destroy((Object)(object)((Component)child).gameObject);
+                continue;
+            }
+
+            CanvasGroup canvasGroup = ((Component)child).GetComponent<CanvasGroup>();
+            if ((Object)(object)canvasGroup != (Object)null)
+                canvasGroup.alpha = 1f;
+            child.localScale = Vector3.one;
+            child.localRotation = Quaternion.identity;
+        }
+
+        Canvas.ForceUpdateCanvases();
+    }
+
+    private IEnumerator PlayPvpTimelineSlide(IReadOnlyList<string> previousOrder, IReadOnlyList<string> currentOrder)
+    {
+        Canvas.ForceUpdateCanvases();
+        int count = currentOrder.Count;
+        float tileSize = GetTimelineTileSize(count);
+        float previousTileSize = GetTimelineTileSize(previousOrder.Count);
+        Vector2[] previousPositions = GetTimelineLocalPositions(previousOrder.Count, previousTileSize);
+        Vector2[] targetPositions = GetTimelineLocalPositions(count, tileSize);
+        if (targetPositions.Length < 2)
+        {
+            pvpTimelineSlideRoutine = null;
+            yield break;
+        }
+
+        List<RectTransform> tiles = new List<RectTransform>(count);
+        List<Vector2> startPositions = new List<Vector2>(count);
+        for (int childIndex = 0; childIndex < ((Transform)initiativeTimelineRoot).childCount && tiles.Count < count; childIndex++)
+        {
+            Transform child = ((Transform)initiativeTimelineRoot).GetChild(childIndex);
+            if (!((Component)child).gameObject.activeSelf || IsTransientTimelineObject(child))
+                continue;
+
+            int index = tiles.Count;
+            RectTransform tile = (RectTransform)(object)child;
+            tiles.Add(tile);
+            int previousIndex = IndexOfTimelineKey(previousOrder, currentOrder[index]);
+            startPositions.Add(previousIndex >= 0 && previousIndex < previousPositions.Length ?previousPositions[previousIndex] : targetPositions[index]);
+            tile.anchoredPosition = startPositions[index];
+            tile.sizeDelta = new Vector2(tileSize, tileSize);
+        }
+
+        if (tiles.Count < count)
+        {
+            ResizeTimelineTiles(count);
+            pvpTimelineSlideRoutine = null;
+            yield break;
+        }
+
+        RectTransform finishedTile = tiles[tiles.Count - 1];
+        int finishedPreviousIndex = IndexOfTimelineKey(previousOrder, currentOrder[count - 1]);
+        Vector2 finishedStart = finishedPreviousIndex >= 0 && finishedPreviousIndex < previousPositions.Length
+            ?previousPositions[finishedPreviousIndex]
+            : targetPositions[0];
+        Vector2 finishedEnd = targetPositions[targetPositions.Length - 1];
+        bool vertical = IsTimelineVerticalLayout();
+        float orbitDistance = Mathf.Max(tileSize * 1.65f, 72f);
+        Vector2 outward = vertical ? Vector2.left : Vector2.up;
+        GameObject aura = CreateTimelineSlideAura();
+
+        float duration = 0.62f;
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float eased = 1f - Mathf.Pow(1f - t, 3f);
+
+            for (int index = 0; index < tiles.Count; index++)
+            {
+                RectTransform tile = tiles[index];
+                if ((Object)(object)tile == (Object)null)
+                    continue;
+
+                if (tile == finishedTile)
+                {
+                    Vector2 line = Vector2.LerpUnclamped(finishedStart, finishedEnd, eased);
+                    float arc = Mathf.Sin(t * Mathf.PI) * orbitDistance;
+                    tile.anchoredPosition = line + outward * arc;
+                    tile.localScale = Vector3.one * Mathf.Lerp(1.18f, 0.94f, t);
+                    tile.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(vertical ? -18f : 18f, 360f, eased));
+                }
+                else
+                {
+                    tile.anchoredPosition = Vector2.LerpUnclamped(startPositions[index], targetPositions[index], eased);
+                    tile.localScale = Vector3.one * (1f + Mathf.Sin(t * Mathf.PI) * 0.05f);
+                    tile.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(t * Mathf.PI) * (vertical ? 2.5f : -2.5f));
+                }
+            }
+
+            AnimateTimelineSlideAura(aura, finishedStart, finishedEnd, outward, orbitDistance, t);
+            yield return null;
+        }
+
+        for (int index = 0; index < count; index++)
+        {
+            RectTransform tile = tiles[index];
+            if ((Object)(object)tile == (Object)null)
+                continue;
+            tile.anchoredPosition = targetPositions[index];
+            tile.localScale = Vector3.one;
+            tile.localRotation = Quaternion.identity;
+        }
+
+        if ((Object)(object)aura != (Object)null)
+            Object.Destroy(aura);
+        pvpTimelineSlideRoutine = null;
+    }
+
+    private GameObject CreateTimelineSlideAura()
+    {
+        if ((Object)(object)initiativeTimelineRoot == (Object)null)
+            return null;
+
+        GameObject root = new GameObject("Timeline Slide VFX", typeof(RectTransform));
+        root.transform.SetParent((Transform)(object)initiativeTimelineRoot, false);
+        root.transform.SetAsLastSibling();
+        LayoutElement rootLayout = root.AddComponent<LayoutElement>();
+        rootLayout.ignoreLayout = true;
+        RectTransform rootRect = (RectTransform)(object)root.transform;
+        rootRect.anchorMin = rootRect.anchorMax = new Vector2(0.5f, 0.5f);
+        rootRect.sizeDelta = Vector2.zero;
+
+        for (int i = 0; i < 11; i++)
+        {
+            Image spark = CreateImage("Rune Spark", root.transform, new Color(1f, 0.78f, 0.24f, 0.88f));
+            spark.raycastTarget = false;
+            RectTransform sparkRect = spark.rectTransform;
+            float size = i % 3 == 0 ? 10f : 6f;
+            sparkRect.sizeDelta = new Vector2(size, size);
+            sparkRect.localRotation = Quaternion.Euler(0f, 0f, i * 32.7f);
+        }
+
+        return root;
+    }
+
+    private static int IndexOfTimelineKey(IReadOnlyList<string> order, string key)
+    {
+        if (order == null)
+            return -1;
+
+        for (int index = 0; index < order.Count; index++)
+        {
+            if (order[index] == key)
+                return index;
+        }
+
+        return -1;
+    }
+
+    private void AnimateTimelineSlideAura(GameObject aura, Vector2 start, Vector2 end, Vector2 outward, float orbitDistance, float t)
+    {
+        if ((Object)(object)aura == (Object)null)
+            return;
+
+        RectTransform root = (RectTransform)(object)aura.transform;
+        Vector2 center = Vector2.LerpUnclamped(start, end, 1f - Mathf.Pow(1f - t, 3f)) + outward * Mathf.Sin(t * Mathf.PI) * orbitDistance;
+        root.anchoredPosition = center;
+        root.localScale = Vector3.one * Mathf.Lerp(1.15f, 0.35f, t);
+        root.localRotation = Quaternion.Euler(0f, 0f, t * 420f);
+
+        for (int i = 0; i < aura.transform.childCount; i++)
+        {
+            RectTransform spark = (RectTransform)(object)aura.transform.GetChild(i);
+            float angle = (i / Mathf.Max(1f, aura.transform.childCount)) * Mathf.PI * 2f + t * Mathf.PI * 3f;
+            float radius = Mathf.Lerp(12f, 42f + i * 1.8f, Mathf.Sin(t * Mathf.PI));
+            spark.anchoredPosition = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+            Image image = ((Component)spark).GetComponent<Image>();
+            if ((Object)(object)image != (Object)null)
+                image.color = new Color(1f, Mathf.Lerp(0.54f, 0.95f, t), 0.18f, Mathf.Sin(t * Mathf.PI) * 0.85f);
+        }
+    }
+
+    private void AddPvpTimelineTile(int player, int initiative, bool active, float timelineTileSize, BattleCardState inspectedState = null)
+    {
+        bool belongsToPlayer = player == pvpState.MyIndex;
         Image tile = CreateImage("PVP Timeline", (Transform)(object)initiativeTimelineRoot,
             active ? new Color(0.72f, 0.48f, 0.12f, 0.98f)
-                : player == pvpState.MyIndex ? new Color(0.04f, 0.42f, 0.48f, 0.95f) : new Color(0.5f, 0.1f, 0.12f, 0.95f));
+                : belongsToPlayer ? new Color(0.04f, 0.42f, 0.48f, 0.95f) : new Color(0.5f, 0.1f, 0.12f, 0.95f));
         LayoutElement layout = ((Component)tile).gameObject.AddComponent<LayoutElement>();
         ConfigureTimelineTileLayout(layout, timelineTileSize);
-        Text text = CreateText("Turn", ((Component)tile).transform, Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"), 18, FontStyle.Bold, TextAnchor.MiddleCenter);
-        text.text = player == pvpState.MyIndex ? "TU" : "AVV";
+        if (inspectedState != null)
+        {
+            Outline factionOutline = ((Component)tile).gameObject.AddComponent<Outline>();
+            factionOutline.effectColor = belongsToPlayer ?new Color(0.1f, 0.82f, 1f, 0.95f) : new Color(1f, 0.16f, 0.12f, 0.95f);
+            factionOutline.effectDistance = new Vector2(2.2f, -2.2f);
+            Image portrait = CreateImage("Portrait", ((Component)tile).transform, Color.white);
+            portrait.sprite = inspectedState.Definition.Artwork;
+            portrait.preserveAspect = false;
+            portrait.raycastTarget = false;
+            SetRect(portrait.rectTransform, new Vector2(0.045f, 0.045f), new Vector2(0.955f, 0.955f));
+            tile.raycastTarget = true;
+            Button button = ((Component)tile).gameObject.AddComponent<Button>();
+            button.targetGraphic = (Graphic)(object)tile;
+            ((UnityEvent)button.onClick).AddListener((UnityAction)delegate
+            {
+                if (CanInspectBattleCard(inspectedState))
+                {
+                    ShowCardInspection(inspectedState);
+                }
+            });
+            return;
+        }
+        Text text = CreateText("Turn", ((Component)tile).transform, AccardND.Battlefield.MmoUiTheme.BodyFont, 18, FontStyle.Bold, TextAnchor.MiddleCenter);
+        text.text = belongsToPlayer ? "TU" : "AVV";
         Stretch(text.rectTransform, 2f);
     }
 
@@ -1138,7 +1438,7 @@ public sealed partial class BattleBoardController
                     Canvas.ForceUpdateCanvases();
                     PlayPawnEnteringBattlefieldSfx(FindPvpDefinition(battleEvent.CardId));
                     PlayPvpDeploymentAnimation(battleEvent);
-                    yield return new WaitForSecondsRealtime(
+                    yield return WaitForCardInspectionPause(
                         Mathf.Max(0.2f, configuration.Animation.CardDeployDuration * 0.7f));
                     break;
                 }
@@ -1150,12 +1450,46 @@ public sealed partial class BattleBoardController
                     break;
                 }
 
+                case "ProtectionTriggered":
+                {
+                    if (battleEvent.Redirected)
+                    {
+                        pvpPendingPaladinRedirectPlayer = battleEvent.Player;
+                        pvpPendingPaladinRedirectSlot = battleEvent.Slot;
+                    }
+                    else
+                    {
+                        ClearPendingPaladinRedirect();
+                    }
+                    break;
+                }
+
+                case "AbilityUsed":
+                {
+                    yield return PlayPvpAbilityUsedRoutine(battleEvent);
+                    RenderPvpMatch();
+                    break;
+                }
+
                 case "SpiritExpired":
                 case "AttachmentApplied":
                 {
                     BattleCardState fallen = FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
+                    BattleCardState target = FindPvpCardForPlayerSlot(battleEvent.TargetPlayer, battleEvent.TargetSlot);
+                    if (string.Equals(battleEvent.Type, "AttachmentApplied", System.StringComparison.Ordinal)
+                        && fallen != null
+                        && target != null
+                        && (Object)(object)fallen.View != (Object)null
+                        && (Object)(object)target.View != (Object)null
+                        && (Object)(object)battleAnimationPlayer != (Object)null)
+                    {
+                        yield return battleAnimationPlayer.PlayTargetLine(
+                            fallen.View,
+                            target.View,
+                            AttachmentTargetLineColor);
+                    }
                     if (fallen != null && (Object)(object)fallen.View != (Object)null)
-                        yield return fallen.View.PlayDefeatAnimation();
+                        yield return fallen.View.PlayDefeatAnimation(killerHeroClass: fallen.Card.HeroClass);
                     RenderPvpMatch();
                     break;
                 }
@@ -1167,6 +1501,8 @@ public sealed partial class BattleBoardController
                     if (revived != null && (Object)(object)revived.View != (Object)null)
                     {
                         revived.View.SetAlpha(1f);
+                        if ((Object)(object)battleAnimationPlayer != (Object)null)
+                            yield return battleAnimationPlayer.PlayNecromancerReviveSkullConvergence(revived.View);
                         revived.View.PlayRevealAnimation(configuration.Animation.CpuCardRevealDuration);
                     }
                     break;
@@ -1206,6 +1542,58 @@ public sealed partial class BattleBoardController
         RenderPvpMatch();
     }
 
+    private IEnumerator PlayPvpAbilityUsedRoutine(BattlePresentationEvent battleEvent)
+    {
+        if (battleEvent == null || !battleEvent.HasAbilityClass)
+            yield break;
+
+        if (battleEvent.AbilityClass != HeroClass.Assassin
+            && battleEvent.AbilityClass != HeroClass.Mage
+            && battleEvent.AbilityClass != HeroClass.Hunter
+            && battleEvent.AbilityClass != HeroClass.Paladin
+            && battleEvent.AbilityClass != HeroClass.Priest)
+            yield break;
+
+        BattleCardState caster = FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
+        BattleCardState target = FindPvpCardForPlayerSlot(battleEvent.TargetPlayer, battleEvent.TargetSlot);
+        if (target == null
+            || (Object)(object)target.View == (Object)null
+            || (Object)(object)battleAnimationPlayer == (Object)null)
+        {
+            yield break;
+        }
+
+        ClearPvpActionSelectionForDuel();
+        if (caster != null && (Object)(object)caster.View != (Object)null)
+        {
+            yield return battleAnimationPlayer.PlayTargetLine(
+                caster.View,
+                target.View,
+                AbilityTargetLineColor);
+        }
+        PlayClassAbilitySfx(battleEvent.AbilityClass);
+        if (battleEvent.AbilityClass == HeroClass.Assassin)
+            yield return battleAnimationPlayer.PlayAssassinInhibitSmoke(target.View);
+        else if (battleEvent.AbilityClass == HeroClass.Mage)
+        {
+            int baseDieSides = pvpState != null ? pvpState.VigorDieSides : configuration.Gameplay.VigorDieSides;
+            int appliedSteps = Mathf.Max(1, battleEvent.AbilityMagnitude);
+            int currentSteps = Mathf.Max(appliedSteps, target.PendingVigorStepPenalty);
+            int startDieSides = LowerVigorDieBySteps(baseDieSides, Mathf.Max(0, currentSteps - appliedSteps));
+            int endDieSides = LowerVigorDieBySteps(baseDieSides, currentSteps);
+            yield return PlayMageVigorConstellation(
+                target,
+                startDieSides,
+                endDieSides);
+        }
+        else if (battleEvent.AbilityClass == HeroClass.Hunter)
+            yield return battleAnimationPlayer.PlayHunterMarkReticle(target.View);
+        else if (battleEvent.AbilityClass == HeroClass.Paladin)
+            yield return battleAnimationPlayer.PlayPaladinProtectionConstellation(target.View);
+        else if (caster != null && (Object)(object)caster.View != (Object)null)
+            yield return battleAnimationPlayer.PlayPriestBlessing(caster.View, target.View, battleEvent.AbilityMagnitude);
+    }
+
     private IEnumerator PlayPvpHandEntranceRoutine()
     {
         if (pvpHandViews.Count == 0
@@ -1237,7 +1625,7 @@ public sealed partial class BattleBoardController
         Rect safeBounds = safeAreaRoot.rect;
 
         if (initialDelay > 0f)
-            yield return new WaitForSecondsRealtime(initialDelay);
+            yield return WaitForCardInspectionPause(initialDelay);
 
         for (int index = 0; index < pvpHandViews.Count; index++)
         {
@@ -1289,7 +1677,7 @@ public sealed partial class BattleBoardController
             ((Transform)animatedRect).localScale = Vector3.one * entranceScale;
             overlayView.SetAlpha(1f);
             if (holdDuration > 0f)
-                yield return new WaitForSecondsRealtime(holdDuration);
+                yield return WaitForCardInspectionPause(holdDuration);
 
             elapsed = 0f;
             while (elapsed < settleDuration)
@@ -1308,7 +1696,7 @@ public sealed partial class BattleBoardController
             draftEntranceOverlayObjects.Remove(overlayObject);
             Object.Destroy(overlayObject);
             if (betweenCardsDelay > 0f && index < pvpHandViews.Count - 1)
-                yield return new WaitForSecondsRealtime(betweenCardsDelay);
+                yield return WaitForCardInspectionPause(betweenCardsDelay);
         }
 
         ApplyResponsiveLayout();
@@ -1342,19 +1730,41 @@ public sealed partial class BattleBoardController
             battleEvent.AttackerRollSecond,
             battleEvent.AttackerRollHasSecond,
             battleEvent.AttackerRollSelected,
-            battleEvent.AttackerRollSelectionMode);
+            battleEvent.AttackerRollSelectionMode,
+            battleEvent.AttackerRollFirstBeforeReroll,
+            battleEvent.AttackerRollSecondBeforeReroll);
         VigorRollResult defenderRoll = BattlePresentationAnimationPlayer.BuildRoll(
             battleEvent.DefenderDieSides,
             battleEvent.DefenderRollFirst,
             battleEvent.DefenderRollSecond,
             battleEvent.DefenderRollHasSecond,
             battleEvent.DefenderRollSelected,
-            battleEvent.DefenderRollSelectionMode);
+            battleEvent.DefenderRollSelectionMode,
+            battleEvent.DefenderRollFirstBeforeReroll,
+            battleEvent.DefenderRollSecondBeforeReroll);
 
         ClearPvpActionSelectionForDuel();
+        if (battleEvent.Certainty == CombatCertainty.Impossible)
+        {
+            ShowPvpAttackSummary(battleEvent, attacker, defender, attackerRoll, defenderRoll);
+            ClearPendingPaladinRedirect();
+            yield break;
+        }
+
         RectTransform duelRoot = (Object)(object)safeAreaRoot != (Object)null ? safeAreaRoot : canvasRect;
-        battleAnimationPlayer.PlayDuel(
-            duelRoot,
+        Vector3 attackerPoint = PvpDuelWorldPoint(duelRoot, 0.30f);
+        Vector3 defenderPoint = PvpDuelWorldPoint(duelRoot, 0.58f);
+        yield return battleAnimationPlayer.PlayTargetLine(
+            attacker.View,
+            defender.View,
+            AttackTargetLineColor);
+        if (ShouldReplayPaladinRedirectProtection(defender))
+        {
+            PlayClassAbilitySfx(HeroClass.Paladin);
+            yield return battleAnimationPlayer.PlayPaladinProtectionConstellation(defender.View);
+        }
+        ClearPendingPaladinRedirect();
+        battleAnimationPlayer.PlayDuelAtPoints(
             configuration,
             diceCatalog,
             attacker.View,
@@ -1366,6 +1776,8 @@ public sealed partial class BattleBoardController
             battleEvent.Player == pvpState.MyIndex ? "ATTACCO" : "ATTACCO AVV",
             battleEvent.TargetPlayer == pvpState.MyIndex ? "TUA DIFESA" : "DIFESA",
             battleEvent.DefenderEliminated,
+            attackerPoint,
+            defenderPoint,
             () =>
             {
                 ShowPvpAttackSummary(battleEvent, attacker, defender, attackerRoll, defenderRoll);
@@ -1375,9 +1787,21 @@ public sealed partial class BattleBoardController
             () => SetMessagePanelHiddenForDuel(hidden: false),
             defenderHit: battleEvent.DefenderLostLife || battleEvent.DefenderEliminated,
             attackerTotal: battleEvent.AttackerTotal,
-            defenderTotal: battleEvent.DefenderTotal);
+            defenderTotal: battleEvent.DefenderTotal,
+            attackerHeroClass: battleEvent.HasHeroClass ? battleEvent.HeroClass : attacker.Card.HeroClass);
         yield return new WaitWhile(() =>
             (Object)(object)battleAnimationPlayer != (Object)null && battleAnimationPlayer.IsBusy);
+    }
+
+    private static Vector3 PvpDuelWorldPoint(RectTransform root, float normalizedX)
+    {
+        if ((Object)(object)root == (Object)null)
+            return Vector3.zero;
+
+        Rect rect = root.rect;
+        float x = Mathf.Lerp(rect.xMin, rect.xMax, normalizedX);
+        float y = Mathf.Lerp(rect.yMin, rect.yMax, 0.51f);
+        return root.TransformPoint(new Vector3(x, y, 0f));
     }
 
     private void ClearPvpActionSelectionForDuel()
@@ -1509,6 +1933,29 @@ public sealed partial class BattleBoardController
         return player == pvpState.MyIndex ? FindPvpLocalCard(slot) : FindPvpOpponentCard(slot);
     }
 
+    private bool ShouldReplayPaladinRedirectProtection(BattleCardState defender)
+    {
+        if (defender == null
+            || pvpState == null
+            || defender.Card.HeroClass != HeroClass.Paladin
+            || pvpPendingPaladinRedirectPlayer < 0
+            || pvpPendingPaladinRedirectSlot < 0)
+        {
+            return false;
+        }
+
+        int defenderPlayer = defender.BelongsToPlayer ? pvpState.MyIndex : OpponentIndex();
+        int defenderSlot = pvpCardSlots.TryGetValue(defender, out int slot) ? slot : -1;
+        return defenderPlayer == pvpPendingPaladinRedirectPlayer
+            && defenderSlot == pvpPendingPaladinRedirectSlot;
+    }
+
+    private void ClearPendingPaladinRedirect()
+    {
+        pvpPendingPaladinRedirectPlayer = -1;
+        pvpPendingPaladinRedirectSlot = -1;
+    }
+
     private void StopPvpRegia()
     {
         if (pvpRegiaRoutine != null)
@@ -1517,15 +1964,21 @@ public sealed partial class BattleBoardController
             pvpRegiaRoutine = null;
         }
         pvpPendingEvents.Clear();
+        ClearPendingPaladinRedirect();
     }
 
     private void ClearInitiativeTimeline()
     {
+        campaignTimelineOrderKeys.Clear();
         if ((Object)(object)initiativeTimelineRoot == (Object)null)
             return;
 
         for (int index = ((Transform)initiativeTimelineRoot).childCount - 1; index >= 0; index--)
-            Object.Destroy((Object)(object)((Component)((Transform)initiativeTimelineRoot).GetChild(index)).gameObject);
+        {
+            GameObject childObject = ((Component)((Transform)initiativeTimelineRoot).GetChild(index)).gameObject;
+            childObject.SetActive(false);
+            Object.Destroy((Object)(object)childObject);
+        }
     }
 
     private CardDefinition FindPvpDefinition(string definitionId)

@@ -110,7 +110,7 @@ namespace AccardND.Presentation
             GameObject textGo = new GameObject("Calibration Text", typeof(Text));
             textGo.transform.SetParent(canvasGo.transform, false);
             calibrationText = textGo.GetComponent<Text>();
-            calibrationText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            calibrationText.font = AccardND.Battlefield.MmoUiTheme.BodyFont;
             calibrationText.fontSize = 34;
             calibrationText.fontStyle = FontStyle.Bold;
             calibrationText.alignment = TextAnchor.MiddleCenter;

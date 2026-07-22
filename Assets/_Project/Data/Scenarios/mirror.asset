@@ -15,6 +15,7 @@ MonoBehaviour:
   id: mirror
   displayName: Specchi
   background: {fileID: 21300000, guid: f31c90fe4d02e5f4cb6aaab7090f1d8a, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: 1daec7c0faf1da14b88892e854176068, type: 3}
   roomType: 2
   difficulty: 0
   bossId: 

@@ -17,25 +17,58 @@ namespace AccardND.GameData
         [SerializeField, TextArea(2, 6)] private string rulesText;
 
         public string Id => id;
-        public string DisplayName => displayName;
+        public string DisplayName => FormatDisplayName(displayName, id);
         public CardCategory Category => category;
         public Sprite Artwork => artwork;
-        public int Strength => strength;
-        public bool HasHeroClass => hasHeroClass;
-        public HeroClass HeroClass => heroClass;
+        public int Strength => IsMedusaBoss ? 8 : strength;
+        public bool HasHeroClass => hasHeroClass || IsMedusaBoss;
+        public HeroClass HeroClass => IsMedusaBoss ? HeroClass.Mage : heroClass;
         public string RulesText => rulesText;
+        private bool IsMedusaBoss => string.Equals(id, "boss-medusa", StringComparison.OrdinalIgnoreCase);
 
         public bool CanEnterCombat =>
             (category == CardCategory.Monster || category == CardCategory.Boss)
-            && strength > 0
-            && hasHeroClass;
+            && Strength > 0
+            && HasHeroClass;
 
         public CombatCard CreateCombatCard()
         {
             if (!CanEnterCombat)
                 throw new InvalidOperationException($"La carta '{displayName}' non ha dati di combattimento completi.");
 
-            return new CombatCard(id, displayName, heroClass, strength);
+            return new CombatCard(id, DisplayName, HeroClass, Strength);
+        }
+
+        private static string FormatDisplayName(string rawDisplayName, string fallbackId)
+        {
+            string source = !string.IsNullOrWhiteSpace(rawDisplayName)
+                ? rawDisplayName
+                : CreatureNameFromId(fallbackId);
+
+            if (string.IsNullOrWhiteSpace(source))
+                return string.Empty;
+
+            string[] words = source.Trim()
+                .Replace("_", " ")
+                .Replace("-", " ")
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            for (int i = 0; i < words.Length; i++)
+            {
+                string word = words[i].ToLowerInvariant();
+                words[i] = char.ToUpperInvariant(word[0]) + word.Substring(1);
+            }
+
+            return string.Join(" ", words);
+        }
+
+        private static string CreatureNameFromId(string fallbackId)
+        {
+            if (string.IsNullOrWhiteSpace(fallbackId))
+                return string.Empty;
+
+            string[] parts = fallbackId.Split('-');
+            return parts.Length > 1 ? parts[1] : fallbackId;
         }
 
 #if UNITY_EDITOR

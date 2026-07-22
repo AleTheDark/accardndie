@@ -20,6 +20,7 @@ public sealed class MessageRouter
     private readonly ProfileService profiles;
     private readonly HallOfFameService hallOfFame;
     private readonly AchievementService achievements;
+    private readonly SinglePlayerProgressService singlePlayerProgress;
     private readonly PresenceRegistry presence;
     private readonly FriendService friends;
     private readonly MatchResultRecorder resultRecorder;
@@ -42,6 +43,7 @@ public sealed class MessageRouter
         ProfileService profiles,
         HallOfFameService hallOfFame,
         AchievementService achievements,
+        SinglePlayerProgressService singlePlayerProgress,
         PresenceRegistry presence,
         FriendService friends,
         MatchResultRecorder resultRecorder,
@@ -59,6 +61,7 @@ public sealed class MessageRouter
         this.profiles = profiles;
         this.hallOfFame = hallOfFame;
         this.achievements = achievements;
+        this.singlePlayerProgress = singlePlayerProgress;
         this.presence = presence;
         this.friends = friends;
         this.resultRecorder = resultRecorder;
@@ -117,6 +120,9 @@ public sealed class MessageRouter
 
         switch (envelope.type)
         {
+            case MessageTypes.NicknameSet:
+                await HandleSetNicknameAsync(connection, envelope, cancellation);
+                break;
             case MessageTypes.RoomCreate:
                 await HandleRoomCreateAsync(connection, envelope, cancellation);
                 break;
@@ -211,6 +217,36 @@ public sealed class MessageRouter
                 await connection.SendAsync(
                     MessageTypes.AchievementsData, achievements.GetAchievements(connection.Identity), cancellation);
                 break;
+            case MessageTypes.SinglePlayerProgressGet:
+                await connection.SendAsync(
+                    MessageTypes.SinglePlayerProgressData,
+                    singlePlayerProgress.GetProgress(connection.Identity),
+                    cancellation);
+                break;
+            case MessageTypes.SinglePlayerPurchaseUnlock:
+                await HandleSinglePlayerPurchaseUnlockAsync(connection, envelope, cancellation);
+                break;
+            case MessageTypes.SinglePlayerClaimTutorialReward:
+            {
+                var request = ClientConnection.ParsePayload<SinglePlayerTutorialRewardRequest>(envelope);
+                await SendRewardResultAsync(
+                    connection, singlePlayerProgress.ClaimTutorialReward(connection.Identity, request), cancellation);
+                break;
+            }
+            case MessageTypes.SinglePlayerClaimDeathReward:
+            {
+                var request = ClientConnection.ParsePayload<SinglePlayerDeathRewardRequest>(envelope);
+                await SendRewardResultAsync(
+                    connection, singlePlayerProgress.ClaimDeathReward(connection.Identity, request), cancellation);
+                break;
+            }
+            case MessageTypes.SinglePlayerClaimAdMultiplier:
+            {
+                var request = ClientConnection.ParsePayload<SinglePlayerAdMultiplierRequest>(envelope);
+                await SendRewardResultAsync(
+                    connection, singlePlayerProgress.ClaimAdMultiplier(connection.Identity, request), cancellation);
+                break;
+            }
             case MessageTypes.MatchAction:
             {
                 MatchSession session = connection.CurrentRoom?.Session;
@@ -231,20 +267,57 @@ public sealed class MessageRouter
         }
     }
 
+    private async Task HandleSinglePlayerPurchaseUnlockAsync(
+        ClientConnection connection,
+        Envelope envelope,
+        CancellationToken cancellation)
+    {
+        var request = ClientConnection.ParsePayload<SinglePlayerPurchaseUnlockRequest>(envelope);
+        (SinglePlayerProgressData progress, string errorCode, string error) =
+            singlePlayerProgress.PurchaseUnlock(connection.Identity, request);
+
+        if (progress == null)
+        {
+            await connection.SendErrorAsync(errorCode, error, cancellation);
+            return;
+        }
+
+        await connection.SendAsync(MessageTypes.SinglePlayerProgressData, progress, cancellation);
+    }
+
+    private static async Task SendRewardResultAsync(
+        ClientConnection connection,
+        (SinglePlayerRewardResult Result, string ErrorCode, string Error) outcome,
+        CancellationToken cancellation)
+    {
+        if (outcome.Result == null)
+        {
+            await connection.SendErrorAsync(outcome.ErrorCode, outcome.Error, cancellation);
+            return;
+        }
+
+        await connection.SendAsync(MessageTypes.SinglePlayerRewardResult, outcome.Result, cancellation);
+    }
+
     private async Task HandleUgsAuthAsync(
         ClientConnection connection, Envelope envelope, CancellationToken cancellation)
     {
         var request = ClientConnection.ParsePayload<UgsLoginRequest>(envelope);
-        (AccountIdentity identity, string error) =
+        (VerifiedExternalIdentity externalIdentity, string error) =
             await ugsAuth.ValidateAsync(request?.accessToken, request?.displayName);
+
+        ExternalAccountResult resolved = externalIdentity == null
+            ? new ExternalAccountResult(null, false, false, error)
+            : accounts.ResolveExternalAccount(externalIdentity);
+        AccountIdentity identity = resolved.Identity;
+        error = resolved.Error ?? error;
 
         if (identity != null)
         {
-            accounts.EnsureExternalAccount(identity);
             connection.Identity = identity;
             logger.LogInformation(
-                "Autenticato via UGS '{Username}' ({PlayerId}) su {ConnectionId}",
-                identity.Username, identity.PlayerId, connection.ConnectionId);
+                "Autenticato via {Provider} '{Username}' ({PlayerId}) su {ConnectionId}",
+                externalIdentity.Provider, identity.Username, identity.PlayerId, connection.ConnectionId);
             await OnAuthenticatedAsync(connection);
         }
 
@@ -254,7 +327,26 @@ public sealed class MessageRouter
             error = error,
             token = null,
             playerId = identity?.PlayerId,
-            username = identity?.Username
+            username = identity?.Username,
+            isNewAccount = resolved.IsNewAccount,
+            authProvider = externalIdentity?.Provider,
+            requiresNickname = resolved.RequiresNickname
+        }, cancellation);
+    }
+
+    private async Task HandleSetNicknameAsync(
+        ClientConnection connection, Envelope envelope, CancellationToken cancellation)
+    {
+        var request = ClientConnection.ParsePayload<SetNicknameRequest>(envelope);
+        NicknameChangeResult result = accounts.SetNickname(connection.Identity, request?.nickname);
+        if (result.Identity != null)
+            connection.Identity = result.Identity;
+
+        await connection.SendAsync(MessageTypes.NicknameResponse, new NicknameResponse
+        {
+            ok = result.Identity != null,
+            error = result.Error,
+            nickname = result.Identity?.Username
         }, cancellation);
     }
 
@@ -493,8 +585,9 @@ public sealed class MessageRouter
         ClientConnection connection, Envelope envelope, CancellationToken cancellation)
     {
         var request = ClientConnection.ParsePayload<CampaignKillsRequest>(envelope);
+        achievements.UnlockCampaignBossVictory(connection.Identity, request?.bosses);
         IReadOnlyList<string> unlocked =
-            profiles.ReportCampaignKills(connection.Identity, request?.monsters);
+            profiles.ReportCampaignKills(connection.Identity, request?.monsters, request?.bosses);
         await connection.SendAsync(MessageTypes.CampaignKillsResult, new CampaignKillsResult
         {
             newlyUnlocked = unlocked.ToArray()

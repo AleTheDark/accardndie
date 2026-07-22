@@ -21,7 +21,8 @@ public sealed partial class BattleBoardController
 		canvas.sortingOrder = 950;
 		auraCodexPanel.AddComponent<GraphicRaycaster>();
 
-		Text title = CreateText("Aura Codex Title", ((Component)overlay).transform, font, 34, (FontStyle)1, (TextAnchor)4);
+		Text title = CreateText("Aura Codex Title", ((Component)overlay).transform, font, 40, (FontStyle)1, (TextAnchor)4);
+		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(title);
 		title.text = "CODICE DELLE AURE";
 		title.color = new Color(0.95f, 0.79f, 0.34f);
 		SetRect(title.rectTransform, new Vector2(0.08f, 0.9f), new Vector2(0.82f, 0.97f));
@@ -74,7 +75,7 @@ public sealed partial class BattleBoardController
 		fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
 		fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-		Text body = CreateText("Aura Codex Body", contentObject.transform, font, 19, (FontStyle)0, (TextAnchor)0);
+		Text body = CreateText("Aura Codex Body", contentObject.transform, font, 24, (FontStyle)0, (TextAnchor)0);
 		body.color = new Color(0.88f, 0.92f, 0.95f);
 		body.horizontalOverflow = HorizontalWrapMode.Wrap;
 		body.verticalOverflow = VerticalWrapMode.Overflow;
@@ -91,7 +92,7 @@ public sealed partial class BattleBoardController
 	{
 		if ((Object)(object)optionsPanel != (Object)null)
 		{
-			optionsPanel.SetActive(false);
+			CloseOptionsPanel();
 		}
 		OpenAuraCodex();
 	}
@@ -120,24 +121,24 @@ public sealed partial class BattleBoardController
 		builder.AppendLine("Schieri sempre 3 carte. In base alla loro composizione si attiva UNA sola aura, con questa priorita':");
 		builder.AppendLine("• 3 carte della stessa CLASSE  ->  Aura di Classe");
 		builder.AppendLine("• 3 carte della stessa FAMIGLIA (classi diverse)  ->  Aura di Famiglia");
-		builder.AppendLine("• 1 Might + 1 Cunning + 1 Magic  ->  Aura di Formazione");
+		builder.AppendLine("• 1 Fortuza + 1 Astuta + 1 Magica  ->  Aura di Formazione");
 		builder.AppendLine("L'Aura di Classe sostituisce quella di Famiglia: non si sommano.");
 		builder.AppendLine();
-		builder.AppendLine("Famiglie:  Might (Warrior, Barbarian, Paladin)  ·  Cunning (Rogue, Assassin, Hunter)  ·  Magic (Mage, Necromancer, Priest)");
+		builder.AppendLine("Famiglie:  Fortuza (Warrior, Barbarian, Paladin)  ·  Astuta (Rogue, Assassin, Hunter)  ·  Magica (Mage, Necromancer, Priest)");
 		builder.AppendLine();
 		builder.AppendLine("<b>AURA DI FORMAZIONE</b>");
 		AppendAuraEntry(builder, "Formazione bilanciata", BattleAuraType.Formation);
 		builder.AppendLine();
 		builder.AppendLine("<b>AURE DI FAMIGLIA</b>");
-		AppendAuraEntry(builder, "Might", BattleAuraType.Might);
-		AppendAuraEntry(builder, "Cunning", BattleAuraType.Cunning);
-		AppendAuraEntry(builder, "Magic", BattleAuraType.Magic);
+		AppendAuraEntry(builder, "Fortuza", BattleAuraType.Might);
+		AppendAuraEntry(builder, "Astuta", BattleAuraType.Cunning);
+		AppendAuraEntry(builder, "Magica", BattleAuraType.Magic);
 		builder.AppendLine();
 		builder.AppendLine("<b>AURE DI CLASSE</b>");
 		AppendAuraEntry(builder, "Warrior", BattleAuraType.Warrior);
 		AppendAuraEntry(builder, "Barbarian", BattleAuraType.Barbarian);
 		AppendAuraEntry(builder, "Paladin", BattleAuraType.Paladin);
-		AppendAuraEntry(builder, "Rogue", BattleAuraType.Rogue);
+		AppendAuraEntry(builder, "Ladri", BattleAuraType.Rogue);
 		AppendAuraEntry(builder, "Assassin", BattleAuraType.Assassin);
 		AppendAuraEntry(builder, "Hunter", BattleAuraType.Hunter);
 		AppendAuraEntry(builder, "Mage", BattleAuraType.Mage);
@@ -159,19 +160,19 @@ public sealed partial class BattleBoardController
 			BattleAuraType.Formation =>
 				"una volta per combattimento, quando una tua carta avrebbe svantaggio di famiglia, lo svantaggio diventa neutro.",
 			BattleAuraType.Might =>
-				"la prima volta per round che una tua carta Might non elimina il bersaglio, ottiene +1 permanente (attacco e difesa) per il resto del combattimento.",
+				"Quando muore una pedina qualsiasi, ogni carta con aura Forzuta attiva acquisisce +1 permanente.",
 			BattleAuraType.Cunning =>
-				"una volta per round, quando una tua carta Cunning attacca un nemico con malus, marca o inibizione, tira con vantaggio anche se il matchup non lo darebbe.",
+				"le tue carte Astuta attaccano sempre con vantaggio i nemici che hanno bonus o malus.",
 			BattleAuraType.Magic =>
-				"le tue carte Magic manipolano il campo indebolendo progressivamente il nemico vivo piu' forte (-1 permanente).",
+				"le tue carte Magica si difendono con un dado piu forte, esempio: se hai un D6 ti difendi con un D8.",
 			BattleAuraType.Warrior =>
 				"quando un Warrior usa la somma dei dadi, aggiunge +1 al totale.",
 			BattleAuraType.Barbarian =>
 				"la Furia diventa +3 invece di +2, in attacco e difesa.",
 			BattleAuraType.Paladin =>
-				"quando un Paladin protegge un alleato e sopravvive, contrattacca subito l'attaccante con +1 in attacco.",
+				"quando un Paladino sopravvive ad una difesa, contrattacca con +1.",
 			BattleAuraType.Rogue =>
-				"i Rogue rilanciano gli 1 in attacco anche quando tirano due dadi (vantaggio o svantaggio).",
+				"I Ladri ritirano una volta per dado se esce 1 o 2, in attacco e in difesa.",
 			BattleAuraType.Assassin =>
 				"quando un Assassin inibisce un nemico, quel nemico subisce anche -1 permanente.",
 			BattleAuraType.Hunter =>
@@ -179,7 +180,7 @@ public sealed partial class BattleBoardController
 			BattleAuraType.Mage =>
 				"la prima abilita' Mage abbassa il dado avversario di 2 step invece di 1.",
 			BattleAuraType.Necromancer =>
-				"la prima volta per combattimento che un tuo alleato viene eliminato, resta come Spirito con un ultimo turno.",
+				"la prima volta che un tuo alleato viene ucciso, resta in campo per un ultimo turno.",
 			BattleAuraType.Priest =>
 				"la Benedizione da' +3 invece di +2.",
 			_ => "nessun effetto.",

@@ -3,6 +3,8 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace AccardND.Server.Accounts;
 
+public sealed record VerifiedExternalIdentity(string Provider, string ExternalId, string DisplayName);
+
 /// <summary>
 /// Valida gli access token di Unity Authentication contro le chiavi pubbliche
 /// (JWKS) di Unity. Per i test la sorgente JWKS può essere un file locale.
@@ -24,7 +26,7 @@ public sealed class UgsAuthService
 
     public bool IsEnabled => !string.IsNullOrWhiteSpace(config.UgsProjectId);
 
-    public async Task<(AccountIdentity Identity, string Error)> ValidateAsync(
+    public async Task<(VerifiedExternalIdentity Identity, string Error)> ValidateAsync(
         string accessToken, string displayName)
     {
         if (!IsEnabled)
@@ -68,7 +70,7 @@ public sealed class UgsAuthService
                 return (null, "Token senza identità giocatore.");
 
             string name = SanitizeName(displayName, playerId);
-            return (new AccountIdentity($"ugs:{playerId}", name), null);
+            return (new VerifiedExternalIdentity("ugs", playerId, name), null);
         }
         catch (Exception exception) when (exception is SecurityTokenException or ArgumentException)
         {

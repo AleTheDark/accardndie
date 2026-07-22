@@ -123,7 +123,9 @@ namespace AccardND.GameData
     public sealed class ProgressionConfiguration
     {
         [SerializeField, Min(1)] private int experiencePerLevel = 100;
+        [SerializeField] private int[] experienceThresholdsByLevel = { 50, 75, 100, 125, 150 };
         [SerializeField, Min(0)] private int monsterRoomClearExperience = 10;
+        [SerializeField, Min(0)] private int minibossClearExperience = 50;
         [SerializeField, Range(1, 12)] private int maximumLevel = 6;
         [SerializeField, Min(1)] private int roomsPerMasterLevel = 5;
         [SerializeField] private int[] vigorDiceByLevel = { 4, 6, 8, 10, 12, 20 };
@@ -146,7 +148,9 @@ namespace AccardND.GameData
         [SerializeField, Min(1)] private int godMerchantMinimumStrength = 7;
 
         public int ExperiencePerLevel => experiencePerLevel;
+        public int[] ExperienceThresholdsByLevel => BuildExperienceThresholds();
         public int MonsterRoomClearExperience => monsterRoomClearExperience;
+        public int MinibossClearExperience => minibossClearExperience;
         public int MaximumLevel => maximumLevel;
         public int RoomsPerMasterLevel => roomsPerMasterLevel;
         public int[] VigorDiceByLevel => vigorDiceByLevel;
@@ -171,17 +175,34 @@ namespace AccardND.GameData
             int safeStartingDie = Math.Max(2, startingVigorDieSides);
             int count = Math.Max(1, maximumLevel);
             int[] effectiveDice = new int[count];
+            int fallbackDie = safeStartingDie;
+            if (vigorDiceByLevel != null && vigorDiceByLevel.Length > 0)
+                fallbackDie = Math.Max(safeStartingDie, vigorDiceByLevel[vigorDiceByLevel.Length - 1]);
 
             for (int index = 0; index < count; index++)
             {
                 int configuredDie = vigorDiceByLevel != null && index < vigorDiceByLevel.Length
                     ? vigorDiceByLevel[index]
-                    : safeStartingDie;
+                    : fallbackDie;
                 effectiveDice[index] = Math.Max(safeStartingDie, configuredDie);
             }
 
             effectiveDice[0] = safeStartingDie;
             return effectiveDice;
+        }
+
+        private int[] BuildExperienceThresholds()
+        {
+            int count = Math.Max(0, maximumLevel - 1);
+            int[] thresholds = new int[count];
+            for (int index = 0; index < count; index++)
+            {
+                int configuredThreshold = experienceThresholdsByLevel != null && index < experienceThresholdsByLevel.Length
+                    ? experienceThresholdsByLevel[index]
+                    : experiencePerLevel;
+                thresholds[index] = Math.Max(1, configuredThreshold);
+            }
+            return thresholds;
         }
     }
 
@@ -285,7 +306,7 @@ namespace AccardND.GameData
     public sealed class GameplayConfiguration
     {
         [SerializeField, Min(2)] private int initiativeDieSides = 20;
-        [SerializeField, Min(2)] private int vigorDieSides = 6;
+        [SerializeField, Min(2)] private int vigorDieSides = 4;
         [SerializeField] private int randomSeed = 20260620;
         [SerializeField] private bool useRandomSeedEachSession = true;
         [SerializeField, Range(3, 8)] private int draftCandidateCount = 6;

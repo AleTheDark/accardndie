@@ -10,13 +10,19 @@
     "Unity.ugui",
     "Unity.InputSystem",
     "Unity.Services.Authentication",
-    "Unity.Services.Core"
+    "Unity.Services.Core",
+    "Google.Play.Games"
   ],
   "versionDefines": [
     {
       "name": "com.unity.services.authentication",
       "expression": "",
       "define": "UGS_AUTH"
+    },
+    {
+      "name": "com.google.play.games",
+      "expression": "",
+      "define": "GPGS_AUTH"
     }
   ]
 }

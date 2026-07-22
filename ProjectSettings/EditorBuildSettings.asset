@@ -6,11 +6,17 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scenes/LoginScreenPrototype.unity
+    guid: e09c930034cf46498b6f7a47a2fb81d1
+  - enabled: 1
     path: Assets/Scenes/MainScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
   - enabled: 0
     path: Assets/Scenes/MinibossGolemDebug.unity
     guid: 3dbaa4ce33a24fce943f913a9ec159c1
+  - enabled: 0
+    path: Assets/Scenes/BragusBossDebug.unity
+    guid: 3aa169b9161f40929fe2c5e7c0de956c
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

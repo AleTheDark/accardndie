@@ -27,6 +27,21 @@ namespace AccardND.GameData
         public CampaignCardZone Zone { get; internal set; }
     }
 
+    /// <summary>Voce di uno snapshot del mazzo, per il save/resume della campagna.</summary>
+    public readonly struct CampaignCardRestoreEntry
+    {
+        public CampaignCardRestoreEntry(CardDefinition definition, CampaignCardZone zone, int instanceId)
+        {
+            Definition = definition;
+            Zone = zone;
+            InstanceId = instanceId;
+        }
+
+        public CardDefinition Definition { get; }
+        public CampaignCardZone Zone { get; }
+        public int InstanceId { get; }
+    }
+
     public sealed class CampaignDeckState
     {
         private readonly List<CampaignCardInstance> cards = new();
@@ -41,10 +56,37 @@ namespace AccardND.GameData
         }
 
         public IReadOnlyList<CampaignCardInstance> Cards => cards;
+        public int NextInstanceId => nextInstanceId;
         public int GraveyardCount => CountZone(CampaignCardZone.Graveyard);
         public int CooldownCount => CountZone(CampaignCardZone.Cooldown);
         public int AvailableCount => CountZone(CampaignCardZone.Deck);
         public int CombatReadyCount => CountCombatReadyCards();
+
+        /// <summary>
+        /// Ricostruisce il mazzo da uno snapshot salvato: svuota lo stato attuale, ricrea
+        /// le istanze con la loro zona e reimposta il contatore degli instanceId. Bypassa il
+        /// dedup di AddCard perché lo snapshot rappresenta uno stato già valido.
+        /// </summary>
+        public void RestoreFrom(IReadOnlyList<CampaignCardRestoreEntry> entries, int nextInstanceId)
+        {
+            if (entries == null)
+                throw new ArgumentNullException(nameof(entries));
+
+            cards.Clear();
+            int maxInstanceId = 0;
+            foreach (CampaignCardRestoreEntry entry in entries)
+            {
+                if (entry.Definition == null)
+                    throw new ArgumentException("Snapshot con definizione nulla.", nameof(entries));
+                cards.Add(new CampaignCardInstance(entry.InstanceId, entry.Definition)
+                {
+                    Zone = entry.Zone
+                });
+                if (entry.InstanceId > maxInstanceId)
+                    maxInstanceId = entry.InstanceId;
+            }
+            this.nextInstanceId = Math.Max(nextInstanceId, maxInstanceId + 1);
+        }
 
         public bool ContainsDefinition(string definitionId)
         {

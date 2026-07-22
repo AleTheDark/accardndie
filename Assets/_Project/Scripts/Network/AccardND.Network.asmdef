@@ -3,6 +3,7 @@
   "rootNamespace": "AccardND.Network",
   "references": [
     "AccardND.GameCore",
+    "AccardND.GameData",
     "AccardND.NetProtocol"
   ]
 }

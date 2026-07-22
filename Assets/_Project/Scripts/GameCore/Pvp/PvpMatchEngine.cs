@@ -43,7 +43,6 @@ namespace AccardND.GameCore.Pvp
             public PvpAuraType Aura;
             public bool NecromancerSpiritUsed;
             public bool FormationAuraUsed;
-            public bool MightAuraUsedThisCycle;
             public readonly List<PvpCardState> Board = new();
             public int RoundWins;
         }
@@ -397,7 +396,6 @@ namespace AccardND.GameCore.Pvp
                 state.Aura = PvpAuraType.None;
                 state.NecromancerSpiritUsed = false;
                 state.FormationAuraUsed = false;
-                state.MightAuraUsedThisCycle = false;
                 state.DecisiveChoice = null;
             }
             turnOrder.Clear();
@@ -566,6 +564,7 @@ namespace AccardND.GameCore.Pvp
             card.IsSpirit = false;
             card.Eliminated = true;
             events.Add(new SpiritExpiredEvent(card.Owner, card.Slot));
+            ApplyMightAuraDeathBonuses(events);
         }
 
         private void AdvanceTurnIndex()
@@ -575,8 +574,6 @@ namespace AccardND.GameCore.Pvp
                 return;
             turnIndex = 0;
             cycle++;
-            players[0].MightAuraUsedThisCycle = false;
-            players[1].MightAuraUsedThisCycle = false;
         }
 
         private bool CheckRoundEnd(List<PvpEvent> events)
@@ -643,9 +640,11 @@ namespace AccardND.GameCore.Pvp
                 ? new CombatModifiers(
                     sumAttackerVigor: false,
                     defenderAdvantage: false,
-                    rerollAttackerOnes: false,
-                    rerollAttackerTwos: false,
-                    attackerFlatBonus: counterFlatBonus)
+                    rerollAttackerOnes: rules.RogueRerollsOnes && attacker.Card.HeroClass == HeroClass.Rogue,
+                    rerollAttackerTwos: players[attacker.Owner].Aura == PvpAuraType.Rogue && attacker.Card.HeroClass == HeroClass.Rogue,
+                    attackerFlatBonus: counterFlatBonus,
+                    rerollDefenderOnes: rules.RogueRerollsOnes && defender.Card.HeroClass == HeroClass.Rogue,
+                    rerollDefenderTwos: players[defender.Owner].Aura == PvpAuraType.Rogue && defender.Card.HeroClass == HeroClass.Rogue)
                 : BuildAttackModifiers(attacker, defender, defenderAdvantage);
 
             CombatCertainty certainty = CombatCertaintyCalculator.Evaluate(
@@ -666,7 +665,7 @@ namespace AccardND.GameCore.Pvp
             {
                 CombatResult result = resolver.ResolveAttack(
                     attacker.Card, defender.Card, attackerDie, defenderDie, modifiers);
-                ConsumeWarriorArm(attacker, modifiers);
+                ConsumeArmedAttackAbility(attacker, modifiers);
                 attackerRoll = result.AttackerRoll;
                 defenderRoll = result.DefenderRoll;
                 attackerTotal = result.AttackerTotal;
@@ -707,7 +706,9 @@ namespace AccardND.GameCore.Pvp
 
             ConsumeVigorPenalties(attacker, defender);
             if (!isCounter)
-                ApplyPostAttackState(attacker, defenderLostLife, events);
+                ApplyPostAttackState(attacker, defender, defenderLostLife, events);
+            if (defenderEliminated)
+                ApplyMightAuraDeathBonuses(events);
 
             events.Add(new AttackResolvedEvent(
                 attacker.Owner,
@@ -733,6 +734,7 @@ namespace AccardND.GameCore.Pvp
             PvpCardState attacker, PvpCardState defender, bool defenderAdvantage)
         {
             PlayerState attackerTeam = players[attacker.Owner];
+            PlayerState defenderTeam = players[defender.Owner];
             int attackerFlat = attacker.PendingAttackBonus + attacker.PermanentCombatBonus;
             if (attackerTeam.Aura == PvpAuraType.Warrior
                 && attacker.Card.HeroClass == HeroClass.Warrior
@@ -744,7 +746,7 @@ namespace AccardND.GameCore.Pvp
 
             bool forceAdvantage = attackerTeam.Aura == PvpAuraType.Cunning
                 && HeroClassFamily.Of(attacker.Card.HeroClass) == ClassFamily.Cunning
-                && IsMarkedOrInhibited(defender);
+                && HasBonusOrMalusForCunning(defender);
 
             bool neutralize = false;
             if (attackerTeam.Aura == PvpAuraType.Formation
@@ -763,37 +765,57 @@ namespace AccardND.GameCore.Pvp
                 attackerFlatBonus: attackerFlat,
                 defenderFlatBonus: defenderFlat,
                 neutralizeAttackerMatchup: neutralize,
-                forceAttackerAdvantage: forceAdvantage);
+                forceAttackerAdvantage: forceAdvantage,
+                rerollDefenderOnes: rules.RogueRerollsOnes && defender.Card.HeroClass == HeroClass.Rogue,
+                rerollDefenderTwos: defenderTeam.Aura == PvpAuraType.Rogue && defender.Card.HeroClass == HeroClass.Rogue);
         }
 
-        private void ApplyPostAttackState(PvpCardState attacker, bool defeatedTarget, List<PvpEvent> events)
+        private void ApplyPostAttackState(PvpCardState attacker, PvpCardState defender, bool defeatedTarget, List<PvpEvent> events)
         {
             attacker.PendingAttackBonus = 0;
             attacker.PendingBonusKind = PvpPendingBonusKind.None;
-            PlayerState team = players[attacker.Owner];
-            if (team.Aura == PvpAuraType.Might
-                && !team.MightAuraUsedThisCycle
-                && HeroClassFamily.Of(attacker.Card.HeroClass) == ClassFamily.Might
-                && !defeatedTarget)
+            if (attacker.Card.HeroClass == HeroClass.Barbarian && !defeatedTarget)
             {
-                team.MightAuraUsedThisCycle = true;
-                attacker.PermanentCombatBonus++;
-                events.Add(new MightAuraBonusEvent(attacker.Owner, attacker.Slot));
+                ApplyBarbarianFury(attacker, events);
             }
-            else if (attacker.Card.HeroClass == HeroClass.Barbarian && !defeatedTarget)
+
+            if (defender.Card.HeroClass == HeroClass.Barbarian && !defeatedTarget)
+                ApplyBarbarianFury(defender, events);
+        }
+
+        private void ApplyBarbarianFury(PvpCardState card, List<PvpEvent> events)
+        {
+            PlayerState team = players[card.Owner];
+            int fury = team.Aura == PvpAuraType.Barbarian
+                ? rules.BarbarianRageBonus + 1
+                : rules.BarbarianRageBonus;
+            card.PendingAttackBonus = fury;
+            card.PendingBonusKind = PvpPendingBonusKind.Fury;
+            events.Add(new FuryGainedEvent(card.Owner, card.Slot, fury));
+        }
+
+        private void ApplyMightAuraDeathBonuses(List<PvpEvent> events)
+        {
+            for (int player = 0; player < players.Length; player++)
             {
-                int fury = team.Aura == PvpAuraType.Barbarian
-                    ? rules.BarbarianRageBonus + 1
-                    : rules.BarbarianRageBonus;
-                attacker.PendingAttackBonus = fury;
-                attacker.PendingBonusKind = PvpPendingBonusKind.Fury;
-                events.Add(new FuryGainedEvent(attacker.Owner, attacker.Slot, fury));
+                PlayerState team = players[player];
+                if (team.Aura != PvpAuraType.Might)
+                    continue;
+
+                foreach (PvpCardState card in team.Board)
+                {
+                    if (!card.IsActive || HeroClassFamily.Of(card.Card.HeroClass) != ClassFamily.Might)
+                        continue;
+
+                    card.PermanentCombatBonus++;
+                    events.Add(new MightAuraBonusEvent(player, card.Slot));
+                }
             }
         }
 
-        private void ConsumeWarriorArm(PvpCardState attacker, CombatModifiers modifiers)
+        private void ConsumeArmedAttackAbility(PvpCardState attacker, CombatModifiers modifiers)
         {
-            if (!modifiers.SumAttackerVigor)
+            if (!attacker.AbilityArmed || !modifiers.SumAttackerVigor)
                 return;
             attacker.AbilityArmed = false;
             attacker.AbilityUsed = true;
@@ -843,8 +865,14 @@ namespace AccardND.GameCore.Pvp
             && players[card.Owner].Aura == PvpAuraType.Magic
             && HeroClassFamily.Of(card.Card.HeroClass) == ClassFamily.Magic;
 
-        private bool IsMarkedOrInhibited(PvpCardState target) =>
-            target.WasInhibited || target.InhibitedTurns > 0 || IsMarked(target);
+        private bool HasBonusOrMalusForCunning(PvpCardState target) =>
+            target != null
+            && (target.WasInhibited
+                || target.InhibitedTurns > 0
+                || target.PendingVigorStepPenalty > 0
+                || target.PendingAttackBonus != 0
+                || target.PermanentCombatBonus != 0
+                || IsMarked(target));
 
         private bool IsMarked(PvpCardState target)
         {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,8 +20,34 @@ namespace AccardND.Presentation
 public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 {
 	private const string ComposableGolemCardId = "miniboss-composable-golem";
-	private const string ComposableGolemModelResourcePath = "Minibosses/miniboss_golem_componibile";
+	private const string MedusaBossCardId = "boss-medusa";
+	private const string TrentorBossCardId = "trentor";
+	private const string BragusBossCardId = "boss-bragus";
+	private const string PalatirBossCardId = "boss-palatir";
 	private const string MinibossGolemDebugSceneName = "MinibossGolemDebug";
+	private const string MedusaBossDebugSceneName = "MedusaBossDebug";
+	private const string TrentorBossDebugSceneName = "TrentorBossDebug";
+	private const string BragusBossDebugSceneName = "BragusBossDebug";
+	private const string PalatirBossDebugSceneName = "PalatirBossDebug";
+	private const string MageVigorConstellationDebugSceneName = "MageVigorConstellationDebug";
+	private const string DiceRollDebugSceneName = "DiceRollDebug";
+	private const string LoginScreenPrototypeSceneName = "LoginScreenPrototype";
+	private const string PlayerHudNamePrefsKey = "AccardND.PlayerHudName";
+	private const int TutorialCompletionHoneyReward = 60;
+	private const int HardcoreUnlockHoneyCost = 50;
+	private static readonly Color AttackTargetLineColor = new(1f, 0.04f, 0.02f, 1f);
+	private static readonly Color AttachmentTargetLineColor = new(1f, 0.45f, 0.03f, 1f);
+	private static readonly Color AbilityTargetLineColor = new(0.1f, 0.58f, 1f, 1f);
+	// Cache di visualizzazione: la UI legge sempre da qui. Quando c'e' una connessione server
+	// autenticata, questo servizio locale viene rispecchiato dallo stato autoritativo del server.
+	private readonly SinglePlayerProgressService singlePlayerProgressService = new SinglePlayerProgressService();
+	// Progressione server-authoritative: attiva quando il link e' connesso. Se resta null il
+	// single player usa il servizio locale (offline/dev), senza cambiare comportamento.
+	private const bool ServerProgressEnabled = true;
+	private AccardND.Network.SinglePlayerServerLink singlePlayerServerLink;
+	private AccardND.Network.ServerSinglePlayerProgressRepository serverProgress;
+	private bool ServerProgressReady =>
+		serverProgress != null && singlePlayerServerLink != null && singlePlayerServerLink.IsReady;
 
 	private enum MerchantBuyMode
 	{
@@ -67,18 +93,78 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		Hard
 	}
 
+	private enum CampaignConsumableType
+	{
+		Detector,
+		SecondChance,
+		Defrost,
+		Empower,
+		DoubleExp
+	}
+
 	private enum MinibossKind
 	{
 		ComposableGolem
+	}
+
+	private enum CpuEncounterKind
+	{
+		MonsterFormation,
+		BossFormation,
+		ComposableGolem,
+		Medusa,
+		Trentor,
+		Bragus,
+		Palatir
 	}
 
 	private readonly struct CampaignDoor
 	{
 		public CampaignDoorDifficulty Difficulty { get; }
 
+		public CampaignRoomRoll? RevealedRoom { get; }
+
 		public CampaignDoor(CampaignDoorDifficulty difficulty)
 		{
 			Difficulty = difficulty;
+			RevealedRoom = null;
+		}
+
+		public CampaignDoor(CampaignDoorDifficulty difficulty, CampaignRoomRoll revealedRoom)
+		{
+			Difficulty = difficulty;
+			RevealedRoom = revealedRoom;
+		}
+	}
+
+	private sealed class CampaignConsumableState
+	{
+		private readonly Dictionary<CampaignConsumableType, int> quantities = new Dictionary<CampaignConsumableType, int>();
+
+		public int GetQuantity(CampaignConsumableType type)
+		{
+			return quantities.TryGetValue(type, out int quantity) ? quantity : 0;
+		}
+
+		public void Add(CampaignConsumableType type, int amount = 1)
+		{
+			if (amount <= 0)
+				return;
+			quantities[type] = GetQuantity(type) + amount;
+		}
+
+		public bool TryConsume(CampaignConsumableType type)
+		{
+			int quantity = GetQuantity(type);
+			if (quantity <= 0)
+				return false;
+			quantities[type] = quantity - 1;
+			return true;
+		}
+
+		public void Clear()
+		{
+			quantities.Clear();
 		}
 	}
 
@@ -129,6 +215,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 		public int PermanentCombatBonus { get; set; }
 
+		public int MightAuraCombatBonus { get; set; }
+
 		public int InhibitedTurns { get; set; }
 
 		public bool WasInhibited { get; set; }
@@ -141,6 +229,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 		public bool IsAttachment { get; set; }
 
+		public bool Petrified { get; set; }
+
 		public BattleCardState MarkedTarget { get; set; }
 
 		public BattleCardState ProtectedAlly { get; set; }
@@ -150,7 +240,13 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		public BattleCardState(CardDefinition definition, PrototypeCardView view, bool belongsToPlayer, CampaignCardInstance campaignCard = null)
 		{
 			Definition = definition;
-			Card = definition.CreateCombatCard();
+			Card = string.Equals(definition.Id, MedusaBossCardId, StringComparison.OrdinalIgnoreCase)
+				? new CombatCard(definition.Id, definition.DisplayName, HeroClass.Mage, MedusaBoss.CardStrength)
+				: string.Equals(definition.Id, BragusBossCardId, StringComparison.OrdinalIgnoreCase)
+					? new CombatCard(definition.Id, definition.DisplayName, HeroClass.Barbarian, BragusBoss.CardStrength)
+					: string.Equals(definition.Id, PalatirBossCardId, StringComparison.OrdinalIgnoreCase)
+						? new CombatCard(definition.Id, definition.DisplayName, HeroClass.Mage, PalatirBoss.CardStrength)
+						: definition.CreateCombatCard();
 			View = view;
 			BelongsToPlayer = belongsToPlayer;
 			CampaignCard = campaignCard;
@@ -208,8 +304,6 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			WorldRotation = worldRotation;
 		}
 	}
-
-	private static Sprite runtimePanelSprite;
 
 	private static Sprite helpAuraSprite;
 
@@ -275,7 +369,49 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private CampaignDeckState campaignDeck;
 
+	private GameObject initialDraftPanel;
+
+	private Image initialDraftFrameImage;
+
+	private AspectRatioFitter initialDraftFrameAspectFitter;
+
+	private Text initialDraftHeadingText;
+
+	private Text initialDraftStatusText;
+
+	private Text initialDraftPromptText;
+
+	private RectTransform initialDraftOffersRoot;
+
+	private RectTransform initialDraftDeckRoot;
+
+	private Text initialDraftDeckText;
+
+	private Button initialDraftConfirmButton;
+
+	private RectTransform initialDraftConfirmButtonRect;
+
+	private Text initialDraftConfirmButtonText;
+
+	private readonly List<CardDefinition> initialDraftOffers = new List<CardDefinition>();
+
+	private readonly List<CardDefinition> initialDraftDeck = new List<CardDefinition>();
+
+	private readonly List<PrototypeCardView> initialDraftOfferViews = new List<PrototypeCardView>();
+
+	private readonly List<PrototypeCardView> initialDraftDeckViews = new List<PrototypeCardView>();
+
+	private readonly HashSet<int> initialDraftSelectedIndices = new HashSet<int>();
+
+	private HeroClass? initialDraftCaptainClass;
+
+	private bool initialDraftChoosingCaptain;
+
 	private GameObject deckBuilderPanel;
+
+	private Image deckBuilderFrameImage;
+
+	private AspectRatioFitter deckBuilderFrameAspectFitter;
 
 	private Text deckBuilderHeadingText;
 
@@ -343,6 +479,76 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Button tutorialAdvanceButton;
 
+	private GameObject campaignModeSelectionPanel;
+
+	private Image campaignModeSelectionFrameImage;
+
+	private AspectRatioFitter campaignModeSelectionFrameAspectFitter;
+
+	private Text campaignModeSelectionHeadingText;
+
+	private Text campaignModeSelectionPromptText;
+
+	private Text campaignModeSelectionProgressText;
+
+	private Button campaignModeAdventureButton;
+
+	private RectTransform campaignModeBuilderButtonRect;
+
+	private Button campaignModeHardcoreButton;
+
+	private Text campaignModeHardcoreButtonText;
+
+	private RectTransform campaignModeDraftButtonRect;
+
+	private GameObject adventureChapterPanel;
+
+	private Text adventureChapterHeadingText;
+
+	private Text adventureChapterProgressText;
+
+	private RectTransform adventureChapterListRoot;
+
+	private Button adventureChapterBackButton;
+
+	private readonly List<GameObject> adventureChapterRows = new List<GameObject>();
+
+	private GameObject adventureTutorialConfirmPopup;
+
+	private Text adventureTutorialConfirmBodyText;
+
+	private GameObject guidedTutorialPanel;
+
+	private Text guidedTutorialTitleText;
+
+	private Text guidedTutorialBodyText;
+
+	private Text guidedTutorialStepText;
+
+	private Button guidedTutorialPreviousButton;
+
+	private Button guidedTutorialNextButton;
+
+	private Text guidedTutorialNextButtonText;
+
+	private int guidedTutorialStepIndex;
+
+	private bool adventureScriptedTutorialActive;
+
+	private int adventureScriptedTutorialStep;
+
+	private GameObject adventureScriptedTutorialPanel;
+
+	private Text adventureScriptedTutorialTitleText;
+
+	private Text adventureScriptedTutorialBodyText;
+
+	private Text adventureScriptedTutorialStepText;
+
+	private Image adventureScriptedTutorialSpotlight;
+
+	private readonly List<Image> adventureScriptedTutorialDimmers = new List<Image>();
+
 	private int tutorialPageIndex;
 
 	private bool modeSelectionTutorialActive;
@@ -359,11 +565,15 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private AspectRatioFitter roomChoiceAspectFitter;
 
+	private int roomChoiceBackgroundIndex = 1;
+
 	private Button roomChoiceLeftButton;
 
 	private Button roomChoiceCenterButton;
 
 	private Button roomChoiceRightButton;
+
+	private readonly List<Text> roomChoiceRevealLabels = new List<Text>();
 
 	private readonly List<CampaignDoor> campaignDoors = new List<CampaignDoor>();
 
@@ -405,6 +615,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private bool hasTimelineBackgroundBaseRect;
 
+	private readonly List<string> campaignTimelineOrderKeys = new();
+
+	private bool timelineLayoutVertical;
+
 	private Text roundText;
 
 	private RectTransform campaignZoneRect;
@@ -413,9 +627,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Button restartButton;
 
-	private Button confirmFormationButton;
+	private Button confirmActionButton;
 
-	private Text confirmFormationButtonText;
+	private Text confirmActionButtonText;
 
 	private Button cancelActionButton;
 
@@ -428,6 +642,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private Sprite confirmActionSprite;
 
 	private Sprite cancelActionSprite;
+
+	private Sprite infoActionSprite;
 
 	private Button merchantBuyButton;
 
@@ -477,6 +693,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Button logButton;
 
+	private Text settingsButtonLabel;
+
 	private Sprite settingsButtonSprite;
 
 	private GameObject logPanel;
@@ -484,6 +702,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private Text logText;
 
 	private GameObject optionsPanel;
+
+	private GameObject optionsBackdropPanel;
 
 	private GameObject returnToMenuConfirmPanel;
 
@@ -501,7 +721,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Button implementationArchiveButton;
 
+	private Text implementationArchiveButtonLabel;
+
 	private GameObject implementationArchivePanel;
+
+	private GameObject implementationArchiveBackdropPanel;
 
 	private RectTransform implementationArchiveButtonRect;
 
@@ -521,9 +745,17 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private readonly List<PrototypeCardView> implementationArchiveCardViews = new List<PrototypeCardView>();
 
+	private readonly List<GameObject> implementationConsumableViews = new List<GameObject>();
+
+	private RectTransform implementationConsumablesRoot;
+
+	private Text implementationConsumablesEmptyText;
+
 	private GameObject combatResultRoot;
 
 	private Text combatScoreText;
+
+	private Text combatDiceText;
 
 	private Text combatOutcomeText;
 
@@ -543,7 +775,23 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Button cardInspectionCloseButton;
 
+	private Button cardInspectionDraftConfirmButton;
+
+	private RectTransform cardInspectionDraftConfirmButtonRect;
+
+	private Text cardInspectionDraftConfirmButtonText;
+
 	private PrototypeCardView inspectedCardView;
+
+	private bool cardInspectionPausedGame;
+
+	private float cardInspectionPreviousTimeScale = 1f;
+
+	private int inspectedInitialDraftOfferIndex = -1;
+
+	private bool inspectedCampaignConsumableActive;
+
+	private CampaignConsumableType inspectedCampaignConsumableType;
 
 	private readonly List<GameObject> cardInspectionStatusRows = new List<GameObject>();
 
@@ -629,6 +877,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private RoomDifficulty pendingRoomDifficulty = RoomDifficulty.Normal;
 
+	private string campaignScenarioId;
+
+	private string campaignScenarioBossId;
+
 	private AbilityTargetMode abilityTargetMode;
 
 	private bool attackTargetingActive;
@@ -647,8 +899,6 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private bool formationAuraUsed;
 
-	private bool mightAuraUsedThisRound;
-
 	private bool necromancerSpiritUsed;
 
 	private bool skipNextCombatCooldown;
@@ -663,15 +913,39 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private int nextMonsterTierBonus;
 
+	private bool nextDoorChoiceRevealed;
+
+	private bool nextRoomEmpowered;
+
+	private bool nextRoomDoubleExperience;
+
+	private CampaignConsumableState campaignConsumables = new CampaignConsumableState();
+
 	private ComposableGolem activeComposableGolem;
 
-	private MinibossGolemRenderView activeComposableGolemPreview;
+	private ComposableGolemFormStats[] retryComposableGolemForms;
+
+	private MedusaBoss activeMedusaBoss;
+
+	private TrentorBoss activeTrentorBoss;
+
+	private BragusBoss activeBragusBoss;
+
+	private PalatirBoss activePalatirBoss;
 
 	private bool merchantRoomsBlockedUntilMonster;
 
 	private bool rewardRoomsBlockedUntilMonster;
 
 	private bool debugForceFirstRoomComposableGolem;
+
+	private bool debugForceFirstRoomMedusa;
+
+	private bool debugForceFirstRoomTrentor;
+
+	private bool debugForceFirstRoomBragus;
+
+	private bool debugForceFirstRoomPalatir;
 
 	private HeroClass merchantSelectedClass = HeroClass.Warrior;
 
@@ -680,6 +954,34 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	[RuntimeInitializeOnLoadMethod(/*Could not decode attribute arguments.*/)]
 	private static void Bootstrap()
 	{
+		SceneManager.sceneLoaded -= BootstrapLoadedScene;
+		SceneManager.sceneLoaded += BootstrapLoadedScene;
+		EnsureControllerForScene(SceneManager.GetActiveScene());
+	}
+
+	private static void BootstrapLoadedScene(Scene scene, LoadSceneMode mode)
+	{
+		EnsureControllerForScene(scene);
+	}
+
+	private static void EnsureControllerForScene(Scene scene)
+	{
+		if (string.Equals(
+			scene.name,
+			MageVigorConstellationDebugSceneName,
+			StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(
+			scene.name,
+			DiceRollDebugSceneName,
+			StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(
+			scene.name,
+			LoginScreenPrototypeSceneName,
+			StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
+
 		if (!((Object)(object)Object.FindAnyObjectByType<BattleBoardController>() != (Object)null))
 		{
 			GameObject val = new GameObject("Accard N' Die - Battle Board");
@@ -699,6 +1001,22 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			SceneManager.GetActiveScene().name,
 			MinibossGolemDebugSceneName,
 			StringComparison.OrdinalIgnoreCase);
+		debugForceFirstRoomMedusa = string.Equals(
+			SceneManager.GetActiveScene().name,
+			MedusaBossDebugSceneName,
+			StringComparison.OrdinalIgnoreCase);
+		debugForceFirstRoomTrentor = string.Equals(
+			SceneManager.GetActiveScene().name,
+			TrentorBossDebugSceneName,
+			StringComparison.OrdinalIgnoreCase);
+		debugForceFirstRoomBragus = string.Equals(
+			SceneManager.GetActiveScene().name,
+			BragusBossDebugSceneName,
+			StringComparison.OrdinalIgnoreCase);
+		debugForceFirstRoomPalatir = string.Equals(
+			SceneManager.GetActiveScene().name,
+			PalatirBossDebugSceneName,
+			StringComparison.OrdinalIgnoreCase);
 		int num = (configuration.UseRandomSeedEachSession ?Guid.NewGuid().GetHashCode() : configuration.Gameplay.RandomSeed);
 		random = new SeededRandomSource(num);
 		combatResolver = new CombatResolver(random);
@@ -713,43 +1031,96 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		{
 			AppendLog("DEBUG - scena MinibossGolemDebug: prima stanza forzata su Golem Componibile.");
 		}
+		if (debugForceFirstRoomMedusa)
+		{
+			AppendLog("DEBUG - scena MedusaBossDebug: prima stanza forzata su Medusa.");
+		}
+		if (debugForceFirstRoomTrentor)
+		{
+			AppendLog("DEBUG - scena TrentorBossDebug: prima stanza forzata su Trentor.");
+		}
+		if (debugForceFirstRoomBragus)
+		{
+			AppendLog("DEBUG - scena BragusBossDebug: prima stanza forzata su Bragus.");
+		}
+		if (debugForceFirstRoomPalatir)
+		{
+			AppendLog("DEBUG - scena PalatirBossDebug: prima stanza forzata su Palatir.");
+		}
 		ShowModeSelection();
 	}
 
 	private void Update()
 	{
-		if ((Object)(object)hintPanel != (Object)null && hintPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+		if (IsEscapePressedThisFrame() && CloseTopmostOverlay())
 		{
-			DismissHint();
+			return;
 		}
-		else if ((Object)(object)auraCodexPanel != (Object)null && auraCodexPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-		{
-			CloseAuraCodex();
-		}
-		else if ((Object)(object)returnToMenuConfirmPanel != (Object)null && returnToMenuConfirmPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-		{
-			HideReturnToMenuConfirmation();
-		}
-		else if ((Object)(object)cardInspectionPanel != (Object)null && cardInspectionPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-		{
-			CloseCardInspection();
-		}
-		else if ((Object)(object)implementationArchivePanel != (Object)null && implementationArchivePanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-		{
-			CloseImplementationArchive();
-		}
-		else if ((Object)(object)merchantPanel != (Object)null && merchantPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-		{
-			CloseMerchantPanel();
-		}
-		else if ((Object)(object)optionsPanel != (Object)null && optionsPanel.activeSelf && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-		{
-			optionsPanel.SetActive(false);
-		}
-		else if (Screen.width != previousScreenWidth || Screen.height != previousScreenHeight || Screen.safeArea != previousSafeArea || Screen.orientation != previousScreenOrientation)
+
+		if (HasScreenGeometryChanged())
 		{
 			ApplyResponsiveLayout();
 		}
+	}
+
+	private static bool IsEscapePressedThisFrame()
+	{
+		Keyboard keyboard = Keyboard.current;
+		return keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
+	}
+
+	private bool CloseTopmostOverlay()
+	{
+		if (IsActive(hintPanel))
+		{
+			DismissHint();
+			return true;
+		}
+		else if (IsActive(auraCodexPanel))
+		{
+			CloseAuraCodex();
+			return true;
+		}
+		else if (IsActive(returnToMenuConfirmPanel))
+		{
+			HideReturnToMenuConfirmation();
+			return true;
+		}
+		else if (IsActive(cardInspectionPanel))
+		{
+			CloseCardInspection();
+			return true;
+		}
+		else if (IsActive(implementationArchivePanel))
+		{
+			CloseImplementationArchive();
+			return true;
+		}
+		else if (IsActive(merchantPanel))
+		{
+			CloseMerchantPanel();
+			return true;
+		}
+		else if (IsActive(optionsPanel))
+		{
+			CloseOptionsPanel();
+			return true;
+		}
+
+		return false;
+	}
+
+	private static bool IsActive(GameObject panel)
+	{
+		return (Object)(object)panel != (Object)null && panel.activeSelf;
+	}
+
+	private bool HasScreenGeometryChanged()
+	{
+		return Screen.width != previousScreenWidth
+			|| Screen.height != previousScreenHeight
+			|| Screen.safeArea != previousSafeArea
+			|| Screen.orientation != previousScreenOrientation;
 	}
 
 	private void LateUpdate()
@@ -764,9 +1135,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private void BuildInterface()
 	{
 		EnsureEventSystem();
-		Font builtinResource = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+		Font builtinResource = AccardND.Battlefield.MmoUiTheme.BodyFont;
 		confirmActionSprite = LoadSpriteResource("UI/confirm_button");
 		cancelActionSprite = LoadSpriteResource("UI/cancel_button");
+		infoActionSprite = LoadSpriteResource("UI/info_button");
 		settingsButtonSprite = LoadSpriteResource("UI/settings_button");
 		Canvas val = CreateCanvas();
 		canvasRect = (RectTransform)((Component)val).transform;
@@ -774,7 +1146,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		scenarioCatalog = Resources.Load<ScenarioCatalog>("ScenarioCatalog");
 		StartingRoomConfiguration startingRoom = configuration.StartingRoom;
 		currentScenario = (((Object)(object)scenarioCatalog != (Object)null) ?scenarioCatalog.Select(startingRoom.RoomType, startingRoom.Difficulty, startingRoom.BossId, startingRoom.ScenarioId) : null);
-		Sprite sprite = (((Object)(object)currentScenario != (Object)null) ?currentScenario.Background : Resources.Load<Sprite>("Backgrounds/Background_terrain"));
+		Sprite sprite = CurrentScenarioBackgroundSprite();
 		VisualConfiguration visual = configuration.Visual;
 		float backgroundFillBrightness = visual.BackgroundFillBrightness;
 		backgroundFillImage = CreateImage("Background", ((Component)val).transform, new Color(backgroundFillBrightness, backgroundFillBrightness, backgroundFillBrightness));
@@ -810,7 +1182,17 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		((Component)topInfoBarRect).gameObject.SetActive(false);
 		logButton = CreateImageButton("Options Button", (Transform)(object)safeAreaRoot, builtinResource, settingsButtonSprite, string.Empty);
 		((UnityEvent)logButton.onClick).AddListener(new UnityAction(ToggleOptionsPanel));
-		SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.87f, 0.93f), new Vector2(0.98f, 0.985f));
+		SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.84f, 0.902f), new Vector2(0.995f, 0.992f));
+		settingsButtonLabel = CreateText("Options Button Label", (Transform)(object)safeAreaRoot, builtinResource, 20, (FontStyle)1, (TextAnchor)4);
+		settingsButtonLabel.text = "settings";
+		settingsButtonLabel.color = new Color(0.95f, 0.79f, 0.34f);
+		settingsButtonLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
+		settingsButtonLabel.verticalOverflow = VerticalWrapMode.Truncate;
+		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(settingsButtonLabel);
+		Outline settingsButtonLabelOutline = ((Component)settingsButtonLabel).gameObject.AddComponent<Outline>();
+		settingsButtonLabelOutline.effectColor = new Color(0.04f, 0.02f, 0.01f, 0.95f);
+		settingsButtonLabelOutline.effectDistance = new Vector2(2f, -2f);
+		SetRect(settingsButtonLabel.rectTransform, new Vector2(0.825f, 0.882f), new Vector2(1f, 0.924f));
 		Image image4 = CreateImage("Game Log Panel", (Transform)(object)safeAreaRoot, new Color(0.008f, 0.014f, 0.022f, 0.97f));
 		StylePanel(image4);
 		logPanel = ((Component)image4).gameObject;
@@ -821,11 +1203,23 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		logPanel.AddComponent<GraphicRaycaster>();
 		logText = CreateText("Log Entries", logPanel.transform, builtinResource, 18, (FontStyle)0, (TextAnchor)6);
 		logText.color = new Color(0.82f, 0.9f, 0.92f);
-		Stretch(logText.rectTransform, 28f);
+		SetRect(logText.rectTransform, new Vector2(0.035f, 0.035f), new Vector2(0.965f, 0.9f));
 		Button button = CreateButton("Close Log", logPanel.transform, builtinResource, "CHIUDI");
 		((UnityEvent)button.onClick).AddListener(new UnityAction(ToggleLogPanel));
 		SetRect((RectTransform)((Component)button).transform, new Vector2(0.84f, 0.93f), new Vector2(0.98f, 0.99f));
 		logPanel.SetActive(false);
+		Image optionsBackdrop = CreateImage("Options Backdrop", ((Component)val).transform, new Color(0f, 0f, 0f, 0.72f));
+		optionsBackdrop.raycastTarget = true;
+		Stretch(optionsBackdrop.rectTransform);
+		optionsBackdropPanel = ((Component)optionsBackdrop).gameObject;
+		Button optionsBackdropButton = optionsBackdropPanel.AddComponent<Button>();
+		optionsBackdropButton.transition = Selectable.Transition.None;
+		((UnityEvent)optionsBackdropButton.onClick).AddListener(new UnityAction(CloseOptionsPanel));
+		Canvas optionsBackdropCanvas = optionsBackdropPanel.AddComponent<Canvas>();
+		optionsBackdropCanvas.overrideSorting = true;
+		optionsBackdropCanvas.sortingOrder = 519;
+		optionsBackdropPanel.AddComponent<GraphicRaycaster>();
+		optionsBackdropPanel.SetActive(false);
 		Image imageOptions = CreateImage("Options Panel", (Transform)(object)safeAreaRoot, new Color(0.008f, 0.014f, 0.022f, 0.97f));
 		StylePanel(imageOptions);
 		optionsPanel = ((Component)imageOptions).gameObject;
@@ -835,6 +1229,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		optionsCanvas.sortingOrder = 520;
 		optionsPanel.AddComponent<GraphicRaycaster>();
 		Text optionsTitle = CreateText("Options Title", optionsPanel.transform, builtinResource, 22, (FontStyle)1, (TextAnchor)4);
+		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(optionsTitle);
 		optionsTitle.text = "OPZIONI";
 		optionsTitle.color = new Color(0.95f, 0.79f, 0.34f);
 		SetRect(optionsTitle.rectTransform, new Vector2(0.06f, 0.87f), new Vector2(0.94f, 0.97f));
@@ -847,51 +1242,55 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		Button optionsTutorialButton = CreateImageButton("Options Tutorial", optionsPanel.transform, builtinResource, LoadSpriteResource("UI/tutorial_button"), string.Empty);
 		((UnityEvent)optionsTutorialButton.onClick).AddListener(new UnityAction(StartTutorialFromOptions));
 		SetRect((RectTransform)((Component)optionsTutorialButton).transform, new Vector2(0.62f, 0.69f), new Vector2(0.94f, 0.86f));
+		Button resetHintsButton = CreateButton("Options Reset Hints", optionsPanel.transform, builtinResource, "RESET HINT");
+		((UnityEvent)resetHintsButton.onClick).AddListener(new UnityAction(ResetHintsFromOptions));
+		SetRect((RectTransform)((Component)resetHintsButton).transform, new Vector2(0.06f, 0.59f), new Vector2(0.94f, 0.68f));
 		Text volumeLabel = CreateText("SFX Volume Label", optionsPanel.transform, builtinResource, 17, (FontStyle)1, (TextAnchor)4);
 		volumeLabel.text = "VOLUME SFX";
 		volumeLabel.color = new Color(0.82f, 0.9f, 0.92f);
-		SetRect(volumeLabel.rectTransform, new Vector2(0.06f, 0.61f), new Vector2(0.94f, 0.7f));
+		SetRect(volumeLabel.rectTransform, new Vector2(0.06f, 0.49f), new Vector2(0.94f, 0.57f));
 		Button sfxDownButton = CreateButton("SFX Volume Down", optionsPanel.transform, builtinResource, "-");
 		((UnityEvent)sfxDownButton.onClick).AddListener(new UnityAction(DecreaseSfxVolume));
-		SetRect((RectTransform)((Component)sfxDownButton).transform, new Vector2(0.06f, 0.49f), new Vector2(0.25f, 0.6f));
+		SetRect((RectTransform)((Component)sfxDownButton).transform, new Vector2(0.06f, 0.38f), new Vector2(0.25f, 0.48f));
 		sfxVolumeText = CreateText("SFX Volume Value", optionsPanel.transform, builtinResource, 19, (FontStyle)1, (TextAnchor)4);
 		sfxVolumeText.color = new Color(0.95f, 0.79f, 0.34f);
-		SetRect(sfxVolumeText.rectTransform, new Vector2(0.28f, 0.49f), new Vector2(0.54f, 0.6f));
+		SetRect(sfxVolumeText.rectTransform, new Vector2(0.28f, 0.38f), new Vector2(0.54f, 0.48f));
 		Button sfxUpButton = CreateButton("SFX Volume Up", optionsPanel.transform, builtinResource, "+");
 		((UnityEvent)sfxUpButton.onClick).AddListener(new UnityAction(IncreaseSfxVolume));
-		SetRect((RectTransform)((Component)sfxUpButton).transform, new Vector2(0.57f, 0.49f), new Vector2(0.76f, 0.6f));
+		SetRect((RectTransform)((Component)sfxUpButton).transform, new Vector2(0.57f, 0.38f), new Vector2(0.76f, 0.48f));
 		sfxMuteButton = CreateButton("SFX Mute", optionsPanel.transform, builtinResource, "MUTE");
 		((UnityEvent)sfxMuteButton.onClick).AddListener(new UnityAction(ToggleSfxMute));
 		sfxMuteButtonText = ((Component)sfxMuteButton).GetComponentInChildren<Text>();
-		SetRect((RectTransform)((Component)sfxMuteButton).transform, new Vector2(0.79f, 0.49f), new Vector2(0.94f, 0.6f));
+		SetRect((RectTransform)((Component)sfxMuteButton).transform, new Vector2(0.79f, 0.38f), new Vector2(0.94f, 0.48f));
 		Text musicLabel = CreateText("Music Volume Label", optionsPanel.transform, builtinResource, 17, (FontStyle)1, (TextAnchor)4);
 		musicLabel.text = "VOLUME MUSICA";
 		musicLabel.color = new Color(0.82f, 0.9f, 0.92f);
-		SetRect(musicLabel.rectTransform, new Vector2(0.06f, 0.37f), new Vector2(0.94f, 0.46f));
+		SetRect(musicLabel.rectTransform, new Vector2(0.06f, 0.27f), new Vector2(0.94f, 0.35f));
 		Button musicDownButton = CreateButton("Music Volume Down", optionsPanel.transform, builtinResource, "-");
 		((UnityEvent)musicDownButton.onClick).AddListener(new UnityAction(DecreaseMusicVolume));
-		SetRect((RectTransform)((Component)musicDownButton).transform, new Vector2(0.06f, 0.25f), new Vector2(0.25f, 0.36f));
+		SetRect((RectTransform)((Component)musicDownButton).transform, new Vector2(0.06f, 0.16f), new Vector2(0.25f, 0.26f));
 		musicVolumeText = CreateText("Music Volume Value", optionsPanel.transform, builtinResource, 19, (FontStyle)1, (TextAnchor)4);
 		musicVolumeText.color = new Color(0.95f, 0.79f, 0.34f);
-		SetRect(musicVolumeText.rectTransform, new Vector2(0.28f, 0.25f), new Vector2(0.54f, 0.36f));
+		SetRect(musicVolumeText.rectTransform, new Vector2(0.28f, 0.16f), new Vector2(0.54f, 0.26f));
 		Button musicUpButton = CreateButton("Music Volume Up", optionsPanel.transform, builtinResource, "+");
 		((UnityEvent)musicUpButton.onClick).AddListener(new UnityAction(IncreaseMusicVolume));
-		SetRect((RectTransform)((Component)musicUpButton).transform, new Vector2(0.57f, 0.25f), new Vector2(0.76f, 0.36f));
+		SetRect((RectTransform)((Component)musicUpButton).transform, new Vector2(0.57f, 0.16f), new Vector2(0.76f, 0.26f));
 		musicMuteButton = CreateButton("Music Mute", optionsPanel.transform, builtinResource, "MUTE");
 		((UnityEvent)musicMuteButton.onClick).AddListener(new UnityAction(ToggleMusicMute));
 		musicMuteButtonText = ((Component)musicMuteButton).GetComponentInChildren<Text>();
-		SetRect((RectTransform)((Component)musicMuteButton).transform, new Vector2(0.79f, 0.25f), new Vector2(0.94f, 0.36f));
+		SetRect((RectTransform)((Component)musicMuteButton).transform, new Vector2(0.79f, 0.16f), new Vector2(0.94f, 0.26f));
 		Button closeOptionsButton = CreateButton("Close Options", optionsPanel.transform, builtinResource, "CHIUDI");
 		((UnityEvent)closeOptionsButton.onClick).AddListener(new UnityAction(ToggleOptionsPanel));
-		SetRect((RectTransform)((Component)closeOptionsButton).transform, new Vector2(0.06f, 0.06f), new Vector2(0.47f, 0.18f));
+		SetRect((RectTransform)((Component)closeOptionsButton).transform, new Vector2(0.06f, 0.04f), new Vector2(0.47f, 0.14f));
 		Button mainMenuButton = CreateButton("Options Main Menu", optionsPanel.transform, builtinResource, "MENU");
 		((UnityEvent)mainMenuButton.onClick).AddListener(new UnityAction(ReturnToMainMenuFromOptions));
-		SetRect((RectTransform)((Component)mainMenuButton).transform, new Vector2(0.53f, 0.06f), new Vector2(0.94f, 0.18f));
-		optionsPanel.SetActive(false);
+		SetRect((RectTransform)((Component)mainMenuButton).transform, new Vector2(0.53f, 0.04f), new Vector2(0.94f, 0.14f));
+		SetOptionsPanelVisible(false);
 		CreateReturnToMenuConfirmation((Transform)(object)safeAreaRoot, builtinResource);
 		RefreshSfxOptionsUi();
 		RefreshMusicOptionsUi();
 		Text text2 = (cpuTitleText = CreateText("CPU Title", (Transform)(object)safeAreaRoot, builtinResource, 25, (FontStyle)1, (TextAnchor)3));
+		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(text2);
 		cpuTitleRect = text2.rectTransform;
 		text2.text = (((Object)(object)currentScenario != (Object)null) ?("CPU - IL MASTER   *   " + currentScenario.DisplayName.ToUpperInvariant()) : "CPU - IL MASTER");
 		SetRect(text2.rectTransform, new Vector2(0.12f, 0.805f), new Vector2(0.88f, 0.85f));
@@ -913,19 +1312,12 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		StylePanel(image6);
 		timelineBackgroundRect = image6.rectTransform;
 		SetRect(image6.rectTransform, new Vector2(0.18f, 0.865f), new Vector2(0.82f, 0.91f));
-		initiativeTimelineRoot = new GameObject("Turn Timeline", new Type[2]
+		initiativeTimelineRoot = new GameObject("Turn Timeline", new Type[1]
 		{
-			typeof(RectTransform),
-			typeof(GridLayoutGroup)
+			typeof(RectTransform)
 		}).GetComponent<RectTransform>();
 		((Transform)initiativeTimelineRoot).SetParent(((Component)image6).transform, false);
 		Stretch(initiativeTimelineRoot, 4f);
-		GridLayoutGroup component = ((Component)initiativeTimelineRoot).GetComponent<GridLayoutGroup>();
-		component.spacing = new Vector2(6f, 6f);
-		component.padding = new RectOffset(4, 4, 2, 2);
-		component.childAlignment = (TextAnchor)4;
-		component.constraint = GridLayoutGroup.Constraint.FixedRowCount;
-		component.constraintCount = 1;
 		Image image7 = CreateImage("Message Panel", (Transform)(object)safeAreaRoot, new Color(0.015f, 0.025f, 0.04f, 0.56f));
 		StylePanel(image7);
 		messagePanelRect = image7.rectTransform;
@@ -948,11 +1340,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		val2.anchorMax = new Vector2(0.97f, 0.58f);
 		val2.offsetMin = Vector2.zero;
 		val2.offsetMax = Vector2.zero;
-		confirmFormationButton = CreateButton("Confirm Formation", ((Component)image7).transform, builtinResource, "CONFERMA FORMAZIONE");
-		((UnityEvent)confirmFormationButton.onClick).AddListener(new UnityAction(ConfirmFormation));
-		confirmFormationButtonText = ((Component)confirmFormationButton).GetComponentInChildren<Text>();
-		((Component)confirmFormationButton).gameObject.SetActive(false);
-		RectTransform val3 = (RectTransform)((Component)confirmFormationButton).transform;
+		confirmActionButton = CreateButton("Confirm Action", ((Component)image7).transform, builtinResource, "CONFERMA");
+		((UnityEvent)confirmActionButton.onClick).AddListener(new UnityAction(HandleConfirmAction));
+		confirmActionButtonText = ((Component)confirmActionButton).GetComponentInChildren<Text>();
+		((Component)confirmActionButton).gameObject.SetActive(false);
+		RectTransform val3 = (RectTransform)((Component)confirmActionButton).transform;
 		val3.anchorMin = new Vector2(0.67f, 0.16f);
 		val3.anchorMax = new Vector2(0.97f, 0.84f);
 		val3.offsetMin = Vector2.zero;
@@ -992,6 +1384,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		val7.offsetMin = Vector2.zero;
 		val7.offsetMax = Vector2.zero;
 		Text text3 = (playerTitleText = CreateText("Player Title", (Transform)(object)safeAreaRoot, builtinResource, 25, (FontStyle)1, (TextAnchor)3));
+		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(text3);
 		playerTitleRect = text3.rectTransform;
 		text3.text = "LA TUA FORMAZIONE";
 		SetRect(text3.rectTransform, new Vector2(0.12f, 0.32f), new Vector2(0.88f, 0.38f));
@@ -1001,10 +1394,12 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		CreateMerchantView(((Component)val).transform, builtinResource);
 		CreateImplementationArchiveView(((Component)val).transform, builtinResource);
 		CreateDeckBuilderView(builtinResource);
+		CreateInitialDraftView(builtinResource);
 		CreateRoomChoiceView(((Component)val).transform, builtinResource);
 		CreateCardInspectionOverlay(((Component)val).transform, builtinResource);
 		CreateRoomTransitionOverlay(((Component)val).transform);
 		CreateModeSelectionView(((Component)val).transform, builtinResource);
+		CreateCampaignModeSelectionView(builtinResource);
 		CreateHintOverlay((Transform)(object)safeAreaRoot, builtinResource);
 		CreateAuraCodexView(((Component)val).transform, builtinResource);
 		RefreshPlayerHud();
@@ -1054,7 +1449,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			skipNextCombatCooldown = true;
 			return (description: " Le carte schierate nella prossima vittoria non entreranno in cooldown.", bonusExperience: 0);
 		case 4:
-			return (description: " Evento misterioso: nessun effetto.", bonusExperience: 0);
+			return (description: " Evento misterioso: il presagio dello scenario si intensifica.", bonusExperience: 0);
 		case 5:
 			return RecoverRandomGraveyardCard();
 		case 6:
@@ -1063,7 +1458,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		case 7:
 			return ResolveMasterChallenge();
 		case 8:
-			return GrantRandomRewardCard("PROVA CONSUMABILE");
+			return GrantRandomConsumable("PROVA CONSUMABILE");
 		case 9:
 			nextCombatAssassinsActLast = true;
 			return (description: " Nel prossimo combattimento gli Assassini partiranno ultimi in iniziativa.", bonusExperience: 0);
@@ -1127,6 +1522,39 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		}
 		int num3 = Math.Max(10, configuration.Progression.OpportunityExperienceJackpot / 2);
 		return (description: $" Sfida del Master vinta ({num} vs {num2}): +{num3} EXP.", bonusExperience: num3);
+	}
+
+	private (string description, int bonusExperience) RevealCampaignScenario()
+	{
+		if (!string.IsNullOrWhiteSpace(campaignScenarioId))
+		{
+			return (description: $" Scenario gia rivelato: {ActiveCampaignScenarioLabel()} resta attivo fino a fine campagna.", bonusExperience: 0);
+		}
+		if ((Object)(object)scenarioCatalog == (Object)null)
+		{
+			scenarioCatalog = Resources.Load<ScenarioCatalog>("ScenarioCatalog");
+		}
+		if ((Object)(object)scenarioCatalog == (Object)null)
+		{
+			AppendLog("SCENARIO CAMPAGNA - catalogo scenari non trovato.");
+			return (description: " Evento misterioso: nessuno scenario disponibile.", bonusExperience: 0);
+		}
+		List<ScenarioDefinition> candidates = scenarioCatalog.Scenarios
+			.Where((ScenarioDefinition scenario) => (Object)(object)scenario != (Object)null
+				&& scenario.RoomType == RoomType.Boss
+				&& (Object)(object)FindCardDefinition(scenario.BossId) != (Object)null)
+			.ToList();
+		if (candidates.Count == 0)
+		{
+			AppendLog("SCENARIO CAMPAGNA - nessuno scenario Boss con carta boss configurata.");
+			return (description: " Evento misterioso: nessuno scenario disponibile.", bonusExperience: 0);
+		}
+		ScenarioDefinition selected = candidates[random.NextInclusive(0, candidates.Count - 1)];
+		campaignScenarioId = selected.Id;
+		campaignScenarioBossId = selected.BossId;
+		string label = string.IsNullOrWhiteSpace(selected.DisplayName) ? selected.Id : selected.DisplayName;
+		AppendLog($"SCENARIO CAMPAGNA RIVELATO - {label}, boss {campaignScenarioBossId}.");
+		return (description: $" Scenario rivelato: {label}. I suoi effetti restano attivi fino a fine campagna.", bonusExperience: 0);
 	}
 
 	private void ResetBattle()

@@ -24,6 +24,7 @@ public sealed class AchievementService
         new("ach-matches-100", "Instancabile", "Gioca 100 partite.", "matches", 100, null),
         new("ach-streak-5", "Inarrestabile", "Vinci 5 partite di fila.", "best_streak", 5, "ach-streak"),
         new("ach-tier-esperto", "Esperto riconosciuto", "Raggiungi il tier Esperto.", "tier", 2, null),
+        new("ach-boss-medusa", "Boss sconfitto", "Sconfiggi Medusa alla fine della campagna.", "campaign_boss", 1, "boss-medusa"),
         new("ach-tier-onnipotente", "Divinità", "Raggiungi il tier Onnipotente.", "tier", 4, "ach-onnipotente")
     };
 
@@ -61,6 +62,7 @@ public sealed class AchievementService
                 "matches" => matches,
                 "best_streak" => bestStreak,
                 "tier" => peakTierIndex,
+                "campaign_boss" => alreadyUnlocked.Contains(def.Id) ? def.Threshold : 0,
                 _ => 0
             };
 
@@ -123,6 +125,41 @@ public sealed class AchievementService
             };
         }
         return new AchievementsData { achievements = list };
+    }
+
+    public IReadOnlyList<string> UnlockCampaignBossVictory(AccountIdentity identity, IEnumerable<string> bosses)
+    {
+        if (bosses == null || !bosses.Any(boss =>
+                string.Equals(boss?.Trim(), "boss-medusa", StringComparison.OrdinalIgnoreCase)))
+            return Array.Empty<string>();
+
+        Definition def = Catalog.First(item => item.Id == "ach-boss-medusa");
+        using SqliteConnection connection = database.Open();
+        using SqliteTransaction transaction = connection.BeginTransaction();
+        HashSet<string> alreadyUnlocked = ReadUnlocked(connection, transaction, identity.PlayerId);
+        bool nowUnlocked = !alreadyUnlocked.Contains(def.Id);
+
+        using (SqliteCommand upsert = connection.CreateCommand())
+        {
+            upsert.Transaction = transaction;
+            upsert.CommandText = @"
+                INSERT INTO player_achievements (player_id, achievement_id, progress, unlocked_at)
+                VALUES ($id, $ach, $progress, $unlocked)
+                ON CONFLICT(player_id, achievement_id) DO UPDATE SET
+                    progress = $progress,
+                    unlocked_at = COALESCE(player_achievements.unlocked_at, $unlocked)";
+            upsert.Parameters.AddWithValue("$id", identity.PlayerId);
+            upsert.Parameters.AddWithValue("$ach", def.Id);
+            upsert.Parameters.AddWithValue("$progress", def.Threshold);
+            upsert.Parameters.AddWithValue("$unlocked", nowUnlocked ? DateTime.UtcNow.ToString("O") : (object)DBNull.Value);
+            upsert.ExecuteNonQuery();
+        }
+
+        if (nowUnlocked)
+            unlocks.GrantIcon(connection, transaction, identity.PlayerId, def.RewardIcon, "achievement");
+
+        transaction.Commit();
+        return nowUnlocked ? new[] { def.Name } : Array.Empty<string>();
     }
 
     private static (int Wins, int Matches, int BestStreak) ReadLifetime(

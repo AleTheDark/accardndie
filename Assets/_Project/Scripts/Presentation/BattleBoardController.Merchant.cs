@@ -149,10 +149,10 @@ public sealed partial class BattleBoardController
 			LayoutElement component = ((Component)prototypeCardView).GetComponent<LayoutElement>();
 			if ((Object)(object)component != (Object)null)
 			{
-				component.minWidth = ImplementationArchiveCardSize;
-				component.preferredWidth = ImplementationArchiveCardSize;
-				component.minHeight = ImplementationArchiveCardSize;
-				component.preferredHeight = ImplementationArchiveCardSize;
+				component.minWidth = MerchantCardSize;
+				component.preferredWidth = MerchantCardSize;
+				component.minHeight = MerchantCardSize;
+				component.preferredHeight = MerchantCardSize;
 				component.flexibleWidth = 0f;
 				component.flexibleHeight = 0f;
 			}
@@ -237,6 +237,10 @@ public sealed partial class BattleBoardController
 		AppendLog($"VENDITA - {displayName}, +{num} EXP.");
 		string text = ((num2 > 0) ?$" LEVEL UP: livello {runProgress.PlayerLevel}, D{runProgress.PlayerVigorDieSides}!" : string.Empty);
 		SetMessage($"VENDUTA: {displayName}. Ottieni {num} EXP." + text);
+		if (num2 > 0)
+		{
+			ShowLevelUpVigorHint();
+		}
 		RefreshMerchantPanel();
 	}
 

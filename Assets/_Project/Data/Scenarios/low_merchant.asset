@@ -15,6 +15,7 @@ MonoBehaviour:
   id: low_merchant
   displayName: Mercante
   background: {fileID: 21300000, guid: 875eaeca22650b248b4f753d05b35a8c, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: 5cdc63c91a8144d44819390fa60bae63, type: 3}
   roomType: 3
   difficulty: 1
   bossId: 

@@ -32,6 +32,7 @@ builder.Services.AddSingleton<UnlockService>();
 builder.Services.AddSingleton<ProfileService>();
 builder.Services.AddSingleton<HallOfFameService>();
 builder.Services.AddSingleton<AchievementService>();
+builder.Services.AddSingleton<SinglePlayerProgressService>();
 builder.Services.AddSingleton<PresenceRegistry>();
 builder.Services.AddSingleton<FriendService>();
 builder.Services.AddSingleton<MatchResultRecorder>();
@@ -41,7 +42,10 @@ builder.Services.AddSingleton<MatchmakingQueue>();
 builder.Services.AddSingleton<MessageRouter>();
 
 WebApplication app = builder.Build();
-app.UseWebSockets();
+// Ping di keep-alive ogni 30s: tiene vive le connessioni idle (turni lunghi)
+// sotto il timeout dei proxy davanti al server, es. Cloudflare. Il browser
+// risponde automaticamente al PING, quindi vale anche per i client WebGL/PWA.
+app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 

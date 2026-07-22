@@ -119,41 +119,117 @@ namespace AccardND.GameCore.Tests
                 new CombatModifiers(false, false, rerollAttackerOnes: true));
 
             Assert.That(result.AttackerRoll.FirstRoll, Is.EqualTo(5));
+            Assert.That(result.AttackerRoll.FirstRollBeforeReroll, Is.EqualTo(1));
             Assert.That(result.DefenderRoll.FirstRoll, Is.EqualTo(2));
         }
 
         [Test]
-        public void ResolveAttack_RogueRerollsAllAttackerOnesWithAdvantage()
+        public void ResolveAttack_RogueDoesNotRerollOneWithoutAbility()
+        {
+            var random = new FixedRandomSource(1, 2);
+            var resolver = new CombatResolver(random);
+            var attacker = new CombatCard("rogue", "Ladro", HeroClass.Rogue, 5);
+            var defender = new CombatCard("assassin", "Assassino", HeroClass.Assassin, 5);
+
+            CombatResult result = resolver.ResolveAttack(attacker, defender, 6);
+
+            Assert.That(result.AttackerRoll.FirstRoll, Is.EqualTo(1));
+            Assert.That(result.DefenderRoll.FirstRoll, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void ResolveAttack_RogueRerollsOneOncePerAttackerDieWithAdvantage()
         {
             var random = new FixedRandomSource(1, 4, 1, 5, 2);
             var resolver = new CombatResolver(random);
             var attacker = new CombatCard("rogue", "Ladro", HeroClass.Rogue, 5);
             var defender = new CombatCard("mage", "Mago", HeroClass.Mage, 5);
 
-            CombatResult result = resolver.ResolveAttack(attacker, defender, 6);
+            CombatResult result = resolver.ResolveAttack(
+                attacker,
+                defender,
+                6,
+                new CombatModifiers(false, false, rerollAttackerOnes: true));
 
             Assert.That(result.AttackerRoll.Matchup, Is.EqualTo(MatchupResult.Advantage));
             Assert.That(result.AttackerRoll.FirstRoll, Is.EqualTo(4));
             Assert.That(result.AttackerRoll.SecondRoll, Is.EqualTo(5));
+            Assert.That(result.AttackerRoll.FirstRollBeforeReroll, Is.EqualTo(1));
+            Assert.That(result.AttackerRoll.SecondRollBeforeReroll, Is.EqualTo(1));
             Assert.That(result.AttackerVigor, Is.EqualTo(5));
             Assert.That(result.DefenderRoll.FirstRoll, Is.EqualTo(2));
         }
 
         [Test]
-        public void ResolveAttack_RogueRerollsAllAttackerOnesWithDisadvantage()
+        public void ResolveAttack_RogueRerollsOneOncePerAttackerDieWithDisadvantage()
         {
             var random = new FixedRandomSource(1, 4, 1, 5, 2);
             var resolver = new CombatResolver(random);
             var attacker = new CombatCard("rogue", "Ladro", HeroClass.Rogue, 5);
             var defender = new CombatCard("paladin", "Paladino", HeroClass.Paladin, 5);
 
-            CombatResult result = resolver.ResolveAttack(attacker, defender, 6);
+            CombatResult result = resolver.ResolveAttack(
+                attacker,
+                defender,
+                6,
+                new CombatModifiers(false, false, rerollAttackerOnes: true));
 
             Assert.That(result.AttackerRoll.Matchup, Is.EqualTo(MatchupResult.Disadvantage));
             Assert.That(result.AttackerRoll.FirstRoll, Is.EqualTo(4));
             Assert.That(result.AttackerRoll.SecondRoll, Is.EqualTo(5));
+            Assert.That(result.AttackerRoll.FirstRollBeforeReroll, Is.EqualTo(1));
+            Assert.That(result.AttackerRoll.SecondRollBeforeReroll, Is.EqualTo(1));
             Assert.That(result.AttackerVigor, Is.EqualTo(4));
             Assert.That(result.DefenderRoll.FirstRoll, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void ResolveAttack_RogueAuraRerollsFirstOneOrTwoOncePerAttackerDie()
+        {
+            var random = new FixedRandomSource(2, 6, 1, 5, 3);
+            var resolver = new CombatResolver(random);
+            var attacker = new CombatCard("rogue", "Ladro", HeroClass.Rogue, 5);
+            var defender = new CombatCard("mage", "Mago", HeroClass.Mage, 5);
+
+            CombatResult result = resolver.ResolveAttack(
+                attacker,
+                defender,
+                6,
+                new CombatModifiers(false, false, rerollAttackerOnes: true, rerollAttackerTwos: true));
+
+            Assert.That(result.AttackerRoll.Matchup, Is.EqualTo(MatchupResult.Advantage));
+            Assert.That(result.AttackerRoll.FirstRoll, Is.EqualTo(6));
+            Assert.That(result.AttackerRoll.SecondRoll, Is.EqualTo(5));
+            Assert.That(result.AttackerRoll.FirstRollBeforeReroll, Is.EqualTo(2));
+            Assert.That(result.AttackerRoll.SecondRollBeforeReroll, Is.EqualTo(1));
+            Assert.That(result.AttackerVigor, Is.EqualTo(6));
+            Assert.That(result.DefenderRoll.FirstRoll, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void ResolveAttack_RogueAuraRerollsFirstOneOrTwoOncePerDefenderDieWithAdvantage()
+        {
+            var random = new FixedRandomSource(3, 2, 6, 1, 5);
+            var resolver = new CombatResolver(random);
+            var attacker = new CombatCard("warrior", "Guerriero", HeroClass.Warrior, 5);
+            var defender = new CombatCard("rogue", "Ladro", HeroClass.Rogue, 5);
+
+            CombatResult result = resolver.ResolveAttack(
+                attacker,
+                defender,
+                6,
+                new CombatModifiers(
+                    sumAttackerVigor: false,
+                    defenderAdvantage: true,
+                    rerollDefenderOnes: true,
+                    rerollDefenderTwos: true));
+
+            Assert.That(result.DefenderRoll.SelectionMode, Is.EqualTo(VigorSelectionMode.Highest));
+            Assert.That(result.DefenderRoll.FirstRoll, Is.EqualTo(6));
+            Assert.That(result.DefenderRoll.SecondRoll, Is.EqualTo(5));
+            Assert.That(result.DefenderRoll.FirstRollBeforeReroll, Is.EqualTo(2));
+            Assert.That(result.DefenderRoll.SecondRollBeforeReroll, Is.EqualTo(1));
+            Assert.That(result.DefenderVigor, Is.EqualTo(6));
         }
 
         [Test]

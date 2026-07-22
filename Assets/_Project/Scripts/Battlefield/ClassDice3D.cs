@@ -4,32 +4,79 @@ using UnityEngine;
 
 namespace AccardND.Battlefield
 {
-    /// <summary>Faccia di un dado: normale in spazio locale del modello e valore stampato.</summary>
+    /// <summary>
+    /// Faccia di un dado: normale in spazio locale del modello, valore stampato
+    /// e direzione "alto" del glifo sulla faccia (zero se non calibrata).
+    /// </summary>
     public readonly struct DieFace
     {
         public DieFace(Vector3 normal, int value)
+            : this(normal, value, Vector3.zero)
+        {
+        }
+
+        public DieFace(Vector3 normal, int value, Vector3 digitUp)
         {
             Normal = normal;
             Value = value;
+            DigitUp = digitUp;
         }
 
         public Vector3 Normal { get; }
         public int Value { get; }
+        public Vector3 DigitUp { get; }
     }
 
     /// <summary>
-    /// Costruisce i dadi 3D da Resources/Dice colorandoli in base alla classe
+    /// Costruisce i dadi 3D da Resources/DnD_Dice colorandoli in base alla classe
     /// che li tira e generando i numeri sulle facce a partire dalla mesh.
     /// </summary>
     public static class ClassDice3D
     {
         private static readonly Dictionary<HeroClass, Material> materialCache = new Dictionary<HeroClass, Material>();
 
-        // Mappa per dado: valore stampato sulla texture per ogni faccia,
-        // nell'ordine deterministico prodotto da ComputeFaces. Da calibrare
-        // guardando i modelli; finché una voce manca si usa l'euristica
-        // "facce opposte sommano a N+1".
-        private static readonly Dictionary<int, int[]> faceValueOverrides = new Dictionary<int, int[]>();
+        // Mappa per dado: valore stampato sul modello per ogni faccia,
+        // nell'ordine deterministico prodotto da ComputeFaces. Calibrata
+        // renderizzando ogni faccia dei modelli DnD_Dice e leggendo il numero
+        // (2026-07); se una voce manca si usa l'euristica "facce opposte
+        // sommano a N+1".
+        private static readonly Dictionary<int, int[]> faceValueOverrides = new Dictionary<int, int[]>
+        {
+            // D4 a lettura di vertice: il "valore" di una faccia è il numero
+            // stampato al vertice opposto (il dado atterra su quella faccia).
+            { 4, new[] { 3, 2, 4, 1 } },
+            { 6, new[] { 4, 6, 2, 5, 1, 3 } },
+            { 8, new[] { 2, 3, 8, 5, 1, 4, 6, 7 } },
+            { 10, new[] { 5, 4, 10, 9, 3, 8, 2, 1, 7, 6 } },
+            { 12, new[] { 8, 3, 5, 6, 10, 12, 1, 11, 7, 4, 2, 9 } },
+            { 20, new[] { 17, 10, 3, 8, 12, 7, 16, 15, 19, 20, 1, 2, 6, 5, 9, 14, 13, 18, 11, 4 } }
+        };
+
+        // Orientamento del glifo su ogni faccia: gradi (in senso orario,
+        // guardando la faccia frontalmente) di cui il numero risulta ruotato
+        // rispetto al riferimento ProjectOnPlane(Vector3.up, normale).
+        // Calibrato insieme ai valori; se manca, il glifo può apparire ruotato.
+        // Il D4 non serve: atterra appoggiato e i numeri all'apice sono dritti.
+        private static readonly Dictionary<int, float[]> faceDigitUpAngles = new Dictionary<int, float[]>
+        {
+            { 6, new[] { 0f, 0f, 90f, 270f, 0f, 0f } },
+            { 8, new[] { 0f, 0f, 0f, 0f, 60f, 300f, 300f, 60f } },
+            { 10, new[] { 180f, 240f, 100f, 90f, 270f, 95f, 60f, 60f, 300f, 0f } },
+            { 12, new[] { 15f, 300f, 60f, 90f, 90f, 0f, 180f, 270f, 90f, 270f, 120f, 0f } },
+            { 20, new[] { 180f, 180f, 270f, 225f, 30f, 70f, 120f, 270f, 330f, 150f, 0f, 230f, 300f, 30f, 120f, 90f, 210f, 270f, 0f, 0f } }
+        };
+
+        /// <summary>
+        /// Direzione "alto" del glifo nello spazio locale della root del dado,
+        /// dato l'angolo calibrato attorno alla normale della faccia.
+        /// </summary>
+        private static Vector3 DigitUpFor(Vector3 localNormal, float clockwiseDegrees)
+        {
+            Vector3 reference = Vector3.ProjectOnPlane(Vector3.up, localNormal);
+            if (reference.sqrMagnitude < 1e-4f)
+                reference = Vector3.ProjectOnPlane(Vector3.forward, localNormal);
+            return Quaternion.AngleAxis(clockwiseDegrees, localNormal) * reference.normalized;
+        }
 
         public static Color BodyColor(HeroClass heroClass)
         {
@@ -70,15 +117,15 @@ namespace AccardND.Battlefield
         {
             return heroClass switch
             {
-                HeroClass.Assassin => new Color(0.9f, 0.15f, 0.2f),
-                HeroClass.Warrior => new Color(1f, 0.4f, 0.3f),
-                HeroClass.Mage => new Color(0.4f, 0.6f, 1f),
-                HeroClass.Paladin => new Color(1f, 0.85f, 0.35f),
-                HeroClass.Rogue => new Color(0.75f, 0.45f, 1f),
-                HeroClass.Hunter => new Color(1f, 0.55f, 0.2f),
-                HeroClass.Barbarian => new Color(1f, 0.45f, 0.25f),
-                HeroClass.Necromancer => new Color(0.35f, 1f, 0.45f),
-                HeroClass.Priest => new Color(1f, 0.92f, 0.65f),
+                HeroClass.Assassin => new Color(1f, 0.05f, 0.04f),
+                HeroClass.Warrior => new Color(0.45f, 0.48f, 0.52f),
+                HeroClass.Mage => new Color(0.45f, 0.18f, 0.8f),
+                HeroClass.Paladin => new Color(0.78f, 0.56f, 0.08f),
+                HeroClass.Rogue => new Color(0.03f, 0.025f, 0.035f),
+                HeroClass.Hunter => new Color(0.72f, 0.28f, 0.04f),
+                HeroClass.Barbarian => new Color(0.45f, 0.22f, 0.08f),
+                HeroClass.Necromancer => new Color(0.04f, 0.34f, 0.12f),
+                HeroClass.Priest => new Color(0.86f, 0.78f, 0.58f),
                 _ => new Color(0.8f, 0.8f, 0.9f)
             };
         }
@@ -102,109 +149,91 @@ namespace AccardND.Battlefield
             return material;
         }
 
+        /// <summary>
+        /// Variante del material dedicato con un glow arbitrario, per dadi che
+        /// non appartengono a una classe (es. iniziativa: blu/rosso).
+        /// </summary>
+        public static Material GetCustomGlowMaterial(int sides, string key, Color glow)
+        {
+            string cacheKey = $"{sides}:custom:{key}";
+            if (dedicatedMaterialCache.TryGetValue(cacheKey, out Material cached) && cached != null)
+                return cached;
+
+            Material baseMaterial = Resources.Load<Material>($"DnD_Dice/Material/D{sides}");
+            if (baseMaterial == null)
+                return null;
+            Material material = new Material(baseMaterial) { name = $"D{sides} {key}" };
+            material.SetColor("_Color", glow);
+            dedicatedMaterialCache[cacheKey] = material;
+            return material;
+        }
+
         public static Material GetMaterial(HeroClass heroClass)
         {
             if (materialCache.TryGetValue(heroClass, out Material cached) && cached != null)
                 return cached;
 
             Color body = BodyColor(heroClass);
-            Material baseMaterial = Resources.Load<Material>("Dice/Space");
-            Material material;
-            if (baseMaterial != null)
-            {
-                // Material del pack con i numeri già disegnati nelle texture:
-                // basta tingerlo con il colore della classe. La texture emissiva
-                // ha i numeri neri, quindi restano leggibili su ogni tinta.
-                material = new Material(baseMaterial) { name = $"Die {heroClass}" };
-                material.SetColor("_BaseColor", body);
-                material.SetColor("_Color", body);
-                // La galassia emissiva usa il colore di bagliore della classe,
-                // così resta visibile anche sui dadi con corpo scuro.
-                material.SetColor("_EmissionColor", GlowColor(heroClass) * 0.85f);
-                material.EnableKeyword("_EMISSION");
-                // Superficie opaca: con smoothness alta il riflesso della luce e
-                // del cielo schiarisce il dado a prescindere dal colore base.
-                material.SetFloat("_Smoothness", 0.15f);
-                material.SetFloat("_EnvironmentReflections", 0f);
-                material.SetFloat("_SpecularHighlights", 0f);
-                material.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
-                material.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
-            }
-            else
-            {
-                Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-                if (shader == null)
-                    shader = Shader.Find("Standard");
-                material = new Material(shader) { name = $"Die {heroClass}" };
-                material.SetColor("_BaseColor", body);
-                material.SetColor("_Color", body);
-                material.SetFloat("_Smoothness", 0.55f);
-                material.SetFloat("_Glossiness", 0.55f);
-            }
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null)
+                shader = Shader.Find("Standard");
+            Material material = new Material(shader) { name = $"Die {heroClass}" };
+            material.SetColor("_BaseColor", body);
+            material.SetColor("_Color", body);
+            material.SetFloat("_Smoothness", 0.55f);
+            material.SetFloat("_Glossiness", 0.55f);
             materialCache[heroClass] = material;
             return material;
         }
 
         /// <summary>
-        /// Istanzia il dado D{sides} da Resources/Dice con materiale della classe
+        /// Istanzia il dado D{sides} da Resources/DnD_Dice con materiale della classe
         /// e numeri sulle facce. Ritorna null se la risorsa non esiste.
         /// </summary>
-        // Modelli dedicati (pacchetto DnD_Dice) che usano il proprio material
-        // originale invece del material tinto per classe.
-        private static readonly Dictionary<int, string> dedicatedModels = new Dictionary<int, string>
+        private static readonly Dictionary<int, string> modelPaths = new Dictionary<int, string>
         {
-            { 12, "DnD_Dice/Mesh/00_D12" }
+            { 4, "DnD_Dice/Mesh/00_D4" },
+            { 6, "DnD_Dice/Mesh/00_D6" },
+            { 8, "DnD_Dice/Mesh/00_D8" },
+            { 10, "DnD_Dice/Mesh/00_D10" },
+            { 12, "DnD_Dice/Mesh/00_D12" },
+            { 20, "DnD_Dice/Mesh/00_D20" }
         };
 
         public static GameObject Create(int sides, HeroClass heroClass, Transform parent = null)
         {
-            GameObject prefab = null;
-            bool dedicated = dedicatedModels.TryGetValue(sides, out string dedicatedPath);
-            if (dedicated)
+            if (!modelPaths.TryGetValue(sides, out string modelPath))
             {
-                prefab = Resources.Load<GameObject>(dedicatedPath);
-                dedicated = prefab != null;
+                Debug.LogError($"[Accard N' Die] Dado D{sides} non configurato.");
+                return null;
             }
-            if (prefab == null)
-                prefab = Resources.Load<GameObject>($"Dice/D{sides}");
+
+            GameObject prefab = Resources.Load<GameObject>(modelPath);
             if (prefab == null)
             {
-                Debug.LogError($"[Accard N' Die] Dado 'Dice/D{sides}' non trovato in Resources.");
+                Debug.LogError($"[Accard N' Die] Dado '{modelPath}' non trovato in Resources.");
                 return null;
             }
 
             GameObject die = Object.Instantiate(prefab, parent, false);
             die.name = $"D{sides} {heroClass}";
 
-            if (dedicated)
-            {
-                foreach (Renderer renderer in die.GetComponentsInChildren<Renderer>(true))
-                {
-                    renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                    renderer.sharedMaterial = GetDedicatedMaterial(sides, heroClass, renderer.sharedMaterial);
-                }
-                return die;
-            }
+            ApplyMaterials(die, sides, heroClass);
+            return die;
+        }
 
-            Material material = GetMaterial(heroClass);
+        public static void ApplyMaterials(GameObject die, int sides, HeroClass heroClass)
+        {
+            if (die == null)
+                return;
+
             foreach (Renderer renderer in die.GetComponentsInChildren<Renderer>(true))
             {
-                renderer.sharedMaterial = material;
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                Material dedicatedMaterial = Resources.Load<Material>($"DnD_Dice/Material/D{sides}");
+                Material baseMaterial = dedicatedMaterial != null ? dedicatedMaterial : renderer.sharedMaterial;
+                renderer.sharedMaterial = GetDedicatedMaterial(sides, heroClass, baseMaterial);
             }
-
-            // Con le texture del pack i numeri sono già sulle facce; i TextMesh
-            // generati dalla mesh servono solo come fallback senza texture.
-            if (material.GetTexture("_BaseMap") == null && material.GetTexture("_MainTex") == null)
-            {
-                MeshFilter meshFilter = die.GetComponentInChildren<MeshFilter>();
-                if (meshFilter != null && meshFilter.sharedMesh != null && meshFilter.sharedMesh.isReadable)
-                    AddFaceNumbers(meshFilter, sides, NumberColor(heroClass));
-                else
-                    Debug.LogWarning($"[Accard N' Die] Mesh del D{sides} non leggibile: numeri sulle facce saltati.");
-            }
-
-            return die;
         }
 
         /// <summary>
@@ -219,11 +248,22 @@ namespace AccardND.Battlefield
             if (meshFilter == null || meshFilter.sharedMesh == null || !meshFilter.sharedMesh.isReadable)
                 return result;
 
+            faceDigitUpAngles.TryGetValue(sides, out float[] digitAngles);
+            int faceIndex = 0;
             foreach (Face face in ComputeFaces(meshFilter.sharedMesh, sides))
             {
                 Vector3 worldNormal = meshFilter.transform.TransformDirection(face.Normal);
                 Vector3 localNormal = dieInstance.transform.InverseTransformDirection(worldNormal).normalized;
-                result.Add(new DieFace(localNormal, face.Number));
+                Vector3 digitUp = Vector3.zero;
+                if (digitAngles != null && faceIndex < digitAngles.Length)
+                {
+                    // L'angolo è calibrato sulla normale nello spazio della
+                    // root: il riferimento va costruito lì e poi riportato.
+                    Vector3 rootDigitUp = DigitUpFor(localNormal, digitAngles[faceIndex]);
+                    digitUp = rootDigitUp;
+                }
+                result.Add(new DieFace(localNormal, face.Number, digitUp));
+                faceIndex++;
             }
             return result;
         }
@@ -268,8 +308,10 @@ namespace AccardND.Battlefield
 
             // Dalle direzioni più "piatte" in su, tenendo solo direzioni ben
             // separate: 30° è sotto la distanza minima tra facce adiacenti di
-            // qualunque dado (il D20 è il più fitto, ~42°).
-            const float minSeparationDot = 0.866f;
+            // qualunque dado (il D20 è il più fitto, ~42°). Il D4 ha facce a
+            // 109°: una soglia più larga scarta i falsi minimi creati dai
+            // numeri in rilievo e dagli smussi.
+            float minSeparationDot = expectedFaces == 4 ? 0.5f : 0.866f;
             var faces = new List<Face>();
             foreach ((Vector3 direction, float _) in samples)
             {
@@ -328,7 +370,7 @@ namespace AccardND.Battlefield
         {
             List<Face> faces = ComputeFaces(meshFilter.sharedMesh, expectedFaces);
 
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Font font = AccardND.Battlefield.MmoUiTheme.BodyFont;
             Transform meshTransform = meshFilter.transform;
             foreach (Face face in faces)
             {

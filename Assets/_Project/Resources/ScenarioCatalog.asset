@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.ScenarioCatalog
   scenarios:
   - {fileID: 11400000, guid: 358d3d0bd61cd1a49aa71d4b31063ff3, type: 2}
+  - {fileID: 11400000, guid: 4566ac69c426536488f82aec82927dbb, type: 2}
   - {fileID: 11400000, guid: a3816d6ceee3e4b4bb738b135044d786, type: 2}
   - {fileID: 11400000, guid: a2f1e155ea9533a42b648ff08170b7e2, type: 2}
   - {fileID: 11400000, guid: 39bae1f94574ff6409cca614fc342851, type: 2}
@@ -23,9 +24,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: b035f083785bffd42be3b0250a693f78, type: 2}
   - {fileID: 11400000, guid: 31f53ce95873cbc4483af130a637bf7c, type: 2}
   - {fileID: 11400000, guid: ce440b5a8d6c4d848a4d34c648be830f, type: 2}
-  - {fileID: 11400000, guid: 8b6abd95cc2d50a4794d0d9df27aa5f8, type: 2}
-  - {fileID: 11400000, guid: 4001b2ee30ce46847b0f5ed813995573, type: 2}
-  - {fileID: 11400000, guid: 0fe1c2e8fad5d994d9f252a67295906e, type: 2}
   - {fileID: 11400000, guid: a3c9b7e6f4016c84d91d34ee9bca4339, type: 2}
   - {fileID: 11400000, guid: 57880d842238fde41ac7b9b470a9ca99, type: 2}
   - {fileID: 11400000, guid: 5dc91134caccedc4080340e1fca18fb7, type: 2}
+  - {fileID: 11400000, guid: e1f60718293ab4c5d6e7f8293a4b5c6d, type: 2}

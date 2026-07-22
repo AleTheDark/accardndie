@@ -15,6 +15,9 @@ namespace AccardND.Battlefield
         private AudioClip genericButtonClickSfx;
         private AudioClip rollingDiceSfx;
         private AudioClip drawCardSfx;
+        private AudioClip footstepSfx;
+        private AudioClip detectorItemUseSfx;
+        private AudioClip empowerItemUseSfx;
         private AudioClip pawnEnteringBattlefieldSfx;
         private AudioClip warriorJoinBattlefieldSfx;
         private AudioClip assassinJoinBattlefieldSfx;
@@ -33,6 +36,7 @@ namespace AccardND.Battlefield
         private AudioClip hunterAbilitySfx;
         private AudioClip necromancerAbilitySfx;
         private AudioClip priestAbilitySfx;
+        private AudioClip warriorAbilitySfx;
         private AudioClip assassinAttackHitSfx;
         private AudioClip assassinAttackBlockedSfx;
         private AudioClip warriorAttackHitSfx;
@@ -52,6 +56,9 @@ namespace AccardND.Battlefield
         private AudioClip barbarianFurySfx;
         private AudioClip hunterAttackHitSfx;
         private AudioClip hunterAttackBlockedSfx;
+        private AudioClip minibossGolemAttackIronSfx;
+        private AudioClip minibossGolemAttackCrystalSfx;
+        private AudioClip minibossGolemAttackGlassSfx;
 
         public float Volume => volume;
         public bool Muted => muted;
@@ -110,6 +117,12 @@ namespace AccardND.Battlefield
 
         public void PlayDrawCard() => PlayClip(drawCardSfx);
 
+        public void PlayFootstep() => PlayClip(footstepSfx);
+
+        public void PlayDetectorItemUse() => PlayClip(detectorItemUseSfx);
+
+        public void PlayEmpowerItemUse() => PlayClip(empowerItemUseSfx);
+
         public void PlayJoinBattlefield() => PlayClip(pawnEnteringBattlefieldSfx);
 
         public void PlayJoinBattlefield(CardDefinition definition)
@@ -156,6 +169,7 @@ namespace AccardND.Battlefield
                 HeroClass.Hunter => hunterAbilitySfx,
                 HeroClass.Necromancer => necromancerAbilitySfx,
                 HeroClass.Priest => priestAbilitySfx,
+                HeroClass.Warrior => warriorAbilitySfx,
                 _ => null
             };
             PlayClip(abilitySfx);
@@ -179,6 +193,18 @@ namespace AccardND.Battlefield
             PlayClip(attackSfx);
         }
 
+        public void PlayComposableGolemAttack(ComposableGolemForm form)
+        {
+            AudioClip attackSfx = form switch
+            {
+                ComposableGolemForm.Iron => minibossGolemAttackIronSfx,
+                ComposableGolemForm.Crystal => minibossGolemAttackCrystalSfx,
+                ComposableGolemForm.Glass => minibossGolemAttackGlassSfx,
+                _ => null
+            };
+            PlayClip(attackSfx);
+        }
+
         private void SaveSettings()
         {
             PlayerPrefs.SetFloat(VolumePlayerPrefsKey, volume);
@@ -191,6 +217,9 @@ namespace AccardND.Battlefield
             genericButtonClickSfx = LoadSfx("generic_button_click");
             rollingDiceSfx = LoadSfx("rolling_dice");
             drawCardSfx = LoadSfx("draw_card");
+            footstepSfx = LoadSfx("footstep");
+            detectorItemUseSfx = LoadSfx("detector_item_use");
+            empowerItemUseSfx = LoadSfx("empower_item_use");
             pawnEnteringBattlefieldSfx = LoadSfx("pawn_entering_battlefield");
             warriorJoinBattlefieldSfx = LoadSfx("warrior_join_battlefield");
             assassinJoinBattlefieldSfx = LoadSfx("assassin_join_battlefield");
@@ -209,6 +238,7 @@ namespace AccardND.Battlefield
             hunterAbilitySfx = LoadSfx("hunter_ability");
             necromancerAbilitySfx = LoadSfx("necromancer_ability");
             priestAbilitySfx = LoadSfx("priest_ability");
+            warriorAbilitySfx = LoadSfx("warrior_ability");
             assassinAttackHitSfx = LoadSfx("assassin_attack_hit");
             assassinAttackBlockedSfx = LoadSfx("assassin_attack_blocked");
             warriorAttackHitSfx = LoadSfx("warrior_attack_hit");
@@ -228,6 +258,9 @@ namespace AccardND.Battlefield
             barbarianFurySfx = LoadSfx("barbarian_fury");
             hunterAttackHitSfx = LoadSfx("hunter_attack_hit");
             hunterAttackBlockedSfx = LoadSfx("hunter_attack_blocked");
+            minibossGolemAttackIronSfx = LoadSfx("miniboss_golem_attack_iron");
+            minibossGolemAttackCrystalSfx = LoadSfx("miniboss_golem_attack_crystal");
+            minibossGolemAttackGlassSfx = LoadSfx("miniboss_golem_attack_glass");
         }
 
         private static AudioClip LoadSfx(string clipName) =>

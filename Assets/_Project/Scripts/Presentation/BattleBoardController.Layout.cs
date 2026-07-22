@@ -17,6 +17,11 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	private const float LandscapePlayerFormationLift = 0.045f;
+	private const float OpponentFormationLift = 0.05f;
+	private const float LandscapeHandDrop = -0.035f;
+	private const float LandscapeMessageLift = 0.055f;
+
 	private void ApplyResponsiveLayout()
 	{
 		if (!((Object)(object)safeAreaRoot == (Object)null) && !((Object)(object)canvasRect == (Object)null))
@@ -28,6 +33,7 @@ public sealed partial class BattleBoardController
 			Rect safeArea = Screen.safeArea;
 			float num = Mathf.Max(1f, (float)Screen.width);
 			float num2 = Mathf.Max(1f, (float)Screen.height);
+			RefreshScenarioBackground();
 			safeAreaRoot.anchorMin = new Vector2(safeArea.xMin / num, safeArea.yMin / num2);
 			safeAreaRoot.anchorMax = new Vector2(safeArea.xMax / num, safeArea.yMax / num2);
 			safeAreaRoot.offsetMin = Vector2.zero;
@@ -36,9 +42,12 @@ public sealed partial class BattleBoardController
 			float num4 = Mathf.Max(1f, safeArea.height);
 			float num5 = num3 / num4;
 			RefreshModeSelectionLayout();
+			RefreshCampaignModeSelectionLayout();
+			RefreshAdventureChapterLayout();
 			RefreshRoomChoiceLayout();
 			RefreshCardInspectionLayout();
 			RefreshDeckBuilderLayout();
+			RefreshInitialDraftLayout();
 			ResponsiveLayoutConfiguration responsiveLayout = configuration.ResponsiveLayout;
 			bool flag = IsCompactLayout(num5, responsiveLayout);
 			bool flag2 = !flag && num5 >= 1.65f;
@@ -60,16 +69,21 @@ public sealed partial class BattleBoardController
 			float num7 = Mathf.Clamp(num6 * responsiveLayout.GapFraction, responsiveLayout.MinimumGap, responsiveLayout.MaximumGap);
 			int num8 = Mathf.Max(1, configuration.Gameplay.FormationSize);
 			float num9 = (num6 - num7 * (float)(num8 - 1)) / (float)num8;
-			float num10 = height * (flag ?responsiveLayout.CompactCardHeight : (flag2 ?0.34f : responsiveLayout.LandscapeCardHeight));
+			float num10 = height * (flag ?responsiveLayout.CompactCardHeight : (flag2 ?0.305f : responsiveLayout.LandscapeCardHeight * 0.92f));
 			float num11 = Mathf.Min(num9, num10 * 1f);
 			float width2 = num11 * (float)num8 + num7 * (float)(num8 - 1);
 			bool flag3 = (currentRoomType == RoomType.Monster || currentRoomType == RoomType.Boss) && (draftActive || deploymentDraftActive || playerCards.Count > 0 || cpuCards.Count > 0);
 			bool flag4 = IsMerchantActionHudVisible() || IsSingleActionNonCombatHudVisible();
-			float anchor = ((!flag3) ?(flag ?0.775f : 0.67f) : (flag ?0.76f : 0.63f));
-			anchor = ClampBattlefieldAnchor(anchor, num11, height, flag ?0.055f : 0.11f, (!flag3) ?(flag ?0.87f : 0.795f) : (flag ?0.835f : 0.72f));
+			float anchor = ((!flag3) ?(flag ?0.775f : (flag2 ?0.845f : 0.79f)) : (flag ?0.76f : (flag2 ?0.845f : 0.79f)));
+			anchor += OpponentFormationLift;
+			anchor = ClampBattlefieldAnchor(anchor, num11, height, flag ?0.055f : 0.08f, (!flag3) ?(flag ?0.87f : (flag2 ?0.995f : 0.94f)) : (flag ?0.835f : (flag2 ?0.995f : 0.94f)));
 			ConfigureBattlefieldRow(cpuRow, cpuCards, width2, num11, num11, num7, anchor);
-			float anchor2 = ((!deploymentDraftActive) ?(flag ?0.205f : 0.17f) : (flag ?0.35f : 0.29f));
-			anchor2 = ClampBattlefieldAnchor(anchor2, num11, height, flag ?0.06f : 0.105f, Mathf.Max(0.12f, anchor - num11 / Mathf.Max(1f, height) - 0.035f));
+			float anchor2 = ((!deploymentDraftActive) ?(flag ?0.205f : (flag2 ?0.145f : 0.15f)) : (flag ?0.35f : (flag2 ?0.24f : 0.25f)));
+			if (!flag)
+			{
+				anchor2 += LandscapePlayerFormationLift;
+			}
+			anchor2 = ClampBattlefieldAnchor(anchor2, num11, height, flag ?0.06f : 0.025f, Mathf.Max(0.12f, anchor - num11 / Mathf.Max(1f, height) - 0.035f));
 			ConfigureBattlefieldRow(playerRow, playerCards, width2, num11, num11, num7, anchor2);
 			int num12 = (((Object)(object)playerHandRow != (Object)null) ?((Transform)playerHandRow).childCount : 0);
 			if (num12 > 0)
@@ -86,27 +100,39 @@ public sealed partial class BattleBoardController
 				float num16 = Mathf.Min(num14, num15 * 0.6708861f);
 				float cardHeight = num16 / 0.6708861f;
 				float width3 = num16 * num13;
-				ConfigureRow(playerHandRow, width3, num16, cardHeight, (0f - num16) * handOverlap, flag ?0.13f : (flag2 ?0.095f : 0.08f));
+				float handVerticalAnchor = flag ?0.13f : LandscapeHandDrop;
+				if (!flag
+					&& pvpPresentationActive
+					&& pvpState != null
+					&& pvpState.Phase == AccardND.NetProtocol.PvpClientPhase.DecisiveSelection)
+				{
+					handVerticalAnchor = LandscapeHandDrop;
+				}
+				ConfigureRow(playerHandRow, width3, num16, cardHeight, (0f - num16) * handOverlap, handVerticalAnchor);
 			}
 			if (flag)
 			{
 				SetRect(tableGlowRect, new Vector2(0.025f, 0.035f), new Vector2(0.975f, 0.965f));
 				SetRect(topInfoBarRect, new Vector2(0.035f, 0.952f), new Vector2(0.7f, 0.992f));
-				SetRect(playerHud.Rect, new Vector2(0.035f, 0.002f), new Vector2(0.58f, 0.09f));
-				SetRect(cpuHud.Rect, new Vector2(0.035f, 0.89f), new Vector2(0.58f, 0.975f));
-				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.84f, 0.94f), new Vector2(0.96f, 0.992f));
+				SetRect(playerHud.Rect, new Vector2(0.2275f, 0.002f), new Vector2(0.7725f, 0.09f));
+				SetRect(cpuHud.Rect, new Vector2(0.2275f, 0.907f), new Vector2(0.7725f, 0.992f));
+				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.81f, 0.917f), new Vector2(0.982f, 0.995f));
+				if ((Object)(object)settingsButtonLabel != (Object)null)
+				{
+					SetRect(settingsButtonLabel.rectTransform, new Vector2(0.785f, 0.895f), new Vector2(1f, 0.937f));
+				}
+				ConfigureLogPanelRect(compact: true, wideLandscape: false);
 				if ((Object)(object)optionsPanel != (Object)null)
 				{
 					SetRect((RectTransform)optionsPanel.transform, new Vector2(0.08f, 0.48f), new Vector2(0.92f, 0.9f));
 				}
-				SetRect(implementationArchiveButtonRect, new Vector2(0.8f, 0.005f), new Vector2(0.96f, 0.115f));
-				SetRect(implementationArchivePanelRect, new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.94f));
-				SetRect(messagePanelRect, flag4 ?new Vector2(0.08f, 0.055f) : (deploymentDraftActive ?new Vector2(0.04f, 0.49f) : (flag3 ?new Vector2(0.1f, 0.43f) : new Vector2(0.08f, 0.065f))), flag4 ?new Vector2(0.92f, 0.215f) : (deploymentDraftActive ?new Vector2(0.76f, 0.575f) : (flag3 ?new Vector2(0.9f, 0.535f) : new Vector2(0.92f, 0.17f))));
-				if (deploymentDraftActive)
+				SetRect(implementationArchiveButtonRect, new Vector2(0.81f, 0.02f), new Vector2(0.982f, 0.102f));
+				if ((Object)(object)implementationArchiveButtonLabel != (Object)null)
 				{
-					messagePanelRect.offsetMin = new Vector2(-13f, messagePanelRect.offsetMin.y);
-					messagePanelRect.offsetMax = new Vector2(-13f, messagePanelRect.offsetMax.y);
+					SetRect(implementationArchiveButtonLabel.rectTransform, new Vector2(0.785f, 0f), new Vector2(1f, 0.042f));
 				}
+				SetRect(implementationArchivePanelRect, new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.94f));
+				SetRect(messagePanelRect, flag4 ?new Vector2(0.08f, 0.055f) : (flag3 ?new Vector2(0.02f, 0.43f) : new Vector2(0.08f, 0.065f)), flag4 ?new Vector2(0.92f, 0.215f) : (flag3 ?new Vector2(0.82f, 0.535f) : new Vector2(0.92f, 0.17f)));
 				SetTimelineBaseRect(new Vector2(0.78f, 0.30f), new Vector2(0.998f, 0.70f));
 				ConfigureTimelineLayout(vertical: true);
 				SetRect(cpuTitleRect, flag3 ?new Vector2(0.05f, 0.78f) : new Vector2(0.05f, 0.848f), flag3 ?new Vector2(0.95f, 0.822f) : new Vector2(0.95f, 0.89f));
@@ -118,18 +144,29 @@ public sealed partial class BattleBoardController
 			{
 				SetRect(tableGlowRect, flag2 ?new Vector2(0.04f, 0.105f) : new Vector2(0.08f, 0.13f), flag2 ?new Vector2(0.96f, 0.895f) : new Vector2(0.92f, 0.87f));
 				SetRect(topInfoBarRect, flag2 ?new Vector2(0.05f, 0.925f) : new Vector2(0.08f, 0.93f), new Vector2(0.73f, 0.985f));
-				SetRect(playerHud.Rect, flag2 ?new Vector2(0.04f, 0.758f) : new Vector2(0.055f, 0.752f), flag2 ?new Vector2(0.31f, 0.92f) : new Vector2(0.325f, 0.915f));
-				SetRect(cpuHud.Rect, flag2 ?new Vector2(0.69f, 0.758f) : new Vector2(0.675f, 0.752f), flag2 ?new Vector2(0.96f, 0.92f) : new Vector2(0.945f, 0.915f));
-				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.88f, 0.925f), new Vector2(0.985f, 0.985f));
+				SetRect(playerHud.Rect, flag2 ?new Vector2(0.385f, 0.035f) : new Vector2(0.385f, 0.035f), flag2 ?new Vector2(0.615f, 0.197f) : new Vector2(0.615f, 0.198f));
+				SetRect(cpuHud.Rect, flag2 ?new Vector2(0.385f, 0.823f) : new Vector2(0.385f, 0.822f), flag2 ?new Vector2(0.615f, 0.985f) : new Vector2(0.615f, 0.985f));
+				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.84f, 0.852f), new Vector2(0.995f, 0.992f));
+				if ((Object)(object)settingsButtonLabel != (Object)null)
+				{
+					SetRect(settingsButtonLabel.rectTransform, new Vector2(0.81f, 0.865f), new Vector2(1f, 0.919f));
+				}
+				ConfigureLogPanelRect(false, flag2);
 				if ((Object)(object)optionsPanel != (Object)null)
 				{
 					SetRect((RectTransform)optionsPanel.transform, new Vector2(0.64f, 0.52f), new Vector2(0.98f, 0.92f));
 				}
-				SetRect(implementationArchiveButtonRect, new Vector2(0.9f, 0.015f), new Vector2(0.985f, 0.17f));
+				SetRect(implementationArchiveButtonRect, new Vector2(0.84f, 0.068f), new Vector2(0.995f, 0.218f));
+				if ((Object)(object)implementationArchiveButtonLabel != (Object)null)
+				{
+					SetRect(implementationArchiveButtonLabel.rectTransform, new Vector2(0.81f, 0.012f), new Vector2(1f, 0.068f));
+				}
 				SetRect(implementationArchivePanelRect, new Vector2(0.62f, 0.05f), new Vector2(0.98f, 0.94f));
-				SetRect(messagePanelRect, flag4 ?new Vector2(0.28f, 0.36f) : (flag3 ?new Vector2(0.22f, 0.41f) : new Vector2(0.25f, 0.41f)), flag4 ?new Vector2(0.72f, 0.575f) : (flag3 ?new Vector2(0.78f, 0.555f) : new Vector2(0.75f, 0.555f)));
-				SetTimelineBaseRect(flag2 ?new Vector2(0.335f, 0.702f) : new Vector2(0.35f, 0.698f), flag2 ?new Vector2(0.665f, 0.75f) : new Vector2(0.65f, 0.745f));
-				ConfigureTimelineLayout(vertical: false);
+				SetRect(messagePanelRect,
+					(flag4 ?new Vector2(0.28f, 0.39f) : (flag3 ?new Vector2(0.26f, 0.43f) : new Vector2(0.28f, 0.43f))) + new Vector2(0f, LandscapeMessageLift),
+					(flag4 ?new Vector2(0.72f, 0.61f) : (flag3 ?new Vector2(0.74f, 0.57f) : new Vector2(0.72f, 0.57f))) + new Vector2(0f, LandscapeMessageLift));
+				SetTimelineBaseRect(flag2 ?new Vector2(0.84f, 0.31f) : new Vector2(0.82f, 0.31f), flag2 ?new Vector2(0.985f, 0.69f) : new Vector2(0.965f, 0.69f));
+				ConfigureTimelineLayout(vertical: true);
 				SetRect(cpuTitleRect, flag3 ?new Vector2(0.12f, 0.725f) : new Vector2(0.12f, 0.805f), flag3 ?new Vector2(0.88f, 0.765f) : new Vector2(0.88f, 0.85f));
 				SetRect(roundText.rectTransform, new Vector2(0.17f, 0.575f), new Vector2(0.55f, 0.625f));
 				SetRect(campaignZoneRect, new Vector2(0.57f, 0.575f), new Vector2(0.83f, 0.625f));
@@ -140,9 +177,53 @@ public sealed partial class BattleBoardController
 				SetCenteredCampaignEndedMessagePanel();
 			}
 			ApplyCompactChromeVisibility(flag);
+			ApplyResponsiveTextSizing(flag);
 			Canvas.ForceUpdateCanvases();
 			ResizeTimelineTiles();
 		}
+	}
+
+	private void ApplyResponsiveTextSizing(bool compact)
+	{
+		SetResponsiveText(topInfoText, compact ?24 : 19, compact ?18 : 13);
+		SetResponsiveText(roundText, compact ?24 : 20, compact ?18 : 14);
+		SetResponsiveText(campaignZoneText, compact ?22 : 18, compact ?16 : 13);
+		SetResponsiveText(cpuTitleText, compact ?28 : 25, compact ?20 : 17);
+		SetResponsiveText(playerTitleText, compact ?28 : 25, compact ?20 : 17);
+		SetResponsiveText(messageText, compact ?29 : 22, compact ?21 : 16);
+		SetResponsiveText(turnBannerText, compact ?30 : 24, compact ?22 : 17);
+		SetResponsiveHudText(playerHud, compact);
+		SetResponsiveHudText(cpuHud, compact);
+		if ((Object)(object)hudTooltipText != (Object)null)
+		{
+			SetResponsiveText(hudTooltipText, compact ?24 : 18, compact ?18 : 13);
+		}
+	}
+
+	private static void SetResponsiveHudText(CombatantHud hud, bool compact)
+	{
+		if (hud == null)
+		{
+			return;
+		}
+		SetResponsiveText(hud.NameText, compact ?24 : 21, compact ?17 : 14);
+		SetResponsiveText(hud.LevelText, compact ?20 : 16, compact ?15 : 12);
+		SetResponsiveText(hud.ExperienceText, compact ?18 : 14, compact ?13 : 10);
+		SetResponsiveText(hud.DiceText, compact ?19 : 15, compact ?14 : 11);
+		SetResponsiveText(hud.DeckText, compact ?19 : 15, compact ?14 : 11);
+		SetResponsiveText(hud.CooldownText, compact ?19 : 15, compact ?14 : 11);
+		SetResponsiveText(hud.GraveyardText, compact ?19 : 15, compact ?14 : 11);
+	}
+
+	private static void SetResponsiveText(Text text, int maxSize, int minSize)
+	{
+		if ((Object)(object)text == (Object)null)
+		{
+			return;
+		}
+		text.fontSize = maxSize;
+		text.resizeTextMaxSize = maxSize;
+		text.resizeTextMinSize = Mathf.Min(maxSize, minSize);
 	}
 
 	private bool IsCurrentCompactLayout()
@@ -150,6 +231,21 @@ public sealed partial class BattleBoardController
 		float width = Mathf.Max(1f, Screen.safeArea.width);
 		float height = Mathf.Max(1f, Screen.safeArea.height);
 		return IsCompactLayout(width / height, configuration.ResponsiveLayout);
+	}
+
+	private void ConfigureLogPanelRect(bool compact, bool wideLandscape)
+	{
+		if ((Object)(object)logPanel == (Object)null)
+		{
+			return;
+		}
+
+		RectTransform rectTransform = (RectTransform)logPanel.transform;
+		SetRect(
+			rectTransform,
+			compact ?new Vector2(0.015f, 0.035f) : (wideLandscape ?new Vector2(0.08f, 0.08f) : new Vector2(0.04f, 0.07f)),
+			compact ?new Vector2(0.985f, 0.925f) : (wideLandscape ?new Vector2(0.92f, 0.895f) : new Vector2(0.96f, 0.895f)));
+		ConfigureLogTextRect();
 	}
 
 	private void ApplyCompactChromeVisibility(bool compact)
@@ -187,18 +283,8 @@ public sealed partial class BattleBoardController
 
 	private void ConfigureTimelineLayout(bool vertical)
 	{
-		if ((Object)(object)initiativeTimelineRoot == (Object)null)
-		{
-			return;
-		}
-		GridLayoutGroup grid = ((Component)initiativeTimelineRoot).GetComponent<GridLayoutGroup>();
-		if ((Object)(object)grid != (Object)null)
-		{
-			grid.constraint = vertical ?GridLayoutGroup.Constraint.FixedColumnCount : GridLayoutGroup.Constraint.FixedRowCount;
-			grid.constraintCount = 1;
-			grid.startAxis = vertical ?GridLayoutGroup.Axis.Vertical : GridLayoutGroup.Axis.Horizontal;
-			grid.padding = vertical ?new RectOffset(7, 7, 4, 4) : new RectOffset(4, 4, 2, 2);
-		}
+		timelineLayoutVertical = vertical;
+		ResizeTimelineTiles();
 	}
 
 	private void SetTimelineBaseRect(Vector2 minimum, Vector2 maximum)
@@ -220,12 +306,7 @@ public sealed partial class BattleBoardController
 
 	private bool IsTimelineVerticalLayout()
 	{
-		if ((Object)(object)initiativeTimelineRoot == (Object)null)
-		{
-			return false;
-		}
-		GridLayoutGroup grid = ((Component)initiativeTimelineRoot).GetComponent<GridLayoutGroup>();
-		return (Object)(object)grid != (Object)null && grid.constraint == GridLayoutGroup.Constraint.FixedColumnCount;
+		return timelineLayoutVertical;
 	}
 
 	private static float ClampBattlefieldAnchor(float anchor, float cardHeight, float layoutHeight, float minimum, float maximum)

@@ -15,8 +15,8 @@ MonoBehaviour:
   id: miniboss-composable-golem
   displayName: Golem Componibile
   category: 1
-  artwork: {fileID: 21300000, guid: 2a51db3950dfd22458e7ea6476b7b0f5, type: 3}
+  artwork: {fileID: 21300000, guid: 7aa412e197084ce9a3a57d59a9800643, type: 3}
   strength: 6
   hasHeroClass: 1
   heroClass: 1
-  rulesText: HP condivisi. Cambia forma ogni 2 round tra Ferro, Cristallo e Vetro.
+  rulesText: "Possiede 30 hp.\nAbilita: cambia forma ogni 2 turni tra Ferro, Cristallo e Vetro. Ogni volta che entra in una forma, quella forma guadagna +1 Potenza.\nForma Ferro: Potenza 8, Vigor D6.\nForma Cristallo: Potenza 6, Vigor D10.\nForma Vetro: Potenza 5, Vigor D8; se resiste ad un attacco, recupera hp pari alla differenza."

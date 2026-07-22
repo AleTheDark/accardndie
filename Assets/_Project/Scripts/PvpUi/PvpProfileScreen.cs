@@ -69,16 +69,16 @@ namespace AccardND.PvpUi
             PvpUiFactory.Stretch(root);
 
             RectTransform titleBand = PvpUiFactory.CreateTitleBand(root, "PROFILO E STAGIONE", "Rank, amici, icone e gloria permanente");
-            PvpUiFactory.SetAnchors(titleBand, new Vector2(0.05f, 0.92f), new Vector2(0.95f, 0.99f));
+            PvpUiFactory.SetAnchors(titleBand, new Vector2(0.055f, 0.9f), new Vector2(0.945f, 0.975f));
 
             Button close = PvpUiFactory.CreateButton(
                 root, "Close", "X", new Color(0.5f, 0.12f, 0.12f, 0.98f), () => callbacks.OnClose?.Invoke(), 26);
-            PvpUiFactory.SetAnchors((RectTransform)close.transform, new Vector2(0.93f, 0.925f), new Vector2(0.98f, 0.985f));
+            PvpUiFactory.SetAnchors((RectTransform)close.transform, new Vector2(0.885f, 0.912f), new Vector2(0.935f, 0.963f));
 
             BuildTabs();
 
             RectTransform scrollPanel = PvpUiFactory.CreateSoftPanel(root, "Scroll", new Color(0.018f, 0.028f, 0.045f, 0.92f));
-            PvpUiFactory.SetAnchors(scrollPanel, new Vector2(0.02f, 0.09f), new Vector2(0.98f, 0.82f));
+            PvpUiFactory.SetAnchors(scrollPanel, new Vector2(0.055f, 0.09f), new Vector2(0.945f, 0.745f));
             var scroll = scrollPanel.gameObject.AddComponent<ScrollRect>();
             scrollPanel.gameObject.AddComponent<RectMask2D>();
 
@@ -91,8 +91,8 @@ namespace AccardND.PvpUi
             content.offsetMin = Vector2.zero;
             content.offsetMax = Vector2.zero;
             var layout = contentHolder.GetComponent<VerticalLayoutGroup>();
-            layout.spacing = 6f;
-            layout.padding = new RectOffset(10, 10, 10, 10);
+            layout.spacing = 10f;
+            layout.padding = new RectOffset(14, 14, 14, 14);
             layout.childControlWidth = true;
             layout.childControlHeight = true;
             layout.childForceExpandWidth = true;
@@ -163,17 +163,25 @@ namespace AccardND.PvpUi
                 (TabProfile, "PROFILO"), (TabIcons, "ICONE"), (TabFriends, "AMICI"),
                 (TabLeaderboard, "CLASSIFICA"), (TabHallOfFame, "HALL OF FAME"), (TabAchievements, "TRAGUARDI")
             };
-            float width = 0.96f / tabs.Length;
+            const int columns = 3;
+            const float left = 0.055f;
+            const float right = 0.945f;
+            const float gap = 0.012f;
+            float width = (right - left - gap * (columns - 1)) / columns;
             for (int index = 0; index < tabs.Length; index++)
             {
                 string key = tabs[index].key;
-                float xMin = 0.02f + index * width;
+                int column = index % columns;
+                int row = index / columns;
+                float xMin = left + column * (width + gap);
+                float yMax = row == 0 ? 0.875f : 0.81f;
+                float yMin = yMax - 0.055f;
                 Button tab = PvpUiFactory.CreateButton(
                     root, $"Tab{key}", tabs[index].label,
-                    new Color(0.075f, 0.13f, 0.19f, 0.98f), () => SwitchTab(key), 15);
+                    new Color(0.075f, 0.13f, 0.19f, 0.98f), () => SwitchTab(key), 22);
                 PvpUiFactory.SetAnchors(
                     (RectTransform)tab.transform,
-                    new Vector2(xMin + 0.004f, 0.835f), new Vector2(xMin + width - 0.004f, 0.905f));
+                    new Vector2(xMin, yMin), new Vector2(xMin + width, yMax));
             }
         }
 
@@ -216,13 +224,14 @@ namespace AccardND.PvpUi
         {
             if (profile == null) { AddInfoRow("Nessun dato profilo.", Dim, 44); return; }
 
-            PvpUiFactory.CreateSectionHeader(content, profile.username, profile.seasonName);
+            Text profileHeader = PvpUiFactory.CreateSectionHeader(content, profile.username, profile.seasonName);
+            profileHeader.fontSize = 26;
             string rank = !profile.ranked
                 ? "Non classificato"
                 : profile.placement
                     ? $"In piazzamento ({profile.placementRemaining} partite rimaste)"
                     : $"{profile.tier} {profile.division} — {profile.leaguePoints} LP";
-            AddInfoRow($"Rank: {rank}", profile.ranked && !profile.placement ? PvpUiFactory.Gold : Dim, 44, 22);
+            AddRankCard(rank, profile.ranked && !profile.placement ? PvpUiFactory.Gold : Dim);
 
             int games = profile.wins + profile.losses;
             AddMetricRow(
@@ -237,7 +246,7 @@ namespace AccardND.PvpUi
                 ("ROUND VINTI", profile.roundsWon.ToString(), PvpUiFactory.Good),
                 ("ROUND PERSI", profile.roundsLost.ToString(), Bad),
                 ("ICONE", $"{profile.iconsUnlocked}/{profile.iconsTotal}", PvpUiFactory.Arcane));
-            AddInfoRow($"Icona attuale: {IconName(profile.selectedIconId)}", Dim, 38);
+            AddInfoRow($"ICONA ATTUALE   {IconName(profile.selectedIconId)}", Dim, 52, 22);
         }
 
         private void RenderIcons()
@@ -398,18 +407,36 @@ namespace AccardND.PvpUi
         private void RenderAchievements()
         {
             if (achievements?.achievements == null) { AddInfoRow("Nessun traguardo.", Dim, 44); return; }
+            PvpUiFactory.CreateSectionHeader(content, "TRAGUARDI", "progressi account");
             foreach (AchievementDto ach in achievements.achievements)
             {
-                RectTransform row = AddHorizontalRow(70f);
-                var info = PvpUiFactory.CreatePanel(
-                    row, "Info",
+                RectTransform row = AddHorizontalRow(124f);
+                RectTransform card = PvpUiFactory.CreatePanel(
+                    row, $"Achievement {ach.name}",
                     ach.unlocked ? new Color(0.12f, 0.28f, 0.16f, 0.95f) : new Color(0.12f, 0.15f, 0.2f, 0.92f));
-                AddFlexible(info);
-                string mark = ach.unlocked ? "[OK] " : $"{ach.progress}/{ach.threshold}  ";
-                Text text = PvpUiFactory.CreateText(
-                    info, "Row", $"{mark}{ach.name}\n{ach.description}", 16, TextAnchor.MiddleLeft);
-                text.color = ach.unlocked ? Good : Color.white;
-                PvpUiFactory.Stretch((RectTransform)text.transform, 12f, 4f);
+                AddFlexible(card);
+
+                Text title = PvpUiFactory.CreateText(card, "Title", ach.name.ToUpperInvariant(), 25, TextAnchor.MiddleLeft);
+                title.color = ach.unlocked ? Good : Color.white;
+                PvpUiFactory.SetAnchors((RectTransform)title.transform, new Vector2(0.035f, 0.57f), new Vector2(0.72f, 0.94f));
+
+                Text progress = PvpUiFactory.CreateTitleText(
+                    card, "Progress", ach.unlocked ? "COMPLETATO" : $"{ach.progress} / {ach.threshold}", 21, TextAnchor.MiddleRight);
+                progress.color = ach.unlocked ? Good : PvpUiFactory.Gold;
+                PvpUiFactory.SetAnchors((RectTransform)progress.transform, new Vector2(0.72f, 0.57f), new Vector2(0.965f, 0.94f));
+
+                Text description = PvpUiFactory.CreateLabel(card, "Description", ach.description, 20, TextAnchor.MiddleLeft);
+                description.color = ach.unlocked ? new Color(0.72f, 0.9f, 0.76f) : Dim;
+                PvpUiFactory.SetAnchors((RectTransform)description.transform, new Vector2(0.035f, 0.25f), new Vector2(0.965f, 0.59f));
+
+                RectTransform track = PvpUiFactory.CreateSoftPanel(card, "Progress Track", new Color(0.018f, 0.028f, 0.04f, 0.95f));
+                PvpUiFactory.SetAnchors(track, new Vector2(0.035f, 0.09f), new Vector2(0.965f, 0.2f));
+                var fillHolder = new GameObject("Fill", typeof(RectTransform), typeof(Image));
+                fillHolder.transform.SetParent(track, false);
+                Image fill = fillHolder.GetComponent<Image>();
+                fill.color = ach.unlocked ? Good : PvpUiFactory.Gold;
+                float ratio = ach.threshold > 0 ? Mathf.Clamp01((float)ach.progress / ach.threshold) : 0f;
+                PvpUiFactory.SetAnchors((RectTransform)fillHolder.transform, Vector2.zero, new Vector2(ratio, 1f));
             }
         }
 
@@ -420,7 +447,7 @@ namespace AccardND.PvpUi
             (string label, string value, Color color) second,
             (string label, string value, Color color) third)
         {
-            RectTransform row = AddHorizontalRow(86f);
+            RectTransform row = AddHorizontalRow(104f);
             AddMetricCard(row, first.label, first.value, first.color);
             AddMetricCard(row, second.label, second.value, second.color);
             AddMetricCard(row, third.label, third.value, third.color);
@@ -430,11 +457,26 @@ namespace AccardND.PvpUi
         {
             RectTransform card = PvpUiFactory.CreateSoftPanel(row, label, new Color(0.045f, 0.075f, 0.11f, 0.94f));
             AddFlexible(card);
-            Text valueText = PvpUiFactory.CreateText(card, "Value", value, 28, TextAnchor.MiddleCenter);
+            Text valueText = PvpUiFactory.CreateText(card, "Value", value, 40, TextAnchor.MiddleCenter);
             valueText.color = color;
             PvpUiFactory.SetAnchors((RectTransform)valueText.transform, new Vector2(0.05f, 0.36f), new Vector2(0.95f, 0.94f));
-            Text labelText = PvpUiFactory.CreateLabel(card, "Label", label, 13, TextAnchor.MiddleCenter);
+            Text labelText = PvpUiFactory.CreateLabel(card, "Label", label, 18, TextAnchor.MiddleCenter);
             PvpUiFactory.SetAnchors((RectTransform)labelText.transform, new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.36f));
+        }
+
+        private void AddRankCard(string rank, Color color)
+        {
+            RectTransform row = AddHorizontalRow(104f);
+            RectTransform card = PvpUiFactory.CreatePanel(row, "Rank Card", new Color(0.08f, 0.12f, 0.18f, 0.98f));
+            AddFlexible(card);
+
+            Text caption = PvpUiFactory.CreateLabel(card, "Caption", "RANK STAGIONALE", 18, TextAnchor.MiddleLeft);
+            caption.color = PvpUiFactory.TextMuted;
+            PvpUiFactory.SetAnchors((RectTransform)caption.transform, new Vector2(0.04f, 0.58f), new Vector2(0.96f, 0.9f));
+
+            Text value = PvpUiFactory.CreateTitleText(card, "Value", rank, 34, TextAnchor.MiddleLeft);
+            value.color = color;
+            PvpUiFactory.SetAnchors((RectTransform)value.transform, new Vector2(0.04f, 0.08f), new Vector2(0.96f, 0.62f));
         }
 
         private void AddAddFriendButton(RectTransform row, string playerId, string username)

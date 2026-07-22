@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c97b479ac9ef46c4d966864af08b9aec, type: 3}
+  m_Name: monster_2
+  m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.ScenarioDefinition
+  id: monster_2
+  displayName: Mostri - Facile
+  background: {fileID: 21300000, guid: c1bc1d3135f6a9d4780d3444b180bcfd, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: da5b05565e406b045a609d2492efde6a, type: 3}
+  roomType: 1
+  difficulty: 1
+  bossId: 

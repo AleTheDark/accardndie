@@ -14,27 +14,36 @@ namespace AccardND.GameCore
     {
         public ComposableGolemFormStats(
             ComposableGolemForm form,
-            int attack,
-            int defense,
-            int vigorDieSides)
+            int basePower,
+            int vigorDieSides,
+            int powerBonus = 0)
         {
-            if (attack < 1)
-                throw new ArgumentOutOfRangeException(nameof(attack));
-            if (defense < 1)
-                throw new ArgumentOutOfRangeException(nameof(defense));
+            if (basePower < 1)
+                throw new ArgumentOutOfRangeException(nameof(basePower));
             if (vigorDieSides < 2)
                 throw new ArgumentOutOfRangeException(nameof(vigorDieSides));
+            if (powerBonus < 0)
+                throw new ArgumentOutOfRangeException(nameof(powerBonus));
 
             Form = form;
-            Attack = attack;
-            Defense = defense;
+            BasePower = basePower;
             VigorDieSides = vigorDieSides;
+            PowerBonus = powerBonus;
         }
 
         public ComposableGolemForm Form { get; }
-        public int Attack { get; }
-        public int Defense { get; }
+        public int BasePower { get; }
+        public int PowerBonus { get; }
+        public int Power => BasePower + PowerBonus;
         public int VigorDieSides { get; }
+
+        public ComposableGolemFormStats AddPowerBonus(int amount)
+        {
+            if (amount < 0)
+                throw new ArgumentOutOfRangeException(nameof(amount));
+
+            return new ComposableGolemFormStats(Form, BasePower, VigorDieSides, PowerBonus + amount);
+        }
     }
 
     public readonly struct ComposableGolemDefenseResult
@@ -164,6 +173,7 @@ namespace AccardND.GameCore
 
             RoundsInActiveForm = 0;
             activeFormIndex = (activeFormIndex + 1) % forms.Length;
+            forms[activeFormIndex] = forms[activeFormIndex].AddPowerBonus(1);
             return true;
         }
 
@@ -177,7 +187,7 @@ namespace AccardND.GameCore
             ComposableGolemFormStats form = ActiveForm;
             int hitPointsBefore = HitPoints;
             int vigorRoll = random.NextInclusive(1, form.VigorDieSides);
-            int defenseTotal = form.Defense + vigorRoll;
+            int defenseTotal = form.Power + vigorRoll;
             int damage = Math.Max(0, attackerTotal - defenseTotal);
             int healing = form.Form == ComposableGolemForm.Glass
                 ? Math.Max(0, defenseTotal - attackerTotal)
@@ -216,7 +226,7 @@ namespace AccardND.GameCore
                 form,
                 target,
                 vigorRoll,
-                form.Attack + vigorRoll,
+                form.Power + vigorRoll,
                 targetVigorRoll,
                 target.Strength + targetVigorRoll);
         }
@@ -256,17 +266,17 @@ namespace AccardND.GameCore
 
         public static ComposableGolemFormStats CreateIronStats()
         {
-            return new ComposableGolemFormStats(ComposableGolemForm.Iron, attack: 8, defense: 5, vigorDieSides: 6);
+            return new ComposableGolemFormStats(ComposableGolemForm.Iron, basePower: 8, vigorDieSides: 6);
         }
 
         public static ComposableGolemFormStats CreateCrystalStats()
         {
-            return new ComposableGolemFormStats(ComposableGolemForm.Crystal, attack: 6, defense: 4, vigorDieSides: 10);
+            return new ComposableGolemFormStats(ComposableGolemForm.Crystal, basePower: 6, vigorDieSides: 10);
         }
 
         public static ComposableGolemFormStats CreateGlassStats()
         {
-            return new ComposableGolemFormStats(ComposableGolemForm.Glass, attack: 5, defense: 6, vigorDieSides: 8);
+            return new ComposableGolemFormStats(ComposableGolemForm.Glass, basePower: 5, vigorDieSides: 8);
         }
 
         private static ComposableGolemFormStats[] CreateShuffledDefaultForms(IRandomSource random)

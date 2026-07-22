@@ -36,12 +36,17 @@ public sealed class UnlockService
     {
         ("ach-veteran", "Veterano"),
         ("ach-streak", "Inarrestabile"),
+        ("boss-medusa", "Medusa"),
         ("ach-onnipotente", "Divinità")
     };
 
     private readonly AccardDatabase database;
     private readonly RankedConfig ranked;
     private readonly string[] monsterFamilies;
+    private static readonly (string Id, string Name)[] CampaignBossIcons =
+    {
+        ("boss-medusa", "Medusa")
+    };
 
     public UnlockService(AccardDatabase database, ServerConfig config)
     {
@@ -91,17 +96,20 @@ public sealed class UnlockService
     /// Registra i mostri sconfitti in campagna e concede le icone corrispondenti.
     /// Ritorna gli id delle icone appena sbloccate.
     /// </summary>
-    public IReadOnlyList<string> GrantCampaignIcons(string playerId, IEnumerable<string> monsters)
+    public IReadOnlyList<string> GrantCampaignIcons(
+        string playerId,
+        IEnumerable<string> monsters,
+        IEnumerable<string> bosses)
     {
         var newlyUnlocked = new List<string>();
-        if (monsters == null)
+        if (monsters == null && bosses == null)
             return newlyUnlocked;
 
         using SqliteConnection connection = database.Open();
         using SqliteTransaction transaction = connection.BeginTransaction();
         string now = DateTime.UtcNow.ToString("O");
 
-        foreach (string raw in monsters)
+        foreach (string raw in monsters ?? Array.Empty<string>())
         {
             string family = raw?.Trim().ToLowerInvariant();
             if (string.IsNullOrEmpty(family) ||
@@ -123,6 +131,16 @@ public sealed class UnlockService
 
             if (Grant(connection, transaction, playerId, $"monster-{family}", "campaign"))
                 newlyUnlocked.Add($"monster-{family}");
+        }
+
+        foreach (string raw in bosses ?? Array.Empty<string>())
+        {
+            string bossId = raw?.Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(bossId) || !IsCampaignBossIcon(bossId))
+                continue;
+
+            if (Grant(connection, transaction, playerId, bossId, "campaign"))
+                newlyUnlocked.Add(bossId);
         }
 
         transaction.Commit();
@@ -215,6 +233,9 @@ public sealed class UnlockService
         foreach (string family in monsterFamilies)
             SeedIcon(connection, transaction, $"monster-{family}", Capitalize(family), "campaign", family, order++);
 
+        foreach ((string id, string name) in CampaignBossIcons)
+            SeedIcon(connection, transaction, id, name, "campaign", id, order++);
+
         foreach ((string id, string name, int maxRank) in HallOfFameIcons)
             SeedIcon(connection, transaction, id, name, "halloffame", maxRank.ToString(), order++);
 
@@ -246,4 +267,12 @@ public sealed class UnlockService
 
     private static string Capitalize(string value) =>
         string.IsNullOrEmpty(value) ? value : char.ToUpperInvariant(value[0]) + value[1..];
+
+    private static bool IsCampaignBossIcon(string bossId)
+    {
+        foreach ((string id, _) in CampaignBossIcons)
+            if (string.Equals(id, bossId, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
 }

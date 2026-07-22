@@ -15,6 +15,7 @@ MonoBehaviour:
   id: toxic
   displayName: Esalazioni Tossiche
   background: {fileID: 21300000, guid: 283af7652560fd349ab2a40e24fe1ca4, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: 02dec25750ff103458b68c9fd49a0551, type: 3}
   roomType: 2
   difficulty: 0
   bossId: kronn

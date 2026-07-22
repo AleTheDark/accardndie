@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using AccardND.Battlefield;
 using AccardND.GameCore;
 using AccardND.GameData;
 using UnityEngine;
@@ -19,11 +20,12 @@ public sealed partial class BattleBoardController
 {
 	private static Canvas CreateCanvas()
 	{
-		GameObject val = new GameObject("Battle Canvas", new Type[3]
+		GameObject val = new GameObject("Battle Canvas", new Type[4]
 		{
 			typeof(Canvas),
 			typeof(CanvasScaler),
-			typeof(GraphicRaycaster)
+			typeof(GraphicRaycaster),
+			typeof(AdaptiveCanvasScaler)
 		});
 		Canvas component = val.GetComponent<Canvas>();
 		component.renderMode = (RenderMode)0;
@@ -96,36 +98,69 @@ public sealed partial class BattleBoardController
 		});
 		val.transform.SetParent(parent, false);
 		Text component = val.GetComponent<Text>();
+		int responsiveSize = ResponsiveTextSize(size);
 		component.font = font;
-		component.fontSize = size;
+		component.fontSize = responsiveSize;
 		component.fontStyle = style;
 		component.alignment = alignment;
 		component.color = Color.white;
 		component.raycastTarget = false;
 		component.resizeTextForBestFit = true;
-		component.resizeTextMinSize = 10;
-		component.resizeTextMaxSize = size;
+		component.resizeTextMinSize = ResponsiveTextMinSize(responsiveSize);
+		component.resizeTextMaxSize = responsiveSize;
+		global::AccardND.Battlefield.EditableRuntimeText.Bind(component);
 		return component;
+	}
+
+	private static int ResponsiveTextSize(int size)
+	{
+		if (Screen.height > Screen.width)
+		{
+			return Mathf.CeilToInt(size * 1.18f);
+		}
+		return size;
+	}
+
+	private static int ResponsiveTextMinSize(int size)
+	{
+		return Mathf.Max(Screen.height > Screen.width ?16 : 12, Mathf.RoundToInt(size * 0.74f));
 	}
 
 	private static Button CreateButton(string name, Transform parent, Font font, string label)
 	{
-		Image image = CreateImage(name, parent, new Color(0.04f, 0.42f, 0.48f, 0.98f));
-		StylePanel(image);
+		Image image = CreateImage(name, parent, Color.white);
+		MmoUiTheme.ButtonVariant variant = ResolveBattleButtonVariant(name, label);
+		image.sprite = MmoUiTheme.GetButtonSprite(variant);
+		image.type = Image.Type.Sliced;
 		image.raycastTarget = true;
 		Button button = ((Component)image).gameObject.AddComponent<Button>();
 		button.targetGraphic = image;
-		ColorBlock colors = button.colors;
-		colors.normalColor = Color.white;
-		colors.highlightedColor = new Color(1.12f, 1.12f, 1.12f);
-		colors.pressedColor = new Color(0.72f, 0.9f, 0.92f);
-		colors.disabledColor = new Color(0.38f, 0.48f, 0.5f, 0.72f);
-		colors.colorMultiplier = 1f;
-		button.colors = colors;
+		MmoUiTheme.ApplyButtonColors(button);
+		MmoUiTheme.AddMotion(button);
 		Text text = CreateText("Label", ((Component)image).transform, font, 20, (FontStyle)1, (TextAnchor)4);
 		text.text = label;
-		Stretch(text.rectTransform);
+		global::AccardND.Battlefield.EditableRuntimeText.Bind(text, fallbackDefaultText: label);
+		MmoUiTheme.StyleAsTitle(text);
+		text.color = Color.Lerp(Color.white, MmoUiTheme.AccentOf(variant), 0.16f);
+		Outline labelOutline = ((Component)text).gameObject.AddComponent<Outline>();
+		labelOutline.effectColor = new Color(0f, 0f, 0f, 0.85f);
+		labelOutline.effectDistance = new Vector2(1.5f, -1.5f);
+		Stretch(text.rectTransform, 6f);
 		return button;
+	}
+
+	private static MmoUiTheme.ButtonVariant ResolveBattleButtonVariant(string name, string label)
+	{
+		string value = ((name ?? string.Empty) + " " + (label ?? string.Empty)).ToUpperInvariant();
+		if (value.Contains("ANNULLA") || value.Contains("CANCEL") || value.Contains("CLOSE") || value.Contains("CHIUDI") || value.Contains("INDIETRO"))
+			return MmoUiTheme.ButtonVariant.Crimson;
+		if (value.Contains("CONFERMA") || value.Contains("SALVA") || value.Contains("OK") || value.Contains("START") || value.Contains("CONTINUA"))
+			return MmoUiTheme.ButtonVariant.Emerald;
+		if (value.Contains("DRAFT") || value.Contains("PROFILO") || value.Contains("PVP") || value.Contains("MULTIPLAYER"))
+			return MmoUiTheme.ButtonVariant.Violet;
+		if (value.Contains("BUILDER") || value.Contains("BORSA") || value.Contains("LOADOUT"))
+			return MmoUiTheme.ButtonVariant.Gold;
+		return MmoUiTheme.ButtonVariant.Arcane;
 	}
 
 	private static Button CreateImageButton(string name, Transform parent, Font font, Sprite sprite, string label)
@@ -162,6 +197,7 @@ public sealed partial class BattleBoardController
 		bool flag2 = IsMerchantImageButton(name);
 		Text text = CreateText("Label", ((Component)image).transform, font, 18, (FontStyle)1, (TextAnchor)4);
 		text.text = label;
+		global::AccardND.Battlefield.EditableRuntimeText.Bind(text, fallbackDefaultText: label);
 		text.color = Color.white;
 		text.horizontalOverflow = flag2 ?HorizontalWrapMode.Wrap : HorizontalWrapMode.Overflow;
 		text.verticalOverflow = (VerticalWrapMode)0;
@@ -227,87 +263,7 @@ public sealed partial class BattleBoardController
 
 	private static Sprite GetRuntimePanelSprite()
 	{
-		if ((Object)(object)runtimePanelSprite != (Object)null)
-		{
-			return runtimePanelSprite;
-		}
-		Texture2D val = new Texture2D(32, 32, (TextureFormat)4, false)
-		{
-			name = "Runtime Rounded UI Panel",
-			filterMode = (FilterMode)1,
-			wrapMode = (TextureWrapMode)1,
-			hideFlags = (HideFlags)61
-		};
-		Color32[] array = (Color32[])(object)new Color32[1024];
-		Color baseBottom = new Color(0.04f, 0.06f, 0.10f); // #0a101a
-		Color baseTop = new Color(0.08f, 0.12f, 0.18f);    // #141f2e
-		Color goldPeak = new Color(0.85f, 0.65f, 0.18f);   // #d9a62e
-		Color goldShadow = new Color(0.45f, 0.32f, 0.08f); // #735214
-		Color bevelLight = new Color(0.18f, 0.25f, 0.35f); // #2e4059
-		Color shadowGroove = new Color(0.01f, 0.02f, 0.04f); // #03050a
-
-		for (int i = 0; i < 32; i++)
-		{
-			float grad = (float)i / 31.0f;
-			for (int j = 0; j < 32; j++)
-			{
-				float cx = j - 15.5f;
-				float cy = i - 15.5f;
-				float ax = Mathf.Abs(cx);
-				float ay = Mathf.Abs(cy);
-
-				float d_edge;
-				if (ax > 8.5f && ay > 8.5f)
-				{
-					float dist = Mathf.Sqrt((ax - 8.5f) * (ax - 8.5f) + (ay - 8.5f) * (ay - 8.5f));
-					d_edge = 7.0f - dist;
-				}
-				else
-				{
-					d_edge = 15.5f - Mathf.Max(ax, ay);
-				}
-
-				Color color;
-				if (d_edge < 0.0f)
-				{
-					color = Color.clear;
-				}
-				else if (d_edge < 1.0f)
-				{
-					float t = d_edge;
-					Color col = Color.Lerp(goldShadow, goldPeak, t);
-					color = new Color(col.r, col.g, col.b, t);
-				}
-				else if (d_edge < 2.0f)
-				{
-					float t = d_edge - 1.0f;
-					color = Color.Lerp(goldPeak, goldShadow, t);
-				}
-				else if (d_edge < 3.0f)
-				{
-					float t = d_edge - 2.0f;
-					color = Color.Lerp(shadowGroove, bevelLight, t);
-				}
-				else if (d_edge < 4.0f)
-				{
-					float t = d_edge - 3.0f;
-					Color bodyBase = Color.Lerp(baseBottom, baseTop, grad);
-					color = Color.Lerp(bevelLight, bodyBase, t);
-				}
-				else
-				{
-					color = Color.Lerp(baseBottom, baseTop, grad);
-				}
-
-				array[i * 32 + j] = color;
-			}
-		}
-		val.SetPixels32(array);
-		val.Apply(false, true);
-		runtimePanelSprite = Sprite.Create(val, new Rect(0f, 0f, 32f, 32f), new Vector2(0.5f, 0.5f), 100f, 0u, (SpriteMeshType)0, new Vector4(9f, 9f, 9f, 9f));
-		((Object)runtimePanelSprite).name = "Runtime Rounded UI Panel";
-		((Object)runtimePanelSprite).hideFlags = (HideFlags)61;
-		return runtimePanelSprite;
+		return MmoUiTheme.GetPanelSprite();
 	}
 
 	private static Sprite GetHelpAuraSprite()

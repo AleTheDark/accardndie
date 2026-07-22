@@ -15,6 +15,7 @@ MonoBehaviour:
   id: default
   displayName: Dungeon
   background: {fileID: 21300000, guid: 30d546d993a96cc45b9c245621f3a6c0, type: 3}
+  backgroundLandscape: {fileID: 21300000, guid: b35898af8f8551d41b3d820af873f0b0, type: 3}
   roomType: 0
   difficulty: 0
   bossId: 

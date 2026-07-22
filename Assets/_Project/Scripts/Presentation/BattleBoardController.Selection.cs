@@ -19,7 +19,9 @@ public sealed partial class BattleBoardController
 {
 	private BattleCardState AddCard(ICollection<BattleCardState> destination, RectTransform row, CardDefinition definition, bool belongsToPlayer, int index, CampaignCardInstance campaignCard = null)
 	{
-		if ((Object)(object)definition == (Object)null || !definition.CanEnterCombat || (Object)(object)row == (Object)null)
+		if ((Object)(object)definition == (Object)null
+			|| (!definition.CanEnterCombat && !IsMedusaBossDefinition(definition) && !IsTrentorBossDefinition(definition) && !IsBragusBossDefinition(definition) && !IsPalatirBossDefinition(definition))
+			|| (Object)(object)row == (Object)null)
 		{
 			return null;
 		}
@@ -42,7 +44,28 @@ public sealed partial class BattleBoardController
 		destination.Add(state);
 		if (!belongsToPlayer && IsComposableGolemDefinition(definition))
 		{
-			AttachComposableGolemModel(state);
+			RefreshComposableGolemPawn(state);
+		}
+		if (!belongsToPlayer && IsMedusaBossDefinition(definition))
+		{
+			activeMedusaBoss ??= new MedusaBoss(random);
+			RefreshMedusaBossPawn(state);
+		}
+		if (!belongsToPlayer && IsTrentorBossDefinition(definition))
+		{
+			activeTrentorBoss ??= new TrentorBoss(random);
+			PlayTrentorJoinBattlefieldSfx();
+			RefreshTrentorBossPawn(state);
+		}
+		if (!belongsToPlayer && IsBragusBossDefinition(definition))
+		{
+			activeBragusBoss ??= new BragusBoss(random);
+			RefreshBragusBossPawn(state);
+		}
+		if (!belongsToPlayer && IsPalatirBossDefinition(definition))
+		{
+			activePalatirBoss ??= new PalatirBoss(random);
+			RefreshPalatirBossPawn(state);
 		}
 		return state;
 	}
@@ -53,37 +76,141 @@ public sealed partial class BattleBoardController
 			&& string.Equals(definition.Id, ComposableGolemCardId, StringComparison.OrdinalIgnoreCase);
 	}
 
-	private void AttachComposableGolemModel(BattleCardState golem)
+	private static bool IsMedusaBossDefinition(CardDefinition definition)
 	{
-		if (golem == null || (Object)(object)golem.View == (Object)null || (Object)(object)playerRow == (Object)null)
+		return (Object)(object)definition != (Object)null
+			&& string.Equals(definition.Id, MedusaBossCardId, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static bool IsTrentorBossDefinition(CardDefinition definition)
+	{
+		return (Object)(object)definition != (Object)null
+			&& string.Equals(definition.Id, TrentorBossCardId, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static bool IsBragusBossDefinition(CardDefinition definition)
+	{
+		return (Object)(object)definition != (Object)null
+			&& string.Equals(definition.Id, BragusBossCardId, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static bool IsPalatirBossDefinition(CardDefinition definition)
+	{
+		return (Object)(object)definition != (Object)null
+			&& string.Equals(definition.Id, PalatirBossCardId, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private void RefreshBragusBossPawn(BattleCardState bragus)
+	{
+		if (bragus == null || (Object)(object)bragus.View == (Object)null || activeBragusBoss == null)
 		{
 			return;
 		}
-		GameObject prefab = Resources.Load<GameObject>(ComposableGolemModelResourcePath);
-		if ((Object)(object)prefab == (Object)null)
+		bragus.View.SetStrengthValue(BragusBoss.CardStrength);
+		UpdateBragusBossHealthBar(bragus);
+		RefreshPersistentStatus(bragus);
+	}
+
+	private void RefreshPalatirBossPawn(BattleCardState palatir)
+	{
+		if (palatir == null || (Object)(object)palatir.View == (Object)null || activePalatirBoss == null)
 		{
-			AppendLog("MINIBOSS - modello 3D Golem Componibile non trovato in Resources/Minibosses.");
 			return;
 		}
-		RectTransform cardRect = golem.View.RectTransform;
-		RectTransform anchor = new GameObject("Composable Golem Model Preview", new Type[3]
+		palatir.View.SetStrengthValue(PalatirBoss.CardStrength);
+		palatir.View.SetPalatirShields(activePalatirBoss.ActiveShields);
+		UpdatePalatirBossHealthBar(palatir);
+		RefreshPersistentStatus(palatir);
+	}
+
+	private void UpdatePalatirBossHealthBar(BattleCardState palatir)
+	{
+		if (palatir == null || (Object)(object)palatir.View == (Object)null || activePalatirBoss == null)
 		{
-			typeof(RectTransform),
-			typeof(CanvasRenderer),
-			typeof(RawImage)
-		}).GetComponent<RectTransform>();
-		((Transform)anchor).SetParent((Transform)(object)cardRect, false);
-		SetRect(anchor, new Vector2(0.05f, 0.03f), new Vector2(0.95f, 0.97f));
-		((Transform)anchor).SetAsLastSibling();
-		MinibossGolemRenderView preview = ((Component)anchor).gameObject.AddComponent<MinibossGolemRenderView>();
-		preview.Configure(cardRect, playerRow, prefab, Vector3.zero, PickGolemFormPlaceholderSprites());
-		activeComposableGolemPreview = preview;
-		if (activeComposableGolem != null)
-		{
-			activeComposableGolemPreview.SetActiveForm(activeComposableGolem.ActiveForm.Form, false);
-			UpdateComposableGolemHealthBar(golem);
+			return;
 		}
-		AppendLog("MINIBOSS - preview 3D Golem Componibile agganciata alla pedina.");
+
+		palatir.View.SetHealthBar(
+			activePalatirBoss.HitPoints,
+			activePalatirBoss.MaxHitPoints,
+			activePalatirBoss.HasActiveShields
+				? new Color(0.35f, 0.18f, 0.95f, 0.98f)
+				: new Color(0.96f, 0.34f, 0.78f, 0.98f));
+	}
+
+	private void UpdateBragusBossHealthBar(BattleCardState bragus)
+	{
+		if (bragus == null || (Object)(object)bragus.View == (Object)null || activeBragusBoss == null)
+		{
+			return;
+		}
+
+		bragus.View.SetHealthBar(
+			activeBragusBoss.HitPoints,
+			activeBragusBoss.MaxHitPoints,
+			new Color(0.9f, 0.32f, 0.18f, 0.98f));
+	}
+
+	private void RefreshTrentorBossPawn(BattleCardState trentor)
+	{
+		if (trentor == null || (Object)(object)trentor.View == (Object)null || activeTrentorBoss == null)
+		{
+			return;
+		}
+		trentor.View.SetStrengthValue(TrentorBoss.CardStrength);
+		UpdateTrentorBossHealthBar(trentor);
+		RefreshPersistentStatus(trentor);
+	}
+
+	private void UpdateTrentorBossHealthBar(BattleCardState trentor)
+	{
+		if (trentor == null || (Object)(object)trentor.View == (Object)null || activeTrentorBoss == null)
+		{
+			return;
+		}
+
+		trentor.View.SetHealthBar(
+			activeTrentorBoss.HitPoints,
+			activeTrentorBoss.MaxHitPoints,
+			new Color(0.28f, 0.82f, 0.34f, 0.98f));
+	}
+
+	private void RefreshMedusaBossPawn(BattleCardState medusa)
+	{
+		if (medusa == null || (Object)(object)medusa.View == (Object)null || activeMedusaBoss == null)
+		{
+			return;
+		}
+		medusa.View.SetStrengthValue(MedusaBoss.CardStrength);
+		UpdateMedusaBossHealthBar(medusa);
+		RefreshPersistentStatus(medusa);
+	}
+
+	private void UpdateMedusaBossHealthBar(BattleCardState medusa)
+	{
+		if (medusa == null || (Object)(object)medusa.View == (Object)null || activeMedusaBoss == null)
+		{
+			return;
+		}
+
+		medusa.View.SetHealthBar(
+			activeMedusaBoss.HitPoints,
+			activeMedusaBoss.MaxHitPoints,
+			new Color(0.56f, 0.74f, 0.66f, 0.98f));
+	}
+
+	// La pedina del Golem usa la grafica standard delle carte: barra HP colorata
+	// in base alla forma attiva e badge di stato con il nome della forma.
+	private void RefreshComposableGolemPawn(BattleCardState golem)
+	{
+		if (golem == null || (Object)(object)golem.View == (Object)null || activeComposableGolem == null)
+		{
+			return;
+		}
+		golem.View.SetComposableGolemForm(activeComposableGolem.ActiveForm.Form);
+		golem.View.SetStrengthValue(activeComposableGolem.ActiveForm.Power);
+		UpdateComposableGolemHealthBar(golem);
+		RefreshPersistentStatus(golem);
 	}
 
 	private void UpdateComposableGolemHealthBar(BattleCardState golem)
@@ -97,26 +224,6 @@ public sealed partial class BattleBoardController
 			activeComposableGolem.HitPoints,
 			activeComposableGolem.MaxHitPoints,
 			GolemHealthColor(activeComposableGolem.ActiveForm.Form));
-	}
-
-	private Sprite[] PickGolemFormPlaceholderSprites()
-	{
-		Sprite[] sprites = new Sprite[3];
-		if (cardDatabase == null)
-		{
-			return sprites;
-		}
-
-		List<CardDefinition> candidates = cardDatabase.Cards
-			.Where((CardDefinition card) => (Object)(object)card != (Object)null && (Object)(object)card.Artwork != (Object)null)
-			.ToList();
-		for (int i = 0; i < sprites.Length && candidates.Count > 0; i++)
-		{
-			int index = random.NextInclusive(0, candidates.Count - 1);
-			sprites[i] = candidates[index].Artwork;
-			candidates.RemoveAt(index);
-		}
-		return sprites;
 	}
 
 	private void MakeDeploymentPreviewInspectable(PrototypeCardView preview, CardDefinition definition)
@@ -142,6 +249,19 @@ public sealed partial class BattleBoardController
 			return !cardInspectionPanel.activeSelf;
 		}
 		return false;
+	}
+
+	private void ShowPendingDeploymentInspection()
+	{
+		if (!draftActive
+			|| !deploymentDraftActive
+			|| pendingDeploymentIndex < 0
+			|| pendingDeploymentIndex >= draftCandidates.Count)
+		{
+			return;
+		}
+
+		ShowCardInspection(draftCandidates[pendingDeploymentIndex]);
 	}
 
 	private void HandlePlayerCardClick(BattleCardState state)
@@ -171,7 +291,7 @@ public sealed partial class BattleBoardController
 
 	private bool CanInspectBattleCard(BattleCardState state)
 	{
-		if (state != null && !draftActive && !deploymentDraftActive && !inputLocked && !gameFinished && !attackTargetingActive && pendingAbilityUser == null && pendingDeploymentIndex < 0 && abilityTargetMode == AbilityTargetMode.None && (Object)(object)cardInspectionPanel != (Object)null)
+		if (state != null && !draftActive && !deploymentDraftActive && !attackTargetingActive && pendingAbilityUser == null && pendingDeploymentIndex < 0 && abilityTargetMode == AbilityTargetMode.None && (Object)(object)cardInspectionPanel != (Object)null)
 		{
 			return !cardInspectionPanel.activeSelf;
 		}
@@ -227,6 +347,13 @@ public sealed partial class BattleBoardController
 			activeAbilityUser.AbilityUsed = true;
 			RefreshPersistentStatus(battleCardState);
 			PlayClassAbilitySfx(HeroClass.Assassin);
+			if ((Object)(object)battleAnimationPlayer != (Object)null
+				&& (Object)(object)activeAbilityUser.View != (Object)null
+				&& (Object)(object)battleCardState.View != (Object)null)
+			{
+				((MonoBehaviour)this).StartCoroutine(battleAnimationPlayer.PlayTargetLine(activeAbilityUser.View, battleCardState.View, AbilityTargetLineColor));
+				((MonoBehaviour)this).StartCoroutine(battleAnimationPlayer.PlayAssassinInhibitSmoke(battleCardState.View));
+			}
 			string text = ((playerAura == BattleAuraType.Assassin) ?" e gli infligge -1 permanente" : string.Empty);
 			SetMessage("ASSASSINO: " + activeAbilityUser.Card.Name + " inibisce " + battleCardState.Card.Name + text + ". Saltera il prossimo turno.");
 			TriggerMagicAuraAfterAbility();
@@ -241,12 +368,25 @@ public sealed partial class BattleBoardController
 		{
 			BattleCardState battleCardState2 = cpuCards[index];
 			int num = ((playerAura != BattleAuraType.Mage) ?1 : 2);
+			int baseDieSides = runProgress != null ? runProgress.MasterVigorDieSides : configuration.Gameplay.VigorDieSides;
+			int startDieSides = EffectiveVigorDieSides(battleCardState2, baseDieSides);
 			battleCardState2.PendingVigorStepPenalty = Math.Max(battleCardState2.PendingVigorStepPenalty, num);
+			int endDieSides = EffectiveVigorDieSides(battleCardState2, baseDieSides);
 			activeAbilityUser.AbilityArmed = false;
 			activeAbilityUser.AbilityUsed = true;
 			RefreshPersistentStatus(battleCardState2);
 			PlayClassAbilitySfx(HeroClass.Mage);
-			SetMessage($"MAGO: {activeAbilityUser.Card.Name} indebolisce {battleCardState2.Card.Name}. Il suo prossimo Vigore scende di {num} step.");
+			if ((Object)(object)battleAnimationPlayer != (Object)null
+				&& (Object)(object)activeAbilityUser.View != (Object)null
+				&& (Object)(object)battleCardState2.View != (Object)null)
+			{
+				((MonoBehaviour)this).StartCoroutine(battleAnimationPlayer.PlayTargetLine(activeAbilityUser.View, battleCardState2.View, AbilityTargetLineColor));
+			}
+			((MonoBehaviour)this).StartCoroutine(PlayMageVigorConstellation(
+				battleCardState2,
+				startDieSides,
+				endDieSides));
+			SetMessage($"Grazie all'abilita del mago, il prossimo dado Vigore di {battleCardState2.Card.Name} scende di {num} step: usera un D{endDieSides}.");
 			TriggerMagicAuraAfterAbility();
 			abilityTargetMode = AbilityTargetMode.None;
 			ClearTargetHints();
@@ -273,6 +413,13 @@ public sealed partial class BattleBoardController
 			activeAbilityUser.AbilityUsed = true;
 			RefreshPersistentStatus(battleCardState3);
 			PlayClassAbilitySfx(HeroClass.Hunter);
+			if ((Object)(object)battleAnimationPlayer != (Object)null
+				&& (Object)(object)activeAbilityUser.View != (Object)null
+				&& (Object)(object)battleCardState3.View != (Object)null)
+			{
+				((MonoBehaviour)this).StartCoroutine(battleAnimationPlayer.PlayTargetLine(activeAbilityUser.View, battleCardState3.View, AbilityTargetLineColor));
+				((MonoBehaviour)this).StartCoroutine(battleAnimationPlayer.PlayHunterMarkReticle(battleCardState3.View));
+			}
 			SetMessage($"CACCIATORE: {activeAbilityUser.Card.Name} marca {battleCardState3.Card.Name}. Bersaglio marcato: chi lo attacca prende +{HunterMarkValueFor(activeAbilityUser)}.");
 			TriggerMagicAuraAfterAbility();
 			abilityTargetMode = AbilityTargetMode.None;
@@ -286,8 +433,11 @@ public sealed partial class BattleBoardController
 		{
 			attackTargetingActive = false;
 			BattleCardState battleCardState4 = turnOrder[currentTurnIndex];
-			MatchupResult matchupResult = ClassMatchup.Compare(battleCardState4.Card.HeroClass, cpuCards[index].Card.HeroClass);
+			MatchupResult matchupResult = IsPalatirBossProxy(cpuCards[index])
+				? MatchupResult.Neutral
+				: ClassMatchup.Compare(battleCardState4.Card.HeroClass, cpuCards[index].Card.HeroClass);
 			AppendLog("BERSAGLIO SCELTO - " + battleCardState4.Card.Name + " attacca " + cpuCards[index].Card.Name + " " + $"({matchupResult})");
+			NotifyAdventureTutorial(AdventureTutorialAction.EnemyTargeted);
 			((MonoBehaviour)this).StartCoroutine(ExecutePlayerTurn(index));
 		}
 	}
@@ -322,6 +472,11 @@ public sealed partial class BattleBoardController
 				ApplyPlayerAuraVisuals(appendLog: false);
 				activeAbilityUser.AbilityUsed = true;
 				PlayClassAbilitySfx(HeroClass.Necromancer);
+				if ((Object)(object)battleAnimationPlayer != (Object)null)
+				{
+					((MonoBehaviour)this).StartCoroutine(battleAnimationPlayer.PlayTargetLine(activeAbilityUser.View, target.View, AbilityTargetLineColor));
+					((MonoBehaviour)this).StartCoroutine(battleAnimationPlayer.PlayNecromancerReviveSkullConvergence(target.View));
+				}
 				SetMessage("NECROMANTE: " + activeAbilityUser.Card.Name + " rialza " + target.Card.Name + ". Agira subito dopo il Necromante.");
 				TriggerMagicAuraAfterAbility();
 			}
@@ -331,6 +486,13 @@ public sealed partial class BattleBoardController
 				activeAbilityUser.ProtectedAlly = target;
 				RefreshPersistentStatus(activeAbilityUser);
 				PlayClassAbilitySfx(HeroClass.Paladin);
+				if ((Object)(object)battleAnimationPlayer != (Object)null
+					&& (Object)(object)activeAbilityUser.View != (Object)null
+					&& (Object)(object)target.View != (Object)null)
+				{
+					((MonoBehaviour)this).StartCoroutine(battleAnimationPlayer.PlayTargetLine(activeAbilityUser.View, target.View, AbilityTargetLineColor));
+					((MonoBehaviour)this).StartCoroutine(battleAnimationPlayer.PlayPaladinProtectionConstellation(target.View));
+				}
 				string text = ((target == activeAbilityUser) ?"si proteggera: vantaggio al prossimo tiro difesa." : ("proteggera " + target.Card.Name + ": se viene attaccato deviera il colpo su di se e difendera con vantaggio."));
 				SetMessage("PALADINO: " + activeAbilityUser.Card.Name + " " + text);
 			}
@@ -349,6 +511,13 @@ public sealed partial class BattleBoardController
 				RefreshPersistentStatus(target);
 				activeAbilityUser.AbilityUsed = true;
 				PlayClassAbilitySfx(HeroClass.Priest);
+				if ((Object)(object)battleAnimationPlayer != (Object)null
+					&& (Object)(object)activeAbilityUser.View != (Object)null
+					&& (Object)(object)target.View != (Object)null)
+				{
+					((MonoBehaviour)this).StartCoroutine(battleAnimationPlayer.PlayTargetLine(activeAbilityUser.View, target.View, AbilityTargetLineColor));
+					((MonoBehaviour)this).StartCoroutine(battleAnimationPlayer.PlayPriestBlessing(activeAbilityUser.View, target.View, num));
+				}
 				SetMessage($"SACERDOTE: {activeAbilityUser.Card.Name} benedice {target.Card.Name} con +{num}.");
 				TriggerMagicAuraAfterAbility();
 			}

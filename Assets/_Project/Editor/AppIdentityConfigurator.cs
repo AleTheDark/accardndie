@@ -8,7 +8,7 @@ namespace AccardND.Editor
     public static class AppIdentityConfigurator
     {
         private const string AppName = "AcCardNDie";
-        private const string BundleIdentifier = "com.accardndie.game";
+        private const string BundleIdentifier = "com.apesolution.accardndie";
         private const string MasterIconPath = "Assets/_Project/Art/AppIcon/accard-n-die-icon-master-1024.png";
 
         [MenuItem("AccardND/Configure App Identity")]

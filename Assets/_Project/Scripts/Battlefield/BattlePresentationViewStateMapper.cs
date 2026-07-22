@@ -16,8 +16,6 @@ namespace AccardND.Battlefield
 
             if (card.Initiative > 0)
                 flags.Add(new PrototypeCardView.StatusToken($"INI {card.Initiative}", new Color(0.95f, 0.78f, 0.22f)));
-            if (card.IsSpirit)
-                flags.Add(new PrototypeCardView.StatusToken("SPIRITO", new Color(0.58f, 0.8f, 1f)));
             if (card.Inhibited)
                 flags.Add(new PrototypeCardView.StatusToken("INIBITO", new Color(0.56f, 0.42f, 0.92f)));
             if (card.Marked)
@@ -44,6 +42,7 @@ namespace AccardND.Battlefield
             };
 
         public static bool HasActivatableAbility(HeroClass heroClass) =>
-            heroClass is not (HeroClass.Rogue or HeroClass.Barbarian);
+            heroClass != HeroClass.Barbarian
+            && heroClass != HeroClass.Rogue;
     }
 }
