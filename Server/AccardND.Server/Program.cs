@@ -1,5 +1,6 @@
 using AccardND.Server;
 using AccardND.Server.Accounts;
+using AccardND.Server.Admin;
 using AccardND.Server.Data;
 using AccardND.Server.Progression;
 using AccardND.Server.Rooms;
@@ -40,6 +41,8 @@ builder.Services.AddHostedService<SeasonRolloverService>();
 builder.Services.AddSingleton<RoomManager>();
 builder.Services.AddSingleton<MatchmakingQueue>();
 builder.Services.AddSingleton<MessageRouter>();
+builder.Services.AddSingleton<AdminAuth>();
+builder.Services.AddSingleton<AdminService>();
 
 WebApplication app = builder.Build();
 // Ping di keep-alive ogni 30s: tiene vive le connessioni idle (turni lunghi)
@@ -48,6 +51,10 @@ WebApplication app = builder.Build();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
+// Pannello admin (pagina + API su /admin/*). Attivo solo se e configurata una
+// password admin (env var ACCARDND_ADMIN_PASSWORD o serverconfig Admin.Password).
+app.MapAdminEndpoints();
 
 app.Map("/ws", async context =>
 {

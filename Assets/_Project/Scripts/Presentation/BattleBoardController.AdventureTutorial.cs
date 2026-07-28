@@ -1,9 +1,11 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using AccardND.GameCore;
 using AccardND.GameData;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
@@ -14,12 +16,16 @@ public sealed partial class BattleBoardController
 	private enum AdventureTutorialAction
 	{
 		Started,
+		NextPressed,
 		DraftReady,
-		DraftCardSelected,
-		DraftConfirmed,
+		InitiativeRolled,
 		DeploymentCardSelected,
 		DeploymentConfirmed,
+		DeploymentCompleted,
+		CardInspected,
 		PlayerTurnStarted,
+		AbilityPressed,
+		AttackPressed,
 		EnemyTargeted,
 		BattleFinished
 	}
@@ -28,18 +34,24 @@ public sealed partial class BattleBoardController
 	{
 		adventureScriptedTutorialActive = true;
 		adventureScriptedTutorialStep = 0;
+		adventureScriptedTutorialStepAcknowledged = false;
+		adventureScriptedTutorialPendingTarget = null;
+		adventureScriptedTutorialAllowedDraftIndex = -1;
+		adventureScriptedTutorialInspectionOpened = false;
+		adventureScriptedTutorialAwaitingAdvantageContinue = false;
+		adventureScriptedTutorialObjectiveShown = false;
 		EnsureAdventureScriptedTutorialView();
 		ReturnToStart(showModeSelection: false);
 		SetBattlefieldSurfaceVisible(visible: true);
 		SetCombatChromeVisible(visible: true);
+		SetAdventureTutorialTimelineVisible(visible: false);
 		if ((Object)(object)adventureChapterPanel != (Object)null)
 		{
 			adventureChapterPanel.SetActive(false);
 		}
-		BuildScriptedTutorialRun();
 		ShowAdventureScriptedTutorialStep(
 			"Tutorial guidato",
-			"Questa non e una spiegazione fuori dal gioco: giocherai una stanza controllata. Ti illumino cosa guardare o premere, e il resto resta bloccato finche non serve.",
+			"Giocherai una stanza guidata. Ti illuminero cosa guardare o premere, per farti capire a grandi linee come funziona il combattimento.",
 			null);
 	}
 
@@ -53,7 +65,7 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		campaignDeck = new CampaignDeckState(playerDeck);
+		campaignDeck = new CampaignDeckState(new List<CardDefinition>());
 		currentRoomType = RoomType.Monster;
 		currentMonsterTier = 1;
 		pendingScenarioId = null;
@@ -67,44 +79,15 @@ public sealed partial class BattleBoardController
 
 	private List<CardDefinition> BuildTutorialPlayerDeck()
 	{
-		IReadOnlyList<CardDefinition> cards = TutorialCards();
-		if (cards.Count == 0)
+		return ResolveTutorialCards(new[]
 		{
-			return new List<CardDefinition>();
-		}
-		HeroClass[] preferred =
-		{
-			HeroClass.Warrior,
-			HeroClass.Mage,
-			HeroClass.Hunter,
-			HeroClass.Paladin,
-			HeroClass.Rogue,
-			HeroClass.Priest
-		};
-		List<CardDefinition> result = new List<CardDefinition>();
-		foreach (HeroClass heroClass in preferred)
-		{
-			CardDefinition card = FindTutorialCard(cards, CardCategory.Monster, heroClass, result);
-			if ((Object)(object)card != (Object)null)
-			{
-				result.Add(card);
-			}
-		}
-		int targetCount = Mathf.Max(configuration.Gameplay.FormationSize, configuration.DeckBuilding.CombatHandSize);
-		foreach (CardDefinition card in cards
-			.Where(card => (Object)(object)card != (Object)null && card.Category == CardCategory.Monster && card.CanEnterCombat)
-			.OrderBy(card => card.Strength))
-		{
-			if (result.Count >= targetCount)
-			{
-				break;
-			}
-			if (!result.Contains(card))
-			{
-				result.Add(card);
-			}
-		}
-		return result;
+			"10-champion-warrior",
+			"9-faceless-mage",
+			"8-spirit-mage",
+			"8-spirit-warrior",
+			"7-whitealien-rogue",
+			"6-chimera-warrior"
+		});
 	}
 
 	private IReadOnlyList<CardDefinition> TutorialCards()
@@ -116,16 +99,35 @@ public sealed partial class BattleBoardController
 		return cardDatabase?.Cards ?? Array.Empty<CardDefinition>();
 	}
 
-	private CardDefinition FindTutorialCard(IReadOnlyList<CardDefinition> cards, CardCategory category, HeroClass heroClass, List<CardDefinition> excluded)
+	private List<CardDefinition> BuildTutorialCpuDeploymentHand()
 	{
-		return cards
-			.Where(card => (Object)(object)card != (Object)null
-				&& card.Category == category
-				&& card.CanEnterCombat
-				&& card.HeroClass == heroClass
-				&& (excluded == null || !excluded.Contains(card)))
-			.OrderBy(card => card.Strength)
-			.FirstOrDefault();
+		return ResolveTutorialCards(new[]
+		{
+			"8-spirit-warrior",
+			"7-whitealien-mage",
+			"6-chimera-rogue"
+		});
+	}
+
+	private List<CardDefinition> ResolveTutorialCards(IReadOnlyList<string> ids)
+	{
+		IReadOnlyList<CardDefinition> cards = TutorialCards();
+		List<CardDefinition> result = new List<CardDefinition>();
+		foreach (string id in ids)
+		{
+			CardDefinition card = cards.FirstOrDefault(candidate =>
+				(Object)(object)candidate != (Object)null
+				&& string.Equals(candidate.Id, id, StringComparison.OrdinalIgnoreCase));
+			if ((Object)(object)card != (Object)null)
+			{
+				result.Add(card);
+			}
+			else
+			{
+				AppendLog($"TUTORIAL AVVENTURA - carta scriptata '{id}' non trovata.");
+			}
+		}
+		return result;
 	}
 
 	private void NotifyAdventureTutorial(AdventureTutorialAction action)
@@ -134,95 +136,400 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
+		if (action != AdventureTutorialAction.NextPressed
+			&& action != AdventureTutorialAction.InitiativeRolled
+			&& action != AdventureTutorialAction.DeploymentCardSelected
+			&& action != AdventureTutorialAction.DeploymentConfirmed
+			&& action != AdventureTutorialAction.DeploymentCompleted
+			&& action != AdventureTutorialAction.CardInspected
+			&& action != AdventureTutorialAction.PlayerTurnStarted
+			&& action != AdventureTutorialAction.AbilityPressed
+			&& action != AdventureTutorialAction.AttackPressed
+			&& action != AdventureTutorialAction.EnemyTargeted
+			&& !adventureScriptedTutorialStepAcknowledged)
+		{
+			return;
+		}
 		AdvanceAdventureTutorialAfter(action);
 	}
 
 	private void AdvanceAdventureTutorialAfter(AdventureTutorialAction action)
 	{
+		if (action == AdventureTutorialAction.PlayerTurnStarted
+			&& adventureScriptedTutorialStep >= 4
+			&& IsAdventureTutorialWarriorAbilityTurn())
+		{
+			adventureScriptedTutorialStep = 5;
+			RefreshCardActionOverlays();
+			ShowAdventureTutorialWarriorAbilityStep();
+			return;
+		}
 		switch (adventureScriptedTutorialStep)
 		{
 		case 0:
-			if (action == AdventureTutorialAction.DraftReady)
+			if (action == AdventureTutorialAction.NextPressed)
 			{
 				adventureScriptedTutorialStep = 1;
 				ShowAdventureScriptedTutorialStep(
-					"Scegli le carte",
-					"Queste sono le carte disponibili per la stanza. Tocca una carta della tua mano: la useremo per costruire la formazione.",
-					FirstVisibleDraftCardRect());
+					"Iniziative",
+					"Le carte entrano in mano e il gioco tira le iniziative, questo tiro determina chi schiera prima e chi attacca prima.",
+					null);
 			}
 			break;
 		case 1:
-			if (action == AdventureTutorialAction.DraftCardSelected)
+			if (action == AdventureTutorialAction.NextPressed)
+			{
+				AcknowledgeAdventureTutorialStep();
+				BuildScriptedTutorialRun();
+				break;
+			}
+			if (action == AdventureTutorialAction.InitiativeRolled)
 			{
 				adventureScriptedTutorialStep = 2;
 				ShowAdventureScriptedTutorialStep(
-					"Completa la formazione",
-					"Ogni stanza richiede una formazione completa. Seleziona le altre carte richieste, poi premi CONFERMA quando il pulsante si illumina.",
-					(Object)(object)confirmActionButton != (Object)null ? (RectTransform)((Component)confirmActionButton).transform : null);
-			}
-			break;
-		case 2:
-			if (action == AdventureTutorialAction.DraftConfirmed)
-			{
-				adventureScriptedTutorialStep = 3;
-				ShowAdventureScriptedTutorialStep(
-					"Iniziativa e schieramento",
-					"Il gioco tira le iniziative. Quando tocca a te, scegli quale carta entra in campo in quel momento: le iniziative alte agiscono prima.",
+					"Il tuo turno di schieramento",
+					"Guarda la timeline delle iniziative qui a destra: quando tocca a te, scegli una carta dalla mano. Ogni carta ha un valore che indica la tua potenza. Seleziona quelle piu forti!",
 					FirstVisibleDraftCardRect());
 			}
 			break;
-		case 3:
+		case 2:
+			if (action == AdventureTutorialAction.NextPressed)
+			{
+				AcknowledgeAdventureTutorialStep();
+				ProcessNextDeploymentToken();
+				break;
+			}
 			if (action == AdventureTutorialAction.DeploymentCardSelected)
 			{
+				adventureScriptedTutorialStep = 3;
+				ShowAdventureScriptedTutorialStep(
+					"Conferma lo schieramento",
+					"Questa carta e pronta a entrare. Premi CONFERMA per metterla sul campo.",
+					(Object)(object)confirmActionButton != (Object)null ? (RectTransform)((Component)confirmActionButton).transform : null);
+				MoveAdventureTutorialSpotlight(null);
+			}
+			break;
+		case 3:
+			if (action == AdventureTutorialAction.NextPressed)
+			{
+				AcknowledgeAdventureTutorialStep();
+				break;
+			}
+			if (action == AdventureTutorialAction.DeploymentCardSelected)
+			{
+				ShowAdventureScriptedTutorialStep(
+					"Conferma lo schieramento",
+					"Questa carta e pronta a entrare. Premi CONFERMA per metterla sul campo.",
+					(Object)(object)confirmActionButton != (Object)null ? (RectTransform)((Component)confirmActionButton).transform : null);
+				MoveAdventureTutorialSpotlight(null);
+				break;
+			}
+			if (action == AdventureTutorialAction.DeploymentCompleted)
+			{
 				adventureScriptedTutorialStep = 4;
+				ShowAdventureScriptedTutorialStep(
+					"Il campo",
+					"Sopra ci sono i mostri del Master, sotto la tua formazione. Premi CONTINUA per sistemare le pedine sul campo.",
+					null);
+				SetAdventureTutorialNextButtonEnabled(enabled: true);
+				break;
+			}
+			if (action == AdventureTutorialAction.DeploymentConfirmed)
+			{
+				if (selectedPlayerDeploymentIndices.Count < configuration.Gameplay.FormationSize)
+				{
+					ShowAdventureScriptedTutorialStep(
+						"Prossima iniziativa",
+						"Lo schieramento continua in ordine di iniziativa. Quando tocchera ancora a te, scegli un'altra carta dalla mano.",
+						null);
+					SetAdventureTutorialNextButtonEnabled(enabled: false);
+				}
+				else
+				{
+					ShowAdventureScriptedTutorialStep(
+						"Schieramento",
+						"L'ultima carta sta entrando in campo. Aspetta che lo schieramento sia completo.",
+						null);
+					SetAdventureTutorialNextButtonEnabled(enabled: false);
+				}
+			}
+			break;
+		case 4:
+			if (action == AdventureTutorialAction.NextPressed)
+			{
+				AcknowledgeAdventureTutorialStep();
+				if (currentDeploymentIndex >= deploymentOrder.Count
+					&& selectedPlayerDeploymentIndices.Count >= configuration.Gameplay.FormationSize)
+				{
+					if (adventureScriptedTutorialInspectionOpened)
+					{
+						BeginCurrentTurn();
+					}
+					else
+					{
+						CompleteDeploymentAndStartBattle();
+					}
+				}
+				break;
+			}
+			if (action == AdventureTutorialAction.DeploymentCompleted)
+			{
+				ShowAdventureScriptedTutorialStep(
+					"Il campo",
+					"Sopra ci sono i mostri del Master, sotto la tua formazione. Premi CONTINUA per sistemare le pedine sul campo.",
+					null);
+				SetAdventureTutorialNextButtonEnabled(enabled: true);
+			}
+			if (action == AdventureTutorialAction.CardInspected)
+			{
+				adventureScriptedTutorialInspectionOpened = true;
+				SetAdventureTutorialNextButtonEnabled(enabled: true);
+				MoveAdventureTutorialSpotlight(null);
+			}
+			if (action == AdventureTutorialAction.DeploymentCardSelected
+				&& selectedPlayerDeploymentIndices.Count < configuration.Gameplay.FormationSize)
+			{
+				adventureScriptedTutorialStep = 3;
 				ShowAdventureScriptedTutorialStep(
 					"Conferma lo schieramento",
 					"Questa carta e pronta a entrare. Premi CONFERMA per metterla sul campo.",
 					(Object)(object)confirmActionButton != (Object)null ? (RectTransform)((Component)confirmActionButton).transform : null);
 			}
-			break;
-		case 4:
-			if (action == AdventureTutorialAction.DeploymentConfirmed)
+			if (action == AdventureTutorialAction.PlayerTurnStarted)
 			{
 				adventureScriptedTutorialStep = 5;
+				RefreshCardActionOverlays();
+				if (IsAdventureTutorialWarriorAbilityTurn())
+				{
+					ShowAdventureTutorialWarriorAbilityStep();
+					break;
+				}
+				RectTransform attackTarget = ActivePlayerAttackActionRect();
 				ShowAdventureScriptedTutorialStep(
-					"Il campo",
-					"Sopra ci sono i mostri del Master, sotto la tua formazione. Aspettiamo il tuo primo turno: il gioco evidenziera la pedina attiva.",
-					(Object)(object)playerRow != (Object)null ? playerRow : null);
+					"Attacca un mostro",
+					"Quando e il tuo turno premi su attacca e scegli un bersaglio nemico, partiranno i dadi Vigore e vedrai come si risolve il confronto.",
+					attackTarget);
+				SetAdventureTutorialNextButtonEnabled(enabled: false);
+				MoveAdventureTutorialSpotlight(attackTarget);
 			}
 			break;
 		case 5:
-			if (action == AdventureTutorialAction.PlayerTurnStarted)
+			if (action == AdventureTutorialAction.PlayerTurnStarted && IsAdventureTutorialWarriorAbilityTurn())
 			{
-				adventureScriptedTutorialStep = 6;
-				ShowAdventureScriptedTutorialStep(
-					"Attacca un mostro",
-					"Nel tuo turno scegli un bersaglio nemico. Tocca una carta del Master: partiranno i dadi Vigore e vedrai come si risolve il confronto.",
-					FirstAliveCpuCardRect());
+				RefreshCardActionOverlays();
+				ShowAdventureTutorialWarriorAbilityStep();
+				break;
+			}
+			if (action == AdventureTutorialAction.NextPressed)
+			{
+				if (adventureScriptedTutorialAwaitingAdvantageContinue)
+				{
+					adventureScriptedTutorialAwaitingAdvantageContinue = false;
+					ShowAdventureTutorialAttackTargetStep();
+					break;
+				}
+				AcknowledgeAdventureTutorialStep();
+				break;
+			}
+			if (action == AdventureTutorialAction.AttackPressed)
+			{
+				if (IsAdventureTutorialMageAdvantageAttackTurn())
+				{
+					adventureScriptedTutorialAwaitingAdvantageContinue = true;
+					ShowAdventureScriptedTutorialStep(
+						"Vantaggio e svantaggio",
+						"Prima del primo attacco guarda le aure sulle pedine nemiche: verde vuol dire vantaggio, gialla vuol dire normale, rossa vuol dire svantaggio. Il vantaggio fa tirare due dadi Vigore e tenere il risultato migliore.",
+						null);
+					SetAdventureTutorialNextButtonEnabled(enabled: true);
+					MoveAdventureTutorialSpotlight(null);
+					break;
+				}
+				SetAdventureTutorialNextButtonEnabled(enabled: false);
+				MoveAdventureTutorialSpotlight(FirstAliveCpuCardRect());
+				break;
+			}
+			if (action == AdventureTutorialAction.AbilityPressed)
+			{
+				ShowAdventureTutorialAttackTargetStep();
+				break;
+			}
+			if (action == AdventureTutorialAction.EnemyTargeted)
+			{
+				SetAdventureTutorialNextButtonEnabled(enabled: false);
+				MoveAdventureTutorialSpotlight(null);
+				break;
 			}
 			break;
 		case 6:
-			if (action == AdventureTutorialAction.EnemyTargeted)
+			if (action == AdventureTutorialAction.NextPressed)
+			{
+				if (!adventureScriptedTutorialObjectiveShown)
+				{
+					adventureScriptedTutorialObjectiveShown = true;
+					ShowAdventureScriptedTutorialStep(
+						"Completa il tutorial",
+						"Sconfiggi tutti i nemici per completare il tutorial.",
+						null);
+					SetAdventureTutorialNextButtonEnabled(enabled: true);
+					MoveAdventureTutorialSpotlight(null);
+					break;
+				}
+				AcknowledgeAdventureTutorialStep();
+				break;
+			}
+			if (action == AdventureTutorialAction.BattleFinished)
 			{
 				adventureScriptedTutorialStep = 7;
 				ShowAdventureScriptedTutorialStep(
-					"Dadi Vigore",
-					"Durante l'attacco il dado Vigore si somma alla forza della carta. Nella prossima iterazione questi tiri saranno completamente scriptati.",
+					"Ricompensa",
+					"Hai completato il tutorial. Ti consegno le classi base e il primo capitolo dell'Avventura. I vasetti di miele, invece, si guadagnano in taverna con le quest del giorno.",
 					null);
 			}
 			break;
 		case 7:
-			if (action == AdventureTutorialAction.BattleFinished)
+			if (action == AdventureTutorialAction.NextPressed)
 			{
-				adventureScriptedTutorialStep = 8;
-				ShowAdventureScriptedTutorialStep(
-					"Ricompensa",
-					"Hai completato il tutorial. Ora assegno i vasetti di miele e sblocco il proseguimento dell'Avventura.",
-					null);
 				EndAdventureScriptedTutorial(complete: true);
 			}
 			break;
 		}
+	}
+
+	private void ShowAdventureTutorialWarriorAbilityStep()
+	{
+		RectTransform abilityTarget = ActivePlayerAbilityActionRect();
+		ShowAdventureScriptedTutorialStep(
+			"Abilita Guerriero",
+			"Questo e il Guerriero. Le carte possono avere abilita speciali: premi ABILITA per preparare il suo colpo pesante. Nel prossimo attacco tirera due dadi Vigore e li sommeremo alla sua potenza.",
+			abilityTarget);
+		SetAdventureTutorialNextButtonEnabled(enabled: false);
+		MoveAdventureTutorialSpotlight(abilityTarget);
+	}
+
+	private void ShowAdventureTutorialAttackTargetStep()
+	{
+		RectTransform target = TutorialCpuWarriorTargetRect();
+		string body = IsAdventureTutorialWarriorAbilityAttackPrepared()
+			? "Ora premi la pedina Warrior avversaria illuminata. Il Guerriero usera l'abilita appena preparata nel tiro Vigore."
+			: "Ora premi la pedina Warrior avversaria illuminata per vedere il vantaggio del Mago in azione.";
+		ShowAdventureScriptedTutorialStep(
+			"Scegli il bersaglio",
+			body,
+			target);
+		SetAdventureTutorialNextButtonEnabled(enabled: false);
+		MoveAdventureTutorialSpotlight(target);
+	}
+
+	private bool IsAdventureTutorialWaitingForAdvantageContinue()
+	{
+		return adventureScriptedTutorialActive && adventureScriptedTutorialAwaitingAdvantageContinue;
+	}
+
+	private bool IsAdventureTutorialMageAdvantageAttackTurn()
+	{
+		if (!adventureScriptedTutorialActive || selectedPlayerIndex < 0 || selectedPlayerIndex >= playerCards.Count)
+		{
+			return false;
+		}
+		BattleCardState card = playerCards[selectedPlayerIndex];
+		return card != null
+			&& !card.Eliminated
+			&& card.Card.HeroClass == HeroClass.Mage
+			&& (card.Card.Strength == 8 || string.Equals(card.Card.Id, "8-spirit-mage", StringComparison.OrdinalIgnoreCase));
+	}
+
+	private bool IsAdventureTutorialWarriorAbilityAttackPrepared()
+	{
+		if (!adventureScriptedTutorialActive || selectedPlayerIndex < 0 || selectedPlayerIndex >= playerCards.Count)
+		{
+			return false;
+		}
+		BattleCardState card = playerCards[selectedPlayerIndex];
+		return card != null
+			&& !card.Eliminated
+			&& card.Card.HeroClass == HeroClass.Warrior
+			&& card.AbilityArmed;
+	}
+
+	private bool ShowAdventureTutorialCombatRollResult(BattleCardState attacker, BattleCardState defender, CombatResult result)
+	{
+		if (!adventureScriptedTutorialActive || adventureScriptedTutorialStep != 5)
+		{
+			return false;
+		}
+		adventureScriptedTutorialStep = 6;
+		ShowAdventureScriptedTutorialStep(
+			"Dadi Vigore",
+			FormatAdventureTutorialCombatRollText(attacker, defender, result),
+			null);
+		SetAdventureTutorialNextButtonEnabled(enabled: true);
+		MoveAdventureTutorialSpotlight(null);
+		return true;
+	}
+
+	private string FormatAdventureTutorialCombatRollText(BattleCardState attacker, BattleCardState defender, CombatResult result)
+	{
+		List<string> lines = new List<string>();
+		string attackerRule = FormatAdventureTutorialRollRule(attacker, defender, result.AttackerRoll, attackerIsAttacking: true);
+		if (!string.IsNullOrEmpty(attackerRule))
+		{
+			lines.Add(attackerRule);
+		}
+		string defenderRule = FormatAdventureTutorialRollRule(defender, attacker, result.DefenderRoll, attackerIsAttacking: false);
+		if (!string.IsNullOrEmpty(defenderRule))
+		{
+			lines.Add(defenderRule);
+		}
+		lines.Add($"Attaccante: potenza {attacker.Card.Strength} + {result.AttackerRoll.SelectedRoll} = {result.AttackerTotal}.");
+		lines.Add($"Difensore: potenza {defender.Card.Strength} + {result.DefenderRoll.SelectedRoll} = {result.DefenderTotal}.");
+		lines.Add(result.DefenderIsDefeated
+			? $"Vince l'attaccante: il totale e piu alto, quindi il difensore perde il confronto."
+			: $"Resiste il difensore: in difesa basta pareggiare o superare l'attacco.");
+		return string.Join("\n", lines);
+	}
+
+	private string FormatAdventureTutorialRollRule(BattleCardState actor, BattleCardState opponent, VigorRollResult roll, bool attackerIsAttacking)
+	{
+		if (actor == null || opponent == null || !roll.HasSecondRoll)
+		{
+			return string.Empty;
+		}
+		if (roll.SelectionMode == VigorSelectionMode.Sum)
+		{
+			return $"{(attackerIsAttacking ? "L'attaccante" : "Il difensore")} ha usato l'abilita Guerriero: tira {roll.FirstRoll} e {roll.SecondRoll} e li somma ({roll.SelectedRoll}).";
+		}
+		string actorFamily = CardRulesGlossary.ClassFamilyName(HeroClassFamily.Of(actor.Card.HeroClass));
+		string opponentFamily = CardRulesGlossary.ClassFamilyName(HeroClassFamily.Of(opponent.Card.HeroClass));
+		if (roll.SelectionMode == VigorSelectionMode.Highest)
+		{
+			if (attackerIsAttacking)
+			{
+				return $"L'attaccante e di famiglia {actorFamily}, e forte contro la famiglia {opponentFamily}: si applica vantaggio tirando due dadi ({roll.FirstRoll} e {roll.SecondRoll}) e si conserva il risultato piu alto ({roll.SelectedRoll}).";
+			}
+			return $"Il difensore ha vantaggio in difesa: tira due dadi ({roll.FirstRoll} e {roll.SecondRoll}) e conserva il risultato piu alto ({roll.SelectedRoll}).";
+		}
+		if (roll.SelectionMode == VigorSelectionMode.Lowest)
+		{
+			return $"{(attackerIsAttacking ? "L'attaccante" : "Il difensore")} ha svantaggio perche {opponentFamily} batte {actorFamily}: tira {roll.FirstRoll} e {roll.SecondRoll}, tiene il piu basso ({roll.SelectedRoll}).";
+		}
+		return string.Empty;
+	}
+
+	private IEnumerator WaitForAdventureTutorialStepAcknowledged(int step)
+	{
+		while (adventureScriptedTutorialActive
+			&& adventureScriptedTutorialStep == step
+			&& !adventureScriptedTutorialStepAcknowledged)
+		{
+			yield return null;
+		}
+	}
+
+	private void AcknowledgeAdventureTutorialStep()
+	{
+		adventureScriptedTutorialStepAcknowledged = true;
+		SetAdventureTutorialNextButtonEnabled(enabled: false);
+		MoveAdventureTutorialSpotlight(adventureScriptedTutorialStep == 2 ? null : adventureScriptedTutorialPendingTarget);
 	}
 
 	private RectTransform FirstVisibleDraftCardRect()
@@ -237,6 +544,120 @@ public sealed partial class BattleBoardController
 		return null;
 	}
 
+	private RectTransform FirstSelectableDraftCardRect()
+	{
+		int index = FirstSelectableDraftCardIndex();
+		return index >= 0 ? draftViews[index].RectTransform : FirstVisibleDraftCardRect();
+	}
+
+	private int FirstSelectableDraftCardIndex()
+	{
+		int scriptedIndex = ScriptedTutorialDeploymentCardIndex();
+		if (scriptedIndex >= 0)
+		{
+			return scriptedIndex;
+		}
+		for (int i = 0; i < draftViews.Count; i++)
+		{
+			PrototypeCardView view = draftViews[i];
+			if ((Object)(object)view != (Object)null
+				&& ((Component)view).gameObject.activeInHierarchy
+				&& !selectedDraftCards.Contains(i))
+			{
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	private int ScriptedTutorialDeploymentCardIndex()
+	{
+		string[] orderedIds =
+		{
+			"10-champion-warrior",
+			"7-whitealien-rogue",
+			"8-spirit-mage"
+		};
+		int stepIndex = selectedPlayerDeploymentIndices.Count;
+		if (stepIndex < 0 || stepIndex >= orderedIds.Length)
+		{
+			return -1;
+		}
+		string targetId = orderedIds[stepIndex];
+		for (int i = 0; i < draftCandidates.Count && i < draftViews.Count; i++)
+		{
+			CardDefinition card = draftCandidates[i];
+			if ((Object)(object)card != (Object)null
+				&& !selectedDraftCards.Contains(i)
+				&& string.Equals(card.Id, targetId, StringComparison.OrdinalIgnoreCase)
+				&& (Object)(object)draftViews[i] != (Object)null
+				&& ((Component)draftViews[i]).gameObject.activeInHierarchy)
+			{
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	private void ShowAdventureTutorialDeploymentChoiceSpotlight()
+	{
+		if (!adventureScriptedTutorialActive
+			|| adventureScriptedTutorialStep < 2
+			|| selectedPlayerDeploymentIndices.Count >= configuration.Gameplay.FormationSize)
+		{
+			return;
+		}
+		adventureScriptedTutorialAllowedDraftIndex = FirstSelectableDraftCardIndex();
+		SetAdventureTutorialDraftInteractivityForChoice();
+		MoveAdventureTutorialSpotlight(adventureScriptedTutorialAllowedDraftIndex >= 0 ? draftViews[adventureScriptedTutorialAllowedDraftIndex].RectTransform : null);
+	}
+
+	private bool IsAdventureTutorialDraftCardAllowed(int index)
+	{
+		return !adventureScriptedTutorialActive
+			|| !deploymentDraftActive
+			|| adventureScriptedTutorialAllowedDraftIndex < 0
+			|| index == adventureScriptedTutorialAllowedDraftIndex;
+	}
+
+	private void SetAdventureTutorialDraftInteractivityForChoice()
+	{
+		if (!adventureScriptedTutorialActive || !deploymentDraftActive)
+		{
+			return;
+		}
+		for (int i = 0; i < draftViews.Count; i++)
+		{
+			PrototypeCardView view = draftViews[i];
+			if ((Object)(object)view == (Object)null)
+			{
+				continue;
+			}
+			view.SetDraftSelected(i == pendingDeploymentIndex);
+			view.SetInteractable(i == adventureScriptedTutorialAllowedDraftIndex
+				&& !selectedDraftCards.Contains(i)
+				&& pendingDeploymentIndex < 0);
+		}
+	}
+
+	private void SetAdventureTutorialDraftInteractivityForConfirmation()
+	{
+		if (!adventureScriptedTutorialActive || !deploymentDraftActive)
+		{
+			return;
+		}
+		for (int i = 0; i < draftViews.Count; i++)
+		{
+			PrototypeCardView view = draftViews[i];
+			if ((Object)(object)view == (Object)null)
+			{
+				continue;
+			}
+			view.SetDraftSelected(i == pendingDeploymentIndex);
+			view.SetInteractable(false);
+		}
+	}
+
 	private RectTransform FirstAliveCpuCardRect()
 	{
 		foreach (BattleCardState card in cpuCards)
@@ -247,6 +668,104 @@ public sealed partial class BattleBoardController
 			}
 		}
 		return null;
+	}
+
+	private RectTransform TutorialCpuWarriorTargetRect()
+	{
+		foreach (BattleCardState card in cpuCards)
+		{
+			if (card != null
+				&& !card.Eliminated
+				&& card.Card.HeroClass == HeroClass.Warrior
+				&& (Object)(object)card.View != (Object)null
+				&& ((Component)card.View).gameObject.activeInHierarchy)
+			{
+				return card.View.RectTransform;
+			}
+		}
+		return FirstAliveCpuCardRect();
+	}
+
+	private RectTransform FirstPlayerDeploymentPreviewRect()
+	{
+		foreach (PrototypeCardView view in playerDeploymentPreviewViews)
+		{
+			if ((Object)(object)view != (Object)null && ((Component)view).gameObject.activeInHierarchy)
+			{
+				return view.RectTransform;
+			}
+		}
+		return (Object)(object)playerRow != (Object)null ? playerRow : null;
+	}
+
+	private RectTransform FirstPlayerBattleCardRect()
+	{
+		foreach (BattleCardState card in playerCards)
+		{
+			if (card != null && !card.Eliminated && (Object)(object)card.View != (Object)null)
+			{
+				return card.View.RectTransform;
+			}
+		}
+		return (Object)(object)playerRow != (Object)null ? playerRow : null;
+	}
+
+	private IEnumerator ShowAdventureTutorialInspectionStepAfterBattlefieldMove()
+	{
+		while (playerBattlefieldRowTransitionCoroutine != null)
+		{
+			yield return null;
+		}
+		adventureScriptedTutorialInspectionOpened = false;
+		ShowAdventureScriptedTutorialStep(
+			"Leggi una pedina",
+			"Tocca una pedina schierata per aprire la scheda. Da li puoi leggere potenza, famiglia, classe, abilita e vantaggi.",
+			FirstPlayerBattleCardRect());
+		SetAdventureTutorialNextButtonEnabled(enabled: false);
+		MoveAdventureTutorialSpotlight(FirstPlayerBattleCardRect());
+	}
+
+	private RectTransform ActivePlayerAttackActionRect()
+	{
+		if (selectedPlayerIndex < 0 || selectedPlayerIndex >= playerCards.Count)
+		{
+			return null;
+		}
+		BattleCardState card = playerCards[selectedPlayerIndex];
+		if (card == null || (Object)(object)card.View == (Object)null)
+		{
+			return null;
+		}
+		return card.View.AttackActionRect ?? card.View.RectTransform;
+	}
+
+	private RectTransform ActivePlayerAbilityActionRect()
+	{
+		if (selectedPlayerIndex < 0 || selectedPlayerIndex >= playerCards.Count)
+		{
+			return null;
+		}
+		BattleCardState card = playerCards[selectedPlayerIndex];
+		if (card == null || (Object)(object)card.View == (Object)null)
+		{
+			return null;
+		}
+		return card.View.AbilityActionRect ?? card.View.RectTransform;
+	}
+
+	private bool IsAdventureTutorialWarriorAbilityTurn()
+	{
+		if (!adventureScriptedTutorialActive || selectedPlayerIndex < 0 || selectedPlayerIndex >= playerCards.Count)
+		{
+			return false;
+		}
+		BattleCardState card = playerCards[selectedPlayerIndex];
+		return card != null
+			&& !card.Eliminated
+			&& !card.AbilityUsed
+			&& !card.AbilityArmed
+			&& card.Card.HeroClass == HeroClass.Warrior
+			&& (card.Card.Strength == 10 || string.Equals(card.Card.Id, "10-champion-warrior", StringComparison.OrdinalIgnoreCase));
 	}
 
 	private void EnsureAdventureScriptedTutorialView()
@@ -261,33 +780,57 @@ public sealed partial class BattleBoardController
 		Image panel = CreateImage("Adventure Scripted Tutorial Panel", (Transform)(object)safeAreaRoot, new Color(0.01f, 0.018f, 0.028f, 0.94f));
 		panel.raycastTarget = false;
 		StylePanel(panel);
-		SetRect(panel.rectTransform, new Vector2(0.08f, 0.02f), new Vector2(0.92f, 0.22f));
+		SetAdventureTutorialPanelToMessageDialogRect(panel.rectTransform);
 		adventureScriptedTutorialPanel = ((Component)panel).gameObject;
+		CanvasGroup panelCanvasGroup = adventureScriptedTutorialPanel.AddComponent<CanvasGroup>();
+		panelCanvasGroup.blocksRaycasts = false;
+		panelCanvasGroup.interactable = false;
 
-		adventureScriptedTutorialTitleText = CreateText("Adventure Scripted Tutorial Title", ((Component)panel).transform, font, 22, (FontStyle)1, (TextAnchor)3);
+		adventureScriptedTutorialTitleText = CreateText("Adventure Scripted Tutorial Title", ((Component)panel).transform, AccardND.Battlefield.MmoUiTheme.LoreFont, 26, FontStyle.Normal, (TextAnchor)3);
+		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(adventureScriptedTutorialTitleText);
 		adventureScriptedTutorialTitleText.color = new Color(0.95f, 0.79f, 0.34f);
 		adventureScriptedTutorialTitleText.raycastTarget = false;
-		SetRect(adventureScriptedTutorialTitleText.rectTransform, new Vector2(0.04f, 0.58f), new Vector2(0.72f, 0.9f));
+		SetRect(adventureScriptedTutorialTitleText.rectTransform, new Vector2(0.04f, 0.68f), new Vector2(0.68f, 0.92f));
 
-		adventureScriptedTutorialStepText = CreateText("Adventure Scripted Tutorial Counter", ((Component)panel).transform, font, 16, (FontStyle)1, (TextAnchor)5);
+		adventureScriptedTutorialStepText = CreateText("Adventure Scripted Tutorial Counter", ((Component)panel).transform, font, 18, (FontStyle)1, (TextAnchor)5);
 		adventureScriptedTutorialStepText.color = new Color(0.64f, 0.78f, 0.86f);
 		adventureScriptedTutorialStepText.raycastTarget = false;
-		SetRect(adventureScriptedTutorialStepText.rectTransform, new Vector2(0.73f, 0.58f), new Vector2(0.96f, 0.9f));
+		SetRect(adventureScriptedTutorialStepText.rectTransform, new Vector2(0.7f, 0.68f), new Vector2(0.96f, 0.92f));
 
-		adventureScriptedTutorialBodyText = CreateText("Adventure Scripted Tutorial Body", ((Component)panel).transform, font, 18, (FontStyle)0, (TextAnchor)3);
+		adventureScriptedTutorialBodyText = CreateText("Adventure Scripted Tutorial Body", ((Component)panel).transform, font, 26, (FontStyle)1, TextAnchor.UpperLeft);
 		adventureScriptedTutorialBodyText.color = new Color(0.88f, 0.92f, 0.96f);
 		adventureScriptedTutorialBodyText.horizontalOverflow = HorizontalWrapMode.Wrap;
 		adventureScriptedTutorialBodyText.verticalOverflow = VerticalWrapMode.Truncate;
 		adventureScriptedTutorialBodyText.resizeTextForBestFit = true;
-		adventureScriptedTutorialBodyText.resizeTextMinSize = 12;
-		adventureScriptedTutorialBodyText.resizeTextMaxSize = 18;
+		adventureScriptedTutorialBodyText.resizeTextMinSize = 18;
+		adventureScriptedTutorialBodyText.resizeTextMaxSize = 26;
 		adventureScriptedTutorialBodyText.raycastTarget = false;
-		SetRect(adventureScriptedTutorialBodyText.rectTransform, new Vector2(0.04f, 0.1f), new Vector2(0.96f, 0.58f));
+		SetRect(adventureScriptedTutorialBodyText.rectTransform, new Vector2(0.04f, 0.22f), new Vector2(0.96f, 0.66f));
+
+		adventureScriptedTutorialNextButton = CreateButton("Adventure Scripted Tutorial Next", ((Component)panel).transform, font, "CONTINUA");
+		AccardND.Battlefield.MmoUiTheme.ApplyConfirmButtonStyle(adventureScriptedTutorialNextButton);
+		CanvasGroup nextButtonCanvasGroup = ((Component)adventureScriptedTutorialNextButton).gameObject.AddComponent<CanvasGroup>();
+		nextButtonCanvasGroup.blocksRaycasts = true;
+		nextButtonCanvasGroup.interactable = true;
+		nextButtonCanvasGroup.ignoreParentGroups = true;
+		((UnityEvent)adventureScriptedTutorialNextButton.onClick).AddListener((UnityAction)delegate
+		{
+			PlayGenericButtonClickSfx();
+			if (CompleteAdventureTutorialBodyText())
+			{
+				return;
+			}
+			NotifyAdventureTutorial(AdventureTutorialAction.NextPressed);
+		});
+		SetRect((RectTransform)((Component)adventureScriptedTutorialNextButton).transform, new Vector2(0.66f, 0.05f), new Vector2(0.96f, 0.19f));
 
 		adventureScriptedTutorialSpotlight = CreateImage("Adventure Scripted Tutorial Spotlight", (Transform)(object)safeAreaRoot, Color.white);
 		adventureScriptedTutorialSpotlight.sprite = GetHelpAuraSprite();
 		adventureScriptedTutorialSpotlight.preserveAspect = false;
 		adventureScriptedTutorialSpotlight.raycastTarget = false;
+		CanvasGroup spotlightCanvasGroup = ((Component)adventureScriptedTutorialSpotlight).gameObject.AddComponent<CanvasGroup>();
+		spotlightCanvasGroup.blocksRaycasts = false;
+		spotlightCanvasGroup.interactable = false;
 		((Component)adventureScriptedTutorialSpotlight).gameObject.SetActive(false);
 		adventureScriptedTutorialPanel.SetActive(false);
 	}
@@ -302,6 +845,9 @@ public sealed partial class BattleBoardController
 		{
 			Image dimmer = CreateImage("Adventure Tutorial Dimmer " + index, (Transform)(object)safeAreaRoot, new Color(0f, 0f, 0f, 0.62f));
 			dimmer.raycastTarget = false;
+			CanvasGroup dimmerCanvasGroup = ((Component)dimmer).gameObject.AddComponent<CanvasGroup>();
+			dimmerCanvasGroup.blocksRaycasts = false;
+			dimmerCanvasGroup.interactable = false;
 			((Component)dimmer).gameObject.SetActive(false);
 			adventureScriptedTutorialDimmers.Add(dimmer);
 		}
@@ -312,11 +858,107 @@ public sealed partial class BattleBoardController
 		EnsureAdventureScriptedTutorialView();
 		adventureScriptedTutorialPanel.SetActive(true);
 		adventureScriptedTutorialPanel.transform.SetAsLastSibling();
+		SetMessagePanelVisibleDuringAdventureTutorial(visible: false);
+		adventureScriptedTutorialStepAcknowledged = false;
+		adventureScriptedTutorialPendingTarget = target;
 		adventureScriptedTutorialTitleText.text = title;
-		adventureScriptedTutorialBodyText.text = body;
-		adventureScriptedTutorialStepText.text = $"PASSO {adventureScriptedTutorialStep + 1}/8";
-		PlaceAdventureTutorialPanel(target);
-		MoveAdventureTutorialSpotlight(target);
+		StartAdventureTutorialBodyText(body);
+		adventureScriptedTutorialStepText.text = $"PASSO {Mathf.Min(adventureScriptedTutorialStep + 1, 8)}/8";
+		SetAdventureTutorialTimelineVisible(adventureScriptedTutorialStep >= 2);
+		SetAdventureTutorialNextButtonEnabled(adventureScriptedTutorialStep != 3);
+		PlaceAdventureTutorialPanel(null);
+		MoveAdventureTutorialSpotlight(null);
+	}
+
+	private void SetAdventureTutorialNextButtonEnabled(bool enabled)
+	{
+		if ((Object)(object)adventureScriptedTutorialNextButton == (Object)null)
+		{
+			return;
+		}
+		GameObject buttonObject = ((Component)adventureScriptedTutorialNextButton).gameObject;
+		buttonObject.SetActive(true);
+		adventureScriptedTutorialNextButton.interactable = enabled;
+		CanvasGroup canvasGroup = buttonObject.GetComponent<CanvasGroup>();
+		if ((Object)(object)canvasGroup != (Object)null)
+		{
+			canvasGroup.alpha = enabled ? 1f : 0.38f;
+		}
+	}
+
+	private void StartAdventureTutorialBodyText(string body)
+	{
+		adventureScriptedTutorialBodyFullText = body ?? string.Empty;
+		if (adventureScriptedTutorialTextRoutine != null)
+		{
+			((MonoBehaviour)this).StopCoroutine(adventureScriptedTutorialTextRoutine);
+			adventureScriptedTutorialTextRoutine = null;
+		}
+		if ((Object)(object)adventureScriptedTutorialBodyText == (Object)null)
+		{
+			return;
+		}
+		adventureScriptedTutorialBodyText.text = string.Empty;
+		adventureScriptedTutorialTextRoutine = ((MonoBehaviour)this).StartCoroutine(PlayAdventureTutorialBodyText(adventureScriptedTutorialBodyFullText));
+	}
+
+	private IEnumerator PlayAdventureTutorialBodyText(string body)
+	{
+		for (int index = 0; index < body.Length; index++)
+		{
+			if ((Object)(object)adventureScriptedTutorialBodyText == (Object)null)
+			{
+				adventureScriptedTutorialTextRoutine = null;
+				yield break;
+			}
+			adventureScriptedTutorialBodyText.text = body.Substring(0, index + 1);
+			yield return new WaitForSecondsRealtime(GetAdventureTutorialTextDelay(body[index]));
+		}
+		adventureScriptedTutorialTextRoutine = null;
+	}
+
+	private float GetAdventureTutorialTextDelay(char character)
+	{
+		if (character == '.' || character == '!' || character == '?')
+		{
+			return 0.16f;
+		}
+		if (character == ',' || character == ':' || character == ';')
+		{
+			return 0.09f;
+		}
+		if (char.IsWhiteSpace(character))
+		{
+			return 0.012f;
+		}
+		return 0.028f;
+	}
+
+	private bool CompleteAdventureTutorialBodyText()
+	{
+		if (adventureScriptedTutorialTextRoutine == null)
+		{
+			return false;
+		}
+		((MonoBehaviour)this).StopCoroutine(adventureScriptedTutorialTextRoutine);
+		adventureScriptedTutorialTextRoutine = null;
+		if ((Object)(object)adventureScriptedTutorialBodyText != (Object)null)
+		{
+			adventureScriptedTutorialBodyText.text = adventureScriptedTutorialBodyFullText;
+		}
+		return true;
+	}
+
+	private void SetAdventureTutorialTimelineVisible(bool visible)
+	{
+		if ((Object)(object)timelineBackgroundRect != (Object)null)
+		{
+			((Component)timelineBackgroundRect).gameObject.SetActive(visible);
+		}
+		if ((Object)(object)initiativeTimelineRoot != (Object)null)
+		{
+			((Component)initiativeTimelineRoot).gameObject.SetActive(visible);
+		}
 	}
 
 	private void PlaceAdventureTutorialPanel(RectTransform target)
@@ -328,7 +970,7 @@ public sealed partial class BattleBoardController
 		RectTransform panelRect = (RectTransform)adventureScriptedTutorialPanel.transform;
 		if ((Object)(object)target == (Object)null)
 		{
-			SetRect(panelRect, new Vector2(0.08f, 0.02f), new Vector2(0.92f, 0.22f));
+			SetAdventureTutorialPanelToMessageDialogRect(panelRect);
 			return;
 		}
 		Vector3[] corners = new Vector3[4];
@@ -338,12 +980,21 @@ public sealed partial class BattleBoardController
 		float normalizedY = Mathf.InverseLerp(safeAreaRoot.rect.yMin, safeAreaRoot.rect.yMax, localCenter.y);
 		if (normalizedY < 0.42f)
 		{
-			SetRect(panelRect, new Vector2(0.08f, 0.48f), new Vector2(0.92f, 0.68f));
+			SetRect(panelRect, new Vector2(0.08f, 0.48f), new Vector2(0.92f, 0.74f));
 		}
 		else
 		{
-			SetRect(panelRect, new Vector2(0.08f, 0.02f), new Vector2(0.92f, 0.22f));
+			SetRect(panelRect, new Vector2(0.08f, 0.02f), new Vector2(0.92f, 0.28f));
 		}
+	}
+
+	private void SetAdventureTutorialPanelToMessageDialogRect(RectTransform panelRect)
+	{
+		if ((Object)(object)panelRect == (Object)null)
+		{
+			return;
+		}
+		SetRect(panelRect, new Vector2(0.08f, 0.39f), new Vector2(0.82f, 0.61f));
 	}
 
 	private void MoveAdventureTutorialSpotlight(RectTransform target)
@@ -356,12 +1007,14 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)target == (Object)null || !((Component)target).gameObject.activeInHierarchy)
 		{
 			spotlightObject.SetActive(false);
+			adventureScriptedTutorialSpotlight.rectTransform.rotation = Quaternion.identity;
 			SetAdventureTutorialDimmers(null);
 			return;
 		}
 		spotlightObject.SetActive(true);
 		RectTransform spotlightRect = adventureScriptedTutorialSpotlight.rectTransform;
 		spotlightRect.SetAsLastSibling();
+		spotlightRect.rotation = ShouldRotateAdventureTutorialSpotlightWithTarget(target) ? target.rotation : Quaternion.identity;
 		Vector3[] corners = new Vector3[4];
 		target.GetWorldCorners(corners);
 		Vector3 center = (corners[0] + corners[2]) * 0.5f;
@@ -369,8 +1022,24 @@ public sealed partial class BattleBoardController
 		float width = Vector3.Distance(corners[0], corners[3]) * 1.18f;
 		float height = Vector3.Distance(corners[0], corners[1]) * 1.18f;
 		spotlightRect.sizeDelta = new Vector2(width, height);
-		SetAdventureTutorialDimmers(new Rect(center.x - width * 0.5f, center.y - height * 0.5f, width, height));
+		SetAdventureTutorialDimmers(null);
 		adventureScriptedTutorialPanel.transform.SetAsLastSibling();
+	}
+
+	private bool ShouldRotateAdventureTutorialSpotlightWithTarget(RectTransform target)
+	{
+		if ((Object)(object)target == (Object)null)
+		{
+			return false;
+		}
+		foreach (PrototypeCardView view in draftViews)
+		{
+			if ((Object)(object)view != (Object)null && (Object)(object)view.RectTransform == (Object)(object)target)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void SetAdventureTutorialDimmers(Rect? worldHole)
@@ -427,6 +1096,17 @@ public sealed partial class BattleBoardController
 	private void EndAdventureScriptedTutorial(bool complete)
 	{
 		adventureScriptedTutorialActive = false;
+		adventureScriptedTutorialAllowedDraftIndex = -1;
+		adventureScriptedTutorialInspectionOpened = false;
+		adventureScriptedTutorialAwaitingAdvantageContinue = false;
+		adventureScriptedTutorialObjectiveShown = false;
+		if (adventureScriptedTutorialTextRoutine != null)
+		{
+			((MonoBehaviour)this).StopCoroutine(adventureScriptedTutorialTextRoutine);
+			adventureScriptedTutorialTextRoutine = null;
+		}
+		SetAdventureTutorialTimelineVisible(visible: true);
+		SetMessagePanelVisibleDuringAdventureTutorial(visible: true);
 		if ((Object)(object)adventureScriptedTutorialPanel != (Object)null)
 		{
 			adventureScriptedTutorialPanel.SetActive(false);
@@ -439,6 +1119,16 @@ public sealed partial class BattleBoardController
 		if (complete)
 		{
 			ConfirmStartTutorialAdventureStage();
+			ReturnToStart(showModeSelection: false);
+			ShowAdventureChapterSelection();
+		}
+	}
+
+	private void SetMessagePanelVisibleDuringAdventureTutorial(bool visible)
+	{
+		if ((Object)(object)messagePanelRect != (Object)null)
+		{
+			((Component)messagePanelRect).gameObject.SetActive(visible && !adventureScriptedTutorialActive);
 		}
 	}
 }

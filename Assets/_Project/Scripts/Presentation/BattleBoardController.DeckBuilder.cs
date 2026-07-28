@@ -17,13 +17,21 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	private static readonly HeroClass[] StarterHeroClasses =
+	{
+		HeroClass.Mage,
+		HeroClass.Warrior,
+		HeroClass.Rogue
+	};
+
 	private void BeginInitialDeckBuilding()
 	{
-		initialDeckBuilder = new InitialDeckBuilder(cardDatabase.Cards, random, configuration.DeckBuilding.ToRules());
+		EnsureSelectedDeckBuilderClassIsUnlocked();
+		initialDeckBuilder = new InitialDeckBuilder(GetUnlockedCombatCards(), random, configuration.DeckBuilding.ToRules());
 		deckBuilderPanel.SetActive(true);
 		HideDeckBuilderToast();
 		RefreshDeckBuilderView();
-		AppendLog($"COSTRUZIONE MAZZO - {configuration.DeckBuilding.StartingEssence} Essenze, " + $"obiettivo {configuration.DeckBuilding.DeckSize} carte.");
+		AppendLog($"COSTRUZIONE MAZZO - scegli campione, vice campione e completa {configuration.DeckBuilding.DeckSize} carte.");
 	}
 
 	private void BuyInitialDeckCard(DeckPurchaseMode mode)
@@ -32,8 +40,8 @@ public sealed partial class BattleBoardController
 		{
 			if (WouldSpendReservedDeckEssence(mode, out int minimumEssenceNeeded))
 			{
-				ShowDeckBuilderToast($"Non puoi spendere queste essenze: te ne servono ancora {minimumEssenceNeeded} per completare le {configuration.DeckBuilding.DeckSize} carte.");
-				AppendLog("ACQUISTO MAZZO RIFIUTATO - essenze da conservare per completare il mazzo.");
+				ShowDeckBuilderToast($"Completa il mazzo scegliendo ancora {configuration.DeckBuilding.DeckSize - initialDeckBuilder.Deck.Count} carte.");
+				AppendLog("DRAFT MAZZO RIFIUTATO - scelta non valida per completare il mazzo.");
 				return;
 			}
 			CardDefinition purchased;
@@ -46,7 +54,7 @@ public sealed partial class BattleBoardController
 			};
 			if (!bought)
 			{
-				AppendLog("ACQUISTO MAZZO RIFIUTATO - offerta non disponibile o Essenze da preservare.");
+				AppendLog("DRAFT MAZZO RIFIUTATO - carta non disponibile.");
 			}
 			else
 			{
@@ -55,6 +63,42 @@ public sealed partial class BattleBoardController
 			}
 			RefreshDeckBuilderView();
 		}
+	}
+
+	private void BuyInitialDeckClass(HeroClass heroClass)
+	{
+		if (!IsHeroClassUnlockedForCampaign(heroClass))
+		{
+			ShowDeckBuilderToast("Classe bloccata: sbloccala con la progressione Avventura.");
+			return;
+		}
+		deckBuilderSelectedClass = heroClass;
+		BuyInitialDeckClassDraft(heroClass);
+	}
+
+	private void BuyInitialDeckClassDraft(HeroClass heroClass)
+	{
+		if (initialDeckBuilder == null || initialDeckBuilder.CanStartCampaign)
+			return;
+
+		int currentCount = initialDeckBuilder.Deck.Count;
+		CardDefinition purchased;
+		bool bought = currentCount switch
+		{
+			0 => initialDeckBuilder.TryDraftExact(heroClass, 10, out purchased),
+			1 => initialDeckBuilder.TryDraftExact(heroClass, 9, out purchased),
+			_ => initialDeckBuilder.TryDraftClass(heroClass, out purchased)
+		};
+		if (!bought)
+		{
+			ShowDeckBuilderToast("Carta non disponibile per questa classe.");
+			AppendLog("DRAFT MAZZO RIFIUTATO - carta non disponibile.");
+			return;
+		}
+
+		PlayBuyCardSfx();
+		HideDeckBuilderToast();
+		RefreshDeckBuilderView();
 	}
 
 	private bool WouldSpendReservedDeckEssence(DeckPurchaseMode mode, out int minimumEssenceNeeded)
@@ -119,13 +163,7 @@ public sealed partial class BattleBoardController
 
 	private void CycleDeckBuilderClass(int direction)
 	{
-		int length = Enum.GetValues(typeof(HeroClass)).Length;
-		int next = ((int)deckBuilderSelectedClass + direction) % length;
-		if (next < 0)
-		{
-			next += length;
-		}
-		deckBuilderSelectedClass = (HeroClass)next;
+		deckBuilderSelectedClass = NextUnlockedHeroClass(deckBuilderSelectedClass, direction);
 		PlayArrowChangeSfx();
 		RefreshDeckBuilderView();
 	}
@@ -155,9 +193,10 @@ public sealed partial class BattleBoardController
 	{
 		if (initialDeckBuilder != null)
 		{
+			EnsureSelectedDeckBuilderClassIsUnlocked();
 			RefreshDeckBuilderLayout();
 			DeckBuildingConfiguration deckBuilding = configuration.DeckBuilding;
-			deckBuilderStatusText.text = $"ESSENZE {initialDeckBuilder.EssenceRemaining}  -  " + $"MAZZO {initialDeckBuilder.Deck.Count}/{deckBuilding.DeckSize}";
+			deckBuilderStatusText.text = DeckBuilderPromptText(initialDeckBuilder.Deck.Count, deckBuilding.DeckSize);
 			int num = deckBuilding.ChosenStrengthBaseCost + deckBuilderSelectedStrength;
 			if ((Object)(object)deckBuilderRandomBuyText != (Object)null)
 			{
@@ -175,6 +214,7 @@ public sealed partial class BattleBoardController
 			{
 				deckBuilderClassBuyText.text = deckBuilding.ChosenClassCost.ToString();
 			}
+			RefreshDeckBuilderClassOptions();
 			if ((Object)(object)deckBuilderStrengthImage != (Object)null)
 			{
 				deckBuilderStrengthImage.sprite = LoadSpriteResource(DeckBuilderStrengthResourcePath(deckBuilderSelectedStrength));
@@ -185,11 +225,17 @@ public sealed partial class BattleBoardController
 			}
 			RefreshDeckBuilderCardPreviews();
 			startCampaignButton.interactable = initialDeckBuilder.CanStartCampaign;
-			if ((Object)(object)startCampaignHelpAura != (Object)null)
-			{
-				((Component)startCampaignHelpAura).gameObject.SetActive(initialDeckBuilder.CanStartCampaign);
-			}
+			((Component)startCampaignButton).gameObject.SetActive(initialDeckBuilder.CanStartCampaign);
 		}
+	}
+
+	private static string DeckBuilderPromptText(int deckCount, int deckSize)
+	{
+		if (deckCount <= 0)
+			return "SCEGLI IL TUO CAMPIONE";
+		if (deckCount == 1)
+			return "SCEGLI IL VICE CAMPIONE";
+		return $"ORA COMPLETA IL MAZZO {deckCount}/{deckSize}";
 	}
 
 	private void RefreshDeckBuilderLayout()
@@ -203,11 +249,20 @@ public sealed partial class BattleBoardController
 		float aspect = width / height;
 		bool compact = IsCompactLayout(aspect, configuration.ResponsiveLayout);
 		bool wide = !compact && aspect >= 1.65f;
-		RefreshResponsiveDeckBuilderFrame(deckBuilderFrameImage, deckBuilderFrameAspectFitter, compact);
+		RefreshScreenOuterFrame(deckBuilderFrameImage, deckBuilderFrameAspectFitter);
+		SetRect(
+			deckBuilderFrameImage.rectTransform,
+			new Vector2(0.008f, 0.008f),
+			new Vector2(0.992f, compact ? 0.872f : 0.862f));
+		SetRect(
+			deckBuilderInnerBackgroundImage.rectTransform,
+			new Vector2(0.008f, 0.008f),
+			new Vector2(0.992f, compact ? 0.872f : 0.862f));
 
-		SetRect(deckBuilderHeadingText.rectTransform,
-			compact ? new Vector2(0.08f, 0.862f) : new Vector2(0.12f, 0.852f),
-			compact ? new Vector2(0.92f, 0.94f) : new Vector2(0.88f, 0.938f));
+		SetRect(
+			deckBuilderTitlePanel.rectTransform,
+			compact ? new Vector2(0.08f, 0.852f) : new Vector2(0.16f, 0.842f),
+			compact ? new Vector2(0.92f, 0.952f) : new Vector2(0.84f, 0.952f));
 		deckBuilderHeadingText.fontSize = compact ? 46 : 42;
 		deckBuilderHeadingText.resizeTextMaxSize = deckBuilderHeadingText.fontSize;
 		deckBuilderHeadingText.resizeTextMinSize = compact ?34 : 30;
@@ -230,17 +285,42 @@ public sealed partial class BattleBoardController
 		deckBuilderCardsText.resizeTextMaxSize = deckBuilderCardsText.fontSize;
 		deckBuilderCardsText.resizeTextMinSize = compact ?22 : 17;
 
-		Vector2 buttonSize = compact ? new Vector2(0.26f, 0.118f) : new Vector2(wide ? 0.18f : 0.22f, 0.14f);
-		float buttonYMin = compact ? 0.245f : 0.255f;
+		SetRect(deckBuilderClassGridRoot,
+			compact ? new Vector2(0.07f, 0.155f) : new Vector2(wide ? 0.28f : 0.22f, 0.125f),
+			compact ? new Vector2(0.93f, 0.425f) : new Vector2(wide ? 0.72f : 0.78f, 0.405f));
+		ResizeDeckBuilderClassGrid(compact);
+
+		Vector2 buttonSize = compact ? new Vector2(0.26f, 0.105f) : new Vector2(wide ? 0.18f : 0.22f, 0.12f);
+		float buttonYMin = compact ? 0.065f : 0.065f;
 		float buttonYMax = buttonYMin + buttonSize.y;
 		float leftCenter = compact ? 0.18f : 0.23f;
-		float middleCenter = 0.5f;
 		float rightCenter = compact ? 0.82f : 0.77f;
 		PlaceDeckBuilderChoice(deckBuilderRandomButtonRect, deckBuilderRandomBuyText, leftCenter, buttonSize.x, buttonYMin, buttonYMax, compact);
-		PlaceDeckBuilderChoice(deckBuilderClassButtonRect, deckBuilderClassBuyText, middleCenter, buttonSize.x, buttonYMin, buttonYMax, compact);
+		if ((Object)(object)deckBuilderRandomButtonRect != (Object)null)
+		{
+			((Component)deckBuilderRandomButtonRect).gameObject.SetActive(false);
+		}
+		if ((Object)(object)deckBuilderRandomBuyText != (Object)null)
+		{
+			((Component)deckBuilderRandomBuyText).gameObject.SetActive(false);
+		}
+		if ((Object)(object)deckBuilderClassButtonRect != (Object)null)
+		{
+			((Component)deckBuilderClassButtonRect).gameObject.SetActive(false);
+		}
+		if ((Object)(object)deckBuilderClassBuyText != (Object)null)
+		{
+			SetRect(deckBuilderClassBuyText.rectTransform, compact ?new Vector2(0.43f, 0.145f) : new Vector2(0.46f, 0.145f), compact ?new Vector2(0.57f, 0.195f) : new Vector2(0.54f, 0.195f));
+		}
 		PlaceDeckBuilderChoice(deckBuilderStrengthButtonRect, deckBuilderStrengthBuyText, rightCenter, buttonSize.x, buttonYMin, buttonYMax, compact);
-		float classMinX = middleCenter - buttonSize.x * 0.5f;
-		float classMaxX = middleCenter + buttonSize.x * 0.5f;
+		if ((Object)(object)deckBuilderStrengthButtonRect != (Object)null)
+		{
+			((Component)deckBuilderStrengthButtonRect).gameObject.SetActive(false);
+		}
+		if ((Object)(object)deckBuilderStrengthBuyText != (Object)null)
+		{
+			((Component)deckBuilderStrengthBuyText).gameObject.SetActive(false);
+		}
 		float strengthMinX = rightCenter - buttonSize.x * 0.5f;
 		float strengthMaxX = rightCenter + buttonSize.x * 0.5f;
 		if ((Object)(object)deckBuilderClassText != (Object)null)
@@ -254,20 +334,31 @@ public sealed partial class BattleBoardController
 		float arrowHeight = compact ? 0.093f : 0.0975f;
 		float arrowYMin = Mathf.Max(0.02f, buttonYMin - (compact ? 0.074f : 0.08f));
 		float arrowYMax = arrowYMin + arrowHeight;
-		PlaceDeckBuilderArrowInside(deckBuilderClassPreviousButtonRect, classMinX, classMaxX, false, arrowWidth, arrowYMin, arrowYMax);
-		PlaceDeckBuilderArrowInside(deckBuilderClassNextButtonRect, classMinX, classMaxX, true, arrowWidth, arrowYMin, arrowYMax);
+		if ((Object)(object)deckBuilderClassPreviousButtonRect != (Object)null)
+		{
+			((Component)deckBuilderClassPreviousButtonRect).gameObject.SetActive(false);
+		}
+		if ((Object)(object)deckBuilderClassNextButtonRect != (Object)null)
+		{
+			((Component)deckBuilderClassNextButtonRect).gameObject.SetActive(false);
+		}
 		PlaceDeckBuilderArrowInside(deckBuilderStrengthPreviousButtonRect, strengthMinX, strengthMaxX, false, arrowWidth, arrowYMin, arrowYMax);
 		PlaceDeckBuilderArrowInside(deckBuilderStrengthNextButtonRect, strengthMinX, strengthMaxX, true, arrowWidth, arrowYMin, arrowYMax);
+		if ((Object)(object)deckBuilderStrengthPreviousButtonRect != (Object)null)
+		{
+			((Component)deckBuilderStrengthPreviousButtonRect).gameObject.SetActive(false);
+		}
+		if ((Object)(object)deckBuilderStrengthNextButtonRect != (Object)null)
+		{
+			((Component)deckBuilderStrengthNextButtonRect).gameObject.SetActive(false);
+		}
 
 		SetRect(deckBuilderToastRect,
 			compact ? new Vector2(0.08f, 0.34f) : new Vector2(0.19f, 0.35f),
 			compact ? new Vector2(0.92f, 0.45f) : new Vector2(0.81f, 0.45f));
-		SetRect(startCampaignHelpAuraRect,
-			compact ? new Vector2(0.36f, 0.065f) : new Vector2(0.385f, 0.075f),
-			compact ? new Vector2(0.64f, 0.19f) : new Vector2(0.615f, 0.205f));
 		SetRect(startCampaignButtonRect,
-			compact ? new Vector2(0.39f, 0.075f) : new Vector2(0.415f, 0.085f),
-			compact ? new Vector2(0.61f, 0.175f) : new Vector2(0.585f, 0.19f));
+			compact ? new Vector2(0.31f, 0.045f) : new Vector2(0.37f, 0.045f),
+			compact ? new Vector2(0.69f, 0.135f) : new Vector2(0.63f, 0.14f));
 	}
 
 	private static void PlaceDeckBuilderChoice(RectTransform button, Text costText, float centerX, float width, float yMin, float yMax, bool compact)
@@ -300,6 +391,27 @@ public sealed partial class BattleBoardController
 		SetRect(button, new Vector2(minX, yMin), new Vector2(minX + width, yMax));
 	}
 
+	private void ResizeDeckBuilderClassGrid(bool compact)
+	{
+		if ((Object)(object)deckBuilderClassGridRoot == (Object)null)
+			return;
+
+		Canvas.ForceUpdateCanvases();
+		GridLayoutGroup component = ((Component)deckBuilderClassGridRoot).GetComponent<GridLayoutGroup>();
+		if ((Object)(object)component == (Object)null)
+			return;
+
+		const int columns = 3;
+		const int rows = 3;
+		Rect rect = deckBuilderClassGridRoot.rect;
+		float spacing = compact ? 8f : 10f;
+		component.spacing = new Vector2(spacing, spacing);
+		float availableWidth = Mathf.Max(1f, rect.width - spacing * (columns - 1));
+		float availableHeight = Mathf.Max(1f, rect.height - spacing * (rows - 1));
+		float size = Mathf.Min(availableWidth / columns, availableHeight / rows);
+		component.cellSize = new Vector2(size, size);
+	}
+
 	private static string DeckBuilderStrengthResourcePath(int strength)
 	{
 		int num = Mathf.Clamp(strength, 2, 10);
@@ -321,10 +433,10 @@ public sealed partial class BattleBoardController
 		ResizeDeckBuilderCardGrid();
 		bool flag = initialDeckBuilder.Deck.Count > 0;
 		((Component)deckBuilderCardsText).gameObject.SetActive(!flag);
-		deckBuilderCardsText.text = (flag ?string.Empty : "Il tuo mazzo e' vuoto. Spendi le essenze per una carta casuale, oppure scegli classe o valore e lascia al caso il resto.");
+		deckBuilderCardsText.text = (flag ?string.Empty : "Scegli una classe: la prima carta sara' il tuo campione di valore 10.");
 		if (!flag)
 		{
-			deckBuilderCardsText.text = "Il tuo mazzo e vuoto. Decidi come spendere le essenze: carta casuale, classe scelta con valore casuale, o valore scelto con classe casuale.";
+			deckBuilderCardsText.text = "Scegli una classe: la prima carta sara' il tuo campione di valore 10.";
 		}
 		foreach (CardDefinition card in initialDeckBuilder.Deck)
 		{
@@ -361,7 +473,7 @@ public sealed partial class BattleBoardController
 		if (initialDeckBuilder != null && initialDeckBuilder.CanStartCampaign)
 		{
 			campaignDeck = new CampaignDeckState(initialDeckBuilder.Deck);
-			GrantStartingCampaignConsumablesForTesting();
+			LoadCampaignConsumablesFromBag();
 			initialDeckBuilder = null;
 			ResetScenarioRuleState();
 			deckBuilderPanel.SetActive(false);
@@ -370,6 +482,25 @@ public sealed partial class BattleBoardController
 			AppendLog($"CAMPAGNA AVVIATA - {campaignDeck.Cards.Count} carte nel mazzo.");
 			PlayTransitionSfx();
 			BeginRoomChoice();
+		}
+	}
+
+	private void RefreshDeckBuilderClassOptions()
+	{
+		for (int index = 0; index < deckBuilderClassOptionClasses.Count; index++)
+		{
+			HeroClass heroClass = deckBuilderClassOptionClasses[index];
+			bool unlocked = IsHeroClassUnlockedForCampaign(heroClass);
+			if (index < deckBuilderClassOptionButtons.Count && (Object)(object)deckBuilderClassOptionButtons[index] != (Object)null)
+			{
+				deckBuilderClassOptionButtons[index].interactable = unlocked;
+			}
+			if (index < deckBuilderClassOptionImages.Count && (Object)(object)deckBuilderClassOptionImages[index] != (Object)null)
+			{
+				Image image = deckBuilderClassOptionImages[index];
+				image.sprite = GetClassIconSprite(heroClass, grayscale: !unlocked);
+				image.color = unlocked ? Color.white : new Color(1f, 1f, 1f, 0.42f);
+			}
 		}
 	}
 
@@ -388,6 +519,62 @@ public sealed partial class BattleBoardController
 			progression.MaximumLevel,
 			progression.RoomsPerMasterLevel,
 			progression.BuildVigorDiceByLevel(startingVigorDieSides));
+	}
+
+	private List<CardDefinition> GetUnlockedCombatCards()
+	{
+		return cardDatabase.Cards
+			.Where(card => card != null
+				&& (!card.HasHeroClass || IsHeroClassUnlockedForCampaign(card.HeroClass)))
+			.ToList();
+	}
+
+	private void EnsureSelectedDeckBuilderClassIsUnlocked()
+	{
+		if (!IsHeroClassUnlockedForCampaign(deckBuilderSelectedClass))
+		{
+			deckBuilderSelectedClass = FirstUnlockedHeroClass();
+		}
+	}
+
+	private HeroClass FirstUnlockedHeroClass()
+	{
+		foreach (HeroClass heroClass in Enum.GetValues(typeof(HeroClass)))
+		{
+			if (IsHeroClassUnlockedForCampaign(heroClass))
+				return heroClass;
+		}
+		return HeroClass.Warrior;
+	}
+
+	private HeroClass NextUnlockedHeroClass(HeroClass current, int direction)
+	{
+		Array values = Enum.GetValues(typeof(HeroClass));
+		int currentIndex = Math.Max(0, Array.IndexOf(values, current));
+		int step = direction >= 0 ? 1 : -1;
+		for (int offset = 1; offset <= values.Length; offset++)
+		{
+			int nextIndex = (currentIndex + step * offset) % values.Length;
+			if (nextIndex < 0)
+				nextIndex += values.Length;
+			HeroClass candidate = (HeroClass)values.GetValue(nextIndex);
+			if (IsHeroClassUnlockedForCampaign(candidate))
+				return candidate;
+		}
+		return current;
+	}
+
+	private bool IsHeroClassUnlockedForCampaign(HeroClass heroClass)
+	{
+		if (Array.IndexOf(StarterHeroClasses, heroClass) >= 0 && singlePlayerProgressService.TutorialCompleted)
+			return true;
+
+		return singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Class, HeroClassUnlockId(heroClass));
+	}
+
+	private static string HeroClassUnlockId(HeroClass heroClass)
+	{
+		return heroClass.ToString().ToLowerInvariant();
 	}
 }
 }

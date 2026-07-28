@@ -42,12 +42,12 @@ public sealed class MatchSession
         identities = new[] { room.Host.Identity, room.Guest.Identity };
         roomCode = room.Code;
         ranked = room.Ranked;
-        turnTimerSeconds = config.TurnTimerSeconds;
+        turnTimerSeconds = config.ResolveTurnTimerSeconds(room.Mode);
         forfeitAfterTimeouts = config.ForfeitAfterConsecutiveTimeouts;
         engine = new PvpMatchEngine(
             ToCombatCards(room.HostLoadout),
             ToCombatCards(room.GuestLoadout),
-            config.ToMatchRules(),
+            config.ToMatchRules(room.Mode),
             new SeededRandomSource(RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue)));
     }
 

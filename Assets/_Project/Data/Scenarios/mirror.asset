@@ -18,4 +18,4 @@ MonoBehaviour:
   backgroundLandscape: {fileID: 21300000, guid: 1daec7c0faf1da14b88892e854176068, type: 3}
   roomType: 2
   difficulty: 0
-  bossId: 
+  bossId: boss-medusa

@@ -229,7 +229,7 @@ namespace AccardND.GameCore.Pvp
                 case HeroClass.Mage:
                 {
                     PvpCardState target = RequireEnemyTarget(player, targetPlayer, targetSlot);
-                    int steps = players[player].Aura == PvpAuraType.Mage ? 2 : 1;
+                    int steps = 1;
                     target.PendingVigorStepPenalty = Math.Max(target.PendingVigorStepPenalty, steps);
                     actor.AbilityUsed = true;
                     events.Add(new AbilityUsedEvent(player, actor.Slot, HeroClass.Mage, targetPlayer, targetSlot, steps));
@@ -708,7 +708,10 @@ namespace AccardND.GameCore.Pvp
             if (!isCounter)
                 ApplyPostAttackState(attacker, defender, defenderLostLife, events);
             if (defenderEliminated)
+            {
+                ApplyMageAuraDeathPenalty(defender, attacker, events);
                 ApplyMightAuraDeathBonuses(events);
+            }
 
             events.Add(new AttackResolvedEvent(
                 attacker.Owner,
@@ -738,11 +741,15 @@ namespace AccardND.GameCore.Pvp
             int attackerFlat = attacker.PendingAttackBonus + attacker.PermanentCombatBonus;
             if (attackerTeam.Aura == PvpAuraType.Warrior
                 && attacker.Card.HeroClass == HeroClass.Warrior
-                && attacker.AbilityArmed)
-                attackerFlat++;
+                && attacker.Card.Strength < defender.Card.Strength)
+                attackerFlat += 2;
             attackerFlat += MarkBonusForTarget(defender);
 
             int defenderFlat = defender.PermanentCombatBonus + defender.PendingDefenseBonus;
+            if (defenderTeam.Aura == PvpAuraType.Warrior
+                && defender.Card.HeroClass == HeroClass.Warrior
+                && defender.Card.Strength < attacker.Card.Strength)
+                defenderFlat += 2;
 
             bool forceAdvantage = attackerTeam.Aura == PvpAuraType.Cunning
                 && HeroClassFamily.Of(attacker.Card.HeroClass) == ClassFamily.Cunning
@@ -811,6 +818,21 @@ namespace AccardND.GameCore.Pvp
                     events.Add(new MightAuraBonusEvent(player, card.Slot));
                 }
             }
+        }
+
+        private void ApplyMageAuraDeathPenalty(
+            PvpCardState defeated,
+            PvpCardState attacker,
+            List<PvpEvent> events)
+        {
+            if (defeated == null
+                || attacker == null
+                || defeated.Card.HeroClass != HeroClass.Mage
+                || players[defeated.Owner].Aura != PvpAuraType.Mage)
+                return;
+
+            attacker.PermanentCombatBonus -= 2;
+            events.Add(new MageAuraPenaltyEvent(attacker.Owner, attacker.Slot, 2));
         }
 
         private void ConsumeArmedAttackAbility(PvpCardState attacker, CombatModifiers modifiers)

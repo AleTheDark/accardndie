@@ -54,7 +54,9 @@ public sealed partial class BattleBoardController
 			HideCardInspectionDraftConfirm();
 			PauseGameForCardInspection();
 			cardInspectionPanel.SetActive(true);
+			RefreshCardInspectionPreferredHeights();
 			PlayCardInspectionOpenSfx();
+			NotifyAdventureTutorial(AdventureTutorialAction.CardInspected);
 			if ((Object)(object)cardInspectionCloseButton != (Object)null)
 			{
 				((Component)cardInspectionCloseButton).transform.SetAsLastSibling();
@@ -99,20 +101,14 @@ public sealed partial class BattleBoardController
 		List<InspectionStatusDetail> ruleDetails = new List<InspectionStatusDetail>();
 		List<InspectionStatusDetail> statusDetails = BuildInspectionStatusDetails(state);
 		bool fieldInspection = state != null;
-		bool showPrintedRules = !string.IsNullOrWhiteSpace(definition.RulesText)
-			&& (!fieldInspection || isBossOrMiniboss);
-		string rulesText = showPrintedRules
-			?"\n\nRegole:\n" + definition.RulesText
-			:string.Empty;
-		cardInspectionSummaryText.resizeTextMinSize = isBossOrMiniboss ? 15 : 20;
-		cardInspectionSummaryText.resizeTextMaxSize = isBossOrMiniboss ? 30 : 34;
-		if (!fieldInspection && !isBossOrMiniboss)
+		ApplyCardInspectionContentLayout(fieldInspection && isBossOrMiniboss && statusDetails.Count > 0);
+		ConfigureCardInspectionText(cardInspectionSummaryText);
+		if (!isBossOrMiniboss && !fieldInspection && definition.HasHeroClass)
 		{
 			ruleDetails.Add(new InspectionStatusDetail(familyAuraLabel, familyAuraDescription, AuraColor(familyAura)));
 			ruleDetails.Add(new InspectionStatusDetail(classAuraLabel, classAuraDescription, AuraColor(classAura)));
-			ruleDetails.Add(new InspectionStatusDetail(CardAbilityInspectionLabel(definition), CardAbilityInspectionDescription(definition), new Color(1f, 0.78f, 0.24f)));
 		}
-		else if (fieldInspection && ShouldShowFieldAbilitySummary(definition, state))
+		if (ShouldShowAbilitySummary(definition))
 		{
 			ruleDetails.Add(new InspectionStatusDetail(CardAbilityInspectionLabel(definition), CardAbilityInspectionDescription(definition), new Color(1f, 0.78f, 0.24f)));
 		}
@@ -123,9 +119,20 @@ public sealed partial class BattleBoardController
 				$"Questa carta puo essere sacrificata per potenziare un alleato di +{AttachmentBonusForInspection(definition, state)} permanentemente. Se l'alleato equipaggiato muore, muore anche questa carta.",
 				new Color(1f, 0.62f, 0.2f)));
 		}
-		cardInspectionSummaryText.text = strengthText + "\n" + familyText + "\n" + classText
-			+ "\n\n" + advantageText + "\n" + disadvantageText
-			+ rulesText;
+		List<string> summaryLines = new List<string>
+		{
+			strengthText,
+			familyText,
+			classText,
+			advantageText,
+			disadvantageText
+		};
+		if (isBossOrMiniboss && !string.IsNullOrWhiteSpace(definition.RulesText))
+		{
+			summaryLines.Add("Regole:");
+			summaryLines.Add(CompactInspectionText(definition.RulesText));
+		}
+		cardInspectionSummaryText.text = string.Join("\n", summaryLines);
 		foreach (InspectionStatusDetail item in ruleDetails)
 		{
 			CreateInspectionStatusRow(item);
@@ -138,6 +145,7 @@ public sealed partial class BattleBoardController
 		{
 			CreateInspectionStatusRow(item);
 		}
+		RefreshCardInspectionPreferredHeights();
 	}
 
 	private static bool IsBossOrMinibossInspectionCard(CardDefinition definition)
@@ -275,6 +283,10 @@ public sealed partial class BattleBoardController
 
 	private bool ShouldShowEquipSummary(CardDefinition definition, BattleCardState state)
 	{
+		if (IsBossOrMinibossInspectionCard(definition))
+		{
+			return false;
+		}
 		if (state != null)
 		{
 			return CanUseAttachment(state) || IsEquipCapableInspectionCard(definition, state);
@@ -291,13 +303,13 @@ public sealed partial class BattleBoardController
 		return definition != null ?5 - definition.Strength : 0;
 	}
 
-	private bool ShouldShowFieldAbilitySummary(CardDefinition definition, BattleCardState state)
+	private static bool ShouldShowAbilitySummary(CardDefinition definition)
 	{
-		if ((Object)(object)definition == (Object)null || state == null || IsBossOrMinibossInspectionCard(definition))
+		if ((Object)(object)definition == (Object)null || IsBossOrMinibossInspectionCard(definition))
 		{
 			return false;
 		}
-		return definition.HasHeroClass && (state.Eliminated || IsPassiveClassAbility(definition.HeroClass) || IsClassAbilityActionAvailable(state));
+		return definition.HasHeroClass || !string.IsNullOrWhiteSpace(definition.RulesText);
 	}
 
 	private static bool IsEquipCapableInspectionCard(CardDefinition definition, BattleCardState state)
@@ -394,23 +406,23 @@ public sealed partial class BattleBoardController
 		};
 	}
 
-	private static string AuraInspectionDescription(BattleAuraType aura)
+	private string AuraInspectionDescription(BattleAuraType aura)
 	{
 		return aura switch
 		{
-			BattleAuraType.Might => "Quando muore una pedina qualsiasi, ogni carta con aura Forzuta attiva acquisisce +1 permanente.",
-			BattleAuraType.Cunning => "Le tue carte Astuta attaccano sempre con vantaggio i nemici che hanno bonus o malus.",
-			BattleAuraType.Magic => "Le tue carte Magica si difendono con un dado piu forte, esempio: Se ho un D6 mi difendo con un D8.",
-			BattleAuraType.Formation => "Annulla lo svantaggio in attacco.", 
-			BattleAuraType.Warrior => "I Guerrieri con abilita pronta attaccano con +1.", 
-			BattleAuraType.Barbarian => "Furia del Barbaro vale +1 extra.", 
-			BattleAuraType.Paladin => "Quando un Paladino sopravvive ad una difesa, contrattacca con +1.",
-			BattleAuraType.Rogue => "I Ladri ritirano una volta per dado se esce 1 o 2, in attacco e in difesa.",
-			BattleAuraType.Assassin => "Quando un Assassino inibisce un nemico, quel nemico subisce anche -1 permanente.",
-			BattleAuraType.Hunter => "I Bersagli marcati dal Cacciatore valgono +4. Il bonus non si somma.", 
-			BattleAuraType.Mage => "Il Mago riduce di una taglia il dado Vigore nemico.", 
-			BattleAuraType.Necromancer => "La prima volta che un tuo alleato viene ucciso, resta in campo per un ultimo turno.",
-			BattleAuraType.Priest => "Le Benedizioni del Sacerdote danno un bonus maggiore.", 
+			BattleAuraType.Might => CardRulesGlossary.FamilyAuraDescription(ClassFamily.Might),
+			BattleAuraType.Cunning => CardRulesGlossary.FamilyAuraDescription(ClassFamily.Cunning),
+			BattleAuraType.Magic => CardRulesGlossary.FamilyAuraDescription(ClassFamily.Magic),
+			BattleAuraType.Formation => CardRulesGlossary.FormationAuraDescription(),
+			BattleAuraType.Warrior => CardRulesGlossary.ClassAuraDescription(HeroClass.Warrior, configuration?.ClassBalance),
+			BattleAuraType.Barbarian => CardRulesGlossary.ClassAuraDescription(HeroClass.Barbarian, configuration?.ClassBalance),
+			BattleAuraType.Paladin => CardRulesGlossary.ClassAuraDescription(HeroClass.Paladin, configuration?.ClassBalance),
+			BattleAuraType.Rogue => CardRulesGlossary.ClassAuraDescription(HeroClass.Rogue, configuration?.ClassBalance),
+			BattleAuraType.Assassin => CardRulesGlossary.ClassAuraDescription(HeroClass.Assassin, configuration?.ClassBalance),
+			BattleAuraType.Hunter => CardRulesGlossary.ClassAuraDescription(HeroClass.Hunter, configuration?.ClassBalance),
+			BattleAuraType.Mage => CardRulesGlossary.ClassAuraDescription(HeroClass.Mage, configuration?.ClassBalance),
+			BattleAuraType.Necromancer => CardRulesGlossary.ClassAuraDescription(HeroClass.Necromancer, configuration?.ClassBalance),
+			BattleAuraType.Priest => CardRulesGlossary.ClassAuraDescription(HeroClass.Priest, configuration?.ClassBalance),
 			_ => "Aura attiva sulla carta.", 
 		};
 	}
@@ -438,18 +450,18 @@ public sealed partial class BattleBoardController
 
 	private void CreateInspectionStatusRow(InspectionStatusDetail status)
 	{
-		if (!((Object)(object)cardInspectionStatusRoot == (Object)null))
+		string label = CompactInspectionText(status.Label);
+		string description = CompactInspectionText(status.Description);
+		if (!((Object)(object)cardInspectionStatusRoot == (Object)null)
+			&& !string.IsNullOrWhiteSpace(label)
+			&& !string.IsNullOrWhiteSpace(description))
 		{
-			GameObject val = new GameObject("Inspection Status " + status.Label, new Type[3]
+			GameObject val = new GameObject("Inspection Status " + label, new Type[2]
 			{
 				typeof(RectTransform),
-				typeof(HorizontalLayoutGroup),
-				typeof(LayoutElement)
+				typeof(HorizontalLayoutGroup)
 			});
 			val.transform.SetParent((Transform)(object)cardInspectionStatusRoot, false);
-			LayoutElement component = val.GetComponent<LayoutElement>();
-			component.minHeight = 82f;
-			component.preferredHeight = 96f;
 			HorizontalLayoutGroup component2 = val.GetComponent<HorizontalLayoutGroup>();
 			component2.spacing = 10f;
 			component2.childAlignment = (TextAnchor)0;
@@ -458,26 +470,24 @@ public sealed partial class BattleBoardController
 			component2.childForceExpandWidth = true;
 			component2.childForceExpandHeight = false;
 			Image image = CreateImage("Icon", val.transform, Color.white);
-			image.sprite = PrototypeCardView.GetStatusIconSprite(status.Label);
+			image.sprite = PrototypeCardView.GetStatusIconSprite(label);
 			image.color = (((Object)(object)image.sprite != (Object)null) ?Color.white : status.Color);
 			image.preserveAspect = true;
 			image.raycastTarget = false;
 			LayoutElement layoutElement = ((Component)image).gameObject.AddComponent<LayoutElement>();
-			bool abilityRow = status.Label.StartsWith("ABILITA", StringComparison.OrdinalIgnoreCase);
-			bool attachmentRow = status.Label.StartsWith("EQUIPAGGIA", StringComparison.OrdinalIgnoreCase);
+			bool abilityRow = label.StartsWith("ABILITA", StringComparison.OrdinalIgnoreCase);
+			bool attachmentRow = label.StartsWith("EQUIPAGGIA", StringComparison.OrdinalIgnoreCase);
 			float iconSize = (abilityRow || attachmentRow) ?54f :44f;
 			layoutElement.minWidth = iconSize;
 			layoutElement.preferredWidth = iconSize;
 			layoutElement.minHeight = iconSize;
 			layoutElement.preferredHeight = iconSize;
-			Text text = CreateText("Description", val.transform, AccardND.Battlefield.MmoUiTheme.BodyFont, 30, (FontStyle)1, (TextAnchor)0);
+			Text text = CreateText("Description", val.transform, AccardND.Battlefield.MmoUiTheme.BodyFont, CardInspectionFontSize, (FontStyle)1, (TextAnchor)0);
 			text.color = new Color(0.16f, 0.085f, 0.025f);
 			text.horizontalOverflow = (HorizontalWrapMode)0;
-			text.verticalOverflow = (VerticalWrapMode)0;
-			text.resizeTextForBestFit = true;
-			text.resizeTextMinSize = 20;
-			text.resizeTextMaxSize = 30;
-			text.text = status.Label + ":\n" + status.Description;
+			text.verticalOverflow = (VerticalWrapMode)1;
+			ConfigureCardInspectionText(text);
+			text.text = label + ":\n" + description;
 			LayoutElement layoutElement2 = ((Component)text).gameObject.AddComponent<LayoutElement>();
 			layoutElement2.minWidth = 0f;
 			layoutElement2.preferredWidth = 620f;
@@ -486,21 +496,127 @@ public sealed partial class BattleBoardController
 		}
 	}
 
+	private static string CompactInspectionText(string value)
+	{
+		if (string.IsNullOrWhiteSpace(value))
+		{
+			return string.Empty;
+		}
+		string[] lines = value.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
+		return string.Join("\n", lines.Select(line => line.Trim()).Where(line => line.Length > 0));
+	}
+
 	private void CreateInspectionStatusHeader()
 	{
 		if ((Object)(object)cardInspectionStatusRoot == (Object)null)
 		{
 			return;
 		}
-		Text text = CreateText("Inspection Status Header", (Transform)(object)cardInspectionStatusRoot, AccardND.Battlefield.MmoUiTheme.BodyFont, 30, (FontStyle)1, (TextAnchor)0);
+		Text text = CreateText("Inspection Status Header", (Transform)(object)cardInspectionStatusRoot, AccardND.Battlefield.MmoUiTheme.BodyFont, CardInspectionFontSize, (FontStyle)1, (TextAnchor)0);
 		text.color = new Color(0.16f, 0.085f, 0.025f);
 		text.horizontalOverflow = (HorizontalWrapMode)0;
 		text.verticalOverflow = (VerticalWrapMode)1;
+		ConfigureCardInspectionText(text);
 		text.text = "Status attivi:";
-		LayoutElement layoutElement = ((Component)text).gameObject.AddComponent<LayoutElement>();
-		layoutElement.minHeight = 34f;
-		layoutElement.preferredHeight = 40f;
 		cardInspectionStatusRows.Add(((Component)text).gameObject);
+	}
+
+	private void RefreshCardInspectionPreferredHeights()
+	{
+		if ((Object)(object)cardInspectionContentRoot == (Object)null)
+		{
+			return;
+		}
+
+		// Prima assegniamo le larghezze effettive, poi misuriamo ogni testo.
+		// In questo modo nessun contenitore eredita l'altezza libera del viewport.
+		LayoutElement statusRootLayout = ((Component)cardInspectionStatusRoot).GetComponent<LayoutElement>();
+		if ((Object)(object)statusRootLayout == (Object)null)
+		{
+			statusRootLayout = ((Component)cardInspectionStatusRoot).gameObject.AddComponent<LayoutElement>();
+		}
+		bool hasVisibleStatusRows = cardInspectionStatusRows.Any(
+			row => (Object)(object)row != (Object)null
+				&& row.activeSelf
+				&& row.transform.parent == (Transform)(object)cardInspectionStatusRoot);
+		statusRootLayout.ignoreLayout = !hasVisibleStatusRows;
+		if (hasVisibleStatusRows)
+		{
+			// Altezza provvisoria minima: il layout padre assegna subito la larghezza
+			// corretta, necessaria per misurare il wrapping dei testi.
+			statusRootLayout.minHeight = 1f;
+			statusRootLayout.preferredHeight = 1f;
+			statusRootLayout.flexibleHeight = 0f;
+		}
+		LayoutRebuilder.ForceRebuildLayoutImmediate(cardInspectionContentRoot);
+		LayoutRebuilder.ForceRebuildLayoutImmediate(cardInspectionStatusRoot);
+		Canvas.ForceUpdateCanvases();
+		SetCardInspectionElementHeight(
+			((Component)cardInspectionSummaryText).gameObject,
+			cardInspectionSummaryText.preferredHeight);
+
+		float statusHeight = 0f;
+		int visibleStatusRows = 0;
+		foreach (GameObject row in cardInspectionStatusRows)
+		{
+			if ((Object)(object)row == (Object)null || !row.activeSelf)
+			{
+				continue;
+			}
+
+			Text directText = row.GetComponent<Text>();
+			if ((Object)(object)directText != (Object)null)
+			{
+				statusHeight += SetCardInspectionElementHeight(row, directText.preferredHeight);
+				visibleStatusRows++;
+				continue;
+			}
+
+			Text description = row.transform.Find("Description")?.GetComponent<Text>();
+			LayoutElement iconLayout = row.transform.Find("Icon")?.GetComponent<LayoutElement>();
+			float textHeight = (Object)(object)description != (Object)null ?description.preferredHeight : 0f;
+			float iconHeight = (Object)(object)iconLayout != (Object)null ?iconLayout.preferredHeight : 0f;
+			statusHeight += SetCardInspectionElementHeight(row, Mathf.Max(textHeight, iconHeight));
+			visibleStatusRows++;
+		}
+
+		if (visibleStatusRows == 0)
+		{
+			statusRootLayout.ignoreLayout = true;
+		}
+		else
+		{
+			VerticalLayoutGroup statusLayout = ((Component)cardInspectionStatusRoot).GetComponent<VerticalLayoutGroup>();
+			if ((Object)(object)statusLayout != (Object)null && visibleStatusRows > 1)
+			{
+				statusHeight += statusLayout.spacing * (visibleStatusRows - 1);
+			}
+			statusRootLayout.ignoreLayout = false;
+			SetCardInspectionElementHeight(((Component)cardInspectionStatusRoot).gameObject, statusHeight);
+		}
+
+		LayoutRebuilder.ForceRebuildLayoutImmediate(cardInspectionStatusRoot);
+		LayoutRebuilder.ForceRebuildLayoutImmediate(cardInspectionContentRoot);
+		Canvas.ForceUpdateCanvases();
+		if ((Object)(object)cardInspectionContentScroll != (Object)null)
+		{
+			cardInspectionContentScroll.verticalNormalizedPosition = 1f;
+		}
+	}
+
+	private static float SetCardInspectionElementHeight(GameObject target, float preferredHeight)
+	{
+		LayoutElement layout = target.GetComponent<LayoutElement>();
+		if ((Object)(object)layout == (Object)null)
+		{
+			layout = target.AddComponent<LayoutElement>();
+		}
+
+		float height = Mathf.Max(1f, Mathf.Ceil(preferredHeight));
+		layout.minHeight = height;
+		layout.preferredHeight = height;
+		layout.flexibleHeight = 0f;
+		return height;
 	}
 
 	private void ClearInspectionStatusRows()
@@ -509,10 +625,19 @@ public sealed partial class BattleBoardController
 		{
 			if ((Object)(object)cardInspectionStatusRows[num] != (Object)null)
 			{
+				cardInspectionStatusRows[num].SetActive(false);
 				Object.Destroy((Object)(object)cardInspectionStatusRows[num]);
 			}
 		}
 		cardInspectionStatusRows.Clear();
+		if ((Object)(object)cardInspectionStatusRoot != (Object)null)
+		{
+			LayoutElement statusRootLayout = ((Component)cardInspectionStatusRoot).GetComponent<LayoutElement>();
+			if ((Object)(object)statusRootLayout != (Object)null)
+			{
+				statusRootLayout.ignoreLayout = true;
+			}
+		}
 	}
 
 	private void CloseCardInspection()

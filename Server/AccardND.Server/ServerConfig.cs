@@ -64,6 +64,13 @@ public sealed class ServerConfig
     public int TurnTimerSeconds { get; set; } = 60;
     public int ForfeitAfterConsecutiveTimeouts { get; set; } = 3;
     public int DisconnectTimeoutSeconds { get; set; } = 120;
+
+    /// <summary>Vite di una carta schierata nelle stanze hardcore: una sola, nessun secondo scontro.</summary>
+    public int HardcoreDeployedCardLives { get; set; } = 1;
+
+    /// <summary>Timer di turno più stretto nelle stanze hardcore.</summary>
+    public int HardcoreTurnTimerSeconds { get; set; } = 30;
+
     public string CardCatalogPath { get; set; } = "cardcatalog.json";
 
     /// <summary>Parametri del sistema ranked (MMR nascosto + tier a leghe).</summary>
@@ -71,6 +78,9 @@ public sealed class ServerConfig
 
     /// <summary>Parametri delle stagioni (durata, soft reset).</summary>
     public SeasonConfig Season { get; set; } = new();
+
+    /// <summary>Pannello admin web (dashboard + gestione DB). Vedi AdminConfig.</summary>
+    public AdminConfig Admin { get; set; } = new();
 
     /// <summary>Famiglie di mostri della campagna: sconfiggerle sblocca l'icona corrispondente.</summary>
     public string[] CampaignMonsters { get; set; } =
@@ -93,18 +103,23 @@ public sealed class ServerConfig
         BaseDieCosts,
         BagDieCosts);
 
-    public PvpMatchRules ToMatchRules() => new(
+    /// <summary>Regole del match; le stanze hardcore ricevono la variante più severa.</summary>
+    public PvpMatchRules ToMatchRules(string roomMode = null) => new(
         HandSize,
         FormationSize,
         DecisiveHandSize,
         RoundsToWinMatch,
-        DeployedCardLives,
+        RoomModes.IsHardcore(roomMode) ? HardcoreDeployedCardLives : DeployedCardLives,
         VigorDieByRound,
         InitiativeDieSides,
         RogueRerollsOnes,
         BarbarianRageBonus,
         HunterMarkBonus,
         PriestBlessingBonus);
+
+    /// <summary>Timer di turno effettivo per la modalità della stanza.</summary>
+    public int ResolveTurnTimerSeconds(string roomMode) =>
+        RoomModes.IsHardcore(roomMode) ? HardcoreTurnTimerSeconds : TurnTimerSeconds;
 
     public RulesData ToRulesData()
     {
@@ -122,7 +137,9 @@ public sealed class ServerConfig
             deployedCardLives = DeployedCardLives,
             turnTimerSeconds = TurnTimerSeconds,
             disconnectTimeoutSeconds = DisconnectTimeoutSeconds,
-            initiativeDieSides = InitiativeDieSides
+            initiativeDieSides = InitiativeDieSides,
+            hardcoreDeployedCardLives = HardcoreDeployedCardLives,
+            hardcoreTurnTimerSeconds = HardcoreTurnTimerSeconds
         };
     }
 
@@ -130,4 +147,35 @@ public sealed class ServerConfig
         .OrderBy(entry => entry.Key)
         .Select(entry => new DieCostDto { sides = entry.Key, cost = entry.Value })
         .ToArray();
+}
+
+/// <summary>
+/// Configurazione del pannello admin web. Nessun segreto viene committato:
+/// la password si fornisce via variabile d'ambiente (Admin__Password oppure
+/// ACCARDND_ADMIN_PASSWORD). Se nessuna password e disponibile il pannello
+/// resta disattivato e gli endpoint /admin rispondono 404.
+/// </summary>
+public sealed class AdminConfig
+{
+    /// <summary>Username richiesto al login del pannello.</summary>
+    public string Username { get; set; } = "admin";
+
+    /// <summary>
+    /// Password in chiaro. Consigliato lasciarla vuota qui (file versionato) e
+    /// passarla via env var ACCARDND_ADMIN_PASSWORD sul server.
+    /// </summary>
+    public string Password { get; set; } = string.Empty;
+
+    /// <summary>Durata di una sessione admin (token bearer) in ore.</summary>
+    public int SessionTtlHours { get; set; } = 12;
+
+    /// <summary>Password effettiva: env var se presente, altrimenti quella in config.</summary>
+    public string ResolvePassword()
+    {
+        string fromEnv = Environment.GetEnvironmentVariable("ACCARDND_ADMIN_PASSWORD");
+        return string.IsNullOrEmpty(fromEnv) ? Password : fromEnv;
+    }
+
+    /// <summary>Il pannello e attivo solo se e stata configurata una password.</summary>
+    public bool IsEnabled => !string.IsNullOrEmpty(ResolvePassword());
 }

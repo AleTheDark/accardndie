@@ -42,7 +42,7 @@ Nel matchup neutro si tira un dado solo.
 | Paladin | Might | Protegge un alleato: quando quell'alleato viene attaccato, il Paladin prende il suo posto come bersaglio. |
 | Rogue | Cunning | In attacco rilancia tutti gli 1 sul proprio dado Vigore, anche con vantaggio o svantaggio. |
 | Assassin | Cunning | Inibisce una carta nemica: quella carta salta il prossimo turno. |
-| Hunter | Cunning | Marca un nemico. Chi lo attacca prende +2; se lo attacca un Hunter prende +4. |
+| Hunter | Cunning | Marca un nemico. Il prossimo attacco contro quel bersaglio riceve +2, poi i marchi vengono consumati. |
 | Mage | Magic | Abbassa di uno step il dado Vigore del nemico scelto per il prossimo tiro. |
 | Necromancer | Magic | Rialza una carta alleata eliminata. |
 | Priest | Magic | Benedice un alleato: +2 al prossimo attacco. |
@@ -134,7 +134,7 @@ Nota implementativa attuale: finche non esiste una UI di scelta dedicata, l'effe
 
 ### 3 Warrior
 
-- Quando un Warrior usa somma dadi, aggiunge +1 al totale.
+- Durante un confronto, se la Potenza del Warrior e inferiore a quella dell'avversario, il Warrior riceve +2 al totale.
 
 ### 3 Barbarian
 
@@ -154,14 +154,13 @@ Nota implementativa attuale: finche non esiste una UI di scelta dedicata, l'effe
 
 ### 3 Hunter
 
-- La marca da +3.
-- Se ad attaccare il bersaglio marcato e un Hunter, il bonus diventa +5.
+- Il prossimo attacco contro un bersaglio marcato riceve +4 invece di +2.
+- Dopo l'attacco tutti i marchi sul bersaglio vengono consumati.
+- Piu marchi sullo stesso bersaglio non si sommano.
 
 ### 3 Mage
 
-- La prima abilita Mage applicata abbassa il dado avversario di 2 step invece di 1.
-
-Nota implementativa attuale: ogni Mage con aura Mage applica 2 step al nemico scelto.
+- Quando un Mage con questa aura muore per un attacco, l'attaccante che lo ha eliminato subisce -2 permanente.
 
 ### 3 Necromancer
 

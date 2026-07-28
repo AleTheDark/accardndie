@@ -10,8 +10,7 @@ public sealed partial class BattleBoardController
 {
 	// Persistenza del save/resume della run di campagna. Isolato in questo partial per
 	// contenere la superficie di modifica sul controller: gli altri file lo agganciano solo
-	// in tre punti (BeginRoomChoice -> SaveCurrentRun, ReturnToStart -> ClearSavedRun,
-	// ShowCampaignModeSelection -> TryStartResumedCampaign).
+	// nei punti di salvataggio/pulizia. La ripresa non deve bypassare la scelta single player.
 	private readonly CampaignRunSaveService runSaveService = new CampaignRunSaveService();
 
 	private bool HasResumableRun => runSaveService.HasSave;
@@ -28,6 +27,10 @@ public sealed partial class BattleBoardController
 
 		save.campaignScenarioId = campaignScenarioId;
 		save.campaignScenarioBossId = campaignScenarioBossId;
+		save.adventureChapterId = activeAdventureChapterId;
+		save.defeatedBossIds = new List<string>(defeatedBossIdsInRun);
+		save.runBagItemIds = new List<string>(runBagItemIds);
+		save.consumedBagItemIds = new List<string>(consumedBagItemIds);
 		save.merchantRoomsBlockedUntilMonster = merchantRoomsBlockedUntilMonster;
 		save.rewardRoomsBlockedUntilMonster = rewardRoomsBlockedUntilMonster;
 		save.nextMonsterTierBonus = nextMonsterTierBonus;
@@ -47,7 +50,8 @@ public sealed partial class BattleBoardController
 	// combattimento è smontato e lo stato è coerente.
 	private void SaveCurrentRun()
 	{
-		if (campaignDeck == null || runProgress == null || pvpPresentationActive)
+		// La scena di test del mercato non deve sporcare il save della campagna vera.
+		if (campaignDeck == null || runProgress == null || pvpPresentationActive || debugMerchantScene)
 			return;
 		try
 		{
@@ -111,6 +115,16 @@ public sealed partial class BattleBoardController
 		// Scenario / regole di stanza
 		campaignScenarioId = string.IsNullOrWhiteSpace(save.campaignScenarioId) ? null : save.campaignScenarioId;
 		campaignScenarioBossId = string.IsNullOrWhiteSpace(save.campaignScenarioBossId) ? null : save.campaignScenarioBossId;
+		activeAdventureChapterId = string.IsNullOrWhiteSpace(save.adventureChapterId) ? null : save.adventureChapterId;
+		defeatedBossIdsInRun.Clear();
+		if (save.defeatedBossIds != null)
+			defeatedBossIdsInRun.AddRange(save.defeatedBossIds);
+		runBagItemIds.Clear();
+		if (save.runBagItemIds != null)
+			runBagItemIds.AddRange(save.runBagItemIds);
+		consumedBagItemIds.Clear();
+		if (save.consumedBagItemIds != null)
+			consumedBagItemIds.AddRange(save.consumedBagItemIds);
 		merchantRoomsBlockedUntilMonster = save.merchantRoomsBlockedUntilMonster;
 		rewardRoomsBlockedUntilMonster = save.rewardRoomsBlockedUntilMonster;
 		nextMonsterTierBonus = save.nextMonsterTierBonus;

@@ -43,5 +43,20 @@ Server/AccardND.Server/*.db
 Server/AccardND.Server/*.db-wal
 Server/AccardND.Server/*.db-shm
 
+# Screenshot di debug/QA (solo materiale di lavoro locale)
+Assets/Screenshots/
+Assets/Screenshots.meta
+Assets/_Project/Screenshots/
+Assets/_Project/Screenshots.meta
+Documentation/
+
+# Dump di analisi asset generati dagli script di manutenzione
+/alive_reason.json
+/dead.json
+/orphans.json
+/unref.json
+/used.json
+/where.json
+
 # Il vecchio progetto archiviato mantiene tutto com'era
 !old_project/**

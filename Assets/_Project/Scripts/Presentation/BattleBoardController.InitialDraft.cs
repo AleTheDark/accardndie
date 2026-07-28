@@ -236,7 +236,7 @@ public sealed partial class BattleBoardController
 	private void StartDraftBuiltCampaign()
 	{
 		campaignDeck = new CampaignDeckState(initialDraftDeck);
-		GrantStartingCampaignConsumablesForTesting();
+		LoadCampaignConsumablesFromBag();
 		ResetScenarioRuleState();
 		initialDraftPanel.SetActive(false);
 		DestroyPrototypeViews(initialDraftOfferViews);
@@ -362,7 +362,11 @@ public sealed partial class BattleBoardController
 		float height = Mathf.Max(1f, safeRect.height);
 		bool compact = IsCompactLayout(width / height, configuration.ResponsiveLayout);
 		bool wide = !compact && width / height >= 1.65f;
-		RefreshResponsiveDeckBuilderFrame(initialDraftFrameImage, initialDraftFrameAspectFitter, compact);
+		RefreshScreenOuterFrame(initialDraftFrameImage, initialDraftFrameAspectFitter);
+		SetRect(
+			initialDraftFrameImage.rectTransform,
+			new Vector2(0.008f, 0.008f),
+			new Vector2(0.992f, compact ? 0.872f : 0.862f));
 		SetRect(initialDraftHeadingText.rectTransform,
 			compact ?new Vector2(0.08f, 0.862f) : new Vector2(0.12f, 0.852f),
 			compact ?new Vector2(0.92f, 0.94f) : new Vector2(0.88f, 0.938f));

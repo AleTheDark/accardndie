@@ -34,6 +34,21 @@ public sealed class SeasonService
     /// <summary>Nome della stagione attiva.</summary>
     public string ActiveSeasonName { get; private set; }
 
+    /// <summary>Fine della stagione attiva in UTC; null se non impostata.</summary>
+    public DateTime? ActiveSeasonEndsAtUtc { get; private set; }
+
+    /// <summary>Secondi che mancano alla fine della stagione attiva; 0 se scaduta o sconosciuta.</summary>
+    public int ActiveSeasonSecondsRemaining
+    {
+        get
+        {
+            if (ActiveSeasonEndsAtUtc == null)
+                return 0;
+            double seconds = (ActiveSeasonEndsAtUtc.Value - DateTime.UtcNow).TotalSeconds;
+            return seconds <= 0d ? 0 : (int)Math.Min(seconds, int.MaxValue);
+        }
+    }
+
     /// <summary>Chiave di scope per le statistiche della stagione attiva.</summary>
     public string ActiveSeasonScope => $"season:{ActiveSeasonId}";
 
@@ -70,6 +85,7 @@ public sealed class SeasonService
 
             ActiveSeasonId = newSeasonId;
             ActiveSeasonName = newName;
+            ActiveSeasonEndsAtUtc = nowUtc.AddDays(seasonConfig.DurationDays);
             return true;
         }
     }
@@ -201,18 +217,23 @@ public sealed class SeasonService
         using (SqliteCommand query = connection.CreateCommand())
         {
             query.CommandText =
-                "SELECT season_id, name FROM seasons WHERE is_active=1 ORDER BY season_id DESC LIMIT 1";
+                "SELECT season_id, name, ends_at FROM seasons WHERE is_active=1 ORDER BY season_id DESC LIMIT 1";
             using SqliteDataReader reader = query.ExecuteReader();
             if (reader.Read())
             {
                 ActiveSeasonId = reader.GetInt32(0);
                 ActiveSeasonName = reader.GetString(1);
+                ActiveSeasonEndsAtUtc = reader.IsDBNull(2)
+                    ? null
+                    : DateTime.Parse(
+                        reader.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind);
                 return;
             }
         }
 
         DateTime now = DateTime.UtcNow;
         ActiveSeasonName = "Stagione 1";
+        ActiveSeasonEndsAtUtc = now.AddDays(seasonConfig.DurationDays);
         using SqliteCommand insert = connection.CreateCommand();
         insert.CommandText =
             "INSERT INTO seasons (name, starts_at, ends_at, is_active) VALUES ($name, $start, $end, 1) RETURNING season_id";

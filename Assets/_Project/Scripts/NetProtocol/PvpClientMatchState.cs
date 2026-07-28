@@ -72,6 +72,7 @@ namespace AccardND.NetProtocol
         public List<PvpClientDeploymentToken> DeploymentOrder { get; } = new();
         public int[] Wins { get; } = new int[2];
         public PvpAuraType[] Auras { get; } = new PvpAuraType[2];
+        public bool[] FormationAuraUsed { get; } = new bool[2];
 
         /// <summary>Mano corrente come coppie (indice loadout, id definizione).</summary>
         public List<(int LoadoutIndex, string DefinitionId)> Hand { get; } = new();
@@ -114,6 +115,8 @@ namespace AccardND.NetProtocol
                     DeploymentOrder.Clear();
                     Auras[0] = PvpAuraType.None;
                     Auras[1] = PvpAuraType.None;
+                    FormationAuraUsed[0] = false;
+                    FormationAuraUsed[1] = false;
                     Phase = PvpClientPhase.Waiting;
                     ActivePlayer = -1;
                     DeployPlayer = -1;
@@ -169,6 +172,8 @@ namespace AccardND.NetProtocol
                     Phase = PvpClientPhase.Battle;
                     Auras[0] = (PvpAuraType)e.auraPlayer0;
                     Auras[1] = (PvpAuraType)e.auraPlayer1;
+                    FormationAuraUsed[0] = false;
+                    FormationAuraUsed[1] = false;
                     if (Auras[0] != PvpAuraType.None || Auras[1] != PvpAuraType.None)
                         AddLog($"Aure: {Auras[0]} contro {Auras[1]}.");
                     break;
@@ -275,6 +280,17 @@ namespace AccardND.NetProtocol
                     break;
                 }
 
+                case "MageAuraPenalty":
+                {
+                    PvpClientCard card = CardAt(e.player, e.slot);
+                    if (card != null)
+                    {
+                        card.PermanentBonus -= e.amount;
+                        AddLog($"Aura Mago: {card.CardName} subisce -{e.amount} permanente.");
+                    }
+                    break;
+                }
+
                 case "SpiritExpired":
                 {
                     PvpClientCard card = CardAt(e.player, e.slot);
@@ -377,6 +393,15 @@ namespace AccardND.NetProtocol
         {
             PvpClientCard attacker = CardAt(e.player, e.slot);
             PvpClientCard defender = CardAt(e.targetPlayer, e.targetSlot);
+            if (attacker != null
+                && defender != null
+                && Auras[e.player] == PvpAuraType.Formation
+                && !FormationAuraUsed[e.player]
+                && ClassMatchup.Compare(attacker.HeroClass, defender.HeroClass) == MatchupResult.Disadvantage)
+            {
+                FormationAuraUsed[e.player] = true;
+            }
+
             if (attacker != null)
             {
                 attacker.PendingBonus = 0;

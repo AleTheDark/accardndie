@@ -85,6 +85,30 @@ namespace AccardND.GameData
         public bool TryBuyStrength(int strength, out CardDefinition purchased) =>
             TryPurchase(DeckPurchaseMode.ChosenStrength, null, strength, out purchased);
 
+        public bool TryDraftClass(HeroClass heroClass, out CardDefinition purchased) =>
+            TryDraft(heroClass, 0, out purchased);
+
+        public bool TryDraftExact(HeroClass heroClass, int strength, out CardDefinition purchased) =>
+            TryDraft(heroClass, strength, out purchased);
+
+        private bool TryDraft(HeroClass heroClass, int strength, out CardDefinition purchased)
+        {
+            purchased = null;
+            if (deck.Count >= rules.DeckSize)
+                return false;
+
+            DeckPurchaseMode mode = strength > 0 ? DeckPurchaseMode.ChosenStrength : DeckPurchaseMode.ChosenClass;
+            List<CardDefinition> eligible = BuildEligiblePool(heroClass, strength, mode);
+            if (eligible.Count == 0)
+                return false;
+
+            purchased = strength > 0
+                ? eligible[random.NextInclusive(0, eligible.Count - 1)]
+                : DrawWeightedByStrength(eligible);
+            deck.Add(purchased);
+            return true;
+        }
+
         private bool TryPurchase(
             DeckPurchaseMode mode,
             HeroClass? heroClass,

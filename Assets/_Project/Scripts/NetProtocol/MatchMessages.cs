@@ -143,5 +143,9 @@ namespace AccardND.NetProtocol
         public int turnTimerSeconds;
         public int disconnectTimeoutSeconds;
         public int initiativeDieSides;
+
+        // Varianti applicate dalle stanze in modalità hardcore.
+        public int hardcoreDeployedCardLives;
+        public int hardcoreTurnTimerSeconds;
     }
 }

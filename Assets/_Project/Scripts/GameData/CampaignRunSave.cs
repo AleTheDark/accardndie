@@ -11,6 +11,8 @@ namespace AccardND.GameData
         public string definitionId;
         public int zone;
         public int instanceId;
+        public int permanentItemBonus;
+        public bool hasRubySeal;
     }
 
     /// <summary>Un consumabile posseduto in uno snapshot salvato.</summary>
@@ -40,6 +42,18 @@ namespace AccardND.GameData
         public int totalExperience;
         public int availableExperience;
         public int roomsCleared;
+        public int enemiesDefeated;
+        public int minibossesDefeated;
+        public int diceRolled;
+        public int abilitiesUsed;
+
+        // Boss e miniboss sconfitti nella run, per i contatori di progressione permanente.
+        public List<string> defeatedBossIds = new List<string>();
+
+        // Bisaccia: cosa e' stato portato e cosa e' gia' stato usato. Serve perche' una run
+        // ripresa deve ancora saper distinguere gli oggetti della bisaccia da quelli trovati.
+        public List<string> runBagItemIds = new List<string>();
+        public List<string> consumedBagItemIds = new List<string>();
 
         // Mazzo di campagna
         public List<CampaignCardSave> deck = new List<CampaignCardSave>();
@@ -48,6 +62,7 @@ namespace AccardND.GameData
         // Stato scenario / regole di stanza (popolato dal controller in fase di wiring)
         public string campaignScenarioId;
         public string campaignScenarioBossId;
+        public string adventureChapterId;
         public bool merchantRoomsBlockedUntilMonster;
         public bool rewardRoomsBlockedUntilMonster;
         public int nextMonsterTierBonus;
@@ -74,6 +89,10 @@ namespace AccardND.GameData
             save.totalExperience = progress.TotalExperience;
             save.availableExperience = progress.AvailableExperience;
             save.roomsCleared = progress.RoomsCleared;
+            save.enemiesDefeated = progress.EnemiesDefeated;
+            save.minibossesDefeated = progress.MinibossesDefeated;
+            save.diceRolled = progress.DiceRolled;
+            save.abilitiesUsed = progress.AbilitiesUsed;
         }
 
         public static void ReadProgress(CampaignRunSave save, RunProgressState progress)
@@ -82,7 +101,9 @@ namespace AccardND.GameData
             if (progress == null) throw new ArgumentNullException(nameof(progress));
 
             progress.RestoreProgress(save.playerLevel, save.currentExperience,
-                save.totalExperience, save.availableExperience, save.roomsCleared);
+                save.totalExperience, save.availableExperience, save.roomsCleared,
+                save.enemiesDefeated, save.minibossesDefeated,
+                save.diceRolled, save.abilitiesUsed);
         }
 
         public static void WriteDeck(CampaignRunSave save, CampaignDeckState deck)
@@ -97,7 +118,9 @@ namespace AccardND.GameData
                 {
                     definitionId = card.Definition.Id,
                     zone = (int)card.Zone,
-                    instanceId = card.InstanceId
+                    instanceId = card.InstanceId,
+                    permanentItemBonus = card.PermanentItemBonus,
+                    hasRubySeal = card.HasRubySeal
                 });
             }
             save.nextInstanceId = deck.NextInstanceId;
@@ -122,7 +145,12 @@ namespace AccardND.GameData
                     CardDefinition definition = resolve(card.definitionId);
                     if (definition == null)
                         continue;
-                    entries.Add(new CampaignCardRestoreEntry(definition, (CampaignCardZone)card.zone, card.instanceId));
+                    entries.Add(new CampaignCardRestoreEntry(
+                        definition,
+                        (CampaignCardZone)card.zone,
+                        card.instanceId,
+                        card.permanentItemBonus,
+                        card.hasRubySeal));
                 }
             }
             deck.RestoreFrom(entries, save.nextInstanceId);

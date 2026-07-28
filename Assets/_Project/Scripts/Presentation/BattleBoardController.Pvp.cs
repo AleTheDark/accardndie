@@ -48,6 +48,7 @@ public sealed partial class BattleBoardController
     private string pvpPendingDeployCardName = string.Empty;
     private int pvpPendingPaladinRedirectPlayer = -1;
     private int pvpPendingPaladinRedirectSlot = -1;
+    private int pvpArenaBackgroundRound = -1;
 
     // Selezione del round decisivo: il giocatore sceglie N carte fra tutte quelle
     // del loadout (indici loadout). Restano selezionate finché non conferma.
@@ -79,6 +80,7 @@ public sealed partial class BattleBoardController
         pvpTargetMode = PvpPresentationTargetMode.None;
         pvpPendingDeployHandIndex = -1;
         pvpPendingDeployCardName = string.Empty;
+        pvpArenaBackgroundRound = -1;
         ClearPendingPaladinRedirect();
         ResetPvpDecisiveSelection();
         StopPvpRegia();
@@ -142,6 +144,7 @@ public sealed partial class BattleBoardController
         pvpTargetMode = PvpPresentationTargetMode.None;
         pvpPendingDeployHandIndex = -1;
         pvpPendingDeployCardName = string.Empty;
+        pvpArenaBackgroundRound = -1;
         ResetPvpDecisiveSelection();
         StopPvpRegia();
 
@@ -163,6 +166,7 @@ public sealed partial class BattleBoardController
         if ((Object)(object)playerTitleText != (Object)null)
             playerTitleText.text = "LA TUA FORMAZIONE";
         SetBattlefieldSurfaceVisible(false);
+        RefreshScenarioBackground();
     }
 
     private void AbandonActivePvpSession()
@@ -200,6 +204,7 @@ public sealed partial class BattleBoardController
         inputLocked = !IsPvpLocalActionTurn();
         gameFinished = pvpState.Phase == PvpClientPhase.Finished;
         roundNumber = pvpState.MatchRound;
+        RefreshPvpArenaBackground(roundNumber);
         selectedPlayerIndex = pvpState.ActiveSlot;
         playerAura = ToBattleAura(pvpState.Auras[pvpState.MyIndex >= 0 ? pvpState.MyIndex : 0]);
         cpuAura = ToBattleAura(pvpState.Auras[OpponentIndex()]);
@@ -220,6 +225,31 @@ public sealed partial class BattleBoardController
         RefreshPvpTimeline();
         ApplyHandFan();
         ConfigurePvpActionOverlays();
+    }
+
+    private void RefreshPvpArenaBackground(int matchRound)
+    {
+        int arenaRound = Mathf.Clamp(matchRound <= 0 ? 1 : matchRound, 1, 3);
+        if (pvpArenaBackgroundRound == arenaRound)
+            return;
+
+        Sprite sprite = Resources.Load<Sprite>($"Backgrounds/bg_arena_{arenaRound}");
+        if ((Object)(object)sprite == (Object)null)
+        {
+            Debug.LogWarning($"[PvP] Sfondo arena round {arenaRound} non trovato in Resources/Backgrounds.");
+            return;
+        }
+
+        pvpArenaBackgroundRound = arenaRound;
+        if ((Object)(object)backgroundFillImage != (Object)null)
+            backgroundFillImage.sprite = sprite;
+        if ((Object)(object)terrainImage != (Object)null)
+            terrainImage.sprite = sprite;
+        if ((Object)(object)terrainAspectFitter != (Object)null)
+        {
+            Rect rect = sprite.rect;
+            terrainAspectFitter.aspectRatio = rect.width / rect.height;
+        }
     }
 
     private void RefreshPvpTurnBanner()
@@ -836,7 +866,17 @@ public sealed partial class BattleBoardController
         if (active == null)
             return null;
 
-        return ClassMatchup.Compare(active.Card.HeroClass, card.Card.HeroClass) switch
+        MatchupResult matchup = ClassMatchup.Compare(active.Card.HeroClass, card.Card.HeroClass);
+        int localPlayer = pvpState.MyIndex;
+        if (localPlayer is >= 0 and < 2
+            && pvpState.Auras[localPlayer] == PvpAuraType.Formation
+            && !pvpState.FormationAuraUsed[localPlayer]
+            && matchup == MatchupResult.Disadvantage)
+        {
+            matchup = MatchupResult.Neutral;
+        }
+
+        return matchup switch
         {
             MatchupResult.Advantage => new Color(0.2f, 1f, 0.35f, 1f),
             MatchupResult.Disadvantage => new Color(1f, 0.22f, 0.18f, 1f),
@@ -1471,6 +1511,20 @@ public sealed partial class BattleBoardController
                     break;
                 }
 
+                case "FuryGained":
+                {
+                    RenderPvpMatch();
+                    Canvas.ForceUpdateCanvases();
+                    BattleCardState barbarian = FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
+                    if (barbarian != null
+                        && (Object)(object)barbarian.View != (Object)null
+                        && (Object)(object)battleAnimationPlayer != (Object)null)
+                    {
+                        yield return battleAnimationPlayer.PlayBarbarianFury(barbarian.View);
+                    }
+                    break;
+                }
+
                 case "SpiritExpired":
                 case "AttachmentApplied":
                 {
@@ -1862,7 +1916,8 @@ public sealed partial class BattleBoardController
         if (battleEvent.Overkill)
             message = "OVERKILL! " + message;
         AppendLog(message);
-        SetBattlefieldMessage((battleEvent.Overkill ? "OVERKILL! " : string.Empty) + FormatResultSummary(attacker, defender, result));
+        string explanation = FormatAdventureTutorialCombatRollText(attacker, defender, result);
+        SetBattlefieldMessage((battleEvent.Overkill ? "OVERKILL!\n" : string.Empty) + explanation);
     }
 
     private void PlayPvpAttackResolvedSfx(BattlePresentationEvent battleEvent)

@@ -62,10 +62,13 @@ public sealed partial class BattleBoardController
 				parts.Add($"{PendingAttackBonusSource(card)} +{card.PendingAttackBonus}");
 				described += card.PendingAttackBonus;
 			}
-			if (card.BelongsToPlayer && playerAura == BattleAuraType.Warrior && card.Card.HeroClass == HeroClass.Warrior && card.AbilityArmed)
+			if (AuraFor(card) == BattleAuraType.Warrior
+				&& card.Card.HeroClass == HeroClass.Warrior
+				&& opponent != null
+				&& card.Card.Strength < opponent.Card.Strength)
 			{
-				parts.Add("Aura Warrior +1");
-				described++;
+				parts.Add("Aura Guerriero +2");
+				described += 2;
 			}
 			int hunterBonus = HunterMarkAttackBonus(card, opponent);
 			if (hunterBonus > 0)
@@ -78,6 +81,15 @@ public sealed partial class BattleBoardController
 		{
 			parts.Add($"Furia +{card.PendingAttackBonus}");
 			described += card.PendingAttackBonus;
+		}
+		if (!attacking
+			&& AuraFor(card) == BattleAuraType.Warrior
+			&& card.Card.HeroClass == HeroClass.Warrior
+			&& opponent != null
+			&& card.Card.Strength < opponent.Card.Strength)
+		{
+			parts.Add("Aura Guerriero +2");
+			described += 2;
 		}
 		if (card.PermanentCombatBonus != 0)
 		{
@@ -150,7 +162,17 @@ public sealed partial class BattleBoardController
 		{
 			messageText.text = message;
 			UpdateMessageTextLayout();
+			HideNormalMessagePanelDuringAdventureTutorial();
 		}
+	}
+
+	private void HideNormalMessagePanelDuringAdventureTutorial()
+	{
+		if (!adventureScriptedTutorialActive || (Object)(object)messagePanelRect == (Object)null)
+		{
+			return;
+		}
+		((Component)messagePanelRect).gameObject.SetActive(false);
 	}
 
 	private void UpdateMessageTextLayout()
@@ -250,8 +272,16 @@ public sealed partial class BattleBoardController
 		if (!((Object)(object)restartButton == (Object)null) && !((Object)(object)merchantBuyButton == (Object)null))
 		{
 			bool singleNonCombat = !merchantVisible && IsSingleActionNonCombatHudVisible();
-			SetRect((RectTransform)((Component)restartButton).transform, merchantVisible ?new Vector2(0.53f, 0.06f) : (singleNonCombat ?new Vector2(0.325f, 0.06f) : new Vector2(0.69f, 0.14f)), merchantVisible ?new Vector2(0.88f, 0.27f) : (singleNonCombat ?new Vector2(0.675f, 0.27f) : new Vector2(0.97f, 0.58f)));
-			SetRect((RectTransform)((Component)merchantBuyButton).transform, merchantVisible ?new Vector2(0.12f, 0.06f) : new Vector2(0.69f, 0.54f), merchantVisible ?new Vector2(0.47f, 0.27f) : new Vector2(0.97f, 0.92f));
+			SetRect((RectTransform)((Component)restartButton).transform, merchantVisible ?new Vector2(0.51f, 0.025f) : (singleNonCombat ?new Vector2(0.325f, 0.06f) : new Vector2(0.69f, 0.14f)), merchantVisible ?new Vector2(0.965f, 0.405f) : (singleNonCombat ?new Vector2(0.675f, 0.27f) : new Vector2(0.97f, 0.58f)));
+			SetRect((RectTransform)((Component)merchantBuyButton).transform, merchantVisible ?new Vector2(0.035f, 0.025f) : new Vector2(0.69f, 0.54f), merchantVisible ?new Vector2(0.49f, 0.405f) : new Vector2(0.97f, 0.92f));
+			if ((Object)(object)merchantOpenButtonPulseVfx != (Object)null)
+			{
+				((Component)merchantOpenButtonPulseVfx).gameObject.SetActive(merchantVisible);
+			}
+			if ((Object)(object)merchantContinueButtonPulseVfx != (Object)null)
+			{
+				((Component)merchantContinueButtonPulseVfx).gameObject.SetActive(merchantVisible);
+			}
 		}
 		UpdateMessageTextLayout();
 	}

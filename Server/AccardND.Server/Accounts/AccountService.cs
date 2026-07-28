@@ -175,6 +175,8 @@ public sealed class AccountService
             update.ExecuteNonQuery();
         }
 
+        RecordLoginEvent(connection, transaction, playerId, external.Provider, now);
+
         string username;
         using (SqliteCommand query = connection.CreateCommand())
         {
@@ -303,11 +305,30 @@ public sealed class AccountService
 
     private static void TouchLastLogin(SqliteConnection connection, string playerId)
     {
+        string now = DateTime.UtcNow.ToString("O");
         using SqliteCommand update = connection.CreateCommand();
         update.CommandText = "UPDATE accounts SET last_login_at=$now WHERE player_id=$id";
-        update.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
+        update.Parameters.AddWithValue("$now", now);
         update.Parameters.AddWithValue("$id", playerId);
         update.ExecuteNonQuery();
+
+        RecordLoginEvent(connection, null, playerId, "password", now);
+    }
+
+    /// <summary>Aggiunge una riga allo storico login (alimenta i grafici admin).</summary>
+    private static void RecordLoginEvent(
+        SqliteConnection connection, SqliteTransaction transaction,
+        string playerId, string provider, string occurredAt)
+    {
+        using SqliteCommand insert = connection.CreateCommand();
+        insert.Transaction = transaction;
+        insert.CommandText = @"
+            INSERT INTO login_events (player_id, provider, occurred_at)
+            VALUES ($player, $provider, $now)";
+        insert.Parameters.AddWithValue("$player", playerId);
+        insert.Parameters.AddWithValue("$provider", provider);
+        insert.Parameters.AddWithValue("$now", occurredAt);
+        insert.ExecuteNonQuery();
     }
 
     private (AccountIdentity, string, string) IssueSession(AccountIdentity identity)

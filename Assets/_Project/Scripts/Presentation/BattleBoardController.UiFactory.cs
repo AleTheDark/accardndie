@@ -146,6 +146,10 @@ public sealed partial class BattleBoardController
 		labelOutline.effectColor = new Color(0f, 0f, 0f, 0.85f);
 		labelOutline.effectDistance = new Vector2(1.5f, -1.5f);
 		Stretch(text.rectTransform, 6f);
+		if (MmoUiTheme.IsBackButtonLabel(label))
+			MmoUiTheme.ApplyBackButtonStyle(button, text);
+		else if (MmoUiTheme.IsLightButtonLabel(label))
+			MmoUiTheme.ApplyLightButtonStyle(button, text);
 		return button;
 	}
 
@@ -154,6 +158,8 @@ public sealed partial class BattleBoardController
 		string value = ((name ?? string.Empty) + " " + (label ?? string.Empty)).ToUpperInvariant();
 		if (value.Contains("ANNULLA") || value.Contains("CANCEL") || value.Contains("CLOSE") || value.Contains("CHIUDI") || value.Contains("INDIETRO"))
 			return MmoUiTheme.ButtonVariant.Crimson;
+		if (value.Contains("START CAMPAIGN") || value.Contains("INIZIA"))
+			return MmoUiTheme.ButtonVariant.Violet;
 		if (value.Contains("CONFERMA") || value.Contains("SALVA") || value.Contains("OK") || value.Contains("START") || value.Contains("CONTINUA"))
 			return MmoUiTheme.ButtonVariant.Emerald;
 		if (value.Contains("DRAFT") || value.Contains("PROFILO") || value.Contains("PVP") || value.Contains("MULTIPLAYER"))
@@ -161,6 +167,35 @@ public sealed partial class BattleBoardController
 		if (value.Contains("BUILDER") || value.Contains("BORSA") || value.Contains("LOADOUT"))
 			return MmoUiTheme.ButtonVariant.Gold;
 		return MmoUiTheme.ButtonVariant.Arcane;
+	}
+
+	private static void ApplyBattleButtonVariant(Button button, MmoUiTheme.ButtonVariant variant)
+	{
+		if ((Object)(object)button == (Object)null)
+			return;
+
+		Image image = ((Component)button).GetComponent<Image>();
+		if ((Object)(object)image != (Object)null)
+		{
+			image.sprite = MmoUiTheme.GetButtonSprite(variant);
+			image.type = Image.Type.Sliced;
+			image.preserveAspect = false;
+			image.color = Color.white;
+			button.targetGraphic = image;
+		}
+
+		MmoUiTheme.ApplyButtonColors(button);
+		Text label = ((Component)button).GetComponentInChildren<Text>(true);
+		if ((Object)(object)label != (Object)null)
+		{
+			MmoUiTheme.StyleAsTitle(label);
+			label.fontSize = ResponsiveTextSize(20);
+			label.resizeTextMaxSize = label.fontSize;
+			label.resizeTextMinSize = ResponsiveTextMinSize(label.fontSize);
+			label.alignment = TextAnchor.MiddleCenter;
+			label.color = Color.Lerp(Color.white, MmoUiTheme.AccentOf(variant), 0.16f);
+			Stretch(label.rectTransform, 6f);
+		}
 	}
 
 	private static Button CreateImageButton(string name, Transform parent, Font font, Sprite sprite, string label)

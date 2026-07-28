@@ -11,6 +11,14 @@ namespace AccardND.Battlefield
 {
     public sealed class BattlePresentationAnimationPlayer : MonoBehaviour
     {
+        public IEnumerator PlayBarbarianFury(PrototypeCardView target)
+        {
+            if (target == null || target.RectTransform == null)
+                yield break;
+
+            yield return BarbarianFuryVfx.Play(target.RectTransform);
+        }
+
         private readonly Queue<IEnumerator> queue = new();
         private Coroutine routine;
         private static Sprite hunterArrowSprite;
@@ -353,14 +361,14 @@ namespace AccardND.Battlefield
                 if (defenderHit)
                     yield return StartCoroutine(PlayAssassinShadowStrike(attacker, defender));
                 else
-                    yield return StartCoroutine(attacker.PlayAttackAnimation());
+                    yield return StartCoroutine(PlayAssassinShadowStrikeBlocked(attacker, defender));
             }
             else if (isBarbarianAttack)
             {
                 if (defenderHit)
                     yield return StartCoroutine(PlayBarbarianAxeSmash(attacker, defender));
                 else
-                    yield return StartCoroutine(attacker.PlayAttackAnimation());
+                    yield return StartCoroutine(PlayBarbarianAxeSmashBlocked(attacker, defender));
             }
             else if (isWarriorAttack)
             {
@@ -587,6 +595,189 @@ namespace AccardND.Battlefield
                 attackerRect.position = Vector3.LerpUnclamped(returnStart, attackerStart, progress);
                 attackerRect.localScale = Vector3.LerpUnclamped(attackerRect.localScale, attackerScale, progress);
                 attackerRect.localRotation = Quaternion.SlerpUnclamped(returnRotation, attackerRotation, progress);
+                yield return null;
+            }
+
+            defenderRect.position = defenderStart;
+            defenderRect.localScale = defenderScale;
+            defenderRect.localRotation = defenderRotation;
+            attackerRect.position = attackerStart;
+            attackerRect.localScale = attackerScale;
+            attackerRect.localRotation = attackerRotation;
+            Destroy(axe);
+        }
+
+        public IEnumerator PlayAssassinShadowStrikeBlocked(PrototypeCardView attacker, PrototypeCardView defender)
+        {
+            RectTransform parent = ResolveProjectileParent(attacker);
+            if (parent == null)
+            {
+                yield return StartCoroutine(attacker.PlayAttackAnimation());
+                yield break;
+            }
+
+            RectTransform attackerRect = attacker.RectTransform;
+            RectTransform defenderRect = defender.RectTransform;
+            Vector3 homePosition = attackerRect.position;
+            Vector3 homeScale = attackerRect.localScale;
+            Quaternion homeRotation = attackerRect.localRotation;
+            int homeSibling = attackerRect.GetSiblingIndex();
+            Vector3 defenderStart = defenderRect.position;
+            Vector3 defenderScale = defenderRect.localScale;
+            Quaternion defenderRotation = defenderRect.localRotation;
+
+            attacker.SetLayoutIgnored(true);
+            attackerRect.SetAsLastSibling();
+
+            yield return StartCoroutine(PlaySmokeWithScale(
+                parent,
+                attacker,
+                homePosition,
+                homeScale,
+                homeScale * 0.34f,
+                0.92f,
+                fadeOut: true));
+
+            Vector3 blockPoint = EdgePoint(defenderRect, homePosition);
+            Vector3 ambushPoint = BehindTargetPoint(defenderRect, homePosition);
+            attackerRect.position = ambushPoint;
+            attackerRect.localRotation = Quaternion.identity;
+            attackerRect.localScale = homeScale * 0.38f;
+            yield return StartCoroutine(PlaySmokeWithScale(
+                parent,
+                attacker,
+                ambushPoint,
+                homeScale * 0.38f,
+                homeScale * 1.04f,
+                0.78f,
+                fadeOut: false));
+
+            StartCoroutine(PlayAssassinBlockedDaggers(parent, defenderRect, ambushPoint));
+            yield return StartCoroutine(PlayClassBlockedWard(
+                parent,
+                blockPoint,
+                defenderRect,
+                new Color(0.18f, 1f, 0.38f, 1f),
+                new Color(0.03f, 0f, 0.05f, 1f),
+                "Assassin Shadow Guard"));
+
+            yield return StartCoroutine(PlaySmokeWithScale(
+                parent,
+                attacker,
+                ambushPoint,
+                attackerRect.localScale,
+                homeScale * 0.3f,
+                0.72f,
+                fadeOut: true));
+            attackerRect.position = homePosition;
+            attackerRect.localRotation = homeRotation;
+            attackerRect.localScale = homeScale * 0.36f;
+            yield return StartCoroutine(PlaySmokeWithScale(
+                parent,
+                attacker,
+                homePosition,
+                homeScale * 0.36f,
+                homeScale,
+                0.74f,
+                fadeOut: false));
+
+            defenderRect.position = defenderStart;
+            defenderRect.localScale = defenderScale;
+            defenderRect.localRotation = defenderRotation;
+            attackerRect.position = homePosition;
+            attackerRect.localScale = homeScale;
+            attackerRect.localRotation = homeRotation;
+            attackerRect.SetSiblingIndex(homeSibling);
+            attacker.SetLayoutIgnored(false);
+        }
+
+        public IEnumerator PlayBarbarianAxeSmashBlocked(PrototypeCardView attacker, PrototypeCardView defender)
+        {
+            RectTransform parent = ResolveProjectileParent(attacker);
+            if (parent == null)
+            {
+                yield return StartCoroutine(attacker.PlayAttackAnimation());
+                yield break;
+            }
+
+            RectTransform attackerRect = attacker.RectTransform;
+            RectTransform defenderRect = defender.RectTransform;
+            Vector3 attackerStart = attackerRect.position;
+            Vector3 attackerScale = attackerRect.localScale;
+            Quaternion attackerRotation = attackerRect.localRotation;
+            Vector3 defenderStart = defenderRect.position;
+            Vector3 defenderScale = defenderRect.localScale;
+            Quaternion defenderRotation = defenderRect.localRotation;
+            Vector3 direction = defenderStart - attackerStart;
+            Vector3 normalizedDirection = direction.sqrMagnitude > 0.001f ? direction.normalized : Vector3.right;
+            float side = Mathf.Sign(normalizedDirection.x == 0f ? 1f : normalizedDirection.x);
+            Vector3 bracePoint = attackerStart - normalizedDirection * 26f;
+            Vector3 blockPoint = EdgePoint(defenderRect, attackerStart);
+
+            GameObject axe = CreateOverlaySprite(
+                parent,
+                "Barbarian Blocked Double Axe",
+                LoadBarbarianDoubleAxeSprite(),
+                new Vector2(240f, 240f),
+                out RectTransform axeRect,
+                out Image axeImage);
+
+            float windupDuration = 0.18f;
+            float elapsed = 0f;
+            while (elapsed < windupDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / windupDuration);
+                float pulse = Mathf.Sin(progress * Mathf.PI);
+                attackerRect.position = Vector3.LerpUnclamped(attackerStart, bracePoint, Mathf.SmoothStep(0f, 1f, progress));
+                attackerRect.localScale = attackerScale * Mathf.Lerp(1f, 1.12f, pulse);
+                attackerRect.localRotation = attackerRotation * Quaternion.Euler(0f, 0f, -side * pulse * 7f);
+                axeRect.position = attackerRect.position + new Vector3(side * 42f, 54f, 0f);
+                axeRect.localRotation = Quaternion.Euler(0f, 0f, -side * Mathf.Lerp(36f, 74f, progress));
+                axeRect.localScale = Vector3.one * Mathf.Lerp(0.74f, 1.08f, progress);
+                axeImage.color = new Color(1f, 1f, 1f, Mathf.Clamp01(progress * 5f));
+                yield return null;
+            }
+
+            Vector3 lungeStart = attackerRect.position;
+            Vector3 lungeEnd = blockPoint - normalizedDirection * 86f + Vector3.up * 8f;
+            float lungeDuration = 0.24f;
+            elapsed = 0f;
+            while (elapsed < lungeDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / lungeDuration);
+                float eased = progress * progress;
+                attackerRect.position = Vector3.LerpUnclamped(lungeStart, lungeEnd, eased);
+                attackerRect.localScale = attackerScale * Mathf.Lerp(1.1f, 1.03f, eased);
+                attackerRect.localRotation = attackerRotation * Quaternion.Euler(0f, 0f, -side * Mathf.Lerp(7f, -4f, eased));
+                axeRect.position = Vector3.LerpUnclamped(attackerRect.position + new Vector3(side * 52f, 60f, 0f), blockPoint - normalizedDirection * 28f, eased);
+                axeRect.localRotation = Quaternion.Euler(0f, 0f, -side * Mathf.Lerp(86f, -32f, eased));
+                axeRect.localScale = Vector3.one * Mathf.Lerp(1.08f, 1.36f, Mathf.Sin(progress * Mathf.PI));
+                axeImage.color = new Color(1f, 1f, 1f, Mathf.Clamp01(Mathf.Min(progress * 8f, (1f - progress) * 9f)));
+                yield return null;
+            }
+
+            yield return StartCoroutine(PlayClassBlockedWard(
+                parent,
+                blockPoint,
+                defenderRect,
+                new Color(1f, 0.22f, 0.02f, 1f),
+                new Color(1f, 0.72f, 0.18f, 1f),
+                "Barbarian Rage Guard"));
+
+            float returnDuration = 0.22f;
+            elapsed = 0f;
+            Vector3 returnStart = attackerRect.position;
+            Quaternion returnRotation = attackerRect.localRotation;
+            while (elapsed < returnDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / returnDuration));
+                attackerRect.position = Vector3.LerpUnclamped(returnStart, attackerStart, progress);
+                attackerRect.localScale = Vector3.LerpUnclamped(attackerRect.localScale, attackerScale, progress);
+                attackerRect.localRotation = Quaternion.SlerpUnclamped(returnRotation, attackerRotation, progress);
+                axeImage.color = new Color(1f, 1f, 1f, 1f - progress);
                 yield return null;
             }
 
@@ -3131,6 +3322,153 @@ namespace AccardND.Battlefield
 
             Destroy(left);
             Destroy(right);
+        }
+
+        private static IEnumerator PlayAssassinBlockedDaggers(RectTransform parent, RectTransform target, Vector3 approachPosition)
+        {
+            Vector3 center = target.position;
+            float approachSide = Mathf.Abs(approachPosition.x - center.x) < 0.001f
+                ? 1f
+                : Mathf.Sign(approachPosition.x - center.x);
+            GameObject left = CreateOverlaySprite(
+                parent,
+                "Assassin Blocked Left Dagger",
+                LoadAssassinDaggerLeftSprite(),
+                new Vector2(164f, 164f),
+                out RectTransform leftRect,
+                out Image leftImage);
+            GameObject right = CreateOverlaySprite(
+                parent,
+                "Assassin Blocked Right Dagger",
+                LoadAssassinDaggerRightSprite(),
+                new Vector2(164f, 164f),
+                out RectTransform rightRect,
+                out Image rightImage);
+
+            Vector3 leftStart = center + new Vector3(approachSide * 116f, 80f, 0f);
+            Vector3 rightStart = center + new Vector3(approachSide * 116f, -62f, 0f);
+            Vector3 leftBlock = center + new Vector3(-approachSide * 32f, -16f, 0f);
+            Vector3 rightBlock = center + new Vector3(-approachSide * 32f, 22f, 0f);
+            Vector3 leftDeflect = leftBlock + new Vector3(approachSide * 94f, 74f, 0f);
+            Vector3 rightDeflect = rightBlock + new Vector3(approachSide * 86f, -76f, 0f);
+            float attackRotation = -90f * approachSide;
+            float duration = 0.44f;
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+                float strike = Mathf.Clamp01(progress / 0.52f);
+                float deflect = Mathf.Clamp01((progress - 0.42f) / 0.58f);
+                float easedStrike = Mathf.SmoothStep(0f, 1f, strike);
+                float easedDeflect = Mathf.SmoothStep(0f, 1f, deflect);
+                leftRect.position = Vector3.LerpUnclamped(Vector3.LerpUnclamped(leftStart, leftBlock, easedStrike), leftDeflect, easedDeflect);
+                rightRect.position = Vector3.LerpUnclamped(Vector3.LerpUnclamped(rightStart, rightBlock, easedStrike), rightDeflect, easedDeflect);
+                leftRect.localRotation = Quaternion.Euler(0f, 0f, attackRotation + approachSide * Mathf.Lerp(0f, 64f, easedDeflect));
+                rightRect.localRotation = Quaternion.Euler(0f, 0f, attackRotation - approachSide * Mathf.Lerp(0f, 58f, easedDeflect));
+                float scale = Mathf.Lerp(0.9f, 1.32f, Mathf.Sin(progress * Mathf.PI));
+                float alpha = Mathf.Clamp01(Mathf.Min(progress * 8f, (1f - progress) * 5f));
+                leftRect.localScale = Vector3.one * scale;
+                rightRect.localScale = Vector3.one * scale;
+                leftImage.color = new Color(0.76f, 1f, 0.82f, alpha);
+                rightImage.color = new Color(0.76f, 1f, 0.82f, alpha);
+                yield return null;
+            }
+
+            Destroy(left);
+            Destroy(right);
+        }
+
+        private static IEnumerator PlayClassBlockedWard(
+            RectTransform parent,
+            Vector3 worldPosition,
+            RectTransform target,
+            Color coreColor,
+            Color shardColor,
+            string objectPrefix)
+        {
+            GameObject ring = CreateOverlaySprite(
+                parent,
+                objectPrefix + " Ring",
+                LoadTargetLineSprite(),
+                new Vector2(260f, 260f),
+                out RectTransform ringRect,
+                out Image ringImage);
+            ringImage.preserveAspect = false;
+            GameObject core = CreateOverlaySprite(
+                parent,
+                objectPrefix + " Core",
+                LoadAssassinSmokeSprite(),
+                new Vector2(210f, 210f),
+                out RectTransform coreRect,
+                out Image coreImage);
+
+            const int shardCount = 16;
+            RectTransform[] shardRects = new RectTransform[shardCount];
+            Image[] shardImages = new Image[shardCount];
+            GameObject[] shardObjects = new GameObject[shardCount];
+            Vector3[] shardOffsets = new Vector3[shardCount];
+            float[] shardRotations = new float[shardCount];
+            for (int i = 0; i < shardCount; i++)
+            {
+                shardObjects[i] = CreateOverlaySprite(
+                    parent,
+                    objectPrefix + " Shard",
+                    LoadTargetLineSprite(),
+                    new Vector2(UnityEngine.Random.Range(46f, 86f), UnityEngine.Random.Range(7f, 15f)),
+                    out shardRects[i],
+                    out shardImages[i]);
+                shardImages[i].preserveAspect = false;
+                float angle = (Mathf.PI * 2f * i / shardCount) + UnityEngine.Random.Range(-0.18f, 0.18f);
+                float distance = UnityEngine.Random.Range(74f, 166f);
+                shardOffsets[i] = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle) * 0.7f, 0f) * distance;
+                shardRotations[i] = angle * Mathf.Rad2Deg;
+            }
+
+            Vector3 targetStart = target.position;
+            Vector3 targetScale = target.localScale;
+            Quaternion targetRotation = target.localRotation;
+            float duration = 0.52f;
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+                float eased = Mathf.SmoothStep(0f, 1f, progress);
+                float fade = 1f - eased;
+                float flash = Mathf.Sin(progress * Mathf.PI);
+                ringRect.position = worldPosition;
+                ringRect.localScale = Vector3.one * Mathf.Lerp(0.18f, 1.74f, eased);
+                ringRect.localRotation = Quaternion.Euler(0f, 0f, progress * 132f);
+                ringImage.color = new Color(coreColor.r, coreColor.g, coreColor.b, fade * 0.72f);
+                coreRect.position = worldPosition;
+                coreRect.localScale = Vector3.one * Mathf.Lerp(0.32f, 1.22f, flash);
+                coreRect.localRotation = Quaternion.Euler(0f, 0f, -progress * 48f);
+                coreImage.color = new Color(coreColor.r, coreColor.g, coreColor.b, Mathf.Clamp01(Mathf.Min(progress * 9f, fade * 0.68f)));
+
+                float shake = fade * 8f;
+                target.position = targetStart + new Vector3(UnityEngine.Random.Range(-shake, shake), UnityEngine.Random.Range(-shake, shake) * 0.36f, 0f);
+                target.localScale = targetScale * (1f + flash * 0.045f);
+                target.localRotation = targetRotation * Quaternion.Euler(0f, 0f, Mathf.Sin(progress * Mathf.PI * 6f) * fade * 3.2f);
+
+                for (int i = 0; i < shardCount; i++)
+                {
+                    shardRects[i].position = worldPosition + shardOffsets[i] * eased;
+                    shardRects[i].localRotation = Quaternion.Euler(0f, 0f, shardRotations[i] + progress * 70f);
+                    shardRects[i].localScale = Vector3.one * Mathf.Lerp(0.7f, 1.18f, flash);
+                    shardImages[i].color = new Color(shardColor.r, shardColor.g, shardColor.b, fade * 0.86f);
+                }
+
+                yield return null;
+            }
+
+            target.position = targetStart;
+            target.localScale = targetScale;
+            target.localRotation = targetRotation;
+            Destroy(ring);
+            Destroy(core);
+            for (int i = 0; i < shardCount; i++)
+                Destroy(shardObjects[i]);
         }
 
         private static GameObject CreateOverlaySprite(

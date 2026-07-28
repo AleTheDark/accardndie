@@ -49,6 +49,7 @@ namespace AccardND.NetProtocol
         public int rank;
         public string playerId;
         public string username;
+        public string selectedIconId;
         public string tier;
         public string division;
         public int leaguePoints;

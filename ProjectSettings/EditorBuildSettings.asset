@@ -17,6 +17,9 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/BragusBossDebug.unity
     guid: 3aa169b9161f40929fe2c5e7c0de956c
+  - enabled: 0
+    path: Assets/Scenes/MerchantDebug.unity
+    guid: 1fb1e87e9db24e8faad1973110883da7
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

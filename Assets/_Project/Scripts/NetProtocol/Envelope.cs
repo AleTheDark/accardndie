@@ -31,6 +31,8 @@ namespace AccardND.NetProtocol
         public const string RoomCreated = "room.created";
         public const string RoomJoin = "room.join";
         public const string RoomLeave = "room.leave";
+        public const string RoomsList = "rooms.list";
+        public const string RoomsData = "rooms.data";
 
         public const string QueueJoin = "queue.join";
         public const string QueueStatus = "queue.status";
@@ -85,6 +87,17 @@ namespace AccardND.NetProtocol
         public const string SinglePlayerClaimDeathReward = "singleplayer.reward.death";
         public const string SinglePlayerClaimAdMultiplier = "singleplayer.reward.ad_multiplier";
         public const string SinglePlayerRewardResult = "singleplayer.reward.result";
+        public const string SinglePlayerClearChapter = "singleplayer.chapter.cleared";
+
+        public const string SanctuaryGet = "sanctuary.get";
+        public const string SanctuaryData = "sanctuary.data";
+        public const string SanctuaryBuyItem = "sanctuary.item.buy";
+        public const string SanctuarySetBag = "sanctuary.bag.set";
+
+        public const string TavernGet = "tavern.get";
+        public const string TavernData = "tavern.data";
+        public const string TavernClaimQuest = "tavern.quest.claim";
+        public const string TavernClaimBonus = "tavern.bonus.claim";
     }
 
     public static class ErrorCodes
@@ -103,5 +116,6 @@ namespace AccardND.NetProtocol
         public const string InsufficientHoney = "insufficient_honey";
         public const string RewardClaimNotFound = "reward_claim_not_found";
         public const string AdAlreadyUsed = "ad_already_used";
+        public const string RequirementsNotMet = "requirements_not_met";
     }
 }

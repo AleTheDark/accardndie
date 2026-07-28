@@ -33,6 +33,37 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void CompleteMinibossRoom_CountsTheMiniboss()
+        {
+            var progress = CreateProgress();
+
+            progress.CompleteMinibossRoom(50);
+            progress.CompleteMinibossRoom(50);
+
+            Assert.That(progress.MinibossesDefeated, Is.EqualTo(2));
+            Assert.That(progress.EnemiesDefeated, Is.Zero);
+        }
+
+        [Test]
+        public void RecordEnemiesDefeated_AccumulatesAcrossRooms()
+        {
+            var progress = CreateProgress();
+
+            progress.RecordEnemiesDefeated(3);
+            progress.RecordEnemiesDefeated(2);
+
+            Assert.That(progress.EnemiesDefeated, Is.EqualTo(5));
+        }
+
+        [Test]
+        public void RecordEnemiesDefeated_RejectsNegativeCount()
+        {
+            var progress = CreateProgress();
+
+            Assert.Throws<System.ArgumentOutOfRangeException>(() => progress.RecordEnemiesDefeated(-1));
+        }
+
+        [Test]
         public void ExperienceLevelsUpAndChangesVigorDie()
         {
             var progress = CreateProgress();

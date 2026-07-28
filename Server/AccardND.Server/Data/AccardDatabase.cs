@@ -209,6 +209,10 @@ public sealed class AccardDatabase
             CREATE TABLE IF NOT EXISTS single_player_progress (
                 player_id          TEXT PRIMARY KEY,
                 honey              INTEGER NOT NULL DEFAULT 0,
+                account_level      INTEGER NOT NULL DEFAULT 1,
+                account_experience INTEGER NOT NULL DEFAULT 0,
+                account_total_experience INTEGER NOT NULL DEFAULT 0,
+                account_experience_to_next_level INTEGER NOT NULL DEFAULT 100,
                 tutorial_completed INTEGER NOT NULL DEFAULT 0,
                 hardcore_unlocked  INTEGER NOT NULL DEFAULT 0,
                 updated_at         TEXT NOT NULL,
@@ -234,6 +238,7 @@ public sealed class AccardDatabase
                 player_id        TEXT NOT NULL,
                 reward_type      TEXT NOT NULL,
                 base_honey       INTEGER NOT NULL,
+                base_account_experience INTEGER NOT NULL DEFAULT 0,
                 multiplier       INTEGER NOT NULL DEFAULT 1,
                 ad_impression_id TEXT,
                 source_ref       TEXT,
@@ -272,7 +277,121 @@ public sealed class AccardDatabase
                 snapshot_at    TEXT NOT NULL,
                 PRIMARY KEY (season_id, player_id)
             );
+
+            -- Storico login: una riga per ogni autenticazione riuscita. Alimenta i
+            -- grafici 'login nel tempo' del pannello admin (accounts.last_login_at
+            -- conserva solo l'ultimo accesso, questa tabella conserva la serie).
+            CREATE TABLE IF NOT EXISTS login_events (
+                event_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_id   TEXT NOT NULL,
+                provider    TEXT NOT NULL,          -- 'password' | 'ugs' | 'google' | ...
+                occurred_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_login_events_time ON login_events(occurred_at);
+            CREATE INDEX IF NOT EXISTS ix_login_events_player ON login_events(player_id);
+
+            -- Storico run di campagna (single player): una riga per ogni run conclusa
+            -- (morte). Persistita dal sommario che il client invia con la death reward.
+            -- client_run_ref = runId lato client, per collegare la riga al reward claim.
+            CREATE TABLE IF NOT EXISTS campaign_runs (
+                run_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_id        TEXT NOT NULL,
+                client_run_ref   TEXT,
+                mode             TEXT,
+                chapter_id       TEXT,
+                stage_id         TEXT,
+                rooms_cleared    INTEGER NOT NULL DEFAULT 0,
+                enemies_defeated INTEGER NOT NULL DEFAULT 0,
+                bosses_defeated  INTEGER NOT NULL DEFAULT 0,
+                minibosses_defeated INTEGER NOT NULL DEFAULT 0,
+                defeated_boss_ids TEXT,          -- id boss/miniboss sconfitti, separati da virgola
+                honey_reward     INTEGER NOT NULL DEFAULT 0,
+                ended_at         TEXT NOT NULL
+            );
+            -- Contatori cumulativi di campagna (single player). Aggregano quello che le righe
+            -- di campaign_runs raccontano una per una, cosi' i requisiti del Santuario si
+            -- valutano con una lettura invece che con una scansione dello storico.
+            CREATE TABLE IF NOT EXISTS player_counters (
+                player_id   TEXT NOT NULL,
+                counter_key TEXT NOT NULL,
+                value       INTEGER NOT NULL DEFAULT 0,
+                updated_at  TEXT NOT NULL,
+                PRIMARY KEY (player_id, counter_key),
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+
+            -- Scorta permanente di consumabili acquistati al Santuario. Il conteggio cala
+            -- solo quando un oggetto viene davvero usato in una run.
+            CREATE TABLE IF NOT EXISTS player_consumables (
+                player_id TEXT NOT NULL,
+                item_id   TEXT NOT NULL,
+                count     INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (player_id, item_id),
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+
+            -- Bisaccia: quali oggetti della scorta il giocatore porta nella prossima run.
+            -- La chiave primaria impone da sola la regola di un solo pezzo per tipo.
+            CREATE TABLE IF NOT EXISTS player_bag (
+                player_id TEXT NOT NULL,
+                item_id   TEXT NOT NULL,
+                PRIMARY KEY (player_id, item_id),
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+
+            -- Quest della taverna assegnate a un giocatore per una data (UTC).
+            -- baseline e' il valore del contatore nel momento dell'assegnazione: il progresso
+            -- e' la differenza, cosi' non serve un secondo sistema di tracciamento.
+            CREATE TABLE IF NOT EXISTS player_tavern_quests (
+                player_id  TEXT NOT NULL,
+                day        TEXT NOT NULL,          -- yyyy-MM-dd in UTC
+                quest_id   TEXT NOT NULL,
+                baseline   INTEGER NOT NULL DEFAULT 0,
+                claimed_at TEXT,
+                PRIMARY KEY (player_id, day, quest_id),
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+
+            -- Premio di giornata (tutte le quest completate). Sta a parte invece che come
+            -- riga speciale di player_tavern_quests: non ha un contatore ne' una soglia, e
+            -- mescolarlo alle quest costringerebbe ogni lettura a filtrarlo via.
+            CREATE TABLE IF NOT EXISTS player_tavern_bonus (
+                player_id  TEXT NOT NULL,
+                day        TEXT NOT NULL,          -- yyyy-MM-dd in UTC
+                claimed_at TEXT NOT NULL,
+                PRIMARY KEY (player_id, day),
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_campaign_runs_time ON campaign_runs(ended_at);
+            CREATE INDEX IF NOT EXISTS ix_campaign_runs_player ON campaign_runs(player_id);
         ";
         command.ExecuteNonQuery();
+        AddColumnIfMissing(connection, "single_player_progress", "account_level", "INTEGER NOT NULL DEFAULT 1");
+        AddColumnIfMissing(connection, "single_player_progress", "account_experience", "INTEGER NOT NULL DEFAULT 0");
+        AddColumnIfMissing(connection, "single_player_progress", "account_total_experience", "INTEGER NOT NULL DEFAULT 0");
+        AddColumnIfMissing(connection, "single_player_progress", "account_experience_to_next_level", "INTEGER NOT NULL DEFAULT 100");
+        AddColumnIfMissing(connection, "single_player_reward_claims", "base_account_experience", "INTEGER NOT NULL DEFAULT 0");
+        AddColumnIfMissing(connection, "campaign_runs", "minibosses_defeated", "INTEGER NOT NULL DEFAULT 0");
+        AddColumnIfMissing(connection, "campaign_runs", "defeated_boss_ids", "TEXT");
+    }
+
+    private static void AddColumnIfMissing(
+        SqliteConnection connection, string tableName, string columnName, string definition)
+    {
+        using (SqliteCommand check = connection.CreateCommand())
+        {
+            check.CommandText = $"PRAGMA table_info({tableName})";
+            using SqliteDataReader reader = check.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+        }
+
+        using SqliteCommand alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {tableName} ADD COLUMN {columnName} {definition}";
+        alter.ExecuteNonQuery();
     }
 }

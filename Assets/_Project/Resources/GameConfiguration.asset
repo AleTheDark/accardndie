@@ -100,8 +100,8 @@ MonoBehaviour:
     opportunityExperienceJackpot: 50
     lootReserveCards: 1
     merchantHeroCardCost: 15
-    godMerchantHeroCardCost: 30
-    godMerchantMinimumStrength: 7
+    merchantCardCostPerStrength: 2
+    merchantMysteryCardCost: 20
   classBalance:
     rogueRerollsOnes: 1
     barbarianRageBonus: 2

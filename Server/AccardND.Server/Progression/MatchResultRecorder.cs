@@ -100,6 +100,14 @@ public sealed class MatchResultRecorder
                 bWon, bLost, forfeit && bLost, outcome.ScoreB, outcome.ScoreA, seconds);
         }
 
+        // Contatori per le quest della taverna. Restano separati da player_stats perche'
+        // quelli sono aggregati di scope (lifetime/stagione) mentre le quest lavorano sulla
+        // differenza rispetto a un baseline giornaliero, che vive in player_counters.
+        CampaignCounters.RecordPvpMatch(connection, transaction, outcome.PlayerA.PlayerId,
+            aWon, forfeit && aLost, outcome.ScoreA);
+        CampaignCounters.RecordPvpMatch(connection, transaction, outcome.PlayerB.PlayerId,
+            bWon, forfeit && bLost, outcome.ScoreB);
+
         PlayerRankedDelta deltaA = null;
         PlayerRankedDelta deltaB = null;
         bool isRanked = outcome.Ranked && outcome.Winner is 0 or 1;

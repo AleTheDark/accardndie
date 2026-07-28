@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using AccardND.GameData;
+using AccardND.NetProtocol;
 using AccardND.Network;
 using NUnit.Framework;
 
@@ -49,6 +50,46 @@ namespace AccardND.GameCore.Tests
             Assert.That(repoOffline.IsSynced, Is.False);
             // La cache (ultima istantanea nota) resta disponibile per l'uso offline.
             Assert.That(repoOffline.Honey, Is.EqualTo(40));
+        }
+
+        [Test]
+        public void ClearChapterAsync_ForwardsBossAndAppliesNewState()
+        {
+            var server = new FakeServerClient
+            {
+                NextSnapshot = new SinglePlayerProgressSave
+                {
+                    clearedChapters = { "chapter-1" },
+                    unlockedChapters = { "chapter-1", "chapter-2" }
+                }
+            };
+            var repo = new ServerSinglePlayerProgressRepository(
+                server, new LocalSinglePlayerProgressRepository(new InMemoryStore()));
+
+            Await(repo.ClearChapterAsync("boss-bragus"));
+
+            Assert.That(server.LastClearedChapterBossId, Is.EqualTo("boss-bragus"));
+            Assert.That(repo.IsUnlocked(SinglePlayerUnlockType.ChapterCleared, "chapter-1"), Is.True);
+            // Il capitolo successivo arriva dallo stato autoritativo, non da una scrittura locale.
+            Assert.That(repo.IsUnlocked(SinglePlayerUnlockType.Chapter, "chapter-2"), Is.True);
+        }
+
+        [Test]
+        public void RefreshAsync_MirrorsServerCounters()
+        {
+            var server = new FakeServerClient
+            {
+                NextSnapshot = new SinglePlayerProgressSave
+                {
+                    counters = { new SinglePlayerCounterSave { key = "boss_trentor", value = 3 } }
+                }
+            };
+            var repo = new ServerSinglePlayerProgressRepository(
+                server, new LocalSinglePlayerProgressRepository(new InMemoryStore()));
+
+            Await(repo.RefreshAsync());
+
+            Assert.That(repo.GetCounter("boss_trentor"), Is.EqualTo(3));
         }
 
         [Test]
@@ -189,6 +230,52 @@ namespace AccardND.GameCore.Tests
             public Task<SinglePlayerProgressSave> PurchaseHardcoreAsync()
             {
                 HardcorePurchased = true;
+                return ThrowOnPurchase != null
+                    ? Task.FromException<SinglePlayerProgressSave>(ThrowOnPurchase)
+                    : Task.FromResult(NextSnapshot);
+            }
+
+            public string LastClearedChapterBossId;
+            public SanctuaryData NextSanctuary = new SanctuaryData();
+
+            public Task<SanctuaryData> GetSanctuaryAsync() => Task.FromResult(NextSanctuary);
+
+            public string LastBoughtItemId;
+            public string[] LastBag;
+
+            public Task<SanctuaryData> BuySanctuaryItemAsync(string itemId)
+            {
+                LastBoughtItemId = itemId;
+                return Task.FromResult(NextSanctuary);
+            }
+
+            public Task<SanctuaryData> SetSanctuaryBagAsync(string[] itemIds)
+            {
+                LastBag = itemIds;
+                return Task.FromResult(NextSanctuary);
+            }
+
+            public TavernData NextTavern = new TavernData();
+            public string LastClaimedQuestId;
+            public bool TavernBonusClaimed;
+
+            public Task<TavernData> GetTavernAsync() => Task.FromResult(NextTavern);
+
+            public Task<TavernData> ClaimTavernQuestAsync(string questId)
+            {
+                LastClaimedQuestId = questId;
+                return Task.FromResult(NextTavern);
+            }
+
+            public Task<TavernData> ClaimTavernBonusAsync()
+            {
+                TavernBonusClaimed = true;
+                return Task.FromResult(NextTavern);
+            }
+
+            public Task<SinglePlayerProgressSave> ClearChapterAsync(string bossId)
+            {
+                LastClearedChapterBossId = bossId;
                 return ThrowOnPurchase != null
                     ? Task.FromException<SinglePlayerProgressSave>(ThrowOnPurchase)
                     : Task.FromResult(NextSnapshot);

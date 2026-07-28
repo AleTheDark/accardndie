@@ -15,18 +15,19 @@ namespace AccardND.UI
     public sealed class LoginScreenPrototype : MonoBehaviour
     {
         private const string BackgroundResource = "UI/Login/background_main_screen";
-        private const string ButtonResource = "UI/Login/fantasy_login_button";
+        private const string AnonymousButtonResource = "UI/CampaignRestyle/campaign_cta_blue";
+        private const string RankedButtonResource = "UI/MultiplayerRestyle/ranked_cta_frame_v3";
         private const string MainSceneName = "MainScene";
         private const string ServerUrl = "wss://accardndie.com/ws";
         private const string NicknamePrefsKey = "AccardND.PvpNickname";
         private const string PlayerHudNamePrefsKey = "AccardND.PlayerHudName";
         private const string GuestModePrefsKey = "AccardND.GuestMode";
         private const int NicknameMaxLength = 18;
-        private static Sprite buttonSprite;
+        private static Sprite anonymousButtonSprite;
+        private static Sprite rankedButtonSprite;
         private Text statusText;
         private InputField nicknameInput;
         private Button loginButton;
-        private Button guestButton;
         private Button nicknameConfirmButton;
         private bool busy;
         private PvpServerClient serverClient;
@@ -40,7 +41,15 @@ namespace AccardND.UI
 
         private async void Start()
         {
-            await TryResumeSessionAsync();
+            // Ripristina automaticamente solo l'identita' Google. Una sessione
+            // anonima salvata deve invece lasciare visibile la schermata di accesso.
+            if (PlayerPrefs.GetInt(GuestModePrefsKey, 0) == 0)
+                await TryResumeSessionAsync();
+            else
+            {
+                SetStatus("Accedi con Google per continuare.");
+                SetButtonsInteractable(true);
+            }
         }
 
         /// <summary>
@@ -60,7 +69,7 @@ namespace AccardND.UI
                 (string accessToken, string provider) = await PvpUgsAuth.TryResumeSessionAsync();
                 if (string.IsNullOrEmpty(accessToken))
                 {
-                    SetStatus("Accedi per giocare online.");
+                    SetStatus("Accedi con Google per continuare.");
                     SetButtonsInteractable(true);
                     busy = false;
                     return;
@@ -76,7 +85,7 @@ namespace AccardND.UI
             {
                 // Sessione scaduta o server non raggiungibile: si ricade sui bottoni.
                 Debug.LogWarning($"[Login] Ripristino sessione fallito: {exception.Message}");
-                SetStatus("Accedi per giocare online.");
+                SetStatus("Accedi con Google per continuare.");
                 SetButtonsInteractable(true);
                 busy = false;
             }
@@ -119,6 +128,7 @@ namespace AccardND.UI
                 20,
                 TextAnchor.MiddleCenter,
                 new Color(0.88f, 0.92f, 0.96f));
+            MmoUiTheme.StyleAsScreenTitle(statusText);
             statusText.horizontalOverflow = HorizontalWrapMode.Wrap;
             SetRect(statusText.rectTransform, new Vector2(0f, 52f), new Vector2(540f, 120f));
 
@@ -128,26 +138,19 @@ namespace AccardND.UI
             nicknameInput.onEndEdit.AddListener(_ => SubmitNickname());
 
             loginButton = CreateButton(panel, "Login", "ACCEDI GOOGLE", new Vector2(0f, -105f), 27);
-            guestButton = CreateButton(panel, "Anonymous", "GIOCA ANONIMO", new Vector2(0f, -235f), 25);
             nicknameConfirmButton = CreateButton(panel, "Confirm Nickname", "CONFERMA", new Vector2(0f, -195f), 28);
             nicknameConfirmButton.gameObject.SetActive(false);
 
             loginButton.onClick.AddListener(StartGoogleFlow);
-            guestButton.onClick.AddListener(StartAnonymousFlow);
             nicknameConfirmButton.onClick.AddListener(SubmitNickname);
         }
 
         private async void StartGoogleFlow()
         {
-            await StartOnlineFlowAsync(LoginMode.Google);
+            await StartOnlineFlowAsync();
         }
 
-        private async void StartAnonymousFlow()
-        {
-            await StartOnlineFlowAsync(LoginMode.Anonymous);
-        }
-
-        private async Task StartOnlineFlowAsync(LoginMode mode)
+        private async Task StartOnlineFlowAsync()
         {
             if (busy)
                 return;
@@ -158,13 +161,13 @@ namespace AccardND.UI
             {
                 SetGuestMode(false);
                 await CheckForUpdatesAsync();
-                await AuthenticateAsync(mode);
+                await AuthenticateWithGoogleAsync();
                 await ConnectAccountServerAsync();
                 OpenMainScene();
             }
             catch (System.Exception exception)
             {
-                SetStatus($"Accesso non riuscito: {exception.Message}\nPuoi riprovare con Google o anonimo.");
+                SetStatus($"Accesso non riuscito: {exception.Message}\nPuoi riprovare con Google.");
                 SetButtonsInteractable(true);
                 busy = false;
             }
@@ -181,17 +184,15 @@ namespace AccardND.UI
             SetStatus("Gioco aggiornato.");
         }
 
-        private async Task AuthenticateAsync(LoginMode mode)
+        private async Task AuthenticateWithGoogleAsync()
         {
-            SetStatus($"Accesso con {PlatformLoginLabel(mode)}...");
+            SetStatus($"Accesso con {GoogleLoginLabel()}...");
             if (!PvpUgsAuth.IsAvailable)
             {
                 throw new System.InvalidOperationException("Unity Authentication non disponibile.");
             }
 
-            (string accessToken, string provider) = mode == LoginMode.Google
-                ? await PvpUgsAuth.SignInWithGoogleAsync()
-                : await PvpUgsAuth.SignInAnonymouslyAsync();
+            (string accessToken, string provider) = await PvpUgsAuth.SignInWithGoogleAsync();
             if (string.IsNullOrEmpty(accessToken))
                 throw new System.InvalidOperationException(provider ?? "token mancante");
 
@@ -200,11 +201,8 @@ namespace AccardND.UI
             await WaitSecondsAsync(0.25f);
         }
 
-        private static string PlatformLoginLabel(LoginMode mode)
+        private static string GoogleLoginLabel()
         {
-            if (mode == LoginMode.Anonymous)
-                return "account anonimo";
-
 #if UNITY_WEBGL && !UNITY_EDITOR
             return "Google";
 #elif UNITY_ANDROID
@@ -212,12 +210,6 @@ namespace AccardND.UI
 #else
             return "Unity Authentication";
 #endif
-        }
-
-        private enum LoginMode
-        {
-            Google,
-            Anonymous
         }
 
         private async Task ConnectAccountServerAsync()
@@ -241,12 +233,21 @@ namespace AccardND.UI
                 throw new System.InvalidOperationException(auth?.error ?? "server account non disponibile");
 
             if (auth.requiresNickname)
-                await RequireNicknameAsync();
+            {
+                auth.username = await RequireNicknameAsync();
+                auth.requiresNickname = false;
+            }
             else
                 SaveNickname(auth.username);
+
+            AccountServerSession.Adopt(
+                serverClient,
+                new PvpServerMessageDispatcher(serverClient),
+                auth);
+            serverClient = null;
         }
 
-        private async Task RequireNicknameAsync()
+        private async Task<string> RequireNicknameAsync()
         {
             SetStatus("Scegli un nickname unico per continuare.");
             SetNicknameUiVisible(true);
@@ -275,7 +276,7 @@ namespace AccardND.UI
                     SetStatus($"Benvenuto, {response.nickname}.");
                     SetNicknameUiVisible(false);
                     await WaitSecondsAsync(0.35f);
-                    return;
+                    return response.nickname;
                 }
 
                 SetStatus(response?.error ?? "Nickname non disponibile. Scegline un altro.");
@@ -325,8 +326,6 @@ namespace AccardND.UI
                 nicknameConfirmButton.gameObject.SetActive(visible);
             if (loginButton != null)
                 loginButton.gameObject.SetActive(!visible);
-            if (guestButton != null)
-                guestButton.gameObject.SetActive(!visible);
         }
 
         private void OpenMainScene()
@@ -368,8 +367,6 @@ namespace AccardND.UI
         {
             if (loginButton != null)
                 loginButton.interactable = interactable;
-            if (guestButton != null)
-                guestButton.interactable = interactable;
         }
 
         private static string SanitizeNickname(string raw)
@@ -410,8 +407,8 @@ namespace AccardND.UI
             RectTransform rect = image.rectTransform;
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.sizeDelta = new Vector2(650f, 960f);
-            rect.anchoredPosition = new Vector2(0f, -350f);
+            rect.anchoredPosition = new Vector2(-2.4519f, 3.741f);
+            rect.sizeDelta = new Vector2(654.9038f, 765.4821f);
             return rect;
         }
 
@@ -439,11 +436,13 @@ namespace AccardND.UI
         private static Button CreateButton(Transform parent, string name, string label, Vector2 position, int fontSize = 34)
         {
             Image image = CreateObject<Image>(name, parent);
-            image.sprite = LoadButtonSprite();
-            // La cornice include già estremità, rune e glow: viene scalata come un unico
-            // elemento per conservarne l'aspetto esatto. Il 9-slice resta utile solo per
-            // varianti di larghezza future, dopo aver separato le estremità in layer.
-            image.type = Image.Type.Simple;
+            MmoUiTheme.ButtonVariant variant = label.Contains("CONFERMA")
+                ? MmoUiTheme.ButtonVariant.Emerald
+                : name == "Login"
+                    ? MmoUiTheme.ButtonVariant.Gold
+                    : MmoUiTheme.ButtonVariant.Arcane;
+            image.sprite = MmoUiTheme.GetButtonSprite(variant);
+            image.type = Image.Type.Sliced;
             image.preserveAspect = false;
             image.color = new Color(1f, 1f, 1f, 1f);
             SetRect(image.rectTransform, position, new Vector2(550f, 145f));
@@ -453,47 +452,159 @@ namespace AccardND.UI
             MmoUiTheme.ApplyButtonColors(button);
             MmoUiTheme.AddMotion(button);
 
-            Text text = CreateText(image.transform, "Label", label, fontSize, TextAnchor.MiddleCenter, MmoUiTheme.Gold);
+            Text text = CreateText(
+                image.transform,
+                "Label",
+                label,
+                fontSize,
+                TextAnchor.MiddleCenter,
+                Color.Lerp(Color.white, MmoUiTheme.AccentOf(variant), 0.12f));
+            MmoUiTheme.StyleAsScreenTitle(text);
             text.fontStyle = FontStyle.Normal;
             Shadow goldDepth = text.gameObject.AddComponent<Shadow>();
-            goldDepth.effectColor = new Color(0.32f, 0.08f, 0.015f, 1f);
-            goldDepth.effectDistance = new Vector2(0f, -3f);
+            goldDepth.effectColor = new Color(0f, 0f, 0f, 0.9f);
+            goldDepth.effectDistance = new Vector2(1.5f, -2f);
             SetStretch(text.rectTransform, 96f, 8f);
+
+            if (name == "Login")
+            {
+                MmoUiTheme.ApplyBackButtonStyle(button, text);
+                text.color = Color.white;
+            }
+            else if (name == "Anonymous")
+                ApplyAnonymousButtonStyle(button, text);
+            else if (name == "Confirm Nickname")
+                ApplyRankedConfirmButtonStyle(button, text);
+
             return button;
         }
 
-        private static Sprite LoadButtonSprite()
+        private static void ApplyRankedConfirmButtonStyle(Button button, Text label)
         {
-            if (buttonSprite != null)
-                return buttonSprite;
-
-            buttonSprite = Resources.Load<Sprite>(ButtonResource);
-            if (buttonSprite != null)
-                return buttonSprite;
-
-            // Alcune versioni dell'importer espongono prima la Texture2D dello Sprite.
-            Texture2D texture = Resources.Load<Texture2D>(ButtonResource);
-            if (texture == null)
+            Image image = button.GetComponent<Image>();
+            Sprite frame = GetRankedButtonSprite();
+            if (image != null && frame != null)
             {
-                Debug.LogError($"[Login Prototype] Asset pulsante non trovato in Resources/{ButtonResource}.");
-                return MmoUiTheme.GetButtonSprite(MmoUiTheme.ButtonVariant.Violet);
+                image.sprite = frame;
+                image.type = Image.Type.Simple;
+                image.preserveAspect = true;
+                image.color = Color.white;
+                button.targetGraphic = image;
+
+                ColorBlock colors = button.colors;
+                colors.normalColor = Color.white;
+                colors.highlightedColor = new Color(1f, 0.92f, 1f, 1f);
+                colors.pressedColor = new Color(0.8f, 0.68f, 0.92f, 1f);
+                colors.selectedColor = Color.white;
+                button.colors = colors;
+                button.transition = Selectable.Transition.ColorTint;
             }
 
-            buttonSprite = Sprite.Create(
+            MmoUiTheme.StyleAsScreenTitle(label);
+            label.color = new Color(0.98f, 0.95f, 1f, 1f);
+            label.alignment = TextAnchor.MiddleCenter;
+            label.rectTransform.anchorMin = new Vector2(0.06f, 0.03f);
+            label.rectTransform.anchorMax = new Vector2(0.94f, 0.97f);
+            label.rectTransform.offsetMin = Vector2.zero;
+            label.rectTransform.offsetMax = Vector2.zero;
+
+            PvpUiVfx.CreateRankedButton(
+                (RectTransform)button.transform,
+                MmoUiTheme.AccentOf(MmoUiTheme.ButtonVariant.Violet));
+        }
+
+        private static Sprite GetRankedButtonSprite()
+        {
+            if (rankedButtonSprite != null)
+                return rankedButtonSprite;
+
+            Texture2D texture = Resources.Load<Texture2D>(RankedButtonResource);
+            if (texture == null)
+            {
+                Debug.LogError($"[Login Prototype] CTA ranked viola non trovato in Resources/{RankedButtonResource}.");
+                return null;
+            }
+
+            Rect crop = new(
+                texture.width * (145f / 2048f),
+                texture.height * (196f / 820f),
+                texture.width * (1692f / 2048f),
+                texture.height * (400f / 820f));
+            rankedButtonSprite = Sprite.Create(
                 texture,
-                new Rect(0f, 0f, texture.width, texture.height),
+                crop,
                 new Vector2(0.5f, 0.5f),
                 100f,
                 0u,
-                SpriteMeshType.FullRect,
-                new Vector4(400f, 205f, 400f, 205f));
-            buttonSprite.name = "Fantasy Login Button (Runtime)";
-            return buttonSprite;
+                SpriteMeshType.FullRect);
+            rankedButtonSprite.name = "Login Confirm Ranked Purple CTA";
+            rankedButtonSprite.hideFlags = HideFlags.HideAndDontSave;
+            return rankedButtonSprite;
+        }
+
+        private static void ApplyAnonymousButtonStyle(Button button, Text label)
+        {
+            Image image = button.GetComponent<Image>();
+            Sprite frame = GetAnonymousButtonSprite();
+            if (image != null && frame != null)
+            {
+                image.sprite = frame;
+                image.type = Image.Type.Simple;
+                image.preserveAspect = true;
+                image.color = Color.white;
+                button.targetGraphic = image;
+
+                ColorBlock colors = button.colors;
+                colors.normalColor = Color.white;
+                colors.highlightedColor = new Color(0.86f, 0.94f, 1f, 1f);
+                colors.pressedColor = new Color(0.38f, 0.56f, 0.82f, 1f);
+                colors.selectedColor = Color.white;
+                button.colors = colors;
+                button.transition = Selectable.Transition.ColorTint;
+            }
+
+            MmoUiTheme.StyleAsScreenTitle(label);
+            label.color = new Color(0.94f, 0.97f, 1f, 1f);
+            label.alignment = TextAnchor.MiddleCenter;
+            label.rectTransform.anchorMin = new Vector2(0.12f, 0.03f);
+            label.rectTransform.anchorMax = new Vector2(0.88f, 0.97f);
+            label.rectTransform.offsetMin = Vector2.zero;
+            label.rectTransform.offsetMax = Vector2.zero;
+        }
+
+        private static Sprite GetAnonymousButtonSprite()
+        {
+            if (anonymousButtonSprite != null)
+                return anonymousButtonSprite;
+
+            Texture2D texture = Resources.Load<Texture2D>(AnonymousButtonResource);
+            if (texture == null)
+            {
+                Debug.LogError($"[Login Prototype] CTA blu non trovato in Resources/{AnonymousButtonResource}.");
+                return null;
+            }
+
+            Rect crop = new(
+                texture.width * (145f / 1983f),
+                texture.height * (196f / 793f),
+                texture.width * (1692f / 1983f),
+                texture.height * (400f / 793f));
+            anonymousButtonSprite = Sprite.Create(
+                texture,
+                crop,
+                new Vector2(0.5f, 0.5f),
+                100f,
+                0u,
+                SpriteMeshType.FullRect);
+            anonymousButtonSprite.name = "Login Anonymous Blue CTA";
+            anonymousButtonSprite.hideFlags = HideFlags.HideAndDontSave;
+            return anonymousButtonSprite;
         }
 
         private static void CreateTitle(Transform parent, string value, Vector2 position, int size)
         {
             Text text = CreateText(parent, "Title", value, size, TextAnchor.MiddleCenter, MmoUiTheme.Gold);
+            MmoUiTheme.StyleAsScreenTitle(text);
             SetRect(text.rectTransform, position, new Vector2(560f, 64f));
         }
 
@@ -507,8 +618,8 @@ namespace AccardND.UI
         {
             Text text = CreateObject<Text>(name, parent);
             text.text = value;
-            text.font = MmoUiTheme.TitleFont;
-            text.fontStyle = FontStyle.Bold;
+            text.font = MmoUiTheme.TitleBoldFont;
+            text.fontStyle = FontStyle.Normal;
             text.fontSize = size;
             text.resizeTextForBestFit = true;
             text.resizeTextMinSize = 12;

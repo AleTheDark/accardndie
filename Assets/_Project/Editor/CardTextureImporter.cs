@@ -11,7 +11,7 @@ namespace AccardND.Editor
 
         public void OnPreprocessBuild(BuildReport report)
         {
-            if (report.summary.platform == BuildTarget.Android)
+            if (report.summary.platform == BuildTarget.Android || report.summary.platform == BuildTarget.WebGL)
                 AndroidTextureOptimizer.OptimizeAndroidTextures();
         }
     }
@@ -27,7 +27,8 @@ namespace AccardND.Editor
             "Assets/_Project/Resources/Backgrounds",
             "Assets/_Project/Resources/BattlePreviews",
             "Assets/_Project/Resources/StatusIcons",
-            "Assets/_Project/Resources/UI"
+            "Assets/_Project/Resources/UI",
+            "Assets/Resources/UI"
         };
 
         [MenuItem("Accard N' Die/Optimize Android Textures", priority = 50)]
@@ -67,6 +68,20 @@ namespace AccardND.Editor
         {
             ApplyCompressedPlatform(importer, "Standalone", maximumSize, true);
             ApplyCompressedPlatform(importer, "iOS", maximumSize, false);
+            ApplyCompressedPlatform(importer, "WebGL", maximumSize, false);
+        }
+
+        public static void ApplyHighQualityWebGL(TextureImporter importer, int maximumSize)
+        {
+            TextureImporterPlatformSettings settings = importer.GetPlatformTextureSettings("WebGL");
+            settings.name = "WebGL";
+            settings.overridden = true;
+            settings.maxTextureSize = maximumSize;
+            settings.format = TextureImporterFormat.Automatic;
+            settings.textureCompression = TextureImporterCompression.Uncompressed;
+            settings.compressionQuality = 100;
+            settings.crunchedCompression = false;
+            importer.SetPlatformTextureSettings(settings);
         }
 
         private static void ApplyCompressedPlatform(
@@ -119,6 +134,8 @@ namespace AccardND.Editor
         private const string BattlePreviewPath = "Assets/_Project/Resources/BattlePreviews/";
         private const string StatusIconPath = "Assets/_Project/Resources/StatusIcons/";
         private const string UiResourcePath = "Assets/_Project/Resources/UI/";
+        private const string SharedUiResourcePath = "Assets/Resources/UI/";
+        private const string ClassIconAtlasPath = "Assets/Resources/UI/DeckBuilder/class_icons_atlas.png";
 
         private void OnPreprocessTexture()
         {
@@ -127,18 +144,19 @@ namespace AccardND.Editor
             bool isBattlePreview = assetPath.StartsWith(BattlePreviewPath, System.StringComparison.Ordinal);
             bool isStatusIcon = assetPath.StartsWith(StatusIconPath, System.StringComparison.Ordinal);
             bool isUiResource = assetPath.StartsWith(UiResourcePath, System.StringComparison.Ordinal);
-            if (!isCardArt && !isCardBorder && !isBattlePreview && !isStatusIcon && !isUiResource)
+            bool isSharedUiResource = assetPath.StartsWith(SharedUiResourcePath, System.StringComparison.Ordinal);
+            if (!isCardArt && !isCardBorder && !isBattlePreview && !isStatusIcon && !isUiResource && !isSharedUiResource)
                 return;
 
             var importer = (TextureImporter)assetImporter;
             importer.textureType = TextureImporterType.Sprite;
-            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.spriteImportMode = IsClassIconAtlas(assetPath) ? SpriteImportMode.Multiple : SpriteImportMode.Single;
             importer.spritePixelsPerUnit = 100f;
             importer.sRGBTexture = true;
             importer.alphaSource = TextureImporterAlphaSource.FromInput;
             importer.alphaIsTransparency = true;
             importer.mipmapEnabled = false;
-            importer.isReadable = false;
+            importer.isReadable = IsClassIconAtlas(assetPath);
             importer.wrapMode = TextureWrapMode.Clamp;
             importer.filterMode = FilterMode.Bilinear;
             importer.textureCompression = TextureImporterCompression.CompressedHQ;
@@ -169,11 +187,20 @@ namespace AccardND.Editor
                 return;
             }
 
-            if (isUiResource)
+            if (isUiResource || isSharedUiResource)
             {
-                int maximumSize = IsLargeUiResource(assetPath) ? 1024 : 512;
+                bool isHighQualityUiTexture = IsHighQualityUiTexture(assetPath);
+                int maximumSize = isHighQualityUiTexture ? 2048 : IsLargeUiResource(assetPath) ? 1024 : 512;
                 importer.maxTextureSize = maximumSize;
+                if (isHighQualityUiTexture)
+                {
+                    importer.textureCompression = TextureImporterCompression.Uncompressed;
+                    importer.crunchedCompression = false;
+                    importer.compressionQuality = 100;
+                }
                 TextureCompressionSettings.ApplyBuildTargets(importer, maximumSize);
+                if (isHighQualityUiTexture)
+                    TextureCompressionSettings.ApplyHighQualityWebGL(importer, maximumSize);
                 TextureCompressionSettings.ApplyAndroid(importer, maximumSize, TextureImporterFormat.ASTC_6x6);
                 return;
             }
@@ -189,12 +216,33 @@ namespace AccardND.Editor
             return fileName.StartsWith("background_", System.StringComparison.Ordinal)
                 || fileName.EndsWith("_background", System.StringComparison.Ordinal)
                 || fileName.EndsWith("_background_hud", System.StringComparison.Ordinal)
+                || fileName.StartsWith("bg_", System.StringComparison.Ordinal)
                 || fileName.StartsWith("selection_mode_screen", System.StringComparison.Ordinal)
                 || fileName.StartsWith("tutorial-", System.StringComparison.Ordinal)
+                || fileName == "tutorial_chapter"
                 || fileName.StartsWith("card_inspection", System.StringComparison.Ordinal)
                 || fileName.StartsWith("deck_builder_frame", System.StringComparison.Ordinal)
                 || fileName.EndsWith("_overlay", System.StringComparison.Ordinal)
+                || fileName.Contains("background", System.StringComparison.Ordinal)
+                || fileName.EndsWith("_frame", System.StringComparison.Ordinal)
+                || fileName.EndsWith("_panel", System.StringComparison.Ordinal)
+                || fileName.Contains("outer_frame", System.StringComparison.Ordinal)
                 || fileName == "card_inspection_book";
+        }
+
+        private static bool IsHighQualityUiTexture(string path)
+        {
+            string fileName = System.IO.Path.GetFileNameWithoutExtension(path);
+            return path.StartsWith(SharedUiResourcePath + "Hub/", System.StringComparison.Ordinal)
+                    && fileName.StartsWith("bg_", System.StringComparison.Ordinal)
+                || path.StartsWith(SharedUiResourcePath + "Common/", System.StringComparison.Ordinal)
+                    && fileName.Contains("outer_frame", System.StringComparison.Ordinal)
+                || IsClassIconAtlas(path);
+        }
+
+        private static bool IsClassIconAtlas(string path)
+        {
+            return string.Equals(path, ClassIconAtlasPath, System.StringComparison.Ordinal);
         }
     }
 }

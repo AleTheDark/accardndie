@@ -13,18 +13,36 @@ public sealed class RoomManager
 
     private readonly ConcurrentDictionary<string, Room> roomsByCode = new();
 
-    public Room Create(ClientConnection host, PvpLoadout hostLoadout)
+    public Room Create(
+        ClientConnection host,
+        PvpLoadout hostLoadout,
+        string name = null,
+        string mode = null,
+        RoomVisibility visibility = RoomVisibility.Private)
     {
         while (true)
         {
             string code = GenerateCode();
-            var room = new Room(code, host, hostLoadout);
+            var room = new Room(code, host, hostLoadout, name, mode, visibility);
             if (roomsByCode.TryAdd(code, room))
             {
                 host.CurrentRoom = room;
                 return room;
             }
         }
+    }
+
+    /// <summary>
+    /// Stanze da mostrare nell'elenco: in attesa di un avversario, non private,
+    /// dalla più recente alla più vecchia.
+    /// </summary>
+    public IReadOnlyList<Room> ListOpen(int limit)
+    {
+        return roomsByCode.Values
+            .Where(room => room.IsListed)
+            .OrderByDescending(room => room.CreatedAtUtc)
+            .Take(limit)
+            .ToList();
     }
 
     public bool TryJoin(string code, ClientConnection guest, PvpLoadout guestLoadout, out Room room)

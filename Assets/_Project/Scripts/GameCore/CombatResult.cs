@@ -95,6 +95,21 @@ namespace AccardND.GameCore
         public int TotalExperience { get; private set; }
         public int AvailableExperience { get; private set; }
         public int RoomsCleared { get; private set; }
+
+        /// <summary>Nemici eliminati nella run. Alimenta i contatori di progressione permanente.</summary>
+        public int EnemiesDefeated { get; private set; }
+
+        /// <summary>Miniboss sconfitti nella run.</summary>
+        public int MinibossesDefeated { get; private set; }
+
+        /// <summary>
+        /// Dadi tirati nella run: un tiro con due dadi ne conta due. Alimenta le quest della
+        /// taverna, che sono l'unica fonte di miele.
+        /// </summary>
+        public int DiceRolled { get; private set; }
+
+        /// <summary>Abilita' di classe attivate dalle pedine del giocatore nella run.</summary>
+        public int AbilitiesUsed { get; private set; }
         public int MasterLevel => Math.Min(maximumLevel, Math.Max(PlayerLevel, 1 + RoomsCleared / roomsPerMasterLevel));
         public int PlayerVigorDieSides => vigorDiceByLevel[PlayerLevel - 1];
         public int MasterVigorDieSides => vigorDiceByLevel[MasterLevel - 1];
@@ -125,7 +140,32 @@ namespace AccardND.GameCore
         public RoomReward CompleteMinibossRoom(int experienceReward, int experienceMultiplier)
         {
             if (experienceReward < 0) throw new ArgumentOutOfRangeException(nameof(experienceReward));
+            MinibossesDefeated++;
             return CompleteRoom(experienceReward, 0, experienceMultiplier);
+        }
+
+        /// <summary>
+        /// Registra i nemici eliminati in una stanza. Separato da <see cref="CompleteMonsterRoom"/>
+        /// perche' quella riceve le forze dei caduti, a cui il chiamante puo' accodare voci
+        /// aggregate (bonus eroi caduti): contarne gli elementi darebbe un totale gonfiato.
+        /// </summary>
+        public void RecordEnemiesDefeated(int count)
+        {
+            if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
+            EnemiesDefeated += count;
+        }
+
+        /// <summary>Registra dadi lanciati (uno per faccia, quindi due per un tiro doppio).</summary>
+        public void RecordDiceRolled(int count)
+        {
+            if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
+            DiceRolled += count;
+        }
+
+        /// <summary>Registra un'abilita' di classe attivata da una pedina del giocatore.</summary>
+        public void RecordAbilityUsed()
+        {
+            AbilitiesUsed++;
         }
 
         public RoomReward CompleteNonCombatRoom(int experienceReward)
@@ -187,7 +227,8 @@ namespace AccardND.GameCore
         /// configurazione (soglie, dadi, livello massimo) resta quella del costruttore.
         /// </summary>
         public void RestoreProgress(int playerLevel, int currentExperience, int totalExperience,
-            int availableExperience, int roomsCleared)
+            int availableExperience, int roomsCleared, int enemiesDefeated = 0, int minibossesDefeated = 0,
+            int diceRolled = 0, int abilitiesUsed = 0)
         {
             if (playerLevel < 1 || playerLevel > maximumLevel)
                 throw new ArgumentOutOfRangeException(nameof(playerLevel));
@@ -195,6 +236,10 @@ namespace AccardND.GameCore
             if (totalExperience < 0) throw new ArgumentOutOfRangeException(nameof(totalExperience));
             if (availableExperience < 0) throw new ArgumentOutOfRangeException(nameof(availableExperience));
             if (roomsCleared < 0) throw new ArgumentOutOfRangeException(nameof(roomsCleared));
+            if (enemiesDefeated < 0) throw new ArgumentOutOfRangeException(nameof(enemiesDefeated));
+            if (minibossesDefeated < 0) throw new ArgumentOutOfRangeException(nameof(minibossesDefeated));
+            if (diceRolled < 0) throw new ArgumentOutOfRangeException(nameof(diceRolled));
+            if (abilitiesUsed < 0) throw new ArgumentOutOfRangeException(nameof(abilitiesUsed));
 
             PlayerLevel = playerLevel;
             // Al livello massimo l'invariante della classe tiene CurrentExperience a 0.
@@ -202,6 +247,10 @@ namespace AccardND.GameCore
             TotalExperience = totalExperience;
             AvailableExperience = availableExperience;
             RoomsCleared = roomsCleared;
+            EnemiesDefeated = enemiesDefeated;
+            MinibossesDefeated = minibossesDefeated;
+            DiceRolled = diceRolled;
+            AbilitiesUsed = abilitiesUsed;
         }
 
         private static int[] BuildRepeatedExperienceThresholds(int experiencePerLevel, int maximumLevel)

@@ -41,7 +41,6 @@ namespace AccardND.Presentation
         private const float D4ScreenDiceAreaScale = 1.45f;
         private const float ScreenDiceAreaWidth = 0.38f;
         private const float CardAspect = 848f / 1264f;
-        private const float ArtworkViewportAspect = CardAspect * (0.865f - 0.135f) / (0.805f - 0.325f);
         private const float ArtworkCropOverscan = 0.86f;
         private static readonly Color ActionLabelOutline = new(0.02f, 0.01f, 0f);
         private static readonly Color ActionLabelGreen = new(0.05f, 0.56f, 0.24f);
@@ -52,6 +51,8 @@ namespace AccardND.Presentation
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatusIconCaches()
         {
+            runtimePreviewSprites.Clear();
+            croppedArtworkSprites.Clear();
             statusIconCache.Clear();
             statusIconSprites = null;
             statusIconTextures = null;
@@ -139,6 +140,8 @@ namespace AccardND.Presentation
         private Coroutine targetHintAuraCoroutine;
         private Coroutine selectedAuraCoroutine;
         private RectTransform actionOverlayRoot;
+        private RectTransform attackActionRect;
+        private RectTransform abilityActionRect;
         private GameConfiguration configuration;
         private Vector3 initialScale;
         private Color turnAuraColor;
@@ -378,6 +381,7 @@ namespace AccardND.Presentation
                 holder.sprite = Resources.Load<Sprite>($"CardBorders/{BorderResourceName(definition.HeroClass)}");
                 holder.preserveAspect = true;
                 Stretch(holder.rectTransform);
+                holder.rectTransform.localScale = Vector3.one * BorderVisualScale(definition.HeroClass);
             }
 
             Font font = AccardND.Battlefield.MmoUiTheme.BodyFont;
@@ -389,6 +393,21 @@ namespace AccardND.Presentation
             strengthOutline.effectDistance = new Vector2(2.5f, -2.5f);
             strengthOutline.useGraphicAlpha = true;
             SetAnchors(strengthText.rectTransform, new Vector2(0.735f, 0.7f), new Vector2(0.935f, 0.88f));
+            if (definition.HeroClass == HeroClass.Rogue)
+            {
+                strengthText.rectTransform.offsetMin = new Vector2(-4.5f, -1.8f);
+                strengthText.rectTransform.offsetMax = new Vector2(-4.5f, -1.8f);
+            }
+            else if (definition.HeroClass == HeroClass.Mage)
+            {
+                strengthText.rectTransform.offsetMin = new Vector2(-4f, -2.2f);
+                strengthText.rectTransform.offsetMax = new Vector2(-4f, -2.2f);
+            }
+            else if (definition.HeroClass == HeroClass.Warrior)
+            {
+                strengthText.rectTransform.offsetMin = new Vector2(0f, 10.3f);
+                strengthText.rectTransform.offsetMax = new Vector2(0f, 10.3f);
+            }
 
             int descriptionFontSize = DescriptionFontSize(definition.HeroClass);
             Text statsText = CreateText("Description", transform, font, descriptionFontSize, FontStyle.Bold, TextAnchor.MiddleCenter);
@@ -838,22 +857,24 @@ namespace AccardND.Presentation
                 return null;
 
             string cacheKey = $"{source.GetInstanceID()}:{heroClass}";
-            if (croppedArtworkSprites.TryGetValue(cacheKey, out Sprite cached))
+            if (croppedArtworkSprites.TryGetValue(cacheKey, out Sprite cached) && cached != null)
                 return cached;
+            croppedArtworkSprites.Remove(cacheKey);
 
             Rect sourceRect = source.textureRect;
             float sourceAspect = sourceRect.width / sourceRect.height;
+            float artworkViewportAspect = ArtworkViewportAspectFor(heroClass);
             float croppedWidth;
             float croppedHeight;
-            if (sourceAspect > ArtworkViewportAspect)
+            if (sourceAspect > artworkViewportAspect)
             {
                 croppedHeight = sourceRect.height;
-                croppedWidth = croppedHeight * ArtworkViewportAspect;
+                croppedWidth = croppedHeight * artworkViewportAspect;
             }
             else
             {
                 croppedWidth = sourceRect.width;
-                croppedHeight = croppedWidth / ArtworkViewportAspect;
+                croppedHeight = croppedWidth / artworkViewportAspect;
             }
 
             croppedWidth = Mathf.Min(sourceRect.width, croppedWidth * ArtworkCropOverscan);
@@ -1341,6 +1362,19 @@ namespace AccardND.Presentation
             RectTransform root = EnsureActionOverlay();
             SetActionOverlayBounds(new Vector2(0.03f, 0.94f), new Vector2(0.97f, 1.48f));
             Button button = CreateIconActionButton("Attack Action", root, icon, "Attacca", ActionLabelRed);
+            attackActionRect = button.GetComponent<RectTransform>();
+            SetAnchors(button.GetComponent<RectTransform>(), new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.93f));
+            if (action != null)
+                button.onClick.AddListener(action);
+        }
+
+        public void ShowAbilityAction(Sprite icon, UnityAction action)
+        {
+            ClearActionOverlay();
+            RectTransform root = EnsureActionOverlay();
+            SetActionOverlayBounds(new Vector2(0.03f, 0.94f), new Vector2(0.97f, 1.48f));
+            Button button = CreateIconActionButton("Ability Action", root, icon, "Abilita", ActionLabelBlue);
+            abilityActionRect = button.GetComponent<RectTransform>();
             SetAnchors(button.GetComponent<RectTransform>(), new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.93f));
             if (action != null)
                 button.onClick.AddListener(action);
@@ -1357,6 +1391,7 @@ namespace AccardND.Presentation
             SetActionOverlayBounds(new Vector2(0.03f, 0.94f), new Vector2(0.97f, 1.48f));
 
             Button first = CreateIconActionButton("Attack Action", root, firstIcon, "Attacca", ActionLabelRed);
+            attackActionRect = first.GetComponent<RectTransform>();
             SetAnchors(first.GetComponent<RectTransform>(), new Vector2(0.02f, 0.03f), new Vector2(0.47f, 0.93f));
             if (firstAction != null)
                 first.onClick.AddListener(firstAction);
@@ -1367,6 +1402,7 @@ namespace AccardND.Presentation
                 secondIcon,
                 GetActionLabelForSprite(secondIcon),
                 GetActionLabelColorForSprite(secondIcon));
+            abilityActionRect = second.GetComponent<RectTransform>();
             SetAnchors(second.GetComponent<RectTransform>(), new Vector2(0.53f, 0.03f), new Vector2(0.98f, 0.93f));
             if (secondAction != null)
                 second.onClick.AddListener(secondAction);
@@ -1385,11 +1421,13 @@ namespace AccardND.Presentation
             SetActionOverlayBounds(new Vector2(-0.02f, 0.92f), new Vector2(1.02f, 1.54f));
 
             Button first = CreateIconActionButton("Attack Action", root, firstIcon, "Attacca", ActionLabelRed);
+            attackActionRect = first.GetComponent<RectTransform>();
             SetAnchors(first.GetComponent<RectTransform>(), new Vector2(0.00f, 0.02f), new Vector2(0.34f, 0.72f));
             if (firstAction != null)
                 first.onClick.AddListener(firstAction);
 
             Button second = CreateIconActionButton("Ability Action", root, secondIcon, "Abilit\u00E0", ActionLabelBlue);
+            abilityActionRect = second.GetComponent<RectTransform>();
             SetAnchors(second.GetComponent<RectTransform>(), new Vector2(0.33f, 0.26f), new Vector2(0.67f, 0.96f));
             if (secondAction != null)
                 second.onClick.AddListener(secondAction);
@@ -1436,6 +1474,22 @@ namespace AccardND.Presentation
                 info.onClick.AddListener(infoAction);
         }
 
+        public void ShowConfirmAction(Sprite confirmIcon, UnityAction confirmAction)
+        {
+            ClearActionOverlay();
+            RectTransform root = EnsureActionOverlay();
+            SetActionOverlayBounds(new Vector2(0.24f, 0.94f), new Vector2(0.76f, 1.46f));
+
+            Button confirm = CreateIconActionButton("Confirm Action", root, confirmIcon, "Conferma", ActionLabelGreen);
+            SetAnchors(confirm.GetComponent<RectTransform>(), new Vector2(0.00f, 0.03f), new Vector2(1.00f, 0.93f));
+            SetActionButtonLabelAnchors(confirm, new Vector2(-0.08f, 0.78f), new Vector2(1.08f, 1.12f));
+            if (confirmAction != null)
+                confirm.onClick.AddListener(confirmAction);
+        }
+
+        public RectTransform AttackActionRect => attackActionRect;
+        public RectTransform AbilityActionRect => abilityActionRect;
+
         public void ShowCancelAction(Sprite cancelIcon, UnityAction cancelAction)
         {
             ClearActionOverlay();
@@ -1461,6 +1515,8 @@ namespace AccardND.Presentation
 
         public void ClearActionOverlay()
         {
+            attackActionRect = null;
+            abilityActionRect = null;
             if (actionOverlayRoot == null)
                 return;
 
@@ -1937,6 +1993,11 @@ namespace AccardND.Presentation
             EndScreenDiceRollLayout();
             if (diceRoot != null)
                 diceRoot.SetActive(false);
+        }
+
+        public void HideActiveDiceRoll()
+        {
+            CancelActiveDiceRoll();
         }
 
         public IEnumerator PlayAttackAnimation()
@@ -3119,10 +3180,10 @@ namespace AccardND.Presentation
             float[] delays = new float[plusCount];
             float[] travelDistances = new float[plusCount];
             float[] sideDrifts = new float[plusCount];
-            Font font = MmoUiTheme.TitleFont;
+            Font font = MmoUiTheme.TitleBoldFont;
             for (int i = 0; i < plusCount; i++)
             {
-                pluses[i] = CreateText("Attachment Equip Plus " + i, transform, font, 32, FontStyle.Bold, TextAnchor.MiddleCenter);
+                pluses[i] = CreateText("Attachment Equip Plus " + i, transform, font, 32, FontStyle.Normal, TextAnchor.MiddleCenter);
                 pluses[i].color = new Color(0.72f, 1f, 0.5f, 0f);
                 pluses[i].raycastTarget = false;
                 RectTransform plusRect = pluses[i].rectTransform;
@@ -4870,7 +4931,7 @@ namespace AccardND.Presentation
         private static void CreateActionButtonLabel(Transform parent, string label, Color labelColor)
         {
             Font font = GetActionLabelFont();
-            Text text = CreateText("Action Label", parent, font, 17, FontStyle.BoldAndItalic, TextAnchor.MiddleCenter);
+            Text text = CreateText("Action Label", parent, font, 17, FontStyle.Italic, TextAnchor.MiddleCenter);
             text.text = label;
             text.color = labelColor;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
@@ -4914,7 +4975,7 @@ namespace AccardND.Presentation
             if (actionLabelFont != null)
                 return actionLabelFont;
 
-            actionLabelFont = MmoUiTheme.TitleFont;
+            actionLabelFont = MmoUiTheme.TitleBoldFont;
             return actionLabelFont;
         }
 
@@ -5644,16 +5705,23 @@ namespace AccardND.Presentation
                     new Vector2(right, top + 0.01f));
             }
 
-            float verticalOffset = heroClass switch
-            {
-                HeroClass.Warrior or HeroClass.Mage or HeroClass.Hunter or HeroClass.Rogue => 0.02f,
-                HeroClass.Assassin or HeroClass.Barbarian or HeroClass.Necromancer or HeroClass.Paladin => 0.01f,
-                _ => 0f
-            };
+			float verticalOffset = heroClass switch
+			{
+				HeroClass.Warrior => 0.04f,
+                HeroClass.Mage or HeroClass.Hunter or HeroClass.Rogue => 0.02f,
+				HeroClass.Assassin or HeroClass.Barbarian or HeroClass.Necromancer or HeroClass.Paladin => 0.01f,
+				_ => 0f
+			};
 
             return (
                 new Vector2(left, bottom + verticalOffset),
                 new Vector2(right, top + verticalOffset));
+        }
+
+        private static float ArtworkViewportAspectFor(HeroClass heroClass)
+        {
+            (Vector2 minimum, Vector2 maximum) = ArtworkViewportAnchors(heroClass);
+            return CardAspect * (maximum.x - minimum.x) / (maximum.y - minimum.y);
         }
 
         private static float ArtworkCropVerticalAlignment(HeroClass heroClass)
@@ -5702,16 +5770,29 @@ namespace AccardND.Presentation
         {
             return heroClass switch
             {
-                HeroClass.Assassin => "card_border_assassin",
-                HeroClass.Warrior => "card_border_warrior",
-                HeroClass.Mage => "card_border_mage",
-                HeroClass.Paladin => "card_border_paladin",
-                HeroClass.Rogue => "card_border_rogue",
-                HeroClass.Hunter => "card_border_hunter",
-                HeroClass.Barbarian => "card_border_barbarian",
-                HeroClass.Necromancer => "card_border_necromancer",
-                HeroClass.Priest => "card_border_priest",
-                _ => "card_border_warrior"
+                HeroClass.Assassin => "card_border_assassin_gem",
+                HeroClass.Warrior => "card_border_warrior_gem",
+                HeroClass.Mage => "card_border_mage_gem",
+                HeroClass.Paladin => "card_border_paladin_gem",
+                HeroClass.Rogue => "card_border_rogue_gem",
+                HeroClass.Hunter => "card_border_hunter_gem",
+                HeroClass.Barbarian => "card_border_barbarian_gem",
+                HeroClass.Necromancer => "card_border_necromancer_gem",
+                HeroClass.Priest => "card_border_priest_gem",
+                _ => "card_border_warrior_gem"
+            };
+        }
+
+        private static float BorderVisualScale(HeroClass heroClass)
+        {
+            return heroClass switch
+            {
+                HeroClass.Assassin => 1.214f,
+                HeroClass.Barbarian => 1.214f,
+                HeroClass.Mage => 1.216f,
+                HeroClass.Necromancer => 1.214f,
+                HeroClass.Paladin => 1.215f,
+                _ => 1f
             };
         }
 

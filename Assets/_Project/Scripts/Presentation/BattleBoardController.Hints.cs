@@ -940,10 +940,10 @@ public sealed partial class BattleBoardController
 	private HintContent CreateMerchantHintContent()
 	{
 		return new HintContent(
-			"MERCANTE",
-			"Qui puoi comprare nuove carte.",
-			"Puoi scegliere per classe o valore.",
-			"Puoi anche recuperare carte dal cimitero.",
+			"MERCATO",
+			"Due banchi: carte oppure oggetti.",
+			"Il primo acquisto chiude l'altro banco.",
+			"Vendere e recuperare carte resta sempre possibile.",
 			"Quando hai finito, premi CONTINUA.");
 	}
 

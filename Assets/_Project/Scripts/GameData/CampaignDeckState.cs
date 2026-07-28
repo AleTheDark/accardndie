@@ -25,21 +25,27 @@ namespace AccardND.GameData
         public int InstanceId { get; }
         public CardDefinition Definition { get; }
         public CampaignCardZone Zone { get; internal set; }
+        public int PermanentItemBonus { get; internal set; }
+        public bool HasRubySeal { get; internal set; }
     }
 
     /// <summary>Voce di uno snapshot del mazzo, per il save/resume della campagna.</summary>
     public readonly struct CampaignCardRestoreEntry
     {
-        public CampaignCardRestoreEntry(CardDefinition definition, CampaignCardZone zone, int instanceId)
+        public CampaignCardRestoreEntry(CardDefinition definition, CampaignCardZone zone, int instanceId, int permanentItemBonus = 0, bool hasRubySeal = false)
         {
             Definition = definition;
             Zone = zone;
             InstanceId = instanceId;
+            PermanentItemBonus = Math.Max(0, permanentItemBonus);
+            HasRubySeal = hasRubySeal;
         }
 
         public CardDefinition Definition { get; }
         public CampaignCardZone Zone { get; }
         public int InstanceId { get; }
+        public int PermanentItemBonus { get; }
+        public bool HasRubySeal { get; }
     }
 
     public sealed class CampaignDeckState
@@ -80,7 +86,9 @@ namespace AccardND.GameData
                     throw new ArgumentException("Snapshot con definizione nulla.", nameof(entries));
                 cards.Add(new CampaignCardInstance(entry.InstanceId, entry.Definition)
                 {
-                    Zone = entry.Zone
+                    Zone = entry.Zone,
+                    PermanentItemBonus = entry.PermanentItemBonus,
+                    HasRubySeal = entry.HasRubySeal
                 });
                 if (entry.InstanceId > maxInstanceId)
                     maxInstanceId = entry.InstanceId;
@@ -121,6 +129,15 @@ namespace AccardND.GameData
             var instance = new CampaignCardInstance(nextInstanceId++, definition);
             cards.Add(instance);
             return instance;
+        }
+
+        public bool TryApplyRubySeal(CampaignCardInstance card, int bonus)
+        {
+            if (card == null || bonus <= 0 || !cards.Contains(card) || card.HasRubySeal)
+                return false;
+            card.PermanentItemBonus += bonus;
+            card.HasRubySeal = true;
+            return true;
         }
 
         public bool RemoveCard(CampaignCardInstance card)

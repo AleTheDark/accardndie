@@ -89,10 +89,12 @@ public sealed class HallOfFameService
         var entries = new List<HallOfFameEntry>();
         using SqliteCommand query = connection.CreateCommand();
         query.CommandText = @"
-            SELECT h.final_rank, h.player_id, COALESCE(a.username, ''), h.final_tier, h.final_division,
+            SELECT h.final_rank, h.player_id, COALESCE(a.username, ''),
+                   COALESCE(p.selected_icon_id, ''), h.final_tier, h.final_division,
                    h.final_mmr, h.wins, h.losses
             FROM hall_of_fame h
             LEFT JOIN accounts a ON a.player_id = h.player_id
+            LEFT JOIN profiles p ON p.player_id = h.player_id
             WHERE h.season_id=$season
             ORDER BY h.final_rank LIMIT $limit";
         query.Parameters.AddWithValue("$season", seasonId);
@@ -112,10 +114,12 @@ public sealed class HallOfFameService
     {
         using SqliteCommand query = connection.CreateCommand();
         query.CommandText = @"
-            SELECT h.final_rank, h.player_id, COALESCE(a.username, ''), h.final_tier, h.final_division,
+            SELECT h.final_rank, h.player_id, COALESCE(a.username, ''),
+                   COALESCE(p.selected_icon_id, ''), h.final_tier, h.final_division,
                    h.final_mmr, h.wins, h.losses
             FROM hall_of_fame h
             LEFT JOIN accounts a ON a.player_id = h.player_id
+            LEFT JOIN profiles p ON p.player_id = h.player_id
             WHERE h.season_id=$season AND h.player_id=$id";
         query.Parameters.AddWithValue("$season", seasonId);
         query.Parameters.AddWithValue("$id", playerId);
@@ -128,10 +132,11 @@ public sealed class HallOfFameService
         rank = reader.GetInt32(0),
         playerId = reader.GetString(1),
         username = reader.GetString(2),
-        tier = reader.GetString(3),
-        division = reader.GetString(4),
-        finalMmr = reader.GetInt32(5),
-        wins = reader.GetInt32(6),
-        losses = reader.GetInt32(7)
+        selectedIconId = reader.GetString(3),
+        tier = reader.GetString(4),
+        division = reader.GetString(5),
+        finalMmr = reader.GetInt32(6),
+        wins = reader.GetInt32(7),
+        losses = reader.GetInt32(8)
     };
 }

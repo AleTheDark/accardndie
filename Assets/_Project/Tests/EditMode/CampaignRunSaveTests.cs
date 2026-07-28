@@ -29,6 +29,23 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void RestoreProgress_RoundTripsKillCounters()
+        {
+            RunProgressState original = CreateProgress();
+            original.RecordEnemiesDefeated(7);
+            original.CompleteMinibossRoom(50);
+
+            var save = new CampaignRunSave();
+            CampaignRunMapper.WriteProgress(save, original);
+
+            RunProgressState restored = CreateProgress();
+            CampaignRunMapper.ReadProgress(save, restored);
+
+            Assert.That(restored.EnemiesDefeated, Is.EqualTo(7));
+            Assert.That(restored.MinibossesDefeated, Is.EqualTo(1));
+        }
+
+        [Test]
         public void RestoreDeck_PreservesZonesAndCount()
         {
             List<CardDefinition> definitions = CreateCards(6);

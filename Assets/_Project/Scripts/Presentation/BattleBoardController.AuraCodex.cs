@@ -1,4 +1,6 @@
 using System.Text;
+using AccardND.GameCore;
+using AccardND.GameData;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -114,7 +116,7 @@ public sealed partial class BattleBoardController
 		}
 	}
 
-	private static string BuildAuraCodexText()
+	private string BuildAuraCodexText()
 	{
 		StringBuilder builder = new StringBuilder();
 		builder.AppendLine("<b>COME SI ATTIVANO</b>");
@@ -147,42 +149,29 @@ public sealed partial class BattleBoardController
 		return builder.ToString();
 	}
 
-	private static void AppendAuraEntry(StringBuilder builder, string label, BattleAuraType aura)
+	private void AppendAuraEntry(StringBuilder builder, string label, BattleAuraType aura)
 	{
-		builder.AppendLine("<b>" + label + ":</b> " + AuraEffectText(aura));
+		builder.AppendLine("<b>" + label + ":</b> " + AuraEffectText(aura, configuration?.ClassBalance));
 	}
 
 	// Descrizione concisa dell'effetto di ogni aura (fonte: Docs/card-rules-and-auras.md).
-	private static string AuraEffectText(BattleAuraType aura)
+	private static string AuraEffectText(BattleAuraType aura, ClassBalanceConfiguration balance = null)
 	{
 		return aura switch
 		{
-			BattleAuraType.Formation =>
-				"una volta per combattimento, quando una tua carta avrebbe svantaggio di famiglia, lo svantaggio diventa neutro.",
-			BattleAuraType.Might =>
-				"Quando muore una pedina qualsiasi, ogni carta con aura Forzuta attiva acquisisce +1 permanente.",
-			BattleAuraType.Cunning =>
-				"le tue carte Astuta attaccano sempre con vantaggio i nemici che hanno bonus o malus.",
-			BattleAuraType.Magic =>
-				"le tue carte Magica si difendono con un dado piu forte, esempio: se hai un D6 ti difendi con un D8.",
-			BattleAuraType.Warrior =>
-				"quando un Warrior usa la somma dei dadi, aggiunge +1 al totale.",
-			BattleAuraType.Barbarian =>
-				"la Furia diventa +3 invece di +2, in attacco e difesa.",
-			BattleAuraType.Paladin =>
-				"quando un Paladino sopravvive ad una difesa, contrattacca con +1.",
-			BattleAuraType.Rogue =>
-				"I Ladri ritirano una volta per dado se esce 1 o 2, in attacco e in difesa.",
-			BattleAuraType.Assassin =>
-				"quando un Assassin inibisce un nemico, quel nemico subisce anche -1 permanente.",
-			BattleAuraType.Hunter =>
-				"la marca da' +3; se ad attaccare il bersaglio marcato e' un Hunter, il bonus diventa +5.",
-			BattleAuraType.Mage =>
-				"la prima abilita' Mage abbassa il dado avversario di 2 step invece di 1.",
-			BattleAuraType.Necromancer =>
-				"la prima volta che un tuo alleato viene ucciso, resta in campo per un ultimo turno.",
-			BattleAuraType.Priest =>
-				"la Benedizione da' +3 invece di +2.",
+			BattleAuraType.Formation => CardRulesGlossary.FormationAuraDescription(),
+			BattleAuraType.Might => CardRulesGlossary.FamilyAuraDescription(ClassFamily.Might),
+			BattleAuraType.Cunning => CardRulesGlossary.FamilyAuraDescription(ClassFamily.Cunning),
+			BattleAuraType.Magic => CardRulesGlossary.FamilyAuraDescription(ClassFamily.Magic),
+			BattleAuraType.Warrior => CardRulesGlossary.ClassAuraDescription(HeroClass.Warrior, balance),
+			BattleAuraType.Barbarian => CardRulesGlossary.ClassAuraDescription(HeroClass.Barbarian, balance),
+			BattleAuraType.Paladin => CardRulesGlossary.ClassAuraDescription(HeroClass.Paladin, balance),
+			BattleAuraType.Rogue => CardRulesGlossary.ClassAuraDescription(HeroClass.Rogue, balance),
+			BattleAuraType.Assassin => CardRulesGlossary.ClassAuraDescription(HeroClass.Assassin, balance),
+			BattleAuraType.Hunter => CardRulesGlossary.ClassAuraDescription(HeroClass.Hunter, balance),
+			BattleAuraType.Mage => CardRulesGlossary.ClassAuraDescription(HeroClass.Mage, balance),
+			BattleAuraType.Necromancer => CardRulesGlossary.ClassAuraDescription(HeroClass.Necromancer, balance),
+			BattleAuraType.Priest => CardRulesGlossary.ClassAuraDescription(HeroClass.Priest, balance),
 			_ => "nessun effetto.",
 		};
 	}

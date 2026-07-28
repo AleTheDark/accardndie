@@ -144,8 +144,8 @@ namespace AccardND.GameData
         [SerializeField, Min(0)] private int opportunityExperienceJackpot = 50;
         [SerializeField, Min(0)] private int lootReserveCards = 1;
         [SerializeField, Min(0)] private int merchantHeroCardCost = 15;
-        [SerializeField, Min(0)] private int godMerchantHeroCardCost = 30;
-        [SerializeField, Min(1)] private int godMerchantMinimumStrength = 7;
+        [SerializeField, Min(0)] private int merchantCardCostPerStrength = 2;
+        [SerializeField, Min(0)] private int merchantMysteryCardCost = 20;
 
         public int ExperiencePerLevel => experiencePerLevel;
         public int[] ExperienceThresholdsByLevel => BuildExperienceThresholds();
@@ -166,9 +166,9 @@ namespace AccardND.GameData
         public int MerchantRoomExperience => merchantRoomExperience;
         public int OpportunityExperienceJackpot => opportunityExperienceJackpot;
         public int LootReserveCards => lootReserveCards;
-        public int MerchantHeroCardCost => merchantHeroCardCost;
-        public int GodMerchantHeroCardCost => godMerchantHeroCardCost;
-        public int GodMerchantMinimumStrength => godMerchantMinimumStrength;
+        public int MerchantCardBaseCost => merchantHeroCardCost;
+        public int MerchantCardCostPerStrength => merchantCardCostPerStrength;
+        public int MerchantMysteryCardCost => merchantMysteryCardCost;
 
         public int[] BuildVigorDiceByLevel(int startingVigorDieSides)
         {

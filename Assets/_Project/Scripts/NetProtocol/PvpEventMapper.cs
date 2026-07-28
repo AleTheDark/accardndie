@@ -139,6 +139,8 @@ namespace AccardND.NetProtocol
                     return new MatchEventDto { type = "FuryGained", player = e.Player, slot = e.Slot, amount = e.Amount };
                 case MightAuraBonusEvent e:
                     return new MatchEventDto { type = "MightAuraBonus", player = e.Player, slot = e.Slot };
+                case MageAuraPenaltyEvent e:
+                    return new MatchEventDto { type = "MageAuraPenalty", player = e.Player, slot = e.Slot, amount = e.Amount };
                 case SpiritExpiredEvent e:
                     return new MatchEventDto { type = "SpiritExpired", player = e.Player, slot = e.Slot };
                 case RoundEndedEvent e:

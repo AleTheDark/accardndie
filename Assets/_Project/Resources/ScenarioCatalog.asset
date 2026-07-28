@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.ScenarioCatalog
   scenarios:
   - {fileID: 11400000, guid: 358d3d0bd61cd1a49aa71d4b31063ff3, type: 2}
-  - {fileID: 11400000, guid: 4566ac69c426536488f82aec82927dbb, type: 2}
+  - {fileID: 11400000, guid: e1f60718293ab4c5d6e7f8293a4b5c6d, type: 2}
   - {fileID: 11400000, guid: a3816d6ceee3e4b4bb738b135044d786, type: 2}
   - {fileID: 11400000, guid: a2f1e155ea9533a42b648ff08170b7e2, type: 2}
   - {fileID: 11400000, guid: 39bae1f94574ff6409cca614fc342851, type: 2}
@@ -27,4 +27,3 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a3c9b7e6f4016c84d91d34ee9bca4339, type: 2}
   - {fileID: 11400000, guid: 57880d842238fde41ac7b9b470a9ca99, type: 2}
   - {fileID: 11400000, guid: 5dc91134caccedc4080340e1fca18fb7, type: 2}
-  - {fileID: 11400000, guid: e1f60718293ab4c5d6e7f8293a4b5c6d, type: 2}

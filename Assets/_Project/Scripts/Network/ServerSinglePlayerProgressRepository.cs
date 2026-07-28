@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using AccardND.GameData;
+using AccardND.NetProtocol;
 
 namespace AccardND.Network
 {
@@ -41,6 +42,7 @@ namespace AccardND.Network
         public bool TutorialCompleted => cache.TutorialCompleted;
         public bool HardcoreUnlocked => cache.HardcoreUnlocked;
         public bool IsUnlocked(SinglePlayerUnlockType type, string id) => cache.IsUnlocked(type, id);
+        public int GetCounter(string key) => cache.GetCounter(key);
 
         /// <summary>
         /// Carica lo stato autoritativo dal server e aggiorna la cache locale.
@@ -74,6 +76,78 @@ namespace AccardND.Network
             SinglePlayerProgressSave snapshot = await server.PurchaseUnlockAsync(type, id);
             cache.ApplyAuthoritative(snapshot);
             IsSynced = true;
+        }
+
+        /// <summary>
+        /// Segnala al server che il boss finale di un capitolo e stato sconfitto: il server
+        /// segna il capitolo completato e concede quello successivo. La cache viene sostituita
+        /// col nuovo stato autoritativo.
+        /// </summary>
+        public async Task ClearChapterAsync(string bossId)
+        {
+            SinglePlayerProgressSave snapshot = await server.ClearChapterAsync(bossId);
+            cache.ApplyAuthoritative(snapshot);
+            IsSynced = true;
+        }
+
+        /// <summary>
+        /// Catalogo del Santuario valutato dal server. Non tocca la cache: e' una fotografia
+        /// per la UI, mentre lo stato autoritativo continua ad arrivare dagli altri messaggi.
+        /// </summary>
+        public async Task<SanctuaryData> GetSanctuaryAsync()
+        {
+            SanctuaryData data = await server.GetSanctuaryAsync();
+            IsSynced = true;
+            return data;
+        }
+
+        /// <summary>
+        /// Compra un consumabile. Il miele cambia lato server, quindi la cache di
+        /// progressione va poi riallineata con <see cref="RefreshAsync"/>.
+        /// </summary>
+        public async Task<SanctuaryData> BuySanctuaryItemAsync(string itemId)
+        {
+            SanctuaryData data = await server.BuySanctuaryItemAsync(itemId);
+            IsSynced = true;
+            return data;
+        }
+
+        /// <summary>Sostituisce la bisaccia scelta per la prossima run.</summary>
+        public async Task<SanctuaryData> SetSanctuaryBagAsync(string[] itemIds)
+        {
+            SanctuaryData data = await server.SetSanctuaryBagAsync(itemIds);
+            IsSynced = true;
+            return data;
+        }
+
+        /// <summary>
+        /// Bacheca della taverna valutata dal server. Come il Santuario non tocca la cache:
+        /// e' una fotografia per la UI.
+        /// </summary>
+        public async Task<TavernData> GetTavernAsync()
+        {
+            TavernData data = await server.GetTavernAsync();
+            IsSynced = true;
+            return data;
+        }
+
+        /// <summary>
+        /// Riscuote una quest della taverna. Concede miele, quindi la cache di progressione
+        /// va poi riallineata con <see cref="RefreshAsync"/>.
+        /// </summary>
+        public async Task<TavernData> ClaimTavernQuestAsync(string questId)
+        {
+            TavernData data = await server.ClaimTavernQuestAsync(questId);
+            IsSynced = true;
+            return data;
+        }
+
+        /// <summary>Riscuote il premio di giornata. Vale la stessa nota sul miele.</summary>
+        public async Task<TavernData> ClaimTavernBonusAsync()
+        {
+            TavernData data = await server.ClaimTavernBonusAsync();
+            IsSynced = true;
+            return data;
         }
 
         /// <summary>Acquista lo sblocco della modalita Hardcore (flag server "mode"/"hardcore").</summary>
@@ -132,6 +206,7 @@ namespace AccardND.Network
 
         // --- Mutatori locali non consentiti: la progressione è autoritativa sul server ---
         public void AddHoney(int amount) => throw ServerAuthorityViolation();
+        public int AddAccountExperience(int amount) => throw ServerAuthorityViolation();
         public bool TrySpendHoney(int amount) => throw ServerAuthorityViolation();
         public void SetTutorialCompleted(bool completed = true) => throw ServerAuthorityViolation();
         public void SetHardcoreUnlocked(bool unlocked = true) => throw ServerAuthorityViolation();

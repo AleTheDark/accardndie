@@ -46,7 +46,31 @@ public sealed partial class BattleBoardController
 		formationAuraUsed = false;
 		draftCandidates.Clear();
 		draftCampaignCards.Clear();
-		if (campaignDeck != null)
+		if (adventureScriptedTutorialActive)
+		{
+			List<CardDefinition> tutorialHand = BuildTutorialPlayerDeck();
+			List<CampaignCardRestoreEntry> entries = new List<CampaignCardRestoreEntry>();
+			for (int i = 0; i < tutorialHand.Count; i++)
+			{
+				CardDefinition card = tutorialHand[i];
+				entries.Add(new CampaignCardRestoreEntry(card, CampaignCardZone.Hand, i + 1));
+				draftCandidates.Add(card);
+			}
+			campaignDeck?.RestoreFrom(entries, tutorialHand.Count + 1);
+			if (campaignDeck != null)
+			{
+				draftCampaignCards.AddRange(campaignDeck.Cards);
+			}
+			if (draftCandidates.Count < configuration.Gameplay.FormationSize)
+			{
+				draftActive = false;
+				inputLocked = true;
+				SetMessage("Tutorial non disponibile: mano scriptata incompleta.");
+				EndAdventureScriptedTutorial(complete: false);
+				return;
+			}
+		}
+		else if (campaignDeck != null)
 		{
 			draftCampaignCards.AddRange(campaignDeck.DrawCombatHand(random, configuration.DeckBuilding.CombatHandSize));
 			draftCandidates.AddRange(draftCampaignCards.Select((CampaignCardInstance card) => card.Definition));
@@ -79,11 +103,17 @@ public sealed partial class BattleBoardController
 			prototypeCardView.SetAlpha(0f);
 			draftViews.Add(prototypeCardView);
 		}
-		playerTitleText.text = $"SCEGLI {configuration.Gameplay.FormationSize} CARTE";
+		if ((Object)(object)playerTitleText != (Object)null)
+		{
+			playerTitleText.text = $"SCEGLI {configuration.Gameplay.FormationSize} CARTE";
+		}
 		bool flag = campaignDeck != null && (currentRoomType == RoomType.Monster || currentRoomType == RoomType.Boss);
 		if (flag)
 		{
-			playerTitleText.text = string.Empty;
+			if ((Object)(object)playerTitleText != (Object)null)
+			{
+				playerTitleText.text = string.Empty;
+			}
 		}
 		((Component)confirmActionButton).gameObject.SetActive(!flag);
 		if ((Object)(object)confirmActionButtonText != (Object)null)
@@ -335,6 +365,10 @@ public sealed partial class BattleBoardController
 			{
 				return;
 			}
+			if (!IsAdventureTutorialDraftCardAllowed(index))
+			{
+				return;
+			}
 			DeploymentToken deploymentToken = deploymentOrder[currentDeploymentIndex];
 			if (deploymentToken.BelongsToPlayer)
 			{
@@ -345,6 +379,7 @@ public sealed partial class BattleBoardController
 					draftViews[i].SetDraftSelected(i == pendingDeploymentIndex);
 					draftViews[i].SetInteractable(!flag);
 				}
+				SetAdventureTutorialDraftInteractivityForConfirmation();
 				RefreshCardActionOverlays();
 				SetMessage($"INIZIATIVA {deploymentToken.Initiative}: confermi {draftCandidates[index].DisplayName} in campo?");
 				NotifyAdventureTutorial(AdventureTutorialAction.DeploymentCardSelected);
@@ -365,7 +400,6 @@ public sealed partial class BattleBoardController
 		}
 		confirmActionButton.interactable = selectedDraftCards.Count == configuration.Gameplay.FormationSize;
 		SetMessage($"Formazione: {selectedDraftCards.Count}/{configuration.Gameplay.FormationSize} carte selezionate.");
-		NotifyAdventureTutorial(AdventureTutorialAction.DraftCardSelected);
 	}
 
 	private int RollUniqueInitiative(int dieSides, HashSet<int> usedInitiatives)
@@ -422,13 +456,29 @@ public sealed partial class BattleBoardController
 			:formationSize;
 		int initiativeDieSides = configuration.Gameplay.InitiativeDieSides;
 		HashSet<int> usedInitiatives = new HashSet<int>();
-		for (int i = 0; i < formationSize; i++)
+		if (adventureScriptedTutorialActive)
 		{
-			deploymentOrder.Add(new DeploymentToken(belongsToPlayer: true, RollUniqueInitiative(initiativeDieSides, usedInitiatives), random.NextInclusive(1, 10000)));
+			int[] playerInitiatives = { 6, 10, 17 };
+			int[] cpuInitiatives = { 1, 5, 8 };
+			for (int i = 0; i < formationSize; i++)
+			{
+				deploymentOrder.Add(new DeploymentToken(belongsToPlayer: true, playerInitiatives[Mathf.Min(i, playerInitiatives.Length - 1)], i));
+			}
+			for (int j = 0; j < cpuDeploymentCount; j++)
+			{
+				deploymentOrder.Add(new DeploymentToken(belongsToPlayer: false, cpuInitiatives[Mathf.Min(j, cpuInitiatives.Length - 1)], 100 + j));
+			}
 		}
-		for (int j = 0; j < cpuDeploymentCount; j++)
+		else
 		{
-			deploymentOrder.Add(new DeploymentToken(belongsToPlayer: false, RollUniqueInitiative(initiativeDieSides, usedInitiatives), random.NextInclusive(1, 10000)));
+			for (int i = 0; i < formationSize; i++)
+			{
+				deploymentOrder.Add(new DeploymentToken(belongsToPlayer: true, RollUniqueInitiative(initiativeDieSides, usedInitiatives), random.NextInclusive(1, 10000)));
+			}
+			for (int j = 0; j < cpuDeploymentCount; j++)
+			{
+				deploymentOrder.Add(new DeploymentToken(belongsToPlayer: false, RollUniqueInitiative(initiativeDieSides, usedInitiatives), random.NextInclusive(1, 10000)));
+			}
 		}
 		deploymentOrder.Sort(delegate(DeploymentToken left, DeploymentToken right)
 		{
@@ -448,8 +498,13 @@ public sealed partial class BattleBoardController
 		SetMessage($"Tiro iniziativa: {formationSize} D20 per te e {cpuDeploymentCount} D20 per il Master.");
 		yield return PlayDeploymentInitiativeDiceRoll(initiativeDieSides);
 		RefreshDeploymentTimeline();
+		NotifyAdventureTutorial(AdventureTutorialAction.InitiativeRolled);
 		SetMessage("Iniziative di schieramento: i valori piu bassi calano per primi.");
 		yield return WaitForCardInspectionPause(Mathf.Max(0.2f, configuration.Animation.DiceResultHold * 0.45f));
+		if (adventureScriptedTutorialActive && adventureScriptedTutorialStep == 2 && !adventureScriptedTutorialStepAcknowledged)
+		{
+			yield break;
+		}
 		ProcessNextDeploymentToken();
 	}
 
@@ -465,6 +520,12 @@ public sealed partial class BattleBoardController
 		if (UsesBossStyleDeployment())
 		{
 			cpuDeploymentHand.AddRange(BuildCpuFormationForCurrentCombat());
+			return;
+		}
+
+		if (adventureScriptedTutorialActive)
+		{
+			cpuDeploymentHand.AddRange(BuildTutorialCpuDeploymentHand());
 			return;
 		}
 
@@ -496,14 +557,12 @@ public sealed partial class BattleBoardController
 		RefreshCardActionOverlays();
 		if (currentDeploymentIndex >= deploymentOrder.Count)
 		{
-			deploymentDraftActive = false;
-			deploymentInitiativesReady = true;
-			foreach (PrototypeCardView cpuDeploymentPreviewView in cpuDeploymentPreviewViews)
+			if (adventureScriptedTutorialActive)
 			{
-				Object.Destroy((Object)(object)((Component)cpuDeploymentPreviewView).gameObject);
+				NotifyAdventureTutorial(AdventureTutorialAction.DeploymentCompleted);
+				return;
 			}
-			cpuDeploymentPreviewViews.Clear();
-			FinalizeDeploymentAndStartBattle();
+			CompleteDeploymentAndStartBattle();
 			return;
 		}
 		DeploymentToken deploymentToken = deploymentOrder[currentDeploymentIndex];
@@ -516,6 +575,7 @@ public sealed partial class BattleBoardController
 				draftViews[i].SetInteractable(!selectedDraftCards.Contains(i));
 			}
 			SetMessage("Scegli una carta dalla tua mano da schierare.");
+			ShowAdventureTutorialDeploymentChoiceSpotlight();
 		}
 		else
 		{
@@ -523,6 +583,22 @@ public sealed partial class BattleBoardController
 			SetMessage($"INIZIATIVA CPU {deploymentToken.Initiative}: il Master sceglie una carta...");
 			((MonoBehaviour)this).StartCoroutine(ExecuteCpuDeployment(deploymentToken));
 		}
+	}
+
+	private void CompleteDeploymentAndStartBattle()
+	{
+		if (!deploymentDraftActive && deploymentInitiativesReady)
+		{
+			return;
+		}
+		deploymentDraftActive = false;
+		deploymentInitiativesReady = true;
+		foreach (PrototypeCardView cpuDeploymentPreviewView in cpuDeploymentPreviewViews)
+		{
+			Object.Destroy((Object)(object)((Component)cpuDeploymentPreviewView).gameObject);
+		}
+		cpuDeploymentPreviewViews.Clear();
+		FinalizeDeploymentAndStartBattle();
 	}
 
 	private IEnumerator ExecuteCpuDeployment(DeploymentToken token)
@@ -691,6 +767,10 @@ public sealed partial class BattleBoardController
 				Stretch(text.rectTransform, 2f);
 			}
 			ResizeTimelineTiles(deploymentOrder.Count);
+			if (adventureScriptedTutorialActive && adventureScriptedTutorialStep < 2)
+			{
+				SetAdventureTutorialTimelineVisible(visible: false);
+			}
 		}
 	}
 
@@ -1110,6 +1190,10 @@ public sealed partial class BattleBoardController
 		((Component)cancelActionButton).gameObject.SetActive(false);
 		RefreshCardActionOverlays();
 		AppendLog($"SCHIERAMENTO TU - {draftCandidates[num].DisplayName}, iniziativa {deploymentToken.Initiative}");
+		if (adventureScriptedTutorialActive)
+		{
+			MoveAdventureTutorialSpotlight(null);
+		}
 		NotifyAdventureTutorial(AdventureTutorialAction.DeploymentConfirmed);
 		inputLocked = true;
 		ApplyResponsiveLayout();
@@ -1377,7 +1461,6 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
-		NotifyAdventureTutorial(AdventureTutorialAction.DraftConfirmed);
 		List<CardDefinition> list = new List<CardDefinition>();
 		IEnumerable<int> enumerable2;
 		if (!deploymentInitiativesReady)
@@ -1443,7 +1526,10 @@ public sealed partial class BattleBoardController
 		selectedDraftCards.Clear();
 		draftActive = false;
 		((Component)confirmActionButton).gameObject.SetActive(false);
-		playerTitleText.text = ((campaignDeck != null) ?string.Empty : "LA TUA FORMAZIONE");
+		if ((Object)(object)playerTitleText != (Object)null)
+		{
+			playerTitleText.text = ((campaignDeck != null) ?string.Empty : "LA TUA FORMAZIONE");
+		}
 		DestroyCardViews(playerCards);
 		DestroyCardViews(cpuCards);
 		ClearCardRowChildren(playerRow);
@@ -1554,7 +1640,10 @@ public sealed partial class BattleBoardController
 		selectedDraftCards.Clear();
 		draftActive = false;
 		((Component)confirmActionButton).gameObject.SetActive(false);
-		playerTitleText.text = campaignDeck != null ?string.Empty : "LA TUA FORMAZIONE";
+		if ((Object)(object)playerTitleText != (Object)null)
+		{
+			playerTitleText.text = campaignDeck != null ?string.Empty : "LA TUA FORMAZIONE";
+		}
 
 		DestroyCardViews(playerCards);
 		DestroyCardViews(cpuCards);

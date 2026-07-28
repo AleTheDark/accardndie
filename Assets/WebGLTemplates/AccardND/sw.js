@@ -22,6 +22,16 @@ function isHeavyBuildAsset(href) {
   return /\/Build\/[^?]*\.(data|wasm|framework\.js|worker\.js|symbols\.json)(\?.*)?$/.test(href);
 }
 
+// Contenuti DINAMICI serviti dal server .NET sulla stessa origine (pannello
+// admin, API JSON): non devono MAI finire in cache, altrimenti la pagina
+// continua a mostrare lo snapshot del primo caricamento.
+function isDynamicEndpoint(pathname) {
+  return pathname === '/ws'
+    || pathname === '/admin'
+    || pathname.indexOf('/admin/') === 0
+    || pathname.indexOf('/api/') === 0;
+}
+
 self.addEventListener('install', function () {
   self.skipWaiting();
 });
@@ -34,6 +44,17 @@ self.addEventListener('activate', function (event) {
           if (k !== CACHE) { return caches.delete(k); }
         }));
       })
+      // Bonifica: rimuove le risposte dinamiche gia' finite in cache dalle
+      // versioni precedenti del Service Worker (senza attendere un cambio di
+      // Product Version).
+      .then(function () { return caches.open(CACHE); })
+      .then(function (cache) {
+        return cache.keys().then(function (requests) {
+          return Promise.all(requests.map(function (r) {
+            if (isDynamicEndpoint(new URL(r.url).pathname)) { return cache.delete(r); }
+          }));
+        });
+      })
       .then(function () { return self.clients.claim(); })
   );
 });
@@ -44,7 +65,7 @@ self.addEventListener('fetch', function (event) {
 
   var url = new URL(req.url);
   if (url.origin !== self.location.origin) { return; }   // solo stessa origine
-  if (url.pathname === '/ws') { return; }                // WebSocket multiplayer: mai intercettato
+  if (isDynamicEndpoint(url.pathname)) { return; }        // /ws, /admin, API: sempre dalla rete
   if (isHeavyBuildAsset(url.href)) { return; }            // gestiti da Unity/IndexedDB
 
   // Navigazione (index.html): rete prima (aggiornamenti immediati), cache di scorta offline.

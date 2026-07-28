@@ -21,6 +21,7 @@ namespace AccardND.Network
         private ServerSinglePlayerProgressRepository repository;
         private Task<ServerSinglePlayerProgressRepository> ensureTask;
         private bool authenticated;
+        private bool ownsConnection;
 
         public bool IsReady => authenticated && repository != null && client is { IsConnected: true };
 
@@ -47,16 +48,35 @@ namespace AccardND.Network
         {
             try
             {
+                if (AccountServerSession.TryGet(
+                        out PvpServerClient sharedClient,
+                        out PvpServerMessageDispatcher sharedDispatcher,
+                        out _))
+                {
+                    client = sharedClient;
+                    dispatcher = sharedDispatcher;
+                    ownsConnection = false;
+                    authenticated = true;
+                    repository = new ServerSinglePlayerProgressRepository(
+                        new ServerSinglePlayerProgressClient(dispatcher));
+                    await repository.RefreshAsync();
+                    return repository;
+                }
+
                 client ??= new PvpServerClient();
                 dispatcher ??= new PvpServerMessageDispatcher(client);
+                ownsConnection = true;
                 if (!client.IsConnected)
                     await client.ConnectAsync(serverUrl);
 
                 (string username, string password) = GuestCredentials.Derive();
-                if (!await AuthenticateGuestAsync(username, password))
+                AuthResponse auth = await AuthenticateGuestAsync(username, password);
+                if (auth is not { ok: true })
                     return null;
 
                 authenticated = true;
+                AccountServerSession.Adopt(client, dispatcher, auth);
+                ownsConnection = false;
                 repository = new ServerSinglePlayerProgressRepository(
                     new ServerSinglePlayerProgressClient(dispatcher));
                 await repository.RefreshAsync();
@@ -73,17 +93,16 @@ namespace AccardND.Network
             }
         }
 
-        private async Task<bool> AuthenticateGuestAsync(string username, string password)
+        private async Task<AuthResponse> AuthenticateGuestAsync(string username, string password)
         {
             AuthResponse response = await SendAuthAsync(
                 MessageTypes.AuthRegister, new RegisterRequest { username = username, password = password });
             if (response is { ok: true })
-                return true;
+                return response;
 
             // Account gia esistente (o registrazione disattivata): tenta il login.
-            response = await SendAuthAsync(
+            return await SendAuthAsync(
                 MessageTypes.AuthLogin, new LoginRequest { username = username, password = password });
-            return response is { ok: true };
         }
 
         private async Task<AuthResponse> SendAuthAsync(string type, object payload)
@@ -100,17 +119,19 @@ namespace AccardND.Network
         }
 
         /// <summary>
-        /// Chiude la connessione. Usato quando si entra in PvP per evitare due socket sullo stesso
-        /// account ospite; alla successiva richiesta il link si riconnette da capo.
+        /// Rilascia il repository usato dall'Hub. La sessione account condivisa resta aperta
+        /// e puo' essere riusata immediatamente dal PvP o dalla richiesta successiva.
         /// </summary>
         public void Shutdown()
         {
             authenticated = false;
             repository = null;
             ensureTask = null;
-            client?.Dispose();
+            if (ownsConnection)
+                client?.Dispose();
             client = null;
             dispatcher = null;
+            ownsConnection = false;
         }
 
         private void OnDestroy() => Shutdown();

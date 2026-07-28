@@ -116,8 +116,9 @@ namespace AccardND.Editor
             return id switch
             {
                 "default" => new(id, "Dungeon", RoomType.Any, RoomDifficulty.Any, string.Empty),
-                "low_merchant" => new(id, "Mercante", RoomType.Merchant, RoomDifficulty.Easy, string.Empty),
-                "god_merchant" => new(id, "Mercante Divino", RoomType.Merchant, RoomDifficulty.Hard, string.Empty),
+                // Un solo mercato: entrambi gli sfondi restano validi per la stessa stanza.
+                "low_merchant" => new(id, "Mercato", RoomType.Merchant, RoomDifficulty.Hard, string.Empty),
+                "god_merchant" => new(id, "Mercato", RoomType.Merchant, RoomDifficulty.Hard, string.Empty),
                 "loot" => new(id, "Ricompensa", RoomType.Loot, RoomDifficulty.Any, string.Empty),
                 "unexpected_opportunity" => new(id, "Imprevisto o Opportunità", RoomType.UnexpectedOpportunity, RoomDifficulty.Any, string.Empty),
                 "climbing" => new(id, "Rampicanti", RoomType.Boss, RoomDifficulty.Any, "trentor"),
@@ -127,7 +128,7 @@ namespace AccardND.Editor
                 "cosmic" => new(id, "Cosmica", RoomType.Boss, RoomDifficulty.Any, "boss-palatir"),
                 "fog" => new(id, "Nebbia", RoomType.Boss, RoomDifficulty.Any, "boss-bragus"),
                 "ghost" => new(id, "Spettrale", RoomType.Boss, RoomDifficulty.Any, string.Empty),
-                "mirror" => new(id, "Specchi", RoomType.Boss, RoomDifficulty.Any, string.Empty),
+                "mirror" => new(id, "Specchi", RoomType.Boss, RoomDifficulty.Any, "boss-medusa"),
                 "rainbow" => new(id, "Arcobaleno", RoomType.Boss, RoomDifficulty.Any, string.Empty),
                 _ => new(id, id.Replace('_', ' '), RoomType.Any, RoomDifficulty.Any, string.Empty)
             };

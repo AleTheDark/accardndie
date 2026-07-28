@@ -74,6 +74,11 @@ public sealed partial class BattleBoardController
 			deploymentInitiativesReady = false;
 			SetMessage("Schieramento completato: in combattimento agiscono prima le iniziative piu alte." + AuraStartMessage());
 			RefreshInitiativeDisplay();
+			if (adventureScriptedTutorialActive && adventureScriptedTutorialStep == 4 && !adventureScriptedTutorialInspectionOpened)
+			{
+				((MonoBehaviour)this).StartCoroutine(ShowAdventureTutorialInspectionStepAfterBattlefieldMove());
+				return;
+			}
 			BeginCurrentTurn();
 		}
 		else
@@ -113,7 +118,7 @@ public sealed partial class BattleBoardController
 			item.TieBreaker = random.NextInclusive(1, 10000);
 			string text = (item.BelongsToPlayer ?"TU" : "CPU");
 			AppendLog($"INIZIATIVA {text} - {item.Card.Name}: D{initiativeDieSides} = {item.Initiative}");
-			item.View.PlayDiceRoll(diceCatalog, initiativeDieSides, item.Initiative, "INIZIATIVA " + text, configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+			item.View.PlayDiceRoll(diceCatalog, initiativeDieSides, TrackDiceRoll(item.Initiative), "INIZIATIVA " + text, configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		}
 		yield return WaitForCardInspectionPause(configuration.Animation.DiceRollDuration + configuration.Animation.DiceResultHold);
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
@@ -159,6 +164,21 @@ public sealed partial class BattleBoardController
 		return Mathf.Max(
 			PrototypeCardView.VigorRollPresentationDuration(attackerRoll, rollDuration, resultHold),
 			PrototypeCardView.VigorRollPresentationDuration(defenderRoll, rollDuration, resultHold));
+	}
+
+	private float CombatRollResultRevealDuration(VigorRollResult attackerRoll, VigorRollResult defenderRoll)
+	{
+		float duration = Mathf.Max(0.75f, configuration.Animation.DiceRollDuration);
+		if (HasVigorReroll(attackerRoll) || HasVigorReroll(defenderRoll))
+		{
+			duration += 0.32f + Mathf.Max(0.45f, configuration.Animation.DiceRollDuration * 0.66f);
+		}
+		return duration + 0.25f;
+	}
+
+	private static bool HasVigorReroll(VigorRollResult roll)
+	{
+		return roll.FirstRollBeforeReroll > 0 || (roll.HasSecondRoll && roll.SecondRollBeforeReroll > 0);
 	}
 
 	private void BeginCurrentTurn()
@@ -294,7 +314,7 @@ public sealed partial class BattleBoardController
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 			defender = protectingPaladin;
 			protectingPaladin.AbilityArmed = false;
-			protectingPaladin.AbilityUsed = true;
+			MarkAbilityUsed(protectingPaladin);
 			protectingPaladin.ProtectedAlly = null;
 			RefreshPersistentStatus(protectingPaladin);
 		}
@@ -303,7 +323,7 @@ public sealed partial class BattleBoardController
 			SetMessage("PALADINO CPU: " + selfProtectingPaladin.Card.Name + " si difende con vantaggio.");
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 			selfProtectingPaladin.AbilityArmed = false;
-			selfProtectingPaladin.AbilityUsed = true;
+			MarkAbilityUsed(selfProtectingPaladin);
 			selfProtectingPaladin.ProtectedAlly = null;
 			RefreshPersistentStatus(selfProtectingPaladin);
 		}
@@ -330,7 +350,7 @@ public sealed partial class BattleBoardController
 		}
 		if (!UsesStationaryClassAttack(attacker))
 			yield return MoveDuelToCenter(attacker, defender);
-		if (certainty == CombatCertainty.Guaranteed)
+		if (certainty == CombatCertainty.Guaranteed && !adventureScriptedTutorialActive)
 		{
 			ConsumeArmedAttackAbility(attacker, modifiers);
 			((Component)abilityButton).gameObject.SetActive(false);
@@ -341,6 +361,7 @@ public sealed partial class BattleBoardController
 			if (hunterMarkUsed)
 				ConsumeHunterMarks(defender);
 			defender.Eliminated = true;
+			ApplyMageAuraDeathPenalty(defender, attacker);
 			ApplyMightAuraDeathBonuses(defender);
 			ConsumeVigorPenalties(attacker, defender);
 			UpdatePostAttackClassState(attacker, defeatedTarget: true);
@@ -359,11 +380,21 @@ public sealed partial class BattleBoardController
 		((Component)abilityButton).gameObject.SetActive(false);
 		((Component)attachmentButton).gameObject.SetActive(false);
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
+		bool holdDiceForTutorial = adventureScriptedTutorialActive && adventureScriptedTutorialStep == 5;
+		float diceResultHold = holdDiceForTutorial ? 999f : configuration.Animation.DiceResultHold;
 		PlayRollingDiceSfx();
-		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, result.AttackerRoll, "ATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, result.DefenderRoll, "DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
+		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, TrackDiceRoll(result.AttackerRoll), "ATTACCO", configuration.Animation.DiceRollDuration, diceResultHold);
+		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(result.DefenderRoll), "DIFESA", configuration.Animation.DiceRollDuration, diceResultHold);
+		yield return WaitForCardInspectionPause(holdDiceForTutorial
+			? CombatRollResultRevealDuration(result.AttackerRoll, result.DefenderRoll)
+			: CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
+		if (ShowAdventureTutorialCombatRollResult(attacker, defender, result))
+		{
+			yield return WaitForAdventureTutorialStepAcknowledged(6);
+			attacker.View.HideActiveDiceRoll();
+			defender.View.HideActiveDiceRoll();
+		}
 		yield return ShowCombatResult(result, attacker, defender);
 		if (hunterMarkUsed)
 			ConsumeHunterMarks(defender);
@@ -372,6 +403,7 @@ public sealed partial class BattleBoardController
 		{
 			yield return PlayHunterRangedAttackIfNeeded(attacker, defender, result.AttackerTotal - result.DefenderTotal, result.AttackerRoll.SelectionMode == VigorSelectionMode.Sum);
 			defender.Eliminated = true;
+			ApplyMageAuraDeathPenalty(defender, attacker);
 			ApplyMightAuraDeathBonuses(defender);
 			PlayDeathCardSfx();
 			yield return PlayTimelineAwareDefeatAnimation(defender, attacker.Card.HeroClass);
@@ -446,7 +478,7 @@ public sealed partial class BattleBoardController
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 			defender = protectingPaladin;
 			protectingPaladin.AbilityArmed = false;
-			protectingPaladin.AbilityUsed = true;
+			MarkAbilityUsed(protectingPaladin);
 			protectingPaladin.ProtectedAlly = null;
 			TriggerMagicAuraAfterAbility();
 			RefreshPersistentStatus(protectingPaladin);
@@ -456,7 +488,7 @@ public sealed partial class BattleBoardController
 			SetMessage("PALADINO: " + selfProtectingPaladin.Card.Name + " si difende con vantaggio.");
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 			selfProtectingPaladin.AbilityArmed = false;
-			selfProtectingPaladin.AbilityUsed = true;
+			MarkAbilityUsed(selfProtectingPaladin);
 			selfProtectingPaladin.ProtectedAlly = null;
 			TriggerMagicAuraAfterAbility();
 			RefreshPersistentStatus(selfProtectingPaladin);
@@ -495,6 +527,7 @@ public sealed partial class BattleBoardController
 			UpdatePostAttackClassState(attacker, defeatedTarget: true);
 			if (!TryCreateNecromancerSpirit(defender))
 			{
+				ApplyMageAuraDeathPenalty(defender, attacker);
 				ApplyMightAuraDeathBonuses(defender);
 				PlayDeathCardSfx();
 				yield return PlayTimelineAwareDefeatAnimation(defender, attacker.Card.HeroClass);
@@ -509,8 +542,8 @@ public sealed partial class BattleBoardController
 		ConsumeArmedAttackAbility(attacker, modifiers);
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
-		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, result.AttackerRoll, "ATTACCO CPU", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, result.DefenderRoll, "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, TrackDiceRoll(result.AttackerRoll), "ATTACCO CPU", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(result.DefenderRoll), "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		yield return ShowCombatResult(result, attacker, defender);
@@ -523,6 +556,7 @@ public sealed partial class BattleBoardController
 			defender.Eliminated = true;
 			if (!TryCreateNecromancerSpirit(defender))
 			{
+				ApplyMageAuraDeathPenalty(defender, attacker);
 				ApplyMightAuraDeathBonuses(defender);
 				PlayDeathCardSfx();
 				yield return PlayTimelineAwareDefeatAnimation(defender, attacker.Card.HeroClass);
@@ -563,8 +597,8 @@ public sealed partial class BattleBoardController
 		((Component)attachmentButton).gameObject.SetActive(false);
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
-		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, attackerRoll, "ATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		golemProxy.View.PlayVigorRoll(diceCatalog, golemResult.Form.VigorDieSides, golemRoll, "DIFESA " + GolemFormName(golemResult.Form.Form), configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, TrackDiceRoll(attackerRoll), "ATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		golemProxy.View.PlayVigorRoll(diceCatalog, golemResult.Form.VigorDieSides, TrackDiceRoll(golemRoll), "DIFESA " + GolemFormName(golemResult.Form.Form), configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(attackerRoll, golemRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		yield return ShowCombatResult(result, attacker, golemProxy);
@@ -589,6 +623,7 @@ public sealed partial class BattleBoardController
 		if (activeComposableGolem.IsDefeated)
 		{
 			golemProxy.Eliminated = true;
+			ApplyMageAuraDeathPenalty(golemProxy, attacker);
 			ApplyMightAuraDeathBonuses(golemProxy);
 			PlayDeathCardSfx();
 			yield return PlayTimelineAwareDefeatAnimation(golemProxy, attacker.Card.HeroClass);
@@ -638,8 +673,8 @@ public sealed partial class BattleBoardController
 
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
-		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, result.AttackerRoll, "ATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		medusaProxy.View.PlayVigorRoll(diceCatalog, defenderDieSides, result.DefenderRoll, "DIFESA MEDUSA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, TrackDiceRoll(result.AttackerRoll), "ATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		medusaProxy.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(result.DefenderRoll), "DIFESA MEDUSA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		yield return ShowCombatResult(result, attacker, medusaProxy);
@@ -660,6 +695,7 @@ public sealed partial class BattleBoardController
 		if (activeMedusaBoss.IsDefeated)
 		{
 			medusaProxy.Eliminated = true;
+			ApplyMageAuraDeathPenalty(medusaProxy, attacker);
 			ApplyMightAuraDeathBonuses(medusaProxy);
 			PlayMedusaDeathSfx();
 			yield return PlayTimelineAwareDefeatAnimation(medusaProxy, attacker.Card.HeroClass);
@@ -706,8 +742,8 @@ public sealed partial class BattleBoardController
 
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
-		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, result.AttackerRoll, "ATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		trentorProxy.View.PlayVigorRoll(diceCatalog, defenderDieSides, result.DefenderRoll, "DIFESA TRENTOR", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, TrackDiceRoll(result.AttackerRoll), "ATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		trentorProxy.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(result.DefenderRoll), "DIFESA TRENTOR", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		yield return ShowCombatResult(result, attacker, trentorProxy);
@@ -732,6 +768,7 @@ public sealed partial class BattleBoardController
 		if (activeTrentorBoss.IsDefeated)
 		{
 			trentorProxy.Eliminated = true;
+			ApplyMageAuraDeathPenalty(trentorProxy, attacker);
 			ApplyMightAuraDeathBonuses(trentorProxy);
 			PlayDeathCardSfx();
 			yield return PlayTimelineAwareDefeatAnimation(trentorProxy, attacker.Card.HeroClass);
@@ -787,8 +824,8 @@ public sealed partial class BattleBoardController
 
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
-		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, result.AttackerRoll, "ATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		bragusProxy.View.PlayVigorRoll(diceCatalog, defenderDieSides, result.DefenderRoll, "DIFESA BRAGUS", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, TrackDiceRoll(result.AttackerRoll), "ATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		bragusProxy.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(result.DefenderRoll), "DIFESA BRAGUS", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		yield return ShowCombatResult(result, attacker, bragusProxy);
@@ -813,6 +850,7 @@ public sealed partial class BattleBoardController
 		if (activeBragusBoss.IsDefeated)
 		{
 			bragusProxy.Eliminated = true;
+			ApplyMageAuraDeathPenalty(bragusProxy, attacker);
 			ApplyMightAuraDeathBonuses(bragusProxy);
 			PlayBragusDeathSfx();
 			yield return PlayTimelineAwareDefeatAnimation(bragusProxy, attacker.Card.HeroClass);
@@ -827,7 +865,7 @@ public sealed partial class BattleBoardController
 			if (counterPaladinProtectionUser != null)
 			{
 				counterPaladinProtectionUser.AbilityArmed = false;
-				counterPaladinProtectionUser.AbilityUsed = true;
+				MarkAbilityUsed(counterPaladinProtectionUser);
 				counterPaladinProtectionUser.ProtectedAlly = null;
 				TriggerMagicAuraAfterAbility();
 				RefreshPersistentStatus(counterPaladinProtectionUser);
@@ -840,8 +878,8 @@ public sealed partial class BattleBoardController
 			PlayBragusAttackSfx();
 			messagePanelWasHidden = HideMessagePanelForDiceRoll();
 			PlayRollingDiceSfx();
-			bragusProxy.View.PlayVigorRoll(diceCatalog, BragusBoss.DefaultVigorDieSides, counterRoll, "CONTRATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-			attacker.View.PlayVigorRoll(diceCatalog, attackerDefenseDieSides, attackerDefenseRoll, "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+			bragusProxy.View.PlayVigorRoll(diceCatalog, BragusBoss.DefaultVigorDieSides, TrackDiceRoll(counterRoll), "CONTRATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+			attacker.View.PlayVigorRoll(diceCatalog, attackerDefenseDieSides, TrackDiceRoll(attackerDefenseRoll), "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 			yield return WaitForCardInspectionPause(CombatRollPresentationDuration(counterResult.AttackerRoll, counterResult.DefenderRoll));
 			RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 			yield return ShowCombatResult(counterResult, bragusProxy, attacker);
@@ -853,6 +891,7 @@ public sealed partial class BattleBoardController
 				attacker.Eliminated = true;
 				if (!TryCreateNecromancerSpirit(attacker))
 				{
+					ApplyMageAuraDeathPenalty(attacker, bragusProxy);
 					ApplyMightAuraDeathBonuses(attacker);
 					PlayDeathCardSfx();
 					yield return PlayTimelineAwareDefeatAnimation(attacker, bragusProxy.Card.HeroClass);
@@ -902,8 +941,8 @@ public sealed partial class BattleBoardController
 
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
-		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, result.AttackerRoll, "ATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		palatirProxy.View.PlayVigorRoll(diceCatalog, defenderDieSides, result.DefenderRoll, activePalatirBoss.HasActiveShields ? "DIFESA SCUDI" : "DIFESA PALATIR", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, TrackDiceRoll(result.AttackerRoll), "ATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		palatirProxy.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(result.DefenderRoll), activePalatirBoss.HasActiveShields ? "DIFESA SCUDI" : "DIFESA PALATIR", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		yield return ShowCombatResult(result, attacker, palatirProxy);
@@ -932,6 +971,7 @@ public sealed partial class BattleBoardController
 		if (activePalatirBoss.IsDefeated)
 		{
 			palatirProxy.Eliminated = true;
+			ApplyMageAuraDeathPenalty(palatirProxy, attacker);
 			ApplyMightAuraDeathBonuses(palatirProxy);
 			PlayDeathCardSfx();
 			yield return PlayTimelineAwareDefeatAnimation(palatirProxy, attacker.Card.HeroClass);
@@ -973,7 +1013,7 @@ public sealed partial class BattleBoardController
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 			defender = protectingPaladin;
 			protectingPaladin.AbilityArmed = false;
-			protectingPaladin.AbilityUsed = true;
+			MarkAbilityUsed(protectingPaladin);
 			protectingPaladin.ProtectedAlly = null;
 			TriggerMagicAuraAfterAbility();
 			RefreshPersistentStatus(protectingPaladin);
@@ -983,7 +1023,7 @@ public sealed partial class BattleBoardController
 			SetMessage("PALADINO: " + selfProtectingPaladin.Card.Name + " si difende dal Golem con vantaggio.");
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 			selfProtectingPaladin.AbilityArmed = false;
-			selfProtectingPaladin.AbilityUsed = true;
+			MarkAbilityUsed(selfProtectingPaladin);
 			selfProtectingPaladin.ProtectedAlly = null;
 			TriggerMagicAuraAfterAbility();
 			RefreshPersistentStatus(selfProtectingPaladin);
@@ -997,8 +1037,8 @@ public sealed partial class BattleBoardController
 			yield return battleAnimationPlayer.PlayTargetLine(golemProxy.View, defender.View, AttackTargetLineColor);
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
-		golemProxy.View.PlayVigorRoll(diceCatalog, golemResult.Form.VigorDieSides, golemRoll, "ATTACCO " + GolemFormName(golemResult.Form.Form), configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, defenderRoll, "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		golemProxy.View.PlayVigorRoll(diceCatalog, golemResult.Form.VigorDieSides, TrackDiceRoll(golemRoll), "ATTACCO " + GolemFormName(golemResult.Form.Form), configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(defenderRoll), "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		yield return ShowCombatResult(result, golemProxy, defender);
@@ -1009,6 +1049,7 @@ public sealed partial class BattleBoardController
 			defender.Eliminated = true;
 			if (!TryCreateNecromancerSpirit(defender))
 			{
+				ApplyMageAuraDeathPenalty(defender, golemProxy);
 				ApplyMightAuraDeathBonuses(defender);
 				PlayDeathCardSfx();
 				yield return PlayTimelineAwareDefeatAnimation(defender, golemProxy.Card.HeroClass);
@@ -1129,7 +1170,7 @@ public sealed partial class BattleBoardController
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 			defender = protectingPaladin;
 			protectingPaladin.AbilityArmed = false;
-			protectingPaladin.AbilityUsed = true;
+			MarkAbilityUsed(protectingPaladin);
 			protectingPaladin.ProtectedAlly = null;
 			TriggerMagicAuraAfterAbility();
 			RefreshPersistentStatus(protectingPaladin);
@@ -1139,7 +1180,7 @@ public sealed partial class BattleBoardController
 			SetMessage("PALADINO: " + selfProtectingPaladin.Card.Name + " si difende dai rampicanti con vantaggio.");
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 			selfProtectingPaladin.AbilityArmed = false;
-			selfProtectingPaladin.AbilityUsed = true;
+			MarkAbilityUsed(selfProtectingPaladin);
 			selfProtectingPaladin.ProtectedAlly = null;
 			TriggerMagicAuraAfterAbility();
 			RefreshPersistentStatus(selfProtectingPaladin);
@@ -1155,8 +1196,8 @@ public sealed partial class BattleBoardController
 			yield return battleAnimationPlayer.PlayTargetLine(trentorProxy.View, defender.View, new Color(0.22f, 0.92f, 0.24f, 1f));
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
-		trentorProxy.View.PlayVigorRoll(diceCatalog, TrentorBoss.DefaultVigorDieSides, trentorRoll, trentorResult.MarkedTargetBonus ? "ATTACCO MARCATO" : "ATTACCO TRENTOR", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, defenderRoll, "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		trentorProxy.View.PlayVigorRoll(diceCatalog, TrentorBoss.DefaultVigorDieSides, TrackDiceRoll(trentorRoll), trentorResult.MarkedTargetBonus ? "ATTACCO MARCATO" : "ATTACCO TRENTOR", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(defenderRoll), "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		yield return ShowCombatResult(result, trentorProxy, defender);
@@ -1174,6 +1215,7 @@ public sealed partial class BattleBoardController
 			defender.Eliminated = true;
 			if (!TryCreateNecromancerSpirit(defender))
 			{
+				ApplyMageAuraDeathPenalty(defender, trentorProxy);
 				ApplyMightAuraDeathBonuses(defender);
 				PlayDeathCardSfx();
 				yield return PlayTimelineAwareDefeatAnimation(defender, trentorProxy.Card.HeroClass);
@@ -1228,7 +1270,7 @@ public sealed partial class BattleBoardController
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 			defender = protectingPaladin;
 			protectingPaladin.AbilityArmed = false;
-			protectingPaladin.AbilityUsed = true;
+			MarkAbilityUsed(protectingPaladin);
 			protectingPaladin.ProtectedAlly = null;
 			TriggerMagicAuraAfterAbility();
 			RefreshPersistentStatus(protectingPaladin);
@@ -1238,7 +1280,7 @@ public sealed partial class BattleBoardController
 			SetMessage("PALADINO: " + selfProtectingPaladin.Card.Name + " si difende dalla cometa con vantaggio.");
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 			selfProtectingPaladin.AbilityArmed = false;
-			selfProtectingPaladin.AbilityUsed = true;
+			MarkAbilityUsed(selfProtectingPaladin);
 			selfProtectingPaladin.ProtectedAlly = null;
 			TriggerMagicAuraAfterAbility();
 			RefreshPersistentStatus(selfProtectingPaladin);
@@ -1253,8 +1295,8 @@ public sealed partial class BattleBoardController
 			yield return battleAnimationPlayer.PlayTargetLine(palatirProxy.View, defender.View, new Color(0.58f, 0.2f, 1f, 1f));
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
-		palatirProxy.View.PlayVigorRoll(diceCatalog, PalatirBoss.DefaultVigorDieSides, palatirRoll, "ATTACCO COSMICO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, defenderRoll, "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		palatirProxy.View.PlayVigorRoll(diceCatalog, PalatirBoss.DefaultVigorDieSides, TrackDiceRoll(palatirRoll), "ATTACCO COSMICO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(defenderRoll), "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		yield return ShowCombatResult(result, palatirProxy, defender);
@@ -1266,6 +1308,7 @@ public sealed partial class BattleBoardController
 			defender.Eliminated = true;
 			if (!TryCreateNecromancerSpirit(defender))
 			{
+				ApplyMageAuraDeathPenalty(defender, palatirProxy);
 				ApplyMightAuraDeathBonuses(defender);
 				PlayDeathCardSfx();
 				yield return PlayTimelineAwareDefeatAnimation(defender, palatirProxy.Card.HeroClass);
@@ -1292,7 +1335,7 @@ public sealed partial class BattleBoardController
 
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
-		card.View.PlayVigorRoll(diceCatalog, dieSides, SingleRoll(dieSides, result.Roll), "SPIETRIFICA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		card.View.PlayVigorRoll(diceCatalog, dieSides, TrackDiceRoll(SingleRoll(dieSides, result.Roll)), "SPIETRIFICA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(configuration.Animation.DiceRollDuration + configuration.Animation.DiceResultHold);
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 
@@ -1700,7 +1743,7 @@ public sealed partial class BattleBoardController
 		messagePanelHiddenForDuel = hidden;
 		if ((Object)(object)messagePanelRect != (Object)null)
 		{
-			((Component)messagePanelRect).gameObject.SetActive(!messagePanelHiddenForDuel);
+			((Component)messagePanelRect).gameObject.SetActive(!messagePanelHiddenForDuel && !adventureScriptedTutorialActive);
 		}
 	}
 
@@ -1739,10 +1782,18 @@ public sealed partial class BattleBoardController
 		ClassBalanceConfiguration classBalance = configuration.ClassBalance;
 		int num = attacker.PendingAttackBonus + TotalPermanentCombatBonus(attacker);
 		int defenderFlatBonus = TotalPermanentCombatBonus(defender) + PendingDefenseBonus(defender);
-		bool flag = ClassAbilitiesEnabled(attacker);
-		if (attacker.BelongsToPlayer && playerAura == BattleAuraType.Warrior && attacker.Card.HeroClass == HeroClass.Warrior && attacker.AbilityArmed)
+		if (AuraFor(defender) == BattleAuraType.Warrior
+			&& defender.Card.HeroClass == HeroClass.Warrior
+			&& defender.Card.Strength < attacker.Card.Strength)
 		{
-			num++;
+			defenderFlatBonus += 2;
+		}
+		bool flag = ClassAbilitiesEnabled(attacker);
+		if (AuraFor(attacker) == BattleAuraType.Warrior
+			&& attacker.Card.HeroClass == HeroClass.Warrior
+			&& attacker.Card.Strength < defender.Card.Strength)
+		{
+			num += 2;
 		}
 		int num2 = HunterMarkAttackBonus(attacker, defender);
 		if (num2 > 0)
@@ -1754,7 +1805,7 @@ public sealed partial class BattleBoardController
 			attacker.View.SetStatus("REROLL 1", new Color(0.75f, 0.9f, 1f));
 		}
 		bool forceAttackerAdvantage = false;
-		if (attacker.BelongsToPlayer && playerAura == BattleAuraType.Cunning && HeroClassFamily.Of(attacker.Card.HeroClass) == ClassFamily.Cunning && HasBonusOrMalusForCunning(defender))
+		if (AuraFor(attacker) == BattleAuraType.Cunning && HeroClassFamily.Of(attacker.Card.HeroClass) == ClassFamily.Cunning && HasBonusOrMalusForCunning(defender))
 		{
 			forceAttackerAdvantage = true;
 			if (updateVisuals)
@@ -1800,7 +1851,7 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		attacker.AbilityArmed = false;
-		attacker.AbilityUsed = true;
+		MarkAbilityUsed(attacker);
 		TriggerMagicAuraAfterAbility();
 	}
 
@@ -1948,8 +1999,8 @@ public sealed partial class BattleBoardController
 		SetMessage("AURA PALADINO: " + paladin.Card.Name + " contrattacca " + target.Card.Name + " con +1.");
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
-		paladin.View.PlayVigorRoll(diceCatalog, num, result.AttackerRoll, "CONTRATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		target.View.PlayVigorRoll(diceCatalog, num2, result.DefenderRoll, "DIFESA CPU", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		paladin.View.PlayVigorRoll(diceCatalog, num, TrackDiceRoll(result.AttackerRoll), "CONTRATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		target.View.PlayVigorRoll(diceCatalog, num2, TrackDiceRoll(result.DefenderRoll), "DIFESA CPU", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		yield return ShowCombatResult(result, paladin, target);
@@ -1957,6 +2008,7 @@ public sealed partial class BattleBoardController
 		if (result.DefenderIsDefeated)
 		{
 			target.Eliminated = true;
+			ApplyMageAuraDeathPenalty(target, paladin);
 			ApplyMightAuraDeathBonuses(target);
 			PlayDeathCardSfx();
 			yield return PlayTimelineAwareDefeatAnimation(target, paladin.Card.HeroClass);
@@ -2085,6 +2137,22 @@ public sealed partial class BattleBoardController
 
 		ApplyMightAuraDeathBonusesForSide(playerCards, playerAura, "TU");
 		ApplyMightAuraDeathBonusesForSide(cpuCards, cpuAura, "CPU");
+	}
+
+	private void ApplyMageAuraDeathPenalty(BattleCardState defeated, BattleCardState attacker)
+	{
+		if (defeated == null
+			|| attacker == null
+			|| !defeated.Eliminated
+			|| defeated.Card.HeroClass != HeroClass.Mage
+			|| AuraFor(defeated) != BattleAuraType.Mage)
+		{
+			return;
+		}
+
+		attacker.PermanentCombatBonus -= 2;
+		RefreshPersistentStatus(attacker);
+		AppendLog($"AURA MAGO - {attacker.Card.Name} subisce -2 permanente per aver eliminato {defeated.Card.Name}.");
 	}
 
 	private void ApplyMightAuraDeathBonusesForSide(List<BattleCardState> cards, BattleAuraType aura, string ownerLabel)
@@ -2256,6 +2324,7 @@ public sealed partial class BattleBoardController
 				ShowTargetHints(battleCardState);
 				SetMessage("ATTACCO: scegli una pedina avversaria da colpire con " + battleCardState.Card.Name + ".");
 				UpdateInteractions();
+				NotifyAdventureTutorial(AdventureTutorialAction.AttackPressed);
 			}
 		}
 	}
@@ -2270,6 +2339,7 @@ public sealed partial class BattleBoardController
 				attackTargetingActive = false;
 				pendingAbilityUser = battleCardState;
 				ConfirmPendingAbility();
+				NotifyAdventureTutorial(AdventureTutorialAction.AbilityPressed);
 			}
 		}
 	}
@@ -2648,7 +2718,7 @@ public sealed partial class BattleBoardController
 		{
 			battleCardState.PermanentCombatBonus--;
 		}
-		card.AbilityUsed = true;
+		MarkAbilityUsed(card);
 		RefreshPersistentStatus(battleCardState);
 		PlayClassAbilitySfx(HeroClass.Assassin);
 		if ((Object)(object)battleAnimationPlayer != (Object)null
@@ -2671,12 +2741,12 @@ public sealed partial class BattleBoardController
 			message = null;
 			return false;
 		}
-		int num = ((cpuAura != BattleAuraType.Mage) ?1 : 2);
+		int num = 1;
 		int baseDieSides = runProgress != null ? runProgress.PlayerVigorDieSides : configuration.Gameplay.VigorDieSides;
 		int startDieSides = EffectiveVigorDieSides(battleCardState, baseDieSides);
 		battleCardState.PendingVigorStepPenalty = Math.Max(battleCardState.PendingVigorStepPenalty, num);
 		int endDieSides = EffectiveVigorDieSides(battleCardState, baseDieSides);
-		card.AbilityUsed = true;
+		MarkAbilityUsed(card);
 		RefreshPersistentStatus(battleCardState);
 		PlayClassAbilitySfx(HeroClass.Mage);
 		if ((Object)(object)battleAnimationPlayer != (Object)null
@@ -2730,7 +2800,7 @@ public sealed partial class BattleBoardController
 			RefreshPersistentStatus(card.MarkedTarget);
 		}
 		card.MarkedTarget = battleCardState;
-		card.AbilityUsed = true;
+		MarkAbilityUsed(card);
 		RefreshPersistentStatus(battleCardState);
 		PlayClassAbilitySfx(HeroClass.Hunter);
 		if ((Object)(object)battleAnimationPlayer != (Object)null
@@ -2761,7 +2831,7 @@ public sealed partial class BattleBoardController
 		battleCardState.View.SetInitiative(battleCardState.Initiative);
 		RefreshPersistentStatus(battleCardState);
 		ApplyCpuAuraVisuals(appendLog: false);
-		card.AbilityUsed = true;
+		MarkAbilityUsed(card);
 		PlayClassAbilitySfx(HeroClass.Necromancer);
 		if ((Object)(object)battleAnimationPlayer != (Object)null
 			&& (Object)(object)card.View != (Object)null
@@ -2788,7 +2858,7 @@ public sealed partial class BattleBoardController
 		{
 			battleCardState.PendingAttackBonusKind = PendingAttackBonusKind.Blessing;
 		}
-		card.AbilityUsed = true;
+		MarkAbilityUsed(card);
 		RefreshPersistentStatus(battleCardState);
 		PlayClassAbilitySfx(HeroClass.Priest);
 		if ((Object)(object)battleAnimationPlayer != (Object)null
@@ -2888,16 +2958,23 @@ public sealed partial class BattleBoardController
 		{
 			((Component)confirmActionButton).gameObject.SetActive(false);
 			((Component)cancelActionButton).gameObject.SetActive(false);
-			draftViews[pendingDeploymentIndex].ShowConfirmInfoActions(confirmActionSprite, infoActionSprite, new UnityAction(ConfirmPendingDeployment), new UnityAction(ShowPendingDeploymentInspection));
-			for (int i = 0; i < draftViews.Count; i++)
+			if (adventureScriptedTutorialActive)
 			{
-				if (i != pendingDeploymentIndex && !selectedDraftCards.Contains(i))
+				draftViews[pendingDeploymentIndex].ShowConfirmAction(confirmActionSprite, new UnityAction(ConfirmPendingDeployment));
+			}
+			else
+			{
+				draftViews[pendingDeploymentIndex].ShowConfirmInfoActions(confirmActionSprite, infoActionSprite, new UnityAction(ConfirmPendingDeployment), new UnityAction(ShowPendingDeploymentInspection));
+				for (int i = 0; i < draftViews.Count; i++)
 				{
-					int capturedIndex = i;
-					draftViews[i].ShowCardClickAction((UnityAction)delegate
+					if (i != pendingDeploymentIndex && !selectedDraftCards.Contains(i))
 					{
-						ToggleDraftCard(capturedIndex);
-					});
+						int capturedIndex = i;
+						draftViews[i].ShowCardClickAction((UnityAction)delegate
+						{
+							ToggleDraftCard(capturedIndex);
+						});
+					}
 				}
 			}
 		}
@@ -2927,13 +3004,32 @@ public sealed partial class BattleBoardController
 			{
 				((Component)attachmentButton).gameObject.SetActive(false);
 			}
+			if (adventureScriptedTutorialActive && adventureScriptedTutorialStep == 5 && IsAdventureTutorialWarriorAbilityTurn())
+			{
+				battleCardState2.View.ShowAbilityAction(GetAbilityButtonSprite(), new UnityAction(ActivateCurrentAbility));
+				return;
+			}
 			if (flag && flag2)
 			{
-				battleCardState2.View.ShowTripleActions(GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack), GetAbilityButtonSprite(), new UnityAction(ActivateCurrentAbility), GetAttachmentButtonSprite(), new UnityAction(ActivateCurrentAttachment));
+				if (adventureScriptedTutorialActive && adventureScriptedTutorialStep == 5)
+				{
+					battleCardState2.View.ShowClassAction(GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack));
+				}
+				else
+				{
+					battleCardState2.View.ShowTripleActions(GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack), GetAbilityButtonSprite(), new UnityAction(ActivateCurrentAbility), GetAttachmentButtonSprite(), new UnityAction(ActivateCurrentAttachment));
+				}
 			}
 			else if (flag || flag2)
 			{
-				battleCardState2.View.ShowDualActions(GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack), flag ?GetAbilityButtonSprite() : GetAttachmentButtonSprite(), flag ?new UnityAction(ActivateCurrentAbility) : new UnityAction(ActivateCurrentAttachment));
+				if (adventureScriptedTutorialActive && adventureScriptedTutorialStep == 5)
+				{
+					battleCardState2.View.ShowClassAction(GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack));
+				}
+				else
+				{
+					battleCardState2.View.ShowDualActions(GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack), flag ?GetAbilityButtonSprite() : GetAttachmentButtonSprite(), flag ?new UnityAction(ActivateCurrentAbility) : new UnityAction(ActivateCurrentAttachment));
+				}
 			}
 			else
 			{
@@ -3294,12 +3390,12 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
-		RestoreTimelineBaseRect();
 		List<string> previousTimelineOrder = new List<string>(campaignTimelineOrderKeys);
 		List<string> expectedTimelineOrder = BuildCampaignTimelineOrder();
 		if (pvpTimelineSlideRoutine != null && previousTimelineOrder.SequenceEqual(expectedTimelineOrder))
 			return;
 
+		RestoreTimelineBaseRect();
 		StopTimelineSlideAnimation();
 
 		for (int num = ((Transform)initiativeTimelineRoot).childCount - 1; num >= 0; num--)

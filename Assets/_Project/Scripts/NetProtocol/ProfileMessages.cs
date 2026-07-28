@@ -33,6 +33,15 @@ namespace AccardND.NetProtocol
         public int iconsTotal;
         public int seasonId;
         public string seasonName;
+
+        /// <summary>Posizione in classifica nella stagione attiva; 0 = non in classifica.</summary>
+        public int globalRank;
+
+        /// <summary>Giocatori presenti nella classifica della stagione attiva.</summary>
+        public int globalPlayers;
+
+        /// <summary>Secondi rimanenti alla fine della stagione; 0 se non disponibile.</summary>
+        public int seasonSecondsRemaining;
     }
 
     [Serializable]

@@ -46,7 +46,9 @@ namespace AccardND.Battlefield
             ClearStatuses();
             panel.SetActive(true);
             panel.transform.SetAsLastSibling();
-            RefreshLayout();
+            bool isBossOrMiniboss = IsBossOrMiniboss(definition);
+            bool compactBossStatusLayout = isBossOrMiniboss && statuses != null && statuses.Count > 0;
+            RefreshLayout(compactBossStatusLayout);
 
             PrototypeCardView view = PrototypeCardView.Create(cardSlot, definition, configuration);
             Stretch(view.RectTransform);
@@ -55,7 +57,6 @@ namespace AccardND.Battlefield
 
             string rules = BuildCardRulesSummary(definition);
             string extra = string.IsNullOrWhiteSpace(extraSummary) ? string.Empty : "\n\n" + extraSummary;
-            bool isBossOrMiniboss = IsBossOrMiniboss(definition);
             summaryText.resizeTextMinSize = isBossOrMiniboss ? 15 : 20;
             summaryText.resizeTextMaxSize = isBossOrMiniboss ? 30 : 34;
             summaryText.text = $"{rules}{extra}";
@@ -93,8 +94,8 @@ namespace AccardND.Battlefield
             if (!isBossOrMiniboss)
             {
                 lines.Add(string.Empty);
-                lines.Add("Aura di Famiglia: " + CardRulesGlossary.ClassFamilyName(family) + "\n" + FamilyAuraDescription(family));
-                lines.Add("Aura di Classe: " + CardRulesGlossary.HeroClassName(definition.HeroClass) + "\n" + ClassAuraDescription(definition.HeroClass));
+                lines.Add("Aura di Famiglia: " + CardRulesGlossary.ClassFamilyName(family) + "\n" + CardRulesGlossary.FamilyAuraDescription(family));
+                lines.Add("Aura di Classe: " + CardRulesGlossary.HeroClassName(definition.HeroClass) + "\n" + CardRulesGlossary.ClassAuraDescription(definition.HeroClass, configuration?.ClassBalance));
                 lines.Add(CardRulesGlossary.AbilityTitle(definition.HeroClass) + ":\n" + CardRulesGlossary.AbilityDescription(definition.HeroClass, configuration.ClassBalance));
             }
 
@@ -139,34 +140,6 @@ namespace AccardND.Battlefield
                 ClassFamily.Cunning => ClassFamily.Might,
                 ClassFamily.Magic => ClassFamily.Cunning,
                 _ => ClassFamily.Might
-            };
-        }
-
-        private static string FamilyAuraDescription(ClassFamily family)
-        {
-            return family switch
-            {
-                ClassFamily.Might => "Quando muore una pedina qualsiasi, ogni carta con aura Forzuta attiva acquisisce +1 permanente.",
-                ClassFamily.Cunning => "le carte Astuta attaccano con vantaggio i nemici che hanno bonus o malus.",
-                ClassFamily.Magic => "Le tue carte Magica si difendono con un dado piu forte, esempio: Se ho un D6 mi difendo con un D8.",
-                _ => "nessun effetto."
-            };
-        }
-
-        private static string ClassAuraDescription(HeroClass heroClass)
-        {
-            return heroClass switch
-            {
-                HeroClass.Warrior => "i Guerrieri con abilita pronta attaccano con +1.",
-                HeroClass.Barbarian => "Furia del Barbaro vale +1 extra.",
-                HeroClass.Paladin => "quando un Paladino sopravvive ad una difesa, contrattacca con +1.",
-                HeroClass.Rogue => "i Ladri ritirano una volta per dado se esce 1 o 2, in attacco e in difesa.",
-                HeroClass.Assassin => "gli Assassini controllano meglio i bersagli inibiti.",
-                HeroClass.Hunter => "i Bersagli marcati dal Cacciatore hanno un bonus maggiore.",
-                HeroClass.Mage => "il Mago riduce di una taglia extra il dado Vigore nemico.",
-                HeroClass.Necromancer => "La prima volta che un tuo alleato viene ucciso, resta in campo per un ultimo turno.",
-                HeroClass.Priest => "le Benedizioni del Sacerdote danno un bonus maggiore.",
-                _ => "nessun effetto."
             };
         }
 
@@ -245,7 +218,7 @@ namespace AccardND.Battlefield
             panel.SetActive(false);
         }
 
-        private void RefreshLayout()
+        private void RefreshLayout(bool compactBossStatusLayout = false)
         {
             bool landscape = Screen.width >= Screen.height * 1.08f;
             Sprite bookSprite = LoadSprite(landscape ? "UI/card_inspection_landscape" : "UI/card_inspection");
@@ -261,11 +234,11 @@ namespace AccardND.Battlefield
                 landscape ? new Vector2(0.105f, 0.14f) : new Vector2(0.215f, 0.63f),
                 landscape ? new Vector2(0.5f, 0.945f) : new Vector2(0.785f, 0.955f));
             SetAnchors(summaryText.rectTransform,
-                landscape ? new Vector2(0.49f, 0.27f) : new Vector2(0.12f, 0.24f),
+                compactBossStatusLayout ? (landscape ? new Vector2(0.49f, 0.43f) : new Vector2(0.12f, 0.405f)) : (landscape ? new Vector2(0.49f, 0.27f) : new Vector2(0.12f, 0.24f)),
                 landscape ? new Vector2(0.91f, 0.875f) : new Vector2(0.84f, 0.615f));
             SetAnchors(statusRoot,
-                landscape ? new Vector2(0.495f, 0.085f) : new Vector2(0.12f, 0.06f),
-                landscape ? new Vector2(0.915f, 0.255f) : new Vector2(0.84f, 0.225f));
+                compactBossStatusLayout ? (landscape ? new Vector2(0.495f, 0.22f) : new Vector2(0.12f, 0.09f)) : (landscape ? new Vector2(0.495f, 0.085f) : new Vector2(0.12f, 0.06f)),
+                compactBossStatusLayout ? (landscape ? new Vector2(0.915f, 0.40f) : new Vector2(0.84f, 0.235f)) : (landscape ? new Vector2(0.915f, 0.255f) : new Vector2(0.84f, 0.225f)));
         }
 
         private void AddStatusRow(PrototypeCardView.StatusToken status)

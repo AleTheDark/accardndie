@@ -29,11 +29,16 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private const string TrentorBossDebugSceneName = "TrentorBossDebug";
 	private const string BragusBossDebugSceneName = "BragusBossDebug";
 	private const string PalatirBossDebugSceneName = "PalatirBossDebug";
+	private const string MerchantDebugSceneName = "MerchantDebug";
+	private const string LootRoomDebugSceneName = "LootRoomDebug";
+
 	private const string MageVigorConstellationDebugSceneName = "MageVigorConstellationDebug";
 	private const string DiceRollDebugSceneName = "DiceRollDebug";
 	private const string LoginScreenPrototypeSceneName = "LoginScreenPrototype";
 	private const string PlayerHudNamePrefsKey = "AccardND.PlayerHudName";
-	private const int TutorialCompletionHoneyReward = 60;
+	// Il tutorial non paga piu' miele (quello arriva solo dalle quest della taverna): regala
+	// il primo capitolo, cosi' chi esce dal tutorial puo' giocare subito.
+	private const string TutorialCompletionChapterId = "chapter-1";
 	private const int HardcoreUnlockHoneyCost = 50;
 	private static readonly Color AttackTargetLineColor = new(1f, 0.04f, 0.02f, 1f);
 	private static readonly Color AttachmentTargetLineColor = new(1f, 0.45f, 0.03f, 1f);
@@ -48,12 +53,22 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private AccardND.Network.ServerSinglePlayerProgressRepository serverProgress;
 	private bool ServerProgressReady =>
 		serverProgress != null && singlePlayerServerLink != null && singlePlayerServerLink.IsReady;
+	private string campaignRunRewardId;
+	private string pendingCampaignRewardClaimId;
+	private int pendingCampaignRewardBaseAccountExperience;
+	private bool pendingCampaignRewardAdClaimed;
+	private GameObject campaignDefeatRewardPopup;
+	private Text campaignDefeatRewardBodyText;
+	private Button campaignDefeatRewardDoubleButton;
+	private Text campaignDefeatRewardDoubleButtonText;
 
-	private enum MerchantBuyMode
+	// Il mercato espone due banchi mutuamente esclusivi: al primo acquisto quello non scelto
+	// resta chiuso per il resto della stanza. Vendita e recupero carte restano sempre attivi.
+	private enum MerchantBranch
 	{
-		Random,
-		Class,
-		Strength
+		None,
+		Cards,
+		Items
 	}
 
 	private enum AbilityTargetMode
@@ -99,6 +114,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		SecondChance,
 		Defrost,
 		Empower,
+		SigilloRubino,
 		DoubleExp
 	}
 
@@ -250,6 +266,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			View = view;
 			BelongsToPlayer = belongsToPlayer;
 			CampaignCard = campaignCard;
+			if (campaignCard != null)
+			{
+				PermanentCombatBonus = campaignCard.PermanentItemBonus;
+			}
 		}
 	}
 
@@ -409,9 +429,13 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private GameObject deckBuilderPanel;
 
+	private Image deckBuilderInnerBackgroundImage;
+
 	private Image deckBuilderFrameImage;
 
 	private AspectRatioFitter deckBuilderFrameAspectFitter;
+
+	private Image deckBuilderTitlePanel;
 
 	private Text deckBuilderHeadingText;
 
@@ -439,6 +463,16 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Text deckBuilderClassBuyText;
 
+	private RectTransform deckBuilderClassGridRoot;
+
+	private readonly List<RectTransform> deckBuilderClassOptionRects = new List<RectTransform>();
+
+	private readonly List<Button> deckBuilderClassOptionButtons = new List<Button>();
+
+	private readonly List<Image> deckBuilderClassOptionImages = new List<Image>();
+
+	private readonly List<HeroClass> deckBuilderClassOptionClasses = new List<HeroClass>();
+
 	private Image deckBuilderStrengthImage;
 
 	private RectTransform deckBuilderStrengthButtonRect;
@@ -457,10 +491,6 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Coroutine deckBuilderToastRoutine;
 
-	private Image startCampaignHelpAura;
-
-	private RectTransform startCampaignHelpAuraRect;
-
 	private Button startCampaignButton;
 
 	private RectTransform startCampaignButtonRect;
@@ -477,7 +507,35 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Button modeSelectionTutorialButton;
 
+	private Button modeSelectionSanctuaryButton;
+
+	private Button modeSelectionLibraryButton;
+
+	private Button modeSelectionShopButton;
+
+	private Button modeSelectionTavernButton;
+
+	private Button modeSelectionProfileButton;
+
+	private Button modeSelectionHallOfFameButton;
+
+	private readonly List<Button> modeSelectionHotspotButtons = new List<Button>();
+	private Image accountBannerImage;
+	private RectTransform accountBannerPortraitRoot;
+	private Image accountBannerPortraitImage;
+	private Image accountBannerExperienceFill;
+	private Text accountBannerNameText;
+	private Text accountBannerLevelText;
+	private Text accountBannerExperienceText;
+	private readonly Text[] accountBannerInfoTexts = new Text[3];
+	private Image accountHoneyPanelImage;
+	private Text accountHoneyAmountText;
+
 	private Button tutorialAdvanceButton;
+
+	private Coroutine campaignHubZoomRoutine;
+
+	private GameObject campaignHubCinematicOverlay;
 
 	private GameObject campaignModeSelectionPanel;
 
@@ -485,11 +543,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private AspectRatioFitter campaignModeSelectionFrameAspectFitter;
 
+	private Image campaignModeSelectionTitlePanel;
+
 	private Text campaignModeSelectionHeadingText;
-
-	private Text campaignModeSelectionPromptText;
-
-	private Text campaignModeSelectionProgressText;
 
 	private Button campaignModeAdventureButton;
 
@@ -499,13 +555,25 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Text campaignModeHardcoreButtonText;
 
+	private Image campaignModeHardcoreEmblemImage;
+
+	private AccardND.PvpUi.PvpUiVfx campaignModeHardcoreVfx;
+
 	private RectTransform campaignModeDraftButtonRect;
+
+	private Button campaignModeBackButton;
 
 	private GameObject adventureChapterPanel;
 
-	private Text adventureChapterHeadingText;
+	private Image adventureChapterInnerBackgroundImage;
 
-	private Text adventureChapterProgressText;
+	private Image adventureChapterFrameImage;
+
+	private AspectRatioFitter adventureChapterFrameAspectFitter;
+
+	private Image adventureChapterTitlePanel;
+
+	private Text adventureChapterHeadingText;
 
 	private RectTransform adventureChapterListRoot;
 
@@ -515,7 +583,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private GameObject adventureTutorialConfirmPopup;
 
+	private Text adventureTutorialConfirmTitleText;
+
 	private Text adventureTutorialConfirmBodyText;
+
+	private Action adventureConfirmAction;
 
 	private GameObject guidedTutorialPanel;
 
@@ -537,6 +609,18 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private int adventureScriptedTutorialStep;
 
+	private bool adventureScriptedTutorialStepAcknowledged;
+
+	private RectTransform adventureScriptedTutorialPendingTarget;
+
+	private int adventureScriptedTutorialAllowedDraftIndex = -1;
+
+	private bool adventureScriptedTutorialInspectionOpened;
+
+	private bool adventureScriptedTutorialAwaitingAdvantageContinue;
+
+	private bool adventureScriptedTutorialObjectiveShown;
+
 	private GameObject adventureScriptedTutorialPanel;
 
 	private Text adventureScriptedTutorialTitleText;
@@ -544,6 +628,12 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private Text adventureScriptedTutorialBodyText;
 
 	private Text adventureScriptedTutorialStepText;
+
+	private Button adventureScriptedTutorialNextButton;
+
+	private Coroutine adventureScriptedTutorialTextRoutine;
+
+	private string adventureScriptedTutorialBodyFullText = string.Empty;
 
 	private Image adventureScriptedTutorialSpotlight;
 
@@ -649,6 +739,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Text merchantBuyButtonText;
 
+	private AccardND.PvpUi.PvpUiVfx merchantOpenButtonPulseVfx;
+
+	private AccardND.PvpUi.PvpUiVfx merchantContinueButtonPulseVfx;
+
 	private GameObject merchantPanel;
 
 	private RectTransform merchantDeckCardsRoot;
@@ -659,6 +753,20 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Text merchantGraveyardEmptyText;
 
+	private Button merchantDeckTabButton;
+
+	private Text merchantDeckTabText;
+
+	private Button merchantGraveyardTabButton;
+
+	private Text merchantGraveyardTabText;
+
+	private bool merchantShowingGraveyard;
+
+	private AccardND.PvpUi.PvpUiVfx merchantDeckTabVfx;
+
+	private AccardND.PvpUi.PvpUiVfx merchantGraveyardTabVfx;
+
 	private Text merchantStatusText;
 
 	private Text merchantSellText;
@@ -667,17 +775,35 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Button merchantRecoverButton;
 
-	private Button merchantRandomBuyButton;
+	private Button merchantCardsTabButton;
 
-	private Button merchantClassBuyButton;
+	private Button merchantItemsTabButton;
 
-	private Button merchantStrengthBuyButton;
+	private Text merchantCardsTabText;
 
-	private Image merchantClassImage;
+	private Text merchantItemsTabText;
 
-	private Image merchantStrengthImage;
+	private Image merchantCardsTabLockImage;
 
-	private Text merchantClassText;
+	private Image merchantItemsTabLockImage;
+
+	private AccardND.PvpUi.PvpUiVfx merchantCardsTabVfx;
+
+	private AccardND.PvpUi.PvpUiVfx merchantItemsTabVfx;
+
+	private RectTransform merchantShelfRoot;
+
+	private readonly List<GameObject> merchantShelfViews = new List<GameObject>();
+
+	private readonly List<MerchantCardOffer> merchantCardOffers = new List<MerchantCardOffer>();
+
+	private readonly List<MerchantItemOffer> merchantItemOffers = new List<MerchantItemOffer>();
+
+	private MerchantBranch merchantVisibleBranch = MerchantBranch.Cards;
+
+	private MerchantBranch merchantLockedBranch = MerchantBranch.None;
+
+	private int merchantStockRoomKey = -1;
 
 	private readonly List<PrototypeCardView> merchantOwnedCardViews = new List<PrototypeCardView>();
 
@@ -793,6 +919,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private CampaignConsumableType inspectedCampaignConsumableType;
 
+	private bool rubySealTargetSelectionActive;
+
 	private readonly List<GameObject> cardInspectionStatusRows = new List<GameObject>();
 
 	private RectTransform topInfoBarRect;
@@ -881,6 +1009,13 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private string campaignScenarioBossId;
 
+	// Capitolo Avventura da cui e' partita la run. Nullo per le run non avviate da un
+	// capitolo: serve a mandare al server il vero id capitolo nel sommario di fine run.
+	private string activeAdventureChapterId;
+
+	// Boss e miniboss sconfitti in questa run, in ordine di sconfitta.
+	private readonly List<string> defeatedBossIdsInRun = new List<string>();
+
 	private AbilityTargetMode abilityTargetMode;
 
 	private bool attackTargetingActive;
@@ -947,9 +1082,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private bool debugForceFirstRoomPalatir;
 
-	private HeroClass merchantSelectedClass = HeroClass.Warrior;
+	private bool debugMerchantScene;
 
-	private int merchantSelectedStrength = 2;
+	private bool debugLootRoomScene;
 
 	[RuntimeInitializeOnLoadMethod(/*Could not decode attribute arguments.*/)]
 	private static void Bootstrap()
@@ -1017,6 +1152,14 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			SceneManager.GetActiveScene().name,
 			PalatirBossDebugSceneName,
 			StringComparison.OrdinalIgnoreCase);
+		debugMerchantScene = string.Equals(
+			SceneManager.GetActiveScene().name,
+			MerchantDebugSceneName,
+			StringComparison.OrdinalIgnoreCase);
+		debugLootRoomScene = string.Equals(
+			SceneManager.GetActiveScene().name,
+			LootRoomDebugSceneName,
+			StringComparison.OrdinalIgnoreCase);
 		int num = (configuration.UseRandomSeedEachSession ?Guid.NewGuid().GetHashCode() : configuration.Gameplay.RandomSeed);
 		random = new SeededRandomSource(num);
 		combatResolver = new CombatResolver(random);
@@ -1027,27 +1170,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		InitializeAudio();
 		BuildInterface();
 		AppendLog($"SESSIONE AVVIATA - seed {num}");
-		if (debugForceFirstRoomComposableGolem)
-		{
-			AppendLog("DEBUG - scena MinibossGolemDebug: prima stanza forzata su Golem Componibile.");
-		}
-		if (debugForceFirstRoomMedusa)
-		{
-			AppendLog("DEBUG - scena MedusaBossDebug: prima stanza forzata su Medusa.");
-		}
-		if (debugForceFirstRoomTrentor)
-		{
-			AppendLog("DEBUG - scena TrentorBossDebug: prima stanza forzata su Trentor.");
-		}
-		if (debugForceFirstRoomBragus)
-		{
-			AppendLog("DEBUG - scena BragusBossDebug: prima stanza forzata su Bragus.");
-		}
-		if (debugForceFirstRoomPalatir)
-		{
-			AppendLog("DEBUG - scena PalatirBossDebug: prima stanza forzata su Palatir.");
-		}
 		ShowModeSelection();
+		_ = EnsureServerProgressAsync();
 	}
 
 	private void Update()
@@ -1071,7 +1195,12 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private bool CloseTopmostOverlay()
 	{
-		if (IsActive(hintPanel))
+		if (IsActive(campaignDefeatRewardPopup))
+		{
+			ContinueAfterCampaignDefeatReward();
+			return true;
+		}
+		else if (IsActive(hintPanel))
 		{
 			DismissHint();
 			return true;
@@ -1235,56 +1364,54 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		SetRect(optionsTitle.rectTransform, new Vector2(0.06f, 0.87f), new Vector2(0.94f, 0.97f));
 		Button optionsLogButton = CreateButton("Options Open Log", optionsPanel.transform, builtinResource, "LOG");
 		((UnityEvent)optionsLogButton.onClick).AddListener(new UnityAction(OpenLogFromOptions));
-		SetRect((RectTransform)((Component)optionsLogButton).transform, new Vector2(0.06f, 0.72f), new Vector2(0.32f, 0.84f));
+		ApplyBattleButtonVariant(optionsLogButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Gold);
 		Button optionsAuraButton = CreateButton("Options Open Aura Codex", optionsPanel.transform, builtinResource, "AURE");
 		((UnityEvent)optionsAuraButton.onClick).AddListener(new UnityAction(OpenAuraCodexFromOptions));
-		SetRect((RectTransform)((Component)optionsAuraButton).transform, new Vector2(0.34f, 0.72f), new Vector2(0.6f, 0.84f));
-		Button optionsTutorialButton = CreateImageButton("Options Tutorial", optionsPanel.transform, builtinResource, LoadSpriteResource("UI/tutorial_button"), string.Empty);
-		((UnityEvent)optionsTutorialButton.onClick).AddListener(new UnityAction(StartTutorialFromOptions));
-		SetRect((RectTransform)((Component)optionsTutorialButton).transform, new Vector2(0.62f, 0.69f), new Vector2(0.94f, 0.86f));
-		Button resetHintsButton = CreateButton("Options Reset Hints", optionsPanel.transform, builtinResource, "RESET HINT");
-		((UnityEvent)resetHintsButton.onClick).AddListener(new UnityAction(ResetHintsFromOptions));
-		SetRect((RectTransform)((Component)resetHintsButton).transform, new Vector2(0.06f, 0.59f), new Vector2(0.94f, 0.68f));
+		ApplyBattleButtonVariant(optionsAuraButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Arcane);
+		SetRect((RectTransform)((Component)optionsLogButton).transform, new Vector2(0.06f, 0.7f), new Vector2(0.48f, 0.84f));
+		SetRect((RectTransform)((Component)optionsAuraButton).transform, new Vector2(0.52f, 0.7f), new Vector2(0.94f, 0.84f));
 		Text volumeLabel = CreateText("SFX Volume Label", optionsPanel.transform, builtinResource, 17, (FontStyle)1, (TextAnchor)4);
 		volumeLabel.text = "VOLUME SFX";
 		volumeLabel.color = new Color(0.82f, 0.9f, 0.92f);
-		SetRect(volumeLabel.rectTransform, new Vector2(0.06f, 0.49f), new Vector2(0.94f, 0.57f));
+		SetRect(volumeLabel.rectTransform, new Vector2(0.06f, 0.57f), new Vector2(0.94f, 0.65f));
 		Button sfxDownButton = CreateButton("SFX Volume Down", optionsPanel.transform, builtinResource, "-");
 		((UnityEvent)sfxDownButton.onClick).AddListener(new UnityAction(DecreaseSfxVolume));
-		SetRect((RectTransform)((Component)sfxDownButton).transform, new Vector2(0.06f, 0.38f), new Vector2(0.25f, 0.48f));
+		SetRect((RectTransform)((Component)sfxDownButton).transform, new Vector2(0.06f, 0.45f), new Vector2(0.25f, 0.55f));
 		sfxVolumeText = CreateText("SFX Volume Value", optionsPanel.transform, builtinResource, 19, (FontStyle)1, (TextAnchor)4);
 		sfxVolumeText.color = new Color(0.95f, 0.79f, 0.34f);
-		SetRect(sfxVolumeText.rectTransform, new Vector2(0.28f, 0.38f), new Vector2(0.54f, 0.48f));
+		SetRect(sfxVolumeText.rectTransform, new Vector2(0.28f, 0.45f), new Vector2(0.54f, 0.55f));
 		Button sfxUpButton = CreateButton("SFX Volume Up", optionsPanel.transform, builtinResource, "+");
 		((UnityEvent)sfxUpButton.onClick).AddListener(new UnityAction(IncreaseSfxVolume));
-		SetRect((RectTransform)((Component)sfxUpButton).transform, new Vector2(0.57f, 0.38f), new Vector2(0.76f, 0.48f));
+		SetRect((RectTransform)((Component)sfxUpButton).transform, new Vector2(0.57f, 0.45f), new Vector2(0.76f, 0.55f));
 		sfxMuteButton = CreateButton("SFX Mute", optionsPanel.transform, builtinResource, "MUTE");
 		((UnityEvent)sfxMuteButton.onClick).AddListener(new UnityAction(ToggleSfxMute));
 		sfxMuteButtonText = ((Component)sfxMuteButton).GetComponentInChildren<Text>();
-		SetRect((RectTransform)((Component)sfxMuteButton).transform, new Vector2(0.79f, 0.38f), new Vector2(0.94f, 0.48f));
+		SetRect((RectTransform)((Component)sfxMuteButton).transform, new Vector2(0.79f, 0.45f), new Vector2(0.94f, 0.55f));
 		Text musicLabel = CreateText("Music Volume Label", optionsPanel.transform, builtinResource, 17, (FontStyle)1, (TextAnchor)4);
 		musicLabel.text = "VOLUME MUSICA";
 		musicLabel.color = new Color(0.82f, 0.9f, 0.92f);
-		SetRect(musicLabel.rectTransform, new Vector2(0.06f, 0.27f), new Vector2(0.94f, 0.35f));
+		SetRect(musicLabel.rectTransform, new Vector2(0.06f, 0.32f), new Vector2(0.94f, 0.4f));
 		Button musicDownButton = CreateButton("Music Volume Down", optionsPanel.transform, builtinResource, "-");
 		((UnityEvent)musicDownButton.onClick).AddListener(new UnityAction(DecreaseMusicVolume));
-		SetRect((RectTransform)((Component)musicDownButton).transform, new Vector2(0.06f, 0.16f), new Vector2(0.25f, 0.26f));
+		SetRect((RectTransform)((Component)musicDownButton).transform, new Vector2(0.06f, 0.2f), new Vector2(0.25f, 0.3f));
 		musicVolumeText = CreateText("Music Volume Value", optionsPanel.transform, builtinResource, 19, (FontStyle)1, (TextAnchor)4);
 		musicVolumeText.color = new Color(0.95f, 0.79f, 0.34f);
-		SetRect(musicVolumeText.rectTransform, new Vector2(0.28f, 0.16f), new Vector2(0.54f, 0.26f));
+		SetRect(musicVolumeText.rectTransform, new Vector2(0.28f, 0.2f), new Vector2(0.54f, 0.3f));
 		Button musicUpButton = CreateButton("Music Volume Up", optionsPanel.transform, builtinResource, "+");
 		((UnityEvent)musicUpButton.onClick).AddListener(new UnityAction(IncreaseMusicVolume));
-		SetRect((RectTransform)((Component)musicUpButton).transform, new Vector2(0.57f, 0.16f), new Vector2(0.76f, 0.26f));
+		SetRect((RectTransform)((Component)musicUpButton).transform, new Vector2(0.57f, 0.2f), new Vector2(0.76f, 0.3f));
 		musicMuteButton = CreateButton("Music Mute", optionsPanel.transform, builtinResource, "MUTE");
 		((UnityEvent)musicMuteButton.onClick).AddListener(new UnityAction(ToggleMusicMute));
 		musicMuteButtonText = ((Component)musicMuteButton).GetComponentInChildren<Text>();
-		SetRect((RectTransform)((Component)musicMuteButton).transform, new Vector2(0.79f, 0.16f), new Vector2(0.94f, 0.26f));
+		SetRect((RectTransform)((Component)musicMuteButton).transform, new Vector2(0.79f, 0.2f), new Vector2(0.94f, 0.3f));
 		Button closeOptionsButton = CreateButton("Close Options", optionsPanel.transform, builtinResource, "CHIUDI");
 		((UnityEvent)closeOptionsButton.onClick).AddListener(new UnityAction(ToggleOptionsPanel));
-		SetRect((RectTransform)((Component)closeOptionsButton).transform, new Vector2(0.06f, 0.04f), new Vector2(0.47f, 0.14f));
+		ApplyBattleButtonVariant(closeOptionsButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Crimson);
+		SetRect((RectTransform)((Component)closeOptionsButton).transform, new Vector2(0.53f, 0.04f), new Vector2(0.94f, 0.14f));
 		Button mainMenuButton = CreateButton("Options Main Menu", optionsPanel.transform, builtinResource, "MENU");
 		((UnityEvent)mainMenuButton.onClick).AddListener(new UnityAction(ReturnToMainMenuFromOptions));
-		SetRect((RectTransform)((Component)mainMenuButton).transform, new Vector2(0.53f, 0.04f), new Vector2(0.94f, 0.14f));
+		ApplyBattleButtonVariant(mainMenuButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Violet);
+		SetRect((RectTransform)((Component)mainMenuButton).transform, new Vector2(0.06f, 0.04f), new Vector2(0.47f, 0.14f));
 		SetOptionsPanelVisible(false);
 		CreateReturnToMenuConfirmation((Transform)(object)safeAreaRoot, builtinResource);
 		RefreshSfxOptionsUi();
@@ -1378,16 +1505,19 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		((UnityEvent)merchantBuyButton.onClick).AddListener(new UnityAction(OpenMerchantPanel));
 		((Component)merchantBuyButton).gameObject.SetActive(false);
 		merchantBuyButtonText = ((Component)merchantBuyButton).GetComponentInChildren<Text>();
+		merchantOpenButtonPulseVfx = AccardND.PvpUi.PvpUiVfx.CreatePulseButton(
+			(RectTransform)((Component)merchantBuyButton).transform,
+			new Color(0.48f, 0.68f, 0.16f, 1f));
+		merchantContinueButtonPulseVfx = AccardND.PvpUi.PvpUiVfx.CreatePulseButton(
+			(RectTransform)((Component)restartButton).transform,
+			new Color(0.12f, 0.58f, 0.92f, 1f));
+		((Component)merchantOpenButtonPulseVfx).gameObject.SetActive(false);
+		((Component)merchantContinueButtonPulseVfx).gameObject.SetActive(false);
 		RectTransform val7 = (RectTransform)((Component)merchantBuyButton).transform;
 		val7.anchorMin = new Vector2(0.69f, 0.54f);
 		val7.anchorMax = new Vector2(0.97f, 0.92f);
 		val7.offsetMin = Vector2.zero;
 		val7.offsetMax = Vector2.zero;
-		Text text3 = (playerTitleText = CreateText("Player Title", (Transform)(object)safeAreaRoot, builtinResource, 25, (FontStyle)1, (TextAnchor)3));
-		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(text3);
-		playerTitleRect = text3.rectTransform;
-		text3.text = "LA TUA FORMAZIONE";
-		SetRect(text3.rectTransform, new Vector2(0.12f, 0.32f), new Vector2(0.88f, 0.38f));
 		playerRow = CreateCardRow("Player Formation", (Transform)(object)safeAreaRoot, new Vector2(0.5f, 0.17f));
 		playerHandRow = CreateCardRow("Player Hand", (Transform)(object)safeAreaRoot, new Vector2(0.5f, 0.08f));
 		CreateCombatResultView(builtinResource);
@@ -1399,9 +1529,13 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		CreateCardInspectionOverlay(((Component)val).transform, builtinResource);
 		CreateRoomTransitionOverlay(((Component)val).transform);
 		CreateModeSelectionView(((Component)val).transform, builtinResource);
+		CreateTavernView(((Component)val).transform, builtinResource);
+		CreateLibraryView(((Component)val).transform, builtinResource);
 		CreateCampaignModeSelectionView(builtinResource);
+		CreateSanctuaryView(builtinResource);
 		CreateHintOverlay((Transform)(object)safeAreaRoot, builtinResource);
 		CreateAuraCodexView(((Component)val).transform, builtinResource);
+		CreateCampaignDefeatRewardPopup((Transform)(object)safeAreaRoot, builtinResource);
 		RefreshPlayerHud();
 		RefreshCpuHud();
 		RefreshRoomHud("PREPARAZIONE", (((Object)(object)currentScenario != (Object)null) ?currentScenario.DisplayName.ToUpperInvariant() : "SCENARIO"));

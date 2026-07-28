@@ -43,6 +43,48 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void LocalRepository_ChapterClearedIsSeparateFromChapterUnlocked()
+        {
+            var store = new InMemoryStore();
+            var service = new LocalSinglePlayerProgressRepository(store);
+
+            service.Unlock(SinglePlayerUnlockType.Chapter, "chapter-1");
+
+            // Comprare un capitolo non significa averlo completato.
+            Assert.That(service.IsUnlocked(SinglePlayerUnlockType.ChapterCleared, "chapter-1"), Is.False);
+
+            service.Unlock(SinglePlayerUnlockType.ChapterCleared, "chapter-1");
+
+            var reloaded = new LocalSinglePlayerProgressRepository(store);
+            Assert.That(reloaded.IsUnlocked(SinglePlayerUnlockType.ChapterCleared, "chapter-1"), Is.True);
+            Assert.That(reloaded.Progress.clearedChapters, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void LocalRepository_CountersSurviveReloadAndDefaultToZero()
+        {
+            var store = new InMemoryStore();
+            var service = new LocalSinglePlayerProgressRepository(store);
+
+            service.ApplyAuthoritative(new SinglePlayerProgressSave
+            {
+                counters =
+                {
+                    new SinglePlayerCounterSave { key = "boss_bragus", value = 2 },
+                    new SinglePlayerCounterSave { key = "enemies_defeated", value = 137 }
+                }
+            });
+
+            var reloaded = new LocalSinglePlayerProgressRepository(store);
+
+            Assert.That(reloaded.GetCounter("boss_bragus"), Is.EqualTo(2));
+            Assert.That(reloaded.GetCounter("enemies_defeated"), Is.EqualTo(137));
+            // Un contatore mai incrementato vale zero, non e un errore.
+            Assert.That(reloaded.GetCounter("miniboss_golem"), Is.Zero);
+            Assert.That(reloaded.GetCounter(null), Is.Zero);
+        }
+
+        [Test]
         public void Service_DelegatesToInjectedRepository()
         {
             var repository = new LocalSinglePlayerProgressRepository(new InMemoryStore());

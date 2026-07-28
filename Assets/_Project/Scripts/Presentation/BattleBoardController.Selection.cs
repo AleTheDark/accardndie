@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -317,6 +317,10 @@ public sealed partial class BattleBoardController
 
 	private bool CanUseCpuCardAction(int index)
 	{
+		if (IsAdventureTutorialWaitingForAdvantageContinue())
+		{
+			return false;
+		}
 		if (index >= 0 && index < cpuCards.Count && !inputLocked && !gameFinished && pendingAbilityUser == null && pendingDeploymentIndex < 0 && selectedPlayerIndex >= 0 && !cpuCards[index].Eliminated && turnOrder.Count > 0 && turnOrder[currentTurnIndex].BelongsToPlayer)
 		{
 			if (!attackTargetingActive && abilityTargetMode != AbilityTargetMode.AssassinEnemy && abilityTargetMode != AbilityTargetMode.MageEnemy)
@@ -330,6 +334,10 @@ public sealed partial class BattleBoardController
 
 	private void SelectCpuTarget(int index)
 	{
+		if (IsAdventureTutorialWaitingForAdvantageContinue())
+		{
+			return;
+		}
 		if (inputLocked || gameFinished || selectedPlayerIndex < 0 || index >= cpuCards.Count || cpuCards[index].Eliminated)
 		{
 			return;
@@ -344,7 +352,7 @@ public sealed partial class BattleBoardController
 				battleCardState.PermanentCombatBonus--;
 			}
 			activeAbilityUser.AbilityArmed = false;
-			activeAbilityUser.AbilityUsed = true;
+			MarkAbilityUsed(activeAbilityUser);
 			RefreshPersistentStatus(battleCardState);
 			PlayClassAbilitySfx(HeroClass.Assassin);
 			if ((Object)(object)battleAnimationPlayer != (Object)null
@@ -367,13 +375,13 @@ public sealed partial class BattleBoardController
 		else if (abilityTargetMode == AbilityTargetMode.MageEnemy && activeAbilityUser != null)
 		{
 			BattleCardState battleCardState2 = cpuCards[index];
-			int num = ((playerAura != BattleAuraType.Mage) ?1 : 2);
+			int num = 1;
 			int baseDieSides = runProgress != null ? runProgress.MasterVigorDieSides : configuration.Gameplay.VigorDieSides;
 			int startDieSides = EffectiveVigorDieSides(battleCardState2, baseDieSides);
 			battleCardState2.PendingVigorStepPenalty = Math.Max(battleCardState2.PendingVigorStepPenalty, num);
 			int endDieSides = EffectiveVigorDieSides(battleCardState2, baseDieSides);
 			activeAbilityUser.AbilityArmed = false;
-			activeAbilityUser.AbilityUsed = true;
+			MarkAbilityUsed(activeAbilityUser);
 			RefreshPersistentStatus(battleCardState2);
 			PlayClassAbilitySfx(HeroClass.Mage);
 			if ((Object)(object)battleAnimationPlayer != (Object)null
@@ -410,7 +418,7 @@ public sealed partial class BattleBoardController
 			}
 			activeAbilityUser.MarkedTarget = battleCardState3;
 			activeAbilityUser.AbilityArmed = false;
-			activeAbilityUser.AbilityUsed = true;
+			MarkAbilityUsed(activeAbilityUser);
 			RefreshPersistentStatus(battleCardState3);
 			PlayClassAbilitySfx(HeroClass.Hunter);
 			if ((Object)(object)battleAnimationPlayer != (Object)null
@@ -470,7 +478,7 @@ public sealed partial class BattleBoardController
 				target.View.SetInitiative(target.Initiative);
 				RefreshPersistentStatus(target);
 				ApplyPlayerAuraVisuals(appendLog: false);
-				activeAbilityUser.AbilityUsed = true;
+				MarkAbilityUsed(activeAbilityUser);
 				PlayClassAbilitySfx(HeroClass.Necromancer);
 				if ((Object)(object)battleAnimationPlayer != (Object)null)
 				{
@@ -509,7 +517,7 @@ public sealed partial class BattleBoardController
 					target.PendingAttackBonusKind = PendingAttackBonusKind.Blessing;
 				}
 				RefreshPersistentStatus(target);
-				activeAbilityUser.AbilityUsed = true;
+				MarkAbilityUsed(activeAbilityUser);
 				PlayClassAbilitySfx(HeroClass.Priest);
 				if ((Object)(object)battleAnimationPlayer != (Object)null
 					&& (Object)(object)activeAbilityUser.View != (Object)null

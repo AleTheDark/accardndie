@@ -19,7 +19,8 @@ public sealed record PlayerRankedDelta(
 public sealed record ApplyMatchResult(PlayerRankedDelta A, PlayerRankedDelta B);
 
 public sealed record LeaderboardRow(
-    string PlayerId, string Username, int Mmr, int GamesPlayed, bool PlacementDone, RankedTierInfo Tier);
+    string PlayerId, string Username, string SelectedIconId,
+    int Mmr, int GamesPlayed, bool PlacementDone, RankedTierInfo Tier);
 
 /// <summary>
 /// MMR nascosto (Elo) e sua traduzione in tier a leghe. Le scritture avvengono
@@ -68,15 +69,49 @@ public sealed class RankedService
             Describe(mmr));
     }
 
+    /// <summary>
+    /// Posizione in classifica (1-based, 0 se il giocatore non è in tabella) e
+    /// totale dei classificati nella stagione. L'ordinamento è lo stesso della
+    /// leaderboard: MMR decrescente, a pari MMR vince chi ha giocato meno partite.
+    /// </summary>
+    public (int Rank, int Players) GetGlobalStanding(string playerId, int seasonId)
+    {
+        using SqliteConnection connection = database.Open();
+
+        int players;
+        using (SqliteCommand count = connection.CreateCommand())
+        {
+            count.CommandText = "SELECT COUNT(*) FROM ranked_state WHERE season_id=$season";
+            count.Parameters.AddWithValue("$season", seasonId);
+            players = (int)(long)count.ExecuteScalar();
+        }
+
+        (int mmr, int games, _, bool exists) = ReadState(connection, null, playerId, seasonId);
+        if (!exists)
+            return (0, players);
+
+        using SqliteCommand ahead = connection.CreateCommand();
+        ahead.CommandText = @"
+            SELECT COUNT(*) FROM ranked_state
+            WHERE season_id=$season
+              AND (mmr > $mmr OR (mmr = $mmr AND games_played < $games))";
+        ahead.Parameters.AddWithValue("$season", seasonId);
+        ahead.Parameters.AddWithValue("$mmr", mmr);
+        ahead.Parameters.AddWithValue("$games", games);
+        return ((int)(long)ahead.ExecuteScalar() + 1, players);
+    }
+
     public IReadOnlyList<LeaderboardRow> GetLeaderboard(int seasonId, int limit)
     {
         var rows = new List<LeaderboardRow>();
         using SqliteConnection connection = database.Open();
         using SqliteCommand query = connection.CreateCommand();
         query.CommandText = @"
-            SELECT r.player_id, COALESCE(a.username, ''), r.mmr, r.games_played, r.placement_done
+            SELECT r.player_id, COALESCE(a.username, ''), COALESCE(p.selected_icon_id, ''),
+                   r.mmr, r.games_played, r.placement_done
             FROM ranked_state r
             LEFT JOIN accounts a ON a.player_id = r.player_id
+            LEFT JOIN profiles p ON p.player_id = r.player_id
             WHERE r.season_id=$season
             ORDER BY r.mmr DESC, r.games_played ASC LIMIT $limit";
         query.Parameters.AddWithValue("$season", seasonId);
@@ -84,10 +119,10 @@ public sealed class RankedService
         using SqliteDataReader reader = query.ExecuteReader();
         while (reader.Read())
         {
-            int mmr = reader.GetInt32(2);
+            int mmr = reader.GetInt32(3);
             rows.Add(new LeaderboardRow(
-                reader.GetString(0), reader.GetString(1), mmr,
-                reader.GetInt32(3), reader.GetInt32(4) != 0, Describe(mmr)));
+                reader.GetString(0), reader.GetString(1), reader.GetString(2), mmr,
+                reader.GetInt32(4), reader.GetInt32(5) != 0, Describe(mmr)));
         }
         return rows;
     }

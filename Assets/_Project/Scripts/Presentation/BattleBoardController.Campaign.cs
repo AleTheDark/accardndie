@@ -159,7 +159,7 @@ public sealed partial class BattleBoardController
 		ShowRoomChoiceHint();
 		RefreshInitiativeDisplay();
 		ApplyResponsiveLayout();
-		if (ShouldForceFirstRoomComposableGolem() || ShouldForceFirstRoomMedusa() || ShouldForceFirstRoomTrentor() || ShouldForceFirstRoomBragus() || ShouldForceFirstRoomPalatir())
+		if (ShouldForceMerchantDebugRoom() || ShouldForceFirstRoomComposableGolem() || ShouldForceFirstRoomMedusa() || ShouldForceFirstRoomTrentor() || ShouldForceFirstRoomBragus() || ShouldForceFirstRoomPalatir())
 		{
 			((MonoBehaviour)this).StartCoroutine(ChooseDebugMinibossDoor());
 		}
@@ -314,6 +314,10 @@ public sealed partial class BattleBoardController
 	{
 		int num = runProgress.RoomsCleared + 1;
 		ProgressionConfiguration progression = configuration.Progression;
+		if (ShouldForceMerchantDebugRoom())
+		{
+			return new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard);
+		}
 		if (ShouldForceFirstRoomComposableGolem())
 		{
 			return new CampaignRoomRoll(RoomType.Boss, 4, null, RoomDifficulty.Hard);
@@ -360,9 +364,9 @@ public sealed partial class BattleBoardController
 			2 => MonsterRoomRoll(2), 
 			3 => MonsterRoomRoll(3), 
 			4 => MonsterRoomRoll(4), 
-			5 => new CampaignRoomRoll(RoomType.Merchant, 0, "low_merchant", RoomDifficulty.Easy), 
-			6 => new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard), 
-			7 => new CampaignRoomRoll(RoomType.UnexpectedOpportunity, 0, "unexpected_opportunity", RoomDifficulty.Any), 
+			5 => new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard),
+			6 => new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard),
+			7 => new CampaignRoomRoll(RoomType.UnexpectedOpportunity, 0, "unexpected_opportunity", RoomDifficulty.Any),
 			_ => new CampaignRoomRoll(RoomType.Loot, 0, "loot", RoomDifficulty.Any), 
 		});
 	}
@@ -375,8 +379,8 @@ public sealed partial class BattleBoardController
 			2 => MonsterRoomRoll(2), 
 			3 => MonsterRoomRoll(3), 
 			4 => MonsterRoomRoll(4), 
-			5 => new CampaignRoomRoll(RoomType.Merchant, 0, "low_merchant", RoomDifficulty.Easy), 
-			_ => new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard), 
+			5 => new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard),
+			_ => new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard),
 		});
 	}
 
@@ -481,6 +485,7 @@ public sealed partial class BattleBoardController
 
 	private void EnterChosenCampaignRoom()
 	{
+		ClearLootRewardReveal();
 		retryComposableGolemForms = null;
 		if ((Object)(object)roomChoicePanel != (Object)null)
 		{
@@ -732,6 +737,11 @@ public sealed partial class BattleBoardController
 				{
 					activeBragusBoss = new BragusBoss(random);
 					return BuildBragusFormation();
+				}
+				if (string.Equals(scenarioBoss.Id, MedusaBossCardId, StringComparison.OrdinalIgnoreCase))
+				{
+					activeMedusaBoss = new MedusaBoss(random);
+					return BuildMedusaFormation();
 				}
 				if (string.Equals(scenarioBoss.Id, PalatirBossCardId, StringComparison.OrdinalIgnoreCase))
 				{

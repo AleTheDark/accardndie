@@ -37,6 +37,8 @@ public sealed class ProfileService
         (string selectedIcon, string bio) = ReadProfile(connection, identity.PlayerId);
         RankedProgress progress = ranked.GetProgress(identity.PlayerId, seasons.ActiveSeasonId);
         PlayerStatsDto lifetime = stats.GetStats(identity).lifetime;
+        (int globalRank, int globalPlayers) =
+            ranked.GetGlobalStanding(identity.PlayerId, seasons.ActiveSeasonId);
 
         return new ProfileData
         {
@@ -61,7 +63,10 @@ public sealed class ProfileService
             iconsUnlocked = unlocks.CountOwned(connection, identity.PlayerId),
             iconsTotal = unlocks.CatalogSize(connection),
             seasonId = seasons.ActiveSeasonId,
-            seasonName = seasons.ActiveSeasonName
+            seasonName = seasons.ActiveSeasonName,
+            globalRank = globalRank,
+            globalPlayers = globalPlayers,
+            seasonSecondsRemaining = seasons.ActiveSeasonSecondsRemaining
         };
     }
 

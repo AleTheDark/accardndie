@@ -34,6 +34,7 @@ namespace AccardND.PvpUi
         private PvpClientMatchState state;
         private PvpLobbyScreen lobby;
         private PvpProfileScreen profileScreen;
+        private PvpLeaderboardScreen leaderboardScreen;
         private PvpMatchResultOverlay resultOverlay;
         private RectTransform challengePrompt;
         private RectTransform nicknameDialog;
@@ -53,6 +54,8 @@ namespace AccardND.PvpUi
         private bool authenticated;
         private bool connecting;
         private bool stateDirty;
+        private bool startInLeaderboard;
+        private bool ownsConnection = true;
         private BattleSfxPlayer battleSfx;
         private readonly List<BattlePresentationEvent> pendingAnimationEvents = new();
 
@@ -67,11 +70,38 @@ namespace AccardND.PvpUi
             matchView = view;
         }
 
+        /// <summary>
+        /// Avvia il collegamento PvP direttamente sulla classifica dell'Hub,
+        /// mantenendo autenticazione e dati autoritativi identici alla lobby.
+        /// </summary>
+        public void ConfigureLeaderboard(
+            CardDatabase database, System.Action closedCallback, IPvpMatchView view = null)
+        {
+            Configure(database, closedCallback, view);
+            startInLeaderboard = true;
+        }
+
         private async void Start()
         {
-            EnsureGuestCredentials();
             BuildCanvas();
             ShowLobby();
+            if (startInLeaderboard)
+                CreateLeaderboardScreen();
+
+            if (AccountServerSession.TryGet(
+                    out PvpServerClient sharedClient,
+                    out PvpServerMessageDispatcher sharedDispatcher,
+                    out AuthResponse sharedIdentity))
+            {
+                client = sharedClient;
+                dispatcher = sharedDispatcher;
+                ownsConnection = false;
+                dispatcher.UnhandledMessage += HandleMessage;
+                CompleteAuthentication(sharedIdentity, adoptConnection: false);
+                return;
+            }
+
+            EnsureGuestCredentials();
             client = new PvpServerClient();
             dispatcher = new PvpServerMessageDispatcher(client);
             dispatcher.UnhandledMessage += HandleMessage;
@@ -85,9 +115,9 @@ namespace AccardND.PvpUi
             connecting = true;
             try
             {
-                lobby.SetStatus($"Connessione a {serverUrl}...");
+                SetConnectionStatus($"Connessione a {serverUrl}...");
                 await client.ConnectAsync(serverUrl);
-                lobby.SetStatus("Connesso. Autenticazione...");
+                SetConnectionStatus("Connesso. Autenticazione...");
                 registerAttempted = false;
                 loginAttempted = false;
 
@@ -95,10 +125,12 @@ namespace AccardND.PvpUi
                 // quando il plugin GPGS e' presente; negli altri casi usa UGS anonimo.
                 if (PvpUgsAuth.IsAvailable)
                 {
-                    (string accessToken, string authProvider) = await PvpUgsAuth.SignInAsync();
+                    (string accessToken, string authProvider) = await PvpUgsAuth.TryResumeSessionAsync();
+                    if (string.IsNullOrEmpty(accessToken))
+                        (accessToken, authProvider) = await PvpUgsAuth.SignInAsync();
                     if (accessToken != null)
                     {
-                        lobby.SetStatus($"Autenticazione {authProvider} riuscita. Accesso al server...");
+                        SetConnectionStatus($"Autenticazione {authProvider} riuscita. Accesso al server...");
                         await dispatcher.SendAsync(MessageTypes.AuthUgs, new UgsLoginRequest
                         {
                             accessToken = accessToken,
@@ -106,7 +138,7 @@ namespace AccardND.PvpUi
                         });
                         return;
                     }
-                    lobby.SetStatus("Unity Auth non disponibile: uso l'account locale...");
+                    SetConnectionStatus("Unity Auth non disponibile: uso l'account locale...");
                 }
 
                 registerAttempted = true;
@@ -118,7 +150,7 @@ namespace AccardND.PvpUi
             }
             catch (System.Exception exception)
             {
-                lobby.SetStatus(
+                SetConnectionStatus(
                     $"Server non raggiungibile ({exception.Message}).\n"
                     + "Avvia il server con: dotnet run in Server/AccardND.Server - poi premi di nuovo un pulsante.");
             }
@@ -126,6 +158,12 @@ namespace AccardND.PvpUi
             {
                 connecting = false;
             }
+        }
+
+        private void SetConnectionStatus(string message)
+        {
+            lobby?.SetStatus(message);
+            leaderboardScreen?.SetStatus(message);
         }
 
         /// <summary>Guardia dei pulsanti: se la connessione manca la ritenta invece di lanciare eccezioni.</summary>
@@ -145,6 +183,7 @@ namespace AccardND.PvpUi
         private void Update()
         {
             lobby?.Tick();
+            leaderboardScreen?.Tick();
             if (dispatcher == null)
                 return;
             dispatcher.Pump();
@@ -165,19 +204,7 @@ namespace AccardND.PvpUi
                     var auth = PvpServerClient.ParsePayload<AuthResponse>(envelope);
                     if (auth.ok)
                     {
-                        authenticated = true;
-                        myPlayerId = auth.playerId;
-                        username = auth.username;
-                        lobby.SetPlayerName(username);
-                        lobby.SetStatus($"Autenticato come {auth.username}. Scegli come giocare.");
-                        nicknameRequired = auth.requiresNickname;
-                        if (nicknameRequired)
-                        {
-                            lobby.SetStatus("Scegli un nickname univoco per continuare.");
-                            OpenNicknameDialog();
-                        }
-                        Send(MessageTypes.ProfileGet);
-                        ReportCampaignKills();
+                        CompleteAuthentication(auth, adoptConnection: true);
                     }
                     else if (!registerAttempted)
                     {
@@ -200,7 +227,7 @@ namespace AccardND.PvpUi
                     }
                     else
                     {
-                        lobby.SetStatus($"Autenticazione fallita: {auth.error}");
+                        SetConnectionStatus($"Autenticazione fallita: {auth.error}");
                     }
                     break;
                 }
@@ -223,6 +250,7 @@ namespace AccardND.PvpUi
                     nicknameDialog?.gameObject.SetActive(false);
                     lobby.SetPlayerName(username);
                     lobby.SetStatus($"Nickname salvato: {username}.");
+                    AccountServerSession.UpdateIdentity(myPlayerId, username);
                     break;
                 }
 
@@ -230,10 +258,16 @@ namespace AccardND.PvpUi
                 {
                     var created = PvpServerClient.ParsePayload<RoomCreated>(envelope);
                     lobby.SetWaitingForOpponent(false);
-                    lobby.ShowRoomCode(created.code);
-                    lobby.SetStatus("Condividi il codice: il match parte quando l'avversario entra.");
+                    lobby.ShowRoom(created);
+                    lobby.SetStatus(created.isPublic
+                        ? "Stanza aperta: comparirà nell'elenco finché non entra un avversario."
+                        : "Condividi il codice: il match parte quando l'avversario entra.");
                     break;
                 }
+
+                case MessageTypes.RoomsData:
+                    lobby.SetRooms(PvpServerClient.ParsePayload<RoomsData>(envelope));
+                    break;
 
                 case MessageTypes.QueueStatus:
                     lobby.SetWaitingForOpponent(true);
@@ -282,9 +316,19 @@ namespace AccardND.PvpUi
                 case MessageTypes.ProfileData:
                 {
                     var data = PvpServerClient.ParsePayload<ProfileData>(envelope);
+                    CachePvpLeague(data);
                     lobby?.SetProfile(data);
                     profileScreen?.SetProfile(data);
                     profileScreen?.SyncSelectedIcon(data.selectedIconId);
+                    leaderboardScreen?.SetProfile(data);
+                    break;
+                }
+
+                case MessageTypes.SinglePlayerProgressData:
+                {
+                    var data = PvpServerClient.ParsePayload<SinglePlayerProgressData>(envelope);
+                    lobby?.SetAccountProgress(data);
+                    leaderboardScreen?.SetAccountProgress(data);
                     break;
                 }
 
@@ -297,16 +341,28 @@ namespace AccardND.PvpUi
                     break;
 
                 case MessageTypes.LeaderboardData:
-                    profileScreen?.SetLeaderboard(PvpServerClient.ParsePayload<LeaderboardData>(envelope));
+                {
+                    var data = PvpServerClient.ParsePayload<LeaderboardData>(envelope);
+                    profileScreen?.SetLeaderboard(data);
+                    leaderboardScreen?.SetLeaderboard(data);
                     break;
+                }
 
                 case MessageTypes.HallOfFameSeasonsData:
-                    profileScreen?.SetHallOfFameSeasons(PvpServerClient.ParsePayload<HallOfFameSeasonsData>(envelope));
+                {
+                    var data = PvpServerClient.ParsePayload<HallOfFameSeasonsData>(envelope);
+                    profileScreen?.SetHallOfFameSeasons(data);
+                    leaderboardScreen?.SetHallOfFameSeasons(data);
                     break;
+                }
 
                 case MessageTypes.HallOfFameData:
-                    profileScreen?.SetHallOfFame(PvpServerClient.ParsePayload<HallOfFameData>(envelope));
+                {
+                    var data = PvpServerClient.ParsePayload<HallOfFameData>(envelope);
+                    profileScreen?.SetHallOfFame(data);
+                    leaderboardScreen?.SetHallOfFame(data);
                     break;
+                }
 
                 case MessageTypes.AchievementsData:
                     profileScreen?.SetAchievements(PvpServerClient.ParsePayload<AchievementsData>(envelope));
@@ -335,6 +391,8 @@ namespace AccardND.PvpUi
                     Debug.LogWarning($"[PvP] {error.code}: {error.message}");
                     if (profileScreen != null)
                         profileScreen.SetStatus($"Errore: {error.message}");
+                    else if (leaderboardScreen != null)
+                        leaderboardScreen.SetStatus($"Errore: {error.message}");
                     else if (state == null)
                     {
                         lobby.SetWaitingForOpponent(false);
@@ -347,7 +405,7 @@ namespace AccardND.PvpUi
 
         // --- Azioni lobby ---
 
-        private async void CreateRoom()
+        private async void CreateRoom(string roomName, string mode, bool isPublic)
         {
             if (!await EnsureReadyAsync())
                 return;
@@ -357,7 +415,13 @@ namespace AccardND.PvpUi
             {
                 lobby.SetStatus("Creazione stanza...");
                 lobby.SetWaitingForOpponent(false);
-                await dispatcher.SendAsync(MessageTypes.RoomCreate, new CreateRoomRequest { loadout = loadout });
+                await dispatcher.SendAsync(MessageTypes.RoomCreate, new CreateRoomRequest
+                {
+                    loadout = loadout,
+                    roomName = roomName,
+                    mode = mode,
+                    isPublic = isPublic
+                });
             }
             catch (System.Exception exception)
             {
@@ -366,12 +430,12 @@ namespace AccardND.PvpUi
             }
         }
 
-        private async void JoinRoom()
+        private async void JoinRoom(string roomCode)
         {
             if (!await EnsureReadyAsync())
                 return;
-            string code = lobby.TypedRoomCode;
-            if (string.IsNullOrWhiteSpace(code) || code.Length < 6)
+            string code = (roomCode ?? string.Empty).Trim().ToUpperInvariant();
+            if (code.Length < 6)
             {
                 lobby.SetStatus("Componi il codice a 6 caratteri col tastierino.");
                 return;
@@ -565,6 +629,10 @@ namespace AccardND.PvpUi
                     if (string.Equals(card.Id, iconId, StringComparison.OrdinalIgnoreCase))
                         return card.Artwork;
             }
+            else if (iconId.StartsWith("tier-"))
+            {
+                return PvpUiFactory.RankEmblem(iconId.Substring("tier-".Length));
+            }
             return null;
         }
 
@@ -573,6 +641,25 @@ namespace AccardND.PvpUi
             profileScreen?.Destroy();
             profileScreen = null;
             lobby.SetVisible(true);
+        }
+
+        private void CreateLeaderboardScreen()
+        {
+            lobby.SetVisible(false);
+            leaderboardScreen = new PvpLeaderboardScreen(
+                canvasRoot,
+                myPlayerId,
+                new PvpLeaderboardScreen.Callbacks
+                {
+                    OnClose = Close,
+                    OnRequestProfile = () => Send(MessageTypes.ProfileGet),
+                    OnRequestAccountProgress = () => Send(MessageTypes.SinglePlayerProgressGet),
+                    OnRequestLeaderboard = () => Send(MessageTypes.LeaderboardGet),
+                    OnRequestHallOfFameSeasons = () => Send(MessageTypes.HallOfFameSeasonsGet),
+                    OnRequestHallOfFame = seasonId =>
+                        Send(MessageTypes.HallOfFameGet, new HallOfFameGetRequest { seasonId = seasonId })
+                },
+                ResolveIconArtwork);
         }
 
         private void ChallengeFriend(string playerId)
@@ -776,7 +863,10 @@ namespace AccardND.PvpUi
             canvasObject = new GameObject("PvpCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = canvasObject.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 950;
+            // La classifica lanciata dall'Hub resta sotto il suo banner account
+            // standard (sorting 901). Le altre schermate PvP continuano a coprire
+            // integralmente l'Hub.
+            canvas.sortingOrder = startInLeaderboard ? 900 : 950;
             var scaler = canvasObject.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
@@ -794,17 +884,18 @@ namespace AccardND.PvpUi
 
         private void ShowLobby()
         {
-            lobby = new PvpLobbyScreen(
-                canvasRoot,
-                username,
-                CreateRoom,
-                JoinRoom,
-                JoinQueue,
-                CancelQueue,
-                LeaveRoom,
-                OpenLoadoutBuilder,
-                OpenProfile,
-                Close);
+            lobby = new PvpLobbyScreen(canvasRoot, username, new PvpLobbyScreen.Callbacks
+            {
+                OnClose = Close,
+                OnCreateRoom = CreateRoom,
+                OnJoinRoom = JoinRoom,
+                OnQueue = JoinQueue,
+                OnCancelQueue = CancelQueue,
+                OnLeaveRoom = LeaveRoom,
+                OnLoadout = OpenLoadoutBuilder,
+                OnProfile = OpenProfile,
+                OnRefreshRooms = () => Send(MessageTypes.RoomsList)
+            }, ResolveIconArtwork);
         }
 
         private void OpenNicknameDialog()
@@ -908,6 +999,64 @@ namespace AccardND.PvpUi
             return value ?? string.Empty;
         }
 
+        private void CompleteAuthentication(AuthResponse auth, bool adoptConnection)
+        {
+            if (auth is not { ok: true })
+                return;
+
+            authenticated = true;
+            myPlayerId = auth.playerId;
+            username = StripEditorSuffix(auth.username);
+            nicknameRequired = auth.requiresNickname;
+
+            if (!string.IsNullOrWhiteSpace(username))
+            {
+                PlayerPrefs.SetString(NicknamePrefsKey, username);
+                PlayerPrefs.SetString(PlayerHudNamePrefsKey, username);
+                PlayerPrefs.Save();
+            }
+
+            lobby.SetPlayerName(string.IsNullOrWhiteSpace(username) ? "Guest" : username);
+            SetConnectionStatus($"Account caricato: {username}.");
+            leaderboardScreen?.SetIdentity(auth.playerId);
+
+            if (adoptConnection)
+            {
+                AccountServerSession.Adopt(client, dispatcher, auth);
+                ownsConnection = false;
+            }
+
+            if (nicknameRequired)
+            {
+                SetConnectionStatus("Scegli un nickname univoco per continuare.");
+                OpenNicknameDialog();
+            }
+
+            if (startInLeaderboard)
+                leaderboardScreen?.RequestInitialData();
+            else
+            {
+                Send(MessageTypes.ProfileGet);
+                Send(MessageTypes.SinglePlayerProgressGet);
+            }
+            ReportCampaignKills();
+        }
+
+        private static void CachePvpLeague(ProfileData data)
+        {
+            if (data == null || !data.ranked || data.placement)
+            {
+                PlayerPrefs.DeleteKey("AccardND.PvpTier");
+                PlayerPrefs.DeleteKey("AccardND.PvpDivision");
+                PlayerPrefs.Save();
+                return;
+            }
+
+            PlayerPrefs.SetString("AccardND.PvpTier", data.tier ?? string.Empty);
+            PlayerPrefs.SetString("AccardND.PvpDivision", data.division ?? string.Empty);
+            PlayerPrefs.Save();
+        }
+
         private void Close()
         {
             Close(invokeCallback: true);
@@ -922,8 +1071,9 @@ namespace AccardND.PvpUi
             resultOverlay = null;
             profileScreen?.Destroy();
             profileScreen = null;
-            client?.Dispose();
-            client = null;
+            leaderboardScreen?.Destroy();
+            leaderboardScreen = null;
+            ReleaseConnection();
             if (canvasObject != null)
                 Destroy(canvasObject);
             System.Action callback = invokeCallback ? onClosed : null;
@@ -937,6 +1087,8 @@ namespace AccardND.PvpUi
             CloseLoadoutBuilder(null);
             profileScreen?.Destroy();
             profileScreen = null;
+            leaderboardScreen?.Destroy();
+            leaderboardScreen = null;
             lobby.ClearRoomCode();
             lobby.SetWaitingForOpponent(false);
             lobby.SetVisible(false);
@@ -945,8 +1097,18 @@ namespace AccardND.PvpUi
 
         private void OnDestroy()
         {
-            client?.Dispose();
+            ReleaseConnection();
+        }
+
+        private void ReleaseConnection()
+        {
+            if (dispatcher != null)
+                dispatcher.UnhandledMessage -= HandleMessage;
+            if (ownsConnection)
+                client?.Dispose();
             client = null;
+            dispatcher = null;
+            ownsConnection = false;
         }
 
         private void InitializeAudio()

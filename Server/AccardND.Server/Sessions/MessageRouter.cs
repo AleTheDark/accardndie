@@ -30,6 +30,7 @@ public sealed class MessageRouter
 
     private const int LeaderboardLimit = 50;
     private const int HallOfFameLimit = 50;
+    private const int RoomListLimit = 30;
 
     public MessageRouter(
         ServerConfig config,
@@ -132,6 +133,9 @@ public sealed class MessageRouter
             case MessageTypes.RoomLeave:
                 await HandleRoomLeaveAsync(connection, cancellation);
                 break;
+            case MessageTypes.RoomsList:
+                await connection.SendAsync(MessageTypes.RoomsData, BuildRoomsData(), cancellation);
+                break;
             case MessageTypes.QueueJoin:
                 await HandleQueueJoinAsync(connection, envelope, cancellation);
                 break;
@@ -223,9 +227,57 @@ public sealed class MessageRouter
                     singlePlayerProgress.GetProgress(connection.Identity),
                     cancellation);
                 break;
-            case MessageTypes.SinglePlayerPurchaseUnlock:
-                await HandleSinglePlayerPurchaseUnlockAsync(connection, envelope, cancellation);
+            case MessageTypes.SanctuaryGet:
+                await connection.SendAsync(
+                    MessageTypes.SanctuaryData,
+                    singlePlayerProgress.GetSanctuary(connection.Identity),
+                    cancellation);
                 break;
+            case MessageTypes.TavernGet:
+                await connection.SendAsync(
+                    MessageTypes.TavernData,
+                    singlePlayerProgress.GetTavern(connection.Identity),
+                    cancellation);
+                break;
+            case MessageTypes.TavernClaimQuest:
+            {
+                var request = ClientConnection.ParsePayload<TavernClaimQuestRequest>(envelope);
+                await SendTavernResultAsync(
+                    connection, singlePlayerProgress.ClaimTavernQuest(connection.Identity, request), cancellation);
+                break;
+            }
+            case MessageTypes.TavernClaimBonus:
+                await SendTavernResultAsync(
+                    connection, singlePlayerProgress.ClaimTavernBonus(connection.Identity), cancellation);
+                break;
+            case MessageTypes.SanctuaryBuyItem:
+            {
+                var request = ClientConnection.ParsePayload<SanctuaryBuyItemRequest>(envelope);
+                await SendSanctuaryResultAsync(
+                    connection, singlePlayerProgress.BuyItem(connection.Identity, request), cancellation);
+                break;
+            }
+            case MessageTypes.SanctuarySetBag:
+            {
+                var request = ClientConnection.ParsePayload<SanctuarySetBagRequest>(envelope);
+                await SendSanctuaryResultAsync(
+                    connection, singlePlayerProgress.SetBag(connection.Identity, request), cancellation);
+                break;
+            }
+            case MessageTypes.SinglePlayerPurchaseUnlock:
+            {
+                var request = ClientConnection.ParsePayload<SinglePlayerPurchaseUnlockRequest>(envelope);
+                await SendProgressResultAsync(
+                    connection, singlePlayerProgress.PurchaseUnlock(connection.Identity, request), cancellation);
+                break;
+            }
+            case MessageTypes.SinglePlayerClearChapter:
+            {
+                var request = ClientConnection.ParsePayload<SinglePlayerClearChapterRequest>(envelope);
+                await SendProgressResultAsync(
+                    connection, singlePlayerProgress.ClearChapter(connection.Identity, request), cancellation);
+                break;
+            }
             case MessageTypes.SinglePlayerClaimTutorialReward:
             {
                 var request = ClientConnection.ParsePayload<SinglePlayerTutorialRewardRequest>(envelope);
@@ -267,22 +319,46 @@ public sealed class MessageRouter
         }
     }
 
-    private async Task HandleSinglePlayerPurchaseUnlockAsync(
+    private static async Task SendSanctuaryResultAsync(
         ClientConnection connection,
-        Envelope envelope,
+        (SanctuaryData Data, string ErrorCode, string Error) outcome,
         CancellationToken cancellation)
     {
-        var request = ClientConnection.ParsePayload<SinglePlayerPurchaseUnlockRequest>(envelope);
-        (SinglePlayerProgressData progress, string errorCode, string error) =
-            singlePlayerProgress.PurchaseUnlock(connection.Identity, request);
-
-        if (progress == null)
+        if (outcome.Data == null)
         {
-            await connection.SendErrorAsync(errorCode, error, cancellation);
+            await connection.SendErrorAsync(outcome.ErrorCode, outcome.Error, cancellation);
             return;
         }
 
-        await connection.SendAsync(MessageTypes.SinglePlayerProgressData, progress, cancellation);
+        await connection.SendAsync(MessageTypes.SanctuaryData, outcome.Data, cancellation);
+    }
+
+    private static async Task SendTavernResultAsync(
+        ClientConnection connection,
+        (TavernData Data, string ErrorCode, string Error) outcome,
+        CancellationToken cancellation)
+    {
+        if (outcome.Data == null)
+        {
+            await connection.SendErrorAsync(outcome.ErrorCode, outcome.Error, cancellation);
+            return;
+        }
+
+        await connection.SendAsync(MessageTypes.TavernData, outcome.Data, cancellation);
+    }
+
+    private static async Task SendProgressResultAsync(
+        ClientConnection connection,
+        (SinglePlayerProgressData Progress, string ErrorCode, string Error) outcome,
+        CancellationToken cancellation)
+    {
+        if (outcome.Progress == null)
+        {
+            await connection.SendErrorAsync(outcome.ErrorCode, outcome.Error, cancellation);
+            return;
+        }
+
+        await connection.SendAsync(MessageTypes.SinglePlayerProgressData, outcome.Progress, cancellation);
     }
 
     private static async Task SendRewardResultAsync(
@@ -410,9 +486,72 @@ public sealed class MessageRouter
         if (loadout == null)
             return;
 
-        Room room = rooms.Create(connection, loadout);
-        logger.LogInformation("Stanza {Code} creata da '{Username}'", room.Code, connection.Identity.Username);
-        await connection.SendAsync(MessageTypes.RoomCreated, new RoomCreated { code = room.Code }, cancellation);
+        Room room = rooms.Create(
+            connection,
+            loadout,
+            SanitizeRoomName(request?.roomName),
+            request?.mode,
+            request?.isPublic == true ? RoomVisibility.Public : RoomVisibility.Protected);
+
+        RankedProgress hostProgress = ranked.GetProgress(connection.Identity.PlayerId, seasons.ActiveSeasonId);
+        if (hostProgress.Ranked && hostProgress.PlacementDone)
+        {
+            room.HostTier = hostProgress.Tier.TierName;
+            room.HostDivision = hostProgress.Tier.Division;
+        }
+
+        logger.LogInformation(
+            "Stanza {Code} '{Name}' ({Mode}, {Visibility}) creata da '{Username}'",
+            room.Code, room.Name, room.Mode, room.Visibility, connection.Identity.Username);
+        await connection.SendAsync(MessageTypes.RoomCreated, new RoomCreated
+        {
+            code = room.Code,
+            roomName = room.Name,
+            mode = room.Mode,
+            isPublic = room.Visibility == RoomVisibility.Public
+        }, cancellation);
+    }
+
+    /// <summary>Ripulisce il nome scelto dall'host: niente caratteri di controllo, lunghezza limitata.</summary>
+    private static string SanitizeRoomName(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+        var builder = new System.Text.StringBuilder(RoomModes.NameMaxLength);
+        foreach (char character in raw.Trim())
+        {
+            if (builder.Length >= RoomModes.NameMaxLength)
+                break;
+            if (!char.IsControl(character))
+                builder.Append(character);
+        }
+        string cleaned = builder.ToString().Trim();
+        return cleaned.Length == 0 ? null : cleaned;
+    }
+
+    private RoomsData BuildRoomsData()
+    {
+        IReadOnlyList<Room> open = rooms.ListOpen(RoomListLimit);
+        var summaries = new RoomSummary[open.Count];
+        for (int index = 0; index < open.Count; index++)
+        {
+            Room room = open[index];
+            bool isPublic = room.Visibility == RoomVisibility.Public;
+            summaries[index] = new RoomSummary
+            {
+                // Il codice viaggia solo per le stanze aperte: quelle protette restano da indovinare.
+                code = isPublic ? room.Code : null,
+                roomName = room.Name,
+                mode = room.Mode,
+                hostUsername = room.Host.Identity.Username,
+                hostTier = room.HostTier,
+                hostDivision = room.HostDivision,
+                isPublic = isPublic,
+                players = room.IsFull ? 2 : 1,
+                capacity = 2
+            };
+        }
+        return new RoomsData { rooms = summaries };
     }
 
     private async Task HandleRoomJoinAsync(
@@ -471,6 +610,7 @@ public sealed class MessageRouter
                 rank = index + 1,
                 playerId = row.PlayerId,
                 username = row.Username,
+                selectedIconId = row.SelectedIconId,
                 tier = row.Tier.TierName,
                 division = row.Tier.Division,
                 leaguePoints = row.Tier.LeaguePoints,
@@ -557,8 +697,14 @@ public sealed class MessageRouter
         if (loadout == null)
             return;
 
-        Room room = rooms.Create(connection, loadout);
-        await connection.SendAsync(MessageTypes.RoomCreated, new RoomCreated { code = room.Code }, cancellation);
+        Room room = rooms.Create(connection, loadout, $"Sfida a {target.Identity.Username}");
+        await connection.SendAsync(MessageTypes.RoomCreated, new RoomCreated
+        {
+            code = room.Code,
+            roomName = room.Name,
+            mode = room.Mode,
+            isPublic = false
+        }, cancellation);
         await target.SendAsync(MessageTypes.FriendChallengeReceived, new FriendChallengeReceived
         {
             roomCode = room.Code,

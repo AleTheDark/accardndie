@@ -44,6 +44,8 @@ public sealed partial class BattleBoardController
 			RefreshModeSelectionLayout();
 			RefreshCampaignModeSelectionLayout();
 			RefreshAdventureChapterLayout();
+			RefreshSanctuaryLayout();
+			RefreshLibraryLayout();
 			RefreshRoomChoiceLayout();
 			RefreshCardInspectionLayout();
 			RefreshDeckBuilderLayout();
@@ -74,6 +76,7 @@ public sealed partial class BattleBoardController
 			float width2 = num11 * (float)num8 + num7 * (float)(num8 - 1);
 			bool flag3 = (currentRoomType == RoomType.Monster || currentRoomType == RoomType.Boss) && (draftActive || deploymentDraftActive || playerCards.Count > 0 || cpuCards.Count > 0);
 			bool flag4 = IsMerchantActionHudVisible() || IsSingleActionNonCombatHudVisible();
+			bool merchantActionHud = IsMerchantActionHudVisible();
 			float anchor = ((!flag3) ?(flag ?0.775f : (flag2 ?0.845f : 0.79f)) : (flag ?0.76f : (flag2 ?0.845f : 0.79f)));
 			anchor += OpponentFormationLift;
 			anchor = ClampBattlefieldAnchor(anchor, num11, height, flag ?0.055f : 0.08f, (!flag3) ?(flag ?0.87f : (flag2 ?0.995f : 0.94f)) : (flag ?0.835f : (flag2 ?0.995f : 0.94f)));
@@ -132,13 +135,23 @@ public sealed partial class BattleBoardController
 					SetRect(implementationArchiveButtonLabel.rectTransform, new Vector2(0.785f, 0f), new Vector2(1f, 0.042f));
 				}
 				SetRect(implementationArchivePanelRect, new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.94f));
-				SetRect(messagePanelRect, flag4 ?new Vector2(0.08f, 0.055f) : (flag3 ?new Vector2(0.02f, 0.43f) : new Vector2(0.08f, 0.065f)), flag4 ?new Vector2(0.92f, 0.215f) : (flag3 ?new Vector2(0.82f, 0.535f) : new Vector2(0.92f, 0.17f)));
+				SetRect(
+					messagePanelRect,
+					merchantActionHud
+						? new Vector2(0.065f, 0.085f)
+						: (flag4 ?new Vector2(0.08f, 0.055f) : (flag3 ?new Vector2(0.02f, 0.43f) : new Vector2(0.08f, 0.065f))),
+					merchantActionHud
+						? new Vector2(0.935f, 0.29f)
+						: (flag4 ?new Vector2(0.92f, 0.215f) : (flag3 ?new Vector2(0.82f, 0.535f) : new Vector2(0.92f, 0.17f))));
 				SetTimelineBaseRect(new Vector2(0.78f, 0.30f), new Vector2(0.998f, 0.70f));
 				ConfigureTimelineLayout(vertical: true);
 				SetRect(cpuTitleRect, flag3 ?new Vector2(0.05f, 0.78f) : new Vector2(0.05f, 0.848f), flag3 ?new Vector2(0.95f, 0.822f) : new Vector2(0.95f, 0.89f));
 				SetRect(roundText.rectTransform, new Vector2(0.05f, 0.545f), new Vector2(0.62f, 0.59f));
 				SetRect(campaignZoneRect, new Vector2(0.64f, 0.545f), new Vector2(0.95f, 0.59f));
-				SetRect(playerTitleRect, new Vector2(0.05f, 0.35f), new Vector2(0.95f, 0.395f));
+				if ((Object)(object)playerTitleRect != (Object)null)
+				{
+					SetRect(playerTitleRect, new Vector2(0.05f, 0.35f), new Vector2(0.95f, 0.395f));
+				}
 			}
 			else
 			{
@@ -162,15 +175,23 @@ public sealed partial class BattleBoardController
 					SetRect(implementationArchiveButtonLabel.rectTransform, new Vector2(0.81f, 0.012f), new Vector2(1f, 0.068f));
 				}
 				SetRect(implementationArchivePanelRect, new Vector2(0.62f, 0.05f), new Vector2(0.98f, 0.94f));
-				SetRect(messagePanelRect,
-					(flag4 ?new Vector2(0.28f, 0.39f) : (flag3 ?new Vector2(0.26f, 0.43f) : new Vector2(0.28f, 0.43f))) + new Vector2(0f, LandscapeMessageLift),
-					(flag4 ?new Vector2(0.72f, 0.61f) : (flag3 ?new Vector2(0.74f, 0.57f) : new Vector2(0.72f, 0.57f))) + new Vector2(0f, LandscapeMessageLift));
+				SetRect(
+					messagePanelRect,
+					(merchantActionHud
+						? new Vector2(0.25f, 0.405f)
+						: (flag4 ?new Vector2(0.28f, 0.39f) : (flag3 ?new Vector2(0.26f, 0.43f) : new Vector2(0.28f, 0.43f)))) + new Vector2(0f, LandscapeMessageLift),
+					(merchantActionHud
+						? new Vector2(0.75f, 0.67f)
+						: (flag4 ?new Vector2(0.72f, 0.61f) : (flag3 ?new Vector2(0.74f, 0.57f) : new Vector2(0.72f, 0.57f)))) + new Vector2(0f, LandscapeMessageLift));
 				SetTimelineBaseRect(flag2 ?new Vector2(0.84f, 0.31f) : new Vector2(0.82f, 0.31f), flag2 ?new Vector2(0.985f, 0.69f) : new Vector2(0.965f, 0.69f));
 				ConfigureTimelineLayout(vertical: true);
 				SetRect(cpuTitleRect, flag3 ?new Vector2(0.12f, 0.725f) : new Vector2(0.12f, 0.805f), flag3 ?new Vector2(0.88f, 0.765f) : new Vector2(0.88f, 0.85f));
 				SetRect(roundText.rectTransform, new Vector2(0.17f, 0.575f), new Vector2(0.55f, 0.625f));
 				SetRect(campaignZoneRect, new Vector2(0.57f, 0.575f), new Vector2(0.83f, 0.625f));
-				SetRect(playerTitleRect, new Vector2(0.12f, 0.32f), new Vector2(0.88f, 0.38f));
+				if ((Object)(object)playerTitleRect != (Object)null)
+				{
+					SetRect(playerTitleRect, new Vector2(0.12f, 0.32f), new Vector2(0.88f, 0.38f));
+				}
 			}
 			if (IsCampaignEndedBannerVisible())
 			{

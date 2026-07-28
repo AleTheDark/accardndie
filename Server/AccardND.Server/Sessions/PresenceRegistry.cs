@@ -32,6 +32,9 @@ public sealed class PresenceRegistry
     public bool IsOnline(string playerId) =>
         byPlayer.TryGetValue(playerId, out ClientConnection connection) && connection.IsOpen;
 
+    /// <summary>Numero di giocatori attualmente connessi (connessioni aperte).</summary>
+    public int OnlineCount => byPlayer.Values.Count(connection => connection.IsOpen);
+
     public ClientConnection GetConnection(string playerId) =>
         byPlayer.TryGetValue(playerId, out ClientConnection connection) && connection.IsOpen ? connection : null;
 

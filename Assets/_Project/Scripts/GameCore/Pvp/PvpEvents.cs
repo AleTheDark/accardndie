@@ -313,6 +313,20 @@ namespace AccardND.GameCore.Pvp
         public int Slot { get; }
     }
 
+    public sealed class MageAuraPenaltyEvent : PvpEvent
+    {
+        public MageAuraPenaltyEvent(int player, int slot, int amount)
+        {
+            Player = player;
+            Slot = slot;
+            Amount = amount;
+        }
+
+        public int Player { get; }
+        public int Slot { get; }
+        public int Amount { get; }
+    }
+
     public sealed class SpiritExpiredEvent : PvpEvent
     {
         public SpiritExpiredEvent(int player, int slot)

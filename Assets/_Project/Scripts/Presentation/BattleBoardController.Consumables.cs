@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using AccardND.GameData;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,6 +10,12 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	// Oggetti della bisaccia portati in questa run e non ancora usati.
+	private readonly List<string> runBagItemIds = new List<string>();
+
+	// Oggetti della bisaccia consumati: a fine run il server li scala dalla scorta.
+	private readonly List<string> consumedBagItemIds = new List<string>();
+
 	private static string CampaignConsumableResourceName(CampaignConsumableType itemType)
 	{
 		return itemType switch
@@ -16,6 +24,7 @@ public sealed partial class BattleBoardController
 			CampaignConsumableType.SecondChance => "second_chance_item",
 			CampaignConsumableType.Defrost => "defrost_item",
 			CampaignConsumableType.Empower => "empower_item",
+			CampaignConsumableType.SigilloRubino => "ruby_seal_item",
 			CampaignConsumableType.DoubleExp => "double_exp_item",
 			_ => "info_button",
 		};
@@ -29,6 +38,7 @@ public sealed partial class BattleBoardController
 			CampaignConsumableType.SecondChance => "Seconda Chance",
 			CampaignConsumableType.Defrost => "Defrost",
 			CampaignConsumableType.Empower => "Empower",
+			CampaignConsumableType.SigilloRubino => "Sigillo Rubino",
 			CampaignConsumableType.DoubleExp => "Doppia EXP",
 			_ => "Consumabile",
 		};
@@ -42,6 +52,7 @@ public sealed partial class BattleBoardController
 			CampaignConsumableType.SecondChance => "Resuscita tutte le carte nel cimitero e le rimette nel mazzo. Non puo essere usata in battaglia.",
 			CampaignConsumableType.Defrost => "Scongela tutte le carte in cooldown e le rimette nel mazzo. Non puo essere usata in battaglia.",
 			CampaignConsumableType.Empower => "Aumenta di uno step il tuo dado Vigore in attacco per la stanza corrente o per la prossima stanza. Non puo essere usato nelle stanze Boss o Miniboss.",
+			CampaignConsumableType.SigilloRubino => "Potenzia permanentemente di +2 una carta del mazzo. Ogni carta puo ricevere un solo Sigillo Rubino.",
 			CampaignConsumableType.DoubleExp => "Raddoppia tutta l'esperienza ottenuta nella prossima stanza.",
 			_ => "Oggetto consumabile da campagna.",
 		};
@@ -84,10 +95,15 @@ public sealed partial class BattleBoardController
 			AppendLog("CONSUMABILE - Empower bloccato: stanza Boss/Miniboss.");
 			return false;
 		}
+		if (itemType == CampaignConsumableType.SigilloRubino)
+		{
+			return BeginRubySealTargetSelection();
+		}
 		if (campaignConsumables == null || !campaignConsumables.TryConsume(itemType))
 		{
 			return false;
 		}
+		RecordConsumedBagItem(itemType);
 		switch (itemType)
 		{
 		case CampaignConsumableType.Detector:
@@ -136,6 +152,84 @@ public sealed partial class BattleBoardController
 		return campaignDeck != null && currentRoomType == RoomType.Boss;
 	}
 
+	private bool BeginRubySealTargetSelection()
+	{
+		if (!HasRubySealTarget())
+		{
+			SetMessage("Sigillo Rubino: nessuna carta valida nel mazzo. Le carte gia' sigillate non possono riceverne un altro.");
+			AppendLog("CONSUMABILE - Sigillo Rubino bloccato: nessun bersaglio valido.");
+			return false;
+		}
+		rubySealTargetSelectionActive = true;
+		if ((Object)(object)implementationArchivePanel != (Object)null)
+		{
+			SetImplementationArchiveVisible(true);
+			RefreshImplementationArchive();
+		}
+		SetMessage("Sigillo Rubino pronto: scegli una carta del mazzo o del cooldown nella borsa.");
+		AppendLog("CONSUMABILE - Sigillo Rubino: scelta bersaglio attiva.");
+		return true;
+	}
+
+	private void HandleImplementationCardClicked(CampaignCardInstance card)
+	{
+		if (!rubySealTargetSelectionActive)
+		{
+			ShowCardInspection(card?.Definition);
+			return;
+		}
+		TryApplyRubySealTo(card);
+	}
+
+	private bool TryApplyRubySealTo(CampaignCardInstance target)
+	{
+		if (!IsRubySealTarget(target))
+		{
+			SetMessage("Sigillo Rubino: scegli una carta combattente non sigillata, fuori dal cimitero.");
+			return false;
+		}
+		if (campaignConsumables == null || !campaignConsumables.TryConsume(CampaignConsumableType.SigilloRubino))
+		{
+			rubySealTargetSelectionActive = false;
+			return false;
+		}
+		if (!campaignDeck.TryApplyRubySeal(target, 2))
+		{
+			campaignConsumables.Add(CampaignConsumableType.SigilloRubino);
+			SetMessage("Sigillo Rubino: questa carta e' gia' sigillata.");
+			return false;
+		}
+		RecordConsumedBagItem(CampaignConsumableType.SigilloRubino);
+		rubySealTargetSelectionActive = false;
+		PlayEmpowerItemUseSfx();
+		string cardName = CardDisplayNames.MarketName(target.Definition);
+		SetMessage($"Sigillo Rubino inciso su {cardName}: forza permanente +2.");
+		AppendLog($"CONSUMABILE - Sigillo Rubino: {cardName} ottiene +2 permanente.");
+		if ((Object)(object)implementationArchivePanel != (Object)null && implementationArchivePanel.activeSelf)
+		{
+			RefreshImplementationArchive();
+		}
+		return true;
+	}
+
+	private bool HasRubySealTarget()
+	{
+		if (campaignDeck == null)
+		{
+			return false;
+		}
+		return campaignDeck.Cards.Any(IsRubySealTarget);
+	}
+
+	private static bool IsRubySealTarget(CampaignCardInstance card)
+	{
+		return card != null
+			&& !card.HasRubySeal
+			&& card.Definition != null
+			&& card.Definition.CanEnterCombat
+			&& card.Zone != AccardND.GameData.CampaignCardZone.Graveyard;
+	}
+
 	private static bool IsConsumableBlockedInBattle(CampaignConsumableType itemType)
 	{
 		return itemType == CampaignConsumableType.SecondChance
@@ -144,9 +238,18 @@ public sealed partial class BattleBoardController
 
 	private bool IsCampaignBattleActive()
 	{
+		if (IsRoomChoiceActive())
+		{
+			return false;
+		}
 		return campaignDeck != null
 			&& (currentRoomType == RoomType.Monster || currentRoomType == RoomType.Boss)
 			&& (draftActive || deploymentDraftActive || roundNumber > 0 || playerCards.Count > 0 || cpuCards.Count > 0);
+	}
+
+	private bool IsRoomChoiceActive()
+	{
+		return (Object)(object)roomChoicePanel != (Object)null && roomChoicePanel.activeSelf;
 	}
 
 	private int RecoverAllGraveyardCards()
@@ -174,6 +277,7 @@ public sealed partial class BattleBoardController
 			CampaignConsumableType.SecondChance,
 			CampaignConsumableType.Defrost,
 			CampaignConsumableType.Empower,
+			CampaignConsumableType.SigilloRubino,
 			CampaignConsumableType.DoubleExp
 		};
 		CampaignConsumableType itemType = pool[random.NextInclusive(0, pool.Length - 1)];
@@ -183,15 +287,88 @@ public sealed partial class BattleBoardController
 		return (description: " " + source + ": ottieni " + itemName + ".", bonusExperience: 0);
 	}
 
-	private void GrantStartingCampaignConsumablesForTesting()
+	/// <summary>
+	/// Riempie la borsa di run con la bisaccia scelta al Santuario: un pezzo per oggetto
+	/// selezionato. La scorta permanente non viene toccata qui, cala solo a fine run e solo
+	/// per quello che e' stato davvero usato.
+	/// </summary>
+	private void LoadCampaignConsumablesFromBag()
 	{
 		campaignConsumables.Clear();
-		campaignConsumables.Add(CampaignConsumableType.Detector, 2);
-		campaignConsumables.Add(CampaignConsumableType.SecondChance, 2);
-		campaignConsumables.Add(CampaignConsumableType.Defrost, 2);
-		campaignConsumables.Add(CampaignConsumableType.Empower, 2);
-		campaignConsumables.Add(CampaignConsumableType.DoubleExp, 2);
-		AppendLog("CONSUMABILI TEST - 2 copie per ogni item aggiunte alla borsa.");
+		runBagItemIds.Clear();
+		consumedBagItemIds.Clear();
+		List<string> bag = singlePlayerProgressService.Progress?.bagItems;
+		if (bag == null || bag.Count == 0)
+		{
+			AppendLog("BISACCIA - vuota: nessun consumabile in questa run.");
+			return;
+		}
+
+		foreach (string itemId in bag)
+		{
+			if (!TryParseSanctuaryItemId(itemId, out CampaignConsumableType itemType))
+			{
+				continue;
+			}
+			campaignConsumables.Add(itemType);
+			runBagItemIds.Add(itemId);
+		}
+		AppendLog($"BISACCIA - {runBagItemIds.Count} consumabili portati in run.");
+	}
+
+	/// <summary>Id del catalogo Santuario -> tipo consumabile di run.</summary>
+	private static bool TryParseSanctuaryItemId(string itemId, out CampaignConsumableType itemType)
+	{
+		switch (itemId)
+		{
+		case "detector":
+			itemType = CampaignConsumableType.Detector;
+			return true;
+		case "second-chance":
+			itemType = CampaignConsumableType.SecondChance;
+			return true;
+		case "defrost":
+			itemType = CampaignConsumableType.Defrost;
+			return true;
+		case "empower":
+			itemType = CampaignConsumableType.Empower;
+			return true;
+		case "sigillo-rubino":
+		case "ruby-seal":
+			itemType = CampaignConsumableType.SigilloRubino;
+			return true;
+		case "double-exp":
+			itemType = CampaignConsumableType.DoubleExp;
+			return true;
+		default:
+			itemType = CampaignConsumableType.Detector;
+			return false;
+		}
+	}
+
+	private static string SanctuaryItemIdOf(CampaignConsumableType itemType) => itemType switch
+	{
+		CampaignConsumableType.Detector => "detector",
+		CampaignConsumableType.SecondChance => "second-chance",
+		CampaignConsumableType.Defrost => "defrost",
+		CampaignConsumableType.Empower => "empower",
+		CampaignConsumableType.SigilloRubino => "sigillo-rubino",
+		CampaignConsumableType.DoubleExp => "double-exp",
+		_ => null
+	};
+
+	/// <summary>
+	/// Segna come consumato un oggetto arrivato dalla bisaccia. Solo questi vengono scalati
+	/// dalla scorta a fine run: quelli trovati in run (loot, mercante) non ne fanno parte.
+	/// </summary>
+	private void RecordConsumedBagItem(CampaignConsumableType itemType)
+	{
+		string itemId = SanctuaryItemIdOf(itemType);
+		if (string.IsNullOrEmpty(itemId) || !runBagItemIds.Remove(itemId))
+		{
+			return;
+		}
+		consumedBagItemIds.Add(itemId);
 	}
 
 	private int ConsumeNextRoomExperienceMultiplier()
@@ -238,6 +415,10 @@ public sealed partial class BattleBoardController
 			if ((Object)(object)cardInspectionDraftConfirmButtonText != (Object)null)
 			{
 				cardInspectionDraftConfirmButtonText.text = "USA";
+			}
+			if ((Object)(object)cardInspectionDraftConfirmButtonRect != (Object)null)
+			{
+				SetCardInspectionConfirmButtonRect(Screen.width > Screen.height);
 			}
 			if (canUse)
 			{
