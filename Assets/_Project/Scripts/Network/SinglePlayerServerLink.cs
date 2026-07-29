@@ -1,41 +1,32 @@
 using System;
 using System.Threading.Tasks;
-using AccardND.NetProtocol;
 using UnityEngine;
 
 namespace AccardND.Network
 {
     /// <summary>
-    /// Connessione headless (senza UI) al server per la progressione single player.
-    /// Si autentica come account ospite legato al dispositivo (come il fallback del PvP) e
-    /// costruisce un <see cref="ServerSinglePlayerProgressRepository"/> sulla connessione autenticata.
-    /// Pensato per essere aggiunto via AddComponent dal controller single player: se il server
-    /// non e raggiungibile o rifiuta il login, restituisce null e il controller resta sul locale.
+    /// Aggancio headless (senza UI) alla progressione single player autoritativa.
+    /// Riusa la sessione account aperta dalla schermata di login e ci costruisce sopra
+    /// un <see cref="ServerSinglePlayerProgressRepository"/>.
+    /// Pensato per essere aggiunto via AddComponent dal controller single player: se non
+    /// c'e' una sessione, restituisce null e il controller resta sulla progressione locale.
+    /// Non apre piu' una connessione per conto suo ne' crea account ospite: gli account
+    /// nascono soltanto dal login Google.
     /// </summary>
     public sealed class SinglePlayerServerLink : MonoBehaviour
     {
-        [SerializeField] private string serverUrl = "wss://accardndie.com/ws";
-
         private PvpServerClient client;
         private PvpServerMessageDispatcher dispatcher;
         private ServerSinglePlayerProgressRepository repository;
         private Task<ServerSinglePlayerProgressRepository> ensureTask;
         private bool authenticated;
-        private bool ownsConnection;
 
         public bool IsReady => authenticated && repository != null && client is { IsConnected: true };
-
-        /// <summary>Imposta l'URL server prima della prima connessione (default = produzione).</summary>
-        public void ConfigureUrl(string url)
-        {
-            if (!string.IsNullOrWhiteSpace(url))
-                serverUrl = url;
-        }
+        public event Action Reconnected;
 
         /// <summary>
-        /// Assicura connessione + autenticazione e restituisce il repository autoritativo, oppure
-        /// null se il server non e raggiungibile o il login e rifiutato. Idempotente: chiamate
-        /// concorrenti condividono lo stesso task.
+        /// Restituisce il repository autoritativo, oppure null se non c'e' una sessione
+        /// account attiva. Idempotente: chiamate concorrenti condividono lo stesso task.
         /// </summary>
         public Task<ServerSinglePlayerProgressRepository> EnsureRepositoryAsync()
         {
@@ -44,10 +35,24 @@ namespace AccardND.Network
             return ensureTask ??= ConnectAndAuthenticateAsync();
         }
 
+        /// <summary>Quanto si aspetta che una riconnessione in corso vada a buon fine prima di ripiegare sul locale.</summary>
+        private const float ReconnectWaitSeconds = 12f;
+
         private async Task<ServerSinglePlayerProgressRepository> ConnectAndAuthenticateAsync()
         {
             try
             {
+                // Un blip di rete non deve buttare la campagna in modalita' locale: se
+                // la sessione si sta riaprendo da sola, conviene darle il tempo di
+                // farlo invece di dichiarare il server assente.
+                float deadline = Time.realtimeSinceStartup + ReconnectWaitSeconds;
+                while (!AccountServerSession.IsReady
+                       && AccountServerSession.IsReconnecting
+                       && Time.realtimeSinceStartup < deadline)
+                {
+                    await PvpAsync.NextFrameAsync();
+                }
+
                 if (AccountServerSession.TryGet(
                         out PvpServerClient sharedClient,
                         out PvpServerMessageDispatcher sharedDispatcher,
@@ -55,32 +60,19 @@ namespace AccardND.Network
                 {
                     client = sharedClient;
                     dispatcher = sharedDispatcher;
-                    ownsConnection = false;
                     authenticated = true;
+                    var progressClient = new ServerSinglePlayerProgressClient(dispatcher);
+                    await progressClient.PendingMutationsReplayed;
                     repository = new ServerSinglePlayerProgressRepository(
-                        new ServerSinglePlayerProgressClient(dispatcher));
+                        progressClient);
                     await repository.RefreshAsync();
                     return repository;
                 }
 
-                client ??= new PvpServerClient();
-                dispatcher ??= new PvpServerMessageDispatcher(client);
-                ownsConnection = true;
-                if (!client.IsConnected)
-                    await client.ConnectAsync(serverUrl);
-
-                (string username, string password) = GuestCredentials.Derive();
-                AuthResponse auth = await AuthenticateGuestAsync(username, password);
-                if (auth is not { ok: true })
-                    return null;
-
-                authenticated = true;
-                AccountServerSession.Adopt(client, dispatcher, auth);
-                ownsConnection = false;
-                repository = new ServerSinglePlayerProgressRepository(
-                    new ServerSinglePlayerProgressClient(dispatcher));
-                await repository.RefreshAsync();
-                return repository;
+                // Nessuna sessione: non si crea piu' un account ospite legato al
+                // dispositivo. Gli account nascono solo dal login Google, quindi
+                // senza sessione la progressione resta locale.
+                return null;
             }
             catch (Exception exception)
             {
@@ -93,30 +85,29 @@ namespace AccardND.Network
             }
         }
 
-        private async Task<AuthResponse> AuthenticateGuestAsync(string username, string password)
-        {
-            AuthResponse response = await SendAuthAsync(
-                MessageTypes.AuthRegister, new RegisterRequest { username = username, password = password });
-            if (response is { ok: true })
-                return response;
-
-            // Account gia esistente (o registrazione disattivata): tenta il login.
-            return await SendAuthAsync(
-                MessageTypes.AuthLogin, new LoginRequest { username = username, password = password });
-        }
-
-        private async Task<AuthResponse> SendAuthAsync(string type, object payload)
-        {
-            Envelope envelope = await dispatcher.RequestAsync(type, payload, MessageTypes.AuthResponse);
-            return envelope.type == MessageTypes.Error
-                ? new AuthResponse { ok = false }
-                : PvpServerClient.ParsePayload<AuthResponse>(envelope);
-        }
-
         private void Update()
         {
             dispatcher?.Pump();
         }
+
+        private async void HandleAccountReconnected()
+        {
+            if (repository == null)
+                return;
+            try
+            {
+                await repository.RefreshAsync();
+                Reconnected?.Invoke();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"[SP] Aggiornamento dopo riconnessione fallito: {exception.Message}");
+            }
+        }
+
+        private void OnEnable() => AccountServerSession.Reconnected += HandleAccountReconnected;
+
+        private void OnDisable() => AccountServerSession.Reconnected -= HandleAccountReconnected;
 
         /// <summary>
         /// Rilascia il repository usato dall'Hub. La sessione account condivisa resta aperta
@@ -124,14 +115,13 @@ namespace AccardND.Network
         /// </summary>
         public void Shutdown()
         {
+            // La connessione e' sempre quella condivisa: qui non si chiude mai,
+            // resta disponibile per il PvP o per la richiesta successiva.
             authenticated = false;
             repository = null;
             ensureTask = null;
-            if (ownsConnection)
-                client?.Dispose();
             client = null;
             dispatcher = null;
-            ownsConnection = false;
         }
 
         private void OnDestroy() => Shutdown();

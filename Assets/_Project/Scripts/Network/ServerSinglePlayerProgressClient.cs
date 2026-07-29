@@ -13,7 +13,7 @@ namespace AccardND.Network
         Task<SinglePlayerProgressSave> PurchaseHardcoreAsync();
         Task<SinglePlayerProgressSave> ClearChapterAsync(string bossId);
         Task<SanctuaryData> GetSanctuaryAsync();
-        Task<SanctuaryData> BuySanctuaryItemAsync(string itemId);
+        Task<SanctuaryData> BuySanctuaryItemAsync(string itemId, string offerId = null);
         Task<SanctuaryData> SetSanctuaryBagAsync(string[] itemIds);
         Task<TavernData> GetTavernAsync();
         Task<TavernData> ClaimTavernQuestAsync(string questId);
@@ -103,17 +103,24 @@ namespace AccardND.Network
         private const float DefaultTimeoutSeconds = 8f;
 
         private readonly PvpServerMessageDispatcher dispatcher;
+        private readonly PersistentMutationOutbox outbox;
         private readonly float timeoutSeconds;
+        public Task PendingMutationsReplayed { get; }
 
         public ServerSinglePlayerProgressClient(PvpServerClient client, float timeoutSeconds = DefaultTimeoutSeconds)
             : this(new PvpServerMessageDispatcher(client), timeoutSeconds)
         {
         }
 
-        public ServerSinglePlayerProgressClient(PvpServerMessageDispatcher dispatcher, float timeoutSeconds = DefaultTimeoutSeconds)
+        public ServerSinglePlayerProgressClient(
+            PvpServerMessageDispatcher dispatcher,
+            float timeoutSeconds = DefaultTimeoutSeconds,
+            PersistentMutationOutbox outbox = null)
         {
             this.dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+            this.outbox = outbox ?? new PersistentMutationOutbox();
             this.timeoutSeconds = Mathf.Max(0.5f, timeoutSeconds);
+            PendingMutationsReplayed = ReplayPersistentMutationsAsync();
         }
 
         public async Task<SinglePlayerProgressSave> LoadProgressAsync()
@@ -138,7 +145,8 @@ namespace AccardND.Network
         {
             SinglePlayerProgressData data = await RequestProgressAsync(
                 MessageTypes.SinglePlayerClearChapter,
-                new SinglePlayerClearChapterRequest { bossId = bossId });
+                new SinglePlayerClearChapterRequest { bossId = bossId },
+                persistent: true);
             return ToSave(data);
         }
 
@@ -146,7 +154,8 @@ namespace AccardND.Network
         {
             SinglePlayerProgressData data = await RequestProgressAsync(
                 MessageTypes.SinglePlayerPurchaseUnlock,
-                new SinglePlayerPurchaseUnlockRequest { type = serverType, id = id });
+                new SinglePlayerPurchaseUnlockRequest { type = serverType, id = id },
+                persistent: true);
             return ToSave(data);
         }
 
@@ -154,34 +163,35 @@ namespace AccardND.Network
         {
             SinglePlayerRewardResult result = await RequestRewardAsync(
                 MessageTypes.SinglePlayerClaimTutorialReward,
-                new SinglePlayerTutorialRewardRequest { tutorialRunId = tutorialRunId });
+                new SinglePlayerTutorialRewardRequest { tutorialRunId = tutorialRunId },
+                persistent: true);
             return ToOutcome(result);
         }
 
         public async Task<SinglePlayerRewardOutcome> ClaimDeathRewardAsync(DeathRewardSummary summary)
         {
+            var request = new SinglePlayerDeathRewardRequest
+            {
+                runId = summary.RunId,
+                mode = summary.Mode,
+                chapterId = summary.ChapterId,
+                stageId = summary.StageId,
+                roomsCleared = summary.RoomsCleared,
+                enemiesDefeated = summary.EnemiesDefeated,
+                bossesDefeated = summary.BossesDefeated,
+                matchExperience = summary.MatchExperience,
+                minibossesDefeated = summary.MinibossesDefeated,
+                defeatedBossIds = summary.DefeatedBossIds,
+                consumedItemIds = summary.ConsumedItemIds,
+                diceRolled = summary.DiceRolled,
+                abilitiesUsed = summary.AbilitiesUsed,
+                itemsUsed = summary.ConsumedItemIds.Length,
+                experienceEarned = summary.ExperienceEarned
+            };
             SinglePlayerRewardResult result = await RequestRewardAsync(
                 MessageTypes.SinglePlayerClaimDeathReward,
-                new SinglePlayerDeathRewardRequest
-                {
-                    runId = summary.RunId,
-                    mode = summary.Mode,
-                    chapterId = summary.ChapterId,
-                    stageId = summary.StageId,
-                    roomsCleared = summary.RoomsCleared,
-                    enemiesDefeated = summary.EnemiesDefeated,
-                    bossesDefeated = summary.BossesDefeated,
-                    matchExperience = summary.MatchExperience,
-                    minibossesDefeated = summary.MinibossesDefeated,
-                    defeatedBossIds = summary.DefeatedBossIds,
-                    consumedItemIds = summary.ConsumedItemIds,
-                    diceRolled = summary.DiceRolled,
-                    abilitiesUsed = summary.AbilitiesUsed,
-                    // Gli oggetti usati sono esattamente quelli scalati dalla scorta: un campo
-                    // a parte sarebbe un secondo conteggio della stessa cosa, e potrebbe mentire.
-                    itemsUsed = summary.ConsumedItemIds.Length,
-                    experienceEarned = summary.ExperienceEarned
-                });
+                request,
+                persistent: true);
             return ToOutcome(result);
         }
 
@@ -193,7 +203,8 @@ namespace AccardND.Network
                 {
                     rewardClaimId = rewardClaimId,
                     adImpressionId = adImpressionId
-                });
+                },
+                persistent: true);
             return ToOutcome(result);
         }
 
@@ -205,11 +216,15 @@ namespace AccardND.Network
             RequestSanctuaryAsync(MessageTypes.SanctuaryGet, null, "Richiesta Santuario rifiutata.");
 
         /// <summary>Compra un consumabile: si somma alla scorta permanente.</summary>
-        public Task<SanctuaryData> BuySanctuaryItemAsync(string itemId) =>
+        public Task<SanctuaryData> BuySanctuaryItemAsync(string itemId, string offerId = null) =>
             RequestSanctuaryAsync(
                 MessageTypes.SanctuaryBuyItem,
-                new SanctuaryBuyItemRequest { itemId = itemId },
-                "Acquisto oggetto rifiutato.");
+                new SanctuaryBuyItemRequest { itemId = itemId, offerId = offerId },
+                "Acquisto oggetto rifiutato.",
+                // Un consumabile pagato e non consegnato è la peggiore delle perdite:
+                // il miele è già uscito. La bisaccia (SetBag) resta fuori di proposito,
+                // è una preferenza che si rifà con un tocco.
+                persistent: true);
 
         /// <summary>Sostituisce la bisaccia scelta per la prossima run.</summary>
         public Task<SanctuaryData> SetSanctuaryBagAsync(string[] itemIds) =>
@@ -230,55 +245,127 @@ namespace AccardND.Network
             RequestTavernAsync(
                 MessageTypes.TavernClaimQuest,
                 new TavernClaimQuestRequest { questId = questId },
-                "Riscossione rifiutata.");
+                "Riscossione rifiutata.",
+                persistent: true);
 
         /// <summary>Riscuote il premio per aver completato tutte le quest del giorno.</summary>
         public Task<TavernData> ClaimTavernBonusAsync() =>
-            RequestTavernAsync(MessageTypes.TavernClaimBonus, null, "Premio di giornata rifiutato.");
+            RequestTavernAsync(
+                MessageTypes.TavernClaimBonus,
+                null,
+                "Premio di giornata rifiutato.",
+                persistent: true);
 
-        private async Task<TavernData> RequestTavernAsync(string messageType, object payload, string fallbackMessage)
+        /// <summary>
+        /// Spedisce una richiesta. Quando <paramref name="persistent"/> è true la
+        /// mutazione viene prima scritta su disco: se la risposta non arriva (rete
+        /// caduta, gioco chiuso) riparte al prossimo avvio con lo stesso requestId.
+        /// </summary>
+        private async Task<Envelope> RequestAsync(
+            string messageType, object payload, string expectedType, bool persistent)
         {
-            Envelope envelope = await dispatcher.RequestAsync(
+            if (!persistent)
+                return await dispatcher.RequestAsync(messageType, payload, expectedType, timeoutSeconds);
+
+            PersistentMutationOutbox.Entry mutation = outbox.Add(
+                AccountServerSession.PlayerId,
                 messageType,
-                payload,
-                MessageTypes.TavernData,
-                timeoutSeconds);
+                expectedType,
+                payload == null ? string.Empty : JsonUtility.ToJson(payload));
+
+            Envelope response = await dispatcher.RequestAsync(
+                messageType, payload, expectedType, timeoutSeconds, mutation.requestId);
+            // Anche un errore applicativo è una risposta definitiva; solo cadute e
+            // timeout lasciano la mutazione su disco per il prossimo avvio.
+            outbox.Remove(mutation.requestId);
+            return response;
+        }
+
+        private async Task ReplayPersistentMutationsAsync()
+        {
+            await PvpAsync.NextFrameAsync();
+            string playerId = AccountServerSession.PlayerId;
+            foreach (PersistentMutationOutbox.Entry mutation in outbox.PendingFor(playerId))
+            {
+                try
+                {
+                    object payload = DeserializePersistentPayload(mutation);
+                    await dispatcher.RequestAsync(
+                        mutation.messageType,
+                        payload,
+                        mutation.expectedType,
+                        timeoutSeconds,
+                        mutation.requestId);
+                    outbox.Remove(mutation.requestId);
+                }
+                catch (Exception exception)
+                {
+                    Debug.Log($"[Progress] Mutazione persistita ancora in attesa: {exception.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Ricostruisce il payload di una mutazione ripescata dal disco. Ogni tipo
+        /// spedito con <c>persistent: true</c> deve comparire qui, o al rinvio
+        /// partirebbe senza corpo.
+        /// </summary>
+        private static object DeserializePersistentPayload(PersistentMutationOutbox.Entry mutation) =>
+            mutation.messageType switch
+            {
+                MessageTypes.SinglePlayerClaimDeathReward =>
+                    JsonUtility.FromJson<SinglePlayerDeathRewardRequest>(mutation.payloadJson),
+                MessageTypes.SinglePlayerClaimTutorialReward =>
+                    JsonUtility.FromJson<SinglePlayerTutorialRewardRequest>(mutation.payloadJson),
+                MessageTypes.SinglePlayerClaimAdMultiplier =>
+                    JsonUtility.FromJson<SinglePlayerAdMultiplierRequest>(mutation.payloadJson),
+                MessageTypes.SinglePlayerPurchaseUnlock =>
+                    JsonUtility.FromJson<SinglePlayerPurchaseUnlockRequest>(mutation.payloadJson),
+                MessageTypes.SinglePlayerClearChapter =>
+                    JsonUtility.FromJson<SinglePlayerClearChapterRequest>(mutation.payloadJson),
+                MessageTypes.SanctuaryBuyItem =>
+                    JsonUtility.FromJson<SanctuaryBuyItemRequest>(mutation.payloadJson),
+                MessageTypes.TavernClaimQuest =>
+                    JsonUtility.FromJson<TavernClaimQuestRequest>(mutation.payloadJson),
+                MessageTypes.TavernClaimBonus => null,
+                _ => null
+            };
+
+        private async Task<TavernData> RequestTavernAsync(
+            string messageType, object payload, string fallbackMessage, bool persistent = false)
+        {
+            Envelope envelope = await RequestAsync(
+                messageType, payload, MessageTypes.TavernData, persistent);
 
             ThrowIfError(envelope, fallbackMessage);
             return PvpServerClient.ParsePayload<TavernData>(envelope) ?? new TavernData();
         }
 
-        private async Task<SanctuaryData> RequestSanctuaryAsync(string messageType, object payload, string fallbackMessage)
+        private async Task<SanctuaryData> RequestSanctuaryAsync(
+            string messageType, object payload, string fallbackMessage, bool persistent = false)
         {
-            Envelope envelope = await dispatcher.RequestAsync(
-                messageType,
-                payload,
-                MessageTypes.SanctuaryData,
-                timeoutSeconds);
+            Envelope envelope = await RequestAsync(
+                messageType, payload, MessageTypes.SanctuaryData, persistent);
 
             ThrowIfError(envelope, fallbackMessage);
             return PvpServerClient.ParsePayload<SanctuaryData>(envelope) ?? new SanctuaryData();
         }
 
-        private async Task<SinglePlayerProgressData> RequestProgressAsync(string messageType, object payload)
+        private async Task<SinglePlayerProgressData> RequestProgressAsync(
+            string messageType, object payload, bool persistent = false)
         {
-            Envelope envelope = await dispatcher.RequestAsync(
-                messageType,
-                payload,
-                MessageTypes.SinglePlayerProgressData,
-                timeoutSeconds);
+            Envelope envelope = await RequestAsync(
+                messageType, payload, MessageTypes.SinglePlayerProgressData, persistent);
 
             ThrowIfError(envelope, "Richiesta progressione rifiutata.");
             return PvpServerClient.ParsePayload<SinglePlayerProgressData>(envelope);
         }
 
-        private async Task<SinglePlayerRewardResult> RequestRewardAsync(string messageType, object payload)
+        private async Task<SinglePlayerRewardResult> RequestRewardAsync(
+            string messageType, object payload, bool persistent = false)
         {
-            Envelope envelope = await dispatcher.RequestAsync(
-                messageType,
-                payload,
-                MessageTypes.SinglePlayerRewardResult,
-                timeoutSeconds);
+            Envelope envelope = await RequestAsync(
+                messageType, payload, MessageTypes.SinglePlayerRewardResult, persistent);
 
             ThrowIfError(envelope, "Richiesta reward rifiutata.");
             return PvpServerClient.ParsePayload<SinglePlayerRewardResult>(envelope);

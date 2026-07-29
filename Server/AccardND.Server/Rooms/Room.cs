@@ -42,7 +42,7 @@ public sealed class Room
     }
 
     public string Code { get; }
-    public ClientConnection Host { get; }
+    public ClientConnection Host { get; private set; }
     public PvpLoadout HostLoadout { get; }
     public ClientConnection Guest { get; private set; }
     public PvpLoadout GuestLoadout { get; private set; }
@@ -91,4 +91,74 @@ public sealed class Room
 
     public ClientConnection OpponentOf(ClientConnection connection) =>
         connection == Host ? Guest : Host;
+
+    // --- Attesa di riconnessione ---
+    //
+    // Un socket che cade non è un abbandono: su mobile basta un cambio di cella.
+    // La stanza resta in piedi per DisconnectTimeoutSeconds e la partita si mette
+    // in pausa; solo allo scadere diventa una sconfitta.
+
+    /// <summary>Giocatore la cui connessione è caduta, null se sono entrambi collegati.</summary>
+    public string DisconnectedPlayerId { get; private set; }
+
+    public DateTime ReconnectDeadlineUtc { get; private set; }
+
+    public bool IsAwaitingReconnect => DisconnectedPlayerId != null;
+
+    private CancellationTokenSource reconnectTimer;
+
+    public void BeginReconnectWait(string playerId, int seconds, CancellationTokenSource timer)
+    {
+        lock (gate)
+        {
+            DisconnectedPlayerId = playerId;
+            ReconnectDeadlineUtc = DateTime.UtcNow.AddSeconds(seconds);
+            reconnectTimer = timer;
+        }
+    }
+
+    /// <summary>
+    /// Chiude l'attesa e restituisce il timer a chi ha vinto la corsa. Il rientro del
+    /// giocatore e la scadenza del countdown possono arrivare insieme: solo uno dei due
+    /// riceve un valore non null, l'altro deve fermarsi.
+    /// </summary>
+    public CancellationTokenSource EndReconnectWait()
+    {
+        lock (gate)
+        {
+            CancellationTokenSource timer = reconnectTimer;
+            reconnectTimer = null;
+            DisconnectedPlayerId = null;
+            return timer;
+        }
+    }
+
+    /// <summary>
+    /// Sostituisce la connessione morta di un giocatore con quella appena riautenticata,
+    /// riconosciuta dal PlayerId. Restituisce false se il giocatore non è di questa stanza.
+    /// </summary>
+    public bool TryReplaceConnection(ClientConnection replacement, out ClientConnection replaced)
+    {
+        replaced = null;
+        string playerId = replacement?.Identity?.PlayerId;
+        if (string.IsNullOrEmpty(playerId))
+            return false;
+
+        lock (gate)
+        {
+            if (Host?.Identity?.PlayerId == playerId)
+            {
+                replaced = Host;
+                Host = replacement;
+                return true;
+            }
+            if (Guest?.Identity?.PlayerId == playerId)
+            {
+                replaced = Guest;
+                Guest = replacement;
+                return true;
+            }
+        }
+        return false;
+    }
 }

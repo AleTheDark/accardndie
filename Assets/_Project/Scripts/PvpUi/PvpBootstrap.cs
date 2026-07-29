@@ -23,9 +23,8 @@ namespace AccardND.PvpUi
         private const int NicknameMaxLength = 18;
 
         [SerializeField] private string serverUrl = "wss://accardndie.com/ws";
-        [SerializeField, Tooltip("Vuoto = account ospite legato al dispositivo.")]
+        [SerializeField, Tooltip("Nome mostrato al server; vuoto = derivato dal dispositivo.")]
         private string username = string.Empty;
-        [SerializeField] private string password = string.Empty;
         [SerializeField] private CardDatabase cardDatabase;
         [SerializeField] private GameConfiguration configuration;
 
@@ -49,25 +48,34 @@ namespace AccardND.PvpUi
         private List<LoadoutCardDto> myLoadout;
         private IPvpMatchView matchView;
         private System.Action onClosed;
-        private bool registerAttempted;
-        private bool loginAttempted;
+        private System.Action onSettings;
         private bool authenticated;
         private bool connecting;
         private bool stateDirty;
         private bool startInLeaderboard;
         private bool ownsConnection = true;
+        private bool rankedQueueRequested;
         private BattleSfxPlayer battleSfx;
         private readonly List<BattlePresentationEvent> pendingAnimationEvents = new();
+        private RectTransform reconnectOverlay;
+        private Text reconnectOverlayText;
+        private float opponentReconnectDeadline;
+        private string disconnectedOpponentName;
 
         public PvpServerMessageDispatcher ServerDispatcher => dispatcher;
         public bool IsAuthenticated => authenticated;
 
         /// <summary>Da chiamare subito dopo AddComponent quando il PvP è lanciato dal menu di gioco.</summary>
-        public void Configure(CardDatabase database, System.Action closedCallback, IPvpMatchView view = null)
+        public void Configure(
+            CardDatabase database,
+            System.Action closedCallback,
+            IPvpMatchView view = null,
+            System.Action settingsCallback = null)
         {
             cardDatabase = database;
             onClosed = closedCallback;
             matchView = view;
+            onSettings = settingsCallback;
         }
 
         /// <summary>
@@ -97,14 +105,16 @@ namespace AccardND.PvpUi
                 dispatcher = sharedDispatcher;
                 ownsConnection = false;
                 dispatcher.UnhandledMessage += HandleMessage;
+                SubscribeConnectionEvents();
                 CompleteAuthentication(sharedIdentity, adoptConnection: false);
                 return;
             }
 
-            EnsureGuestCredentials();
+            EnsureDisplayName();
             client = new PvpServerClient();
             dispatcher = new PvpServerMessageDispatcher(client);
             dispatcher.UnhandledMessage += HandleMessage;
+            SubscribeConnectionEvents();
             await ConnectAndAuthenticateAsync();
         }
 
@@ -112,17 +122,23 @@ namespace AccardND.PvpUi
         {
             if (connecting || client == null || client.IsConnected)
                 return;
+            // La sessione si sta già riaprendo da sola col token: aprire un secondo
+            // socket in parallelo darebbe due connessioni per lo stesso account.
+            if (dispatcher is { IsReconnecting: true })
+            {
+                SetConnectionStatus("Riconnessione in corso...");
+                return;
+            }
             connecting = true;
             try
             {
                 SetConnectionStatus($"Connessione a {serverUrl}...");
                 await client.ConnectAsync(serverUrl);
                 SetConnectionStatus("Connesso. Autenticazione...");
-                registerAttempted = false;
-                loginAttempted = false;
 
-                // Prima scelta: Unity Authentication. Su Android usa Google Play Games
-                // quando il plugin GPGS e' presente; negli altri casi usa UGS anonimo.
+                // Unica strada: Unity Authentication con provider Google. Non c'e'
+                // piu' un ripiego su account locale o ospite: un accesso che non
+                // arriva da Google non deve creare un profilo.
                 if (PvpUgsAuth.IsAvailable)
                 {
                     (string accessToken, string authProvider) = await PvpUgsAuth.TryResumeSessionAsync();
@@ -134,19 +150,17 @@ namespace AccardND.PvpUi
                         await dispatcher.SendAsync(MessageTypes.AuthUgs, new UgsLoginRequest
                         {
                             accessToken = accessToken,
-                            displayName = username
+                            displayName = username,
+                            authMethod = PvpUgsAuth.CurrentAuthMethod(),
+                            googleIdToken = PvpUgsAuth.LastGoogleIdToken
                         });
                         return;
                     }
-                    SetConnectionStatus("Unity Auth non disponibile: uso l'account locale...");
+                    SetConnectionStatus("Accesso Google non riuscito: riprova.");
+                    return;
                 }
 
-                registerAttempted = true;
-                await dispatcher.SendAsync(MessageTypes.AuthRegister, new RegisterRequest
-                {
-                    username = username,
-                    password = password
-                });
+                SetConnectionStatus("Unity Authentication non disponibile: impossibile accedere.");
             }
             catch (System.Exception exception)
             {
@@ -164,6 +178,53 @@ namespace AccardND.PvpUi
         {
             lobby?.SetStatus(message);
             leaderboardScreen?.SetStatus(message);
+        }
+
+        // --- Cadute di rete ---
+
+        private void SubscribeConnectionEvents()
+        {
+            if (dispatcher == null)
+                return;
+            dispatcher.Disconnected += HandleConnectionLost;
+            dispatcher.Reconnected += HandleConnectionRestored;
+            dispatcher.ReconnectFailed += HandleReconnectGivenUp;
+        }
+
+        private void UnsubscribeConnectionEvents()
+        {
+            if (dispatcher == null)
+                return;
+            dispatcher.Disconnected -= HandleConnectionLost;
+            dispatcher.Reconnected -= HandleConnectionRestored;
+            dispatcher.ReconnectFailed -= HandleReconnectGivenUp;
+        }
+
+        /// <summary>
+        /// Il socket è caduto. Non è una sconfitta: il server tiene la partita in pausa
+        /// e il dispatcher sta già riaprendo la connessione.
+        /// </summary>
+        private void HandleConnectionLost()
+        {
+            SetConnectionStatus("Connessione persa: riconnessione in corso...");
+            state?.AddNotice("Connessione persa: riconnessione in corso...");
+            ShowReconnectOverlay("CONNESSIONE PERSA\nRiconnessione in corso...");
+            stateDirty = true;
+        }
+
+        private void HandleConnectionRestored()
+        {
+            SetConnectionStatus("Connessione ripristinata.");
+            state?.AddNotice("Connessione ripristinata.");
+            HideReconnectOverlay();
+            stateDirty = true;
+        }
+
+        private void HandleReconnectGivenUp()
+        {
+            SetConnectionStatus("Sessione scaduta: rientra dal menu per riaccedere.");
+            if (state != null)
+                LeaveToLobby();
         }
 
         /// <summary>Guardia dei pulsanti: se la connessione manca la ritenta invece di lanciare eccezioni.</summary>
@@ -184,6 +245,7 @@ namespace AccardND.PvpUi
         {
             lobby?.Tick();
             leaderboardScreen?.Tick();
+            UpdateReconnectOverlay();
             if (dispatcher == null)
                 return;
             dispatcher.Pump();
@@ -203,32 +265,9 @@ namespace AccardND.PvpUi
                 {
                     var auth = PvpServerClient.ParsePayload<AuthResponse>(envelope);
                     if (auth.ok)
-                    {
                         CompleteAuthentication(auth, adoptConnection: true);
-                    }
-                    else if (!registerAttempted)
-                    {
-                        // L'auth UGS è stata rifiutata dal server: fallback all'account locale.
-                        registerAttempted = true;
-                        await dispatcher.SendAsync(MessageTypes.AuthRegister, new RegisterRequest
-                        {
-                            username = username,
-                            password = password
-                        });
-                    }
-                    else if (!loginAttempted)
-                    {
-                        loginAttempted = true;
-                        await dispatcher.SendAsync(MessageTypes.AuthLogin, new LoginRequest
-                        {
-                            username = username,
-                            password = password
-                        });
-                    }
                     else
-                    {
                         SetConnectionStatus($"Autenticazione fallita: {auth.error}");
-                    }
                     break;
                 }
 
@@ -270,17 +309,24 @@ namespace AccardND.PvpUi
                     break;
 
                 case MessageTypes.QueueStatus:
-                    lobby.SetWaitingForOpponent(true);
-                    lobby.SetStatus("In coda: in attesa di un avversario...");
+                    // La conferma del join puo' arrivare dopo che il giocatore ha gia'
+                    // premuto Annulla. In quel caso non deve riaprire il pannello d'attesa.
+                    if (rankedQueueRequested)
+                    {
+                        lobby.SetWaitingForOpponent(true);
+                        lobby.SetStatus("In coda: in attesa di un avversario...");
+                    }
                     break;
 
                 case MessageTypes.MatchFound:
+                    rankedQueueRequested = false;
                     lobby.SetWaitingForOpponent(false);
                     lobby.SetStatus("Avversario trovato!");
                     break;
 
                 case MessageTypes.MatchStart:
                 {
+                    rankedQueueRequested = false;
                     state = new PvpClientMatchState();
                     state.Changed += () => stateDirty = true;
                     state.ApplyMatchStart(PvpServerClient.ParsePayload<MatchStart>(envelope));
@@ -379,6 +425,33 @@ namespace AccardND.PvpUi
                     ShowChallengePrompt(PvpServerClient.ParsePayload<FriendChallengeReceived>(envelope));
                     break;
 
+                case MessageTypes.MatchOpponentDisconnected:
+                {
+                    var dropped = PvpServerClient.ParsePayload<MatchOpponentDisconnected>(envelope);
+                    // La partita è ferma per entrambi: il server rifiuta le azioni
+                    // finché l'altro non rientra, quindi qui basta dirlo.
+                    state?.AddNotice(
+                        $"{dropped.opponentName} ha perso la connessione: {dropped.secondsRemaining}s per rientrare.");
+                    disconnectedOpponentName = dropped.opponentName;
+                    opponentReconnectDeadline = Time.unscaledTime + Mathf.Max(0, dropped.secondsRemaining);
+                    ShowReconnectOverlay(string.Empty);
+                    stateDirty = true;
+                    break;
+                }
+
+                case MessageTypes.MatchOpponentReconnected:
+                {
+                    var back = PvpServerClient.ParsePayload<MatchOpponentReconnected>(envelope);
+                    state?.AddNotice($"{back.opponentName} è rientrato: si riprende.");
+                    HideReconnectOverlay();
+                    stateDirty = true;
+                    break;
+                }
+
+                case MessageTypes.MatchResume:
+                    ResumeMatch(PvpServerClient.ParsePayload<MatchResumeState>(envelope));
+                    break;
+
                 case MessageTypes.MatchOpponentLeft:
                     if (state != null)
                         lobby.SetStatus("L'avversario ha lasciato la partita.");
@@ -401,6 +474,40 @@ namespace AccardND.PvpUi
                     break;
                 }
             }
+        }
+
+        /// <summary>
+        /// Rientro in una partita rimasta in piedi mentre eravamo offline. Lo stato si
+        /// ricostruisce riapplicando il log eventi dall'inizio: è lo stesso codice della
+        /// diretta, ma senza animazioni, così si riparte dal tavolo com'era davvero
+        /// invece di indovinarlo.
+        /// </summary>
+        private void ResumeMatch(MatchResumeState resume)
+        {
+            if (resume == null)
+                return;
+
+            state = new PvpClientMatchState();
+            state.Changed += () => stateDirty = true;
+            state.ApplyMatchStart(new MatchStart
+            {
+                opponentName = resume.opponentName,
+                yourPlayerIndex = resume.yourPlayerIndex
+            });
+
+            if (resume.events != null)
+            {
+                foreach (MatchEventDto matchEvent in resume.events)
+                    state.Apply(matchEvent);
+            }
+            if (resume.hand?.handIndices is { Length: > 0 })
+                state.ApplyHand(resume.hand);
+
+            pendingAnimationEvents.Clear();
+            Debug.Log($"[PvP] Partita ripresa: {resume.events?.Length ?? 0} eventi riapplicati.");
+            ShowMatch();
+            state.AddNotice("Partita ripresa dopo la disconnessione.");
+            stateDirty = true;
         }
 
         // --- Azioni lobby ---
@@ -484,12 +591,14 @@ namespace AccardND.PvpUi
                 return;
             try
             {
+                rankedQueueRequested = true;
                 lobby.SetStatus("Ingresso in coda...");
                 lobby.SetWaitingForOpponent(true);
                 await dispatcher.SendAsync(MessageTypes.QueueJoin, new QueueJoinRequest { loadout = loadout });
             }
             catch (System.Exception exception)
             {
+                rankedQueueRequested = false;
                 lobby.SetWaitingForOpponent(false);
                 lobby.SetStatus($"Invio fallito: {exception.Message}");
             }
@@ -497,6 +606,12 @@ namespace AccardND.PvpUi
 
         private async void CancelQueue()
         {
+            // Il feedback deve essere immediato: non teniamo il pannello bloccato mentre
+            // aspettiamo la rete e marchiamo come obsolete eventuali QueueStatus in volo.
+            rankedQueueRequested = false;
+            lobby.SetWaitingForOpponent(false);
+            lobby.SetStatus("Ricerca annullata. Puoi continuare a navigare o riprovare.");
+
             if (client is { IsConnected: true })
             {
                 try
@@ -509,9 +624,6 @@ namespace AccardND.PvpUi
                     return;
                 }
             }
-
-            lobby.SetWaitingForOpponent(false);
-            lobby.SetStatus("Ricerca annullata. Puoi continuare a navigare o riprovare.");
         }
 
         /// <summary>Loadout confermato o salvato; null se va ancora composto.</summary>
@@ -595,13 +707,35 @@ namespace AccardND.PvpUi
             }, ResolveIconArtwork);
         }
 
-        /// <summary>Sincronizza col server i mostri sconfitti in campagna (sblocco icone).</summary>
-        private void ReportCampaignKills()
+        /// <summary>
+        /// Sincronizza col server i mostri sconfitti in campagna (sblocco icone).
+        /// Aspetta la conferma invece di sperarci: il server risponde già con
+        /// campaign.kills_result, e con un requestId il rinvio dopo una caduta di rete
+        /// viene riconosciuto invece di essere rieseguito. Il tracker locale è
+        /// cumulativo, quindi un fallimento qui si ripara comunque al login successivo:
+        /// niente di rumoroso da mostrare al giocatore, solo una riga di log.
+        /// </summary>
+        private async void ReportCampaignKills()
         {
             string[] families = PvpCampaignKillTracker.All();
             string[] bosses = PvpCampaignKillTracker.AllBosses();
-            if (families.Length > 0 || bosses.Length > 0)
-                Send(MessageTypes.CampaignReportKills, new CampaignKillsRequest { monsters = families, bosses = bosses });
+            if (families.Length == 0 && bosses.Length == 0)
+                return;
+            if (dispatcher == null)
+                return;
+
+            try
+            {
+                await dispatcher.RequestAsync(
+                    MessageTypes.CampaignReportKills,
+                    new CampaignKillsRequest { monsters = families, bosses = bosses },
+                    MessageTypes.CampaignKillsResult,
+                    timeoutSeconds: 10f);
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogWarning($"[PvP] Sincronizzazione uccisioni campagna fallita: {exception.Message}");
+            }
         }
 
         /// <summary>Mappa un id icona all'artwork di una carta: classe eroe o famiglia di mostri.</summary>
@@ -731,17 +865,21 @@ namespace AccardND.PvpUi
 
         private async void Send(string type, object payload = null)
         {
-            if (client is not { IsConnected: true } || dispatcher == null)
+            if (dispatcher == null)
             {
                 profileScreen?.SetStatus("Connessione al server persa.");
                 return;
             }
             try
             {
+                // Niente guardia su IsConnected: se il socket è giù il dispatcher
+                // tiene il messaggio in coda e lo spedisce alla riconnessione. Solo
+                // quelli che scadono con l'istante (una mossa, la coda) rifiutano.
                 await dispatcher.SendAsync(type, payload);
             }
             catch (System.Exception exception)
             {
+                profileScreen?.SetStatus("Connessione al server persa.");
                 Debug.LogWarning($"[PvP] Invio {type} fallito: {exception.Message}");
             }
         }
@@ -791,7 +929,7 @@ namespace AccardND.PvpUi
 
         private async void SendMatchAction(MatchActionDto action)
         {
-            if (client is not { IsConnected: true } || dispatcher == null)
+            if (dispatcher == null)
             {
                 Debug.LogWarning("[PvP] Azione ignorata: connessione al server persa.");
                 return;
@@ -799,10 +937,26 @@ namespace AccardND.PvpUi
             try
             {
                 battleSfx?.PlayButtonClick();
-                await dispatcher.SendAsync(MessageTypes.MatchAction, action);
+                Envelope response = await dispatcher.RequestAsync(
+                    MessageTypes.MatchAction,
+                    action,
+                    MessageTypes.MatchActionAck,
+                    timeoutSeconds: 12f);
+                if (response?.type == MessageTypes.Error)
+                {
+                    var error = PvpServerClient.ParsePayload<ErrorMessage>(response);
+                    state?.AddNotice(error?.message ?? "Mossa rifiutata dal server.");
+                    stateDirty = true;
+                }
             }
             catch (System.Exception exception)
             {
+                // Senza questo avviso una mossa non confermata è indistinguibile da un
+                // gioco che non risponde: il tavolo resta com'era e nessuno spiega perché.
+                state?.AddNotice(exception is System.TimeoutException
+                    ? "Mossa non confermata dal server: riprova."
+                    : "Mossa non inviata: connessione persa.");
+                stateDirty = true;
                 Debug.LogWarning($"[PvP] Invio azione fallito: {exception.Message}");
             }
         }
@@ -834,22 +988,23 @@ namespace AccardND.PvpUi
 
         // --- Setup ---
 
-        private void EnsureGuestCredentials()
+        /// <summary>
+        /// Nome da mostrare al server nel login UGS. Non e' piu' una credenziale:
+        /// gli account si creano solo con Google, quindi qui serve solo un'etichetta
+        /// leggibile finche' il giocatore non sceglie il nickname.
+        /// </summary>
+        private void EnsureDisplayName()
         {
-            // Account ospite stabile per dispositivo: nessun inserimento richiesto.
             // In editor il suffisso distingue l'istanza dalla build affiancata nei test locali.
-            string device = SystemInfo.deviceUniqueIdentifier;
             string editorSuffix = Application.isEditor ? "-editor" : string.Empty;
             string savedNickname = SanitizeNickname(PlayerPrefs.GetString(NicknamePrefsKey, string.Empty));
             if (!string.IsNullOrWhiteSpace(savedNickname))
                 username = savedNickname + editorSuffix;
             else if (string.IsNullOrWhiteSpace(username))
             {
-                int hash = device.GetHashCode();
-                username = $"ospite-{(uint)hash % 100000:D5}{editorSuffix}";
+                int hash = SystemInfo.deviceUniqueIdentifier.GetHashCode();
+                username = $"giocatore-{(uint)hash % 100000:D5}{editorSuffix}";
             }
-            if (string.IsNullOrWhiteSpace(password))
-                password = $"dev-{device.Substring(0, Mathf.Min(12, device.Length))}";
         }
 
         private void BuildCanvas()
@@ -882,6 +1037,45 @@ namespace AccardND.PvpUi
                 new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
         }
 
+        private void ShowReconnectOverlay(string message)
+        {
+            if (reconnectOverlay == null)
+            {
+                reconnectOverlay = PvpUiFactory.CreatePanel(
+                    canvasRoot, "Match Reconnect Overlay", new Color(0f, 0f, 0f, 0.82f));
+                PvpUiFactory.Stretch(reconnectOverlay);
+                reconnectOverlayText = PvpUiFactory.CreateTitleText(
+                    reconnectOverlay, "Reconnect Status", string.Empty, 34);
+                reconnectOverlayText.alignment = TextAnchor.MiddleCenter;
+                PvpUiFactory.SetAnchors(
+                    (RectTransform)reconnectOverlayText.transform,
+                    new Vector2(0.18f, 0.36f),
+                    new Vector2(0.82f, 0.64f));
+            }
+            reconnectOverlay.gameObject.SetActive(true);
+            reconnectOverlay.SetAsLastSibling();
+            if (!string.IsNullOrEmpty(message))
+                reconnectOverlayText.text = message;
+        }
+
+        private void UpdateReconnectOverlay()
+        {
+            if (reconnectOverlay == null || !reconnectOverlay.gameObject.activeSelf
+                || string.IsNullOrEmpty(disconnectedOpponentName))
+                return;
+            int seconds = Mathf.Max(0, Mathf.CeilToInt(opponentReconnectDeadline - Time.unscaledTime));
+            reconnectOverlayText.text =
+                $"{disconnectedOpponentName.ToUpperInvariant()} È DISCONNESSO\n"
+                + $"Attesa riconnessione: {seconds}s";
+        }
+
+        private void HideReconnectOverlay()
+        {
+            disconnectedOpponentName = null;
+            opponentReconnectDeadline = 0f;
+            reconnectOverlay?.gameObject.SetActive(false);
+        }
+
         private void ShowLobby()
         {
             lobby = new PvpLobbyScreen(canvasRoot, username, new PvpLobbyScreen.Callbacks
@@ -894,8 +1088,14 @@ namespace AccardND.PvpUi
                 OnLeaveRoom = LeaveRoom,
                 OnLoadout = OpenLoadoutBuilder,
                 OnProfile = OpenProfile,
+                OnSettings = OpenSettings,
                 OnRefreshRooms = () => Send(MessageTypes.RoomsList)
             }, ResolveIconArtwork);
+        }
+
+        private void OpenSettings()
+        {
+            onSettings?.Invoke();
         }
 
         private void OpenNicknameDialog()
@@ -1022,7 +1222,12 @@ namespace AccardND.PvpUi
 
             if (adoptConnection)
             {
-                AccountServerSession.Adopt(client, dispatcher, auth);
+                AccountServerSession.Adopt(
+                    client,
+                    dispatcher,
+                    auth,
+                    serverUrl,
+                    BuildGoogleRefreshRequestAsync);
                 ownsConnection = false;
             }
 
@@ -1040,6 +1245,21 @@ namespace AccardND.PvpUi
                 Send(MessageTypes.SinglePlayerProgressGet);
             }
             ReportCampaignKills();
+        }
+
+        private static async System.Threading.Tasks.Task<UgsLoginRequest> BuildGoogleRefreshRequestAsync()
+        {
+            var resume = await PvpUgsAuth.TryResumeSessionAsync();
+            string accessToken = resume.AccessToken;
+            return string.IsNullOrEmpty(accessToken)
+                ? null
+                : new UgsLoginRequest
+                {
+                    accessToken = accessToken,
+                    displayName = string.Empty,
+                    authMethod = PvpUgsAuth.CurrentAuthMethod(),
+                    googleIdToken = PvpUgsAuth.LastGoogleIdToken
+                };
         }
 
         private static void CachePvpLeague(ProfileData data)
@@ -1104,6 +1324,7 @@ namespace AccardND.PvpUi
         {
             if (dispatcher != null)
                 dispatcher.UnhandledMessage -= HandleMessage;
+            UnsubscribeConnectionEvents();
             if (ownsConnection)
                 client?.Dispose();
             client = null;

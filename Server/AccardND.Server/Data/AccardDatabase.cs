@@ -46,7 +46,7 @@ public sealed class AccardDatabase
 
             CREATE TABLE IF NOT EXISTS accounts (
                 player_id     TEXT PRIMARY KEY,
-                source        TEXT NOT NULL,          -- 'password' | 'ugs'
+                source        TEXT NOT NULL,          -- 'password' | 'external' (token UGS)
                 username      TEXT NOT NULL,
                 username_ci   TEXT NOT NULL,          -- username in minuscolo, per confronto case-insensitive
                 password_salt TEXT,                   -- NULL per gli account UGS
@@ -61,9 +61,10 @@ public sealed class AccardDatabase
                 ON accounts(username_ci) WHERE source='password';
 
             CREATE TABLE IF NOT EXISTS external_identities (
-                provider      TEXT NOT NULL,
+                provider      TEXT NOT NULL,          -- sempre 'ugs': il token e' di Unity Auth
                 external_id   TEXT NOT NULL,
                 player_id     TEXT NOT NULL,
+                auth_method   TEXT,                   -- 'google' | 'google-play-games' | 'anonymous' | NULL
                 created_at    TEXT NOT NULL,
                 last_login_at TEXT,
                 PRIMARY KEY (provider, external_id),
@@ -339,6 +340,16 @@ public sealed class AccardDatabase
                 FOREIGN KEY (player_id) REFERENCES accounts(player_id)
             );
 
+            -- Copie acquistate nelle offerte giornaliere del negozio.
+            CREATE TABLE IF NOT EXISTS player_shop_offer_purchases (
+                player_id TEXT NOT NULL,
+                rotation  TEXT NOT NULL,
+                item_id   TEXT NOT NULL,
+                count     INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (player_id, rotation, item_id),
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+
             -- Quest della taverna assegnate a un giocatore per una data (UTC).
             -- baseline e' il valore del contatore nel momento dell'assegnazione: il progresso
             -- e' la differenza, cosi' non serve un secondo sistema di tracciamento.
@@ -365,6 +376,22 @@ public sealed class AccardDatabase
 
             CREATE INDEX IF NOT EXISTS ix_campaign_runs_time ON campaign_runs(ended_at);
             CREATE INDEX IF NOT EXISTS ix_campaign_runs_player ON campaign_runs(player_id);
+
+            -- Risposte gia' date alle richieste che mutano lo stato, per (giocatore, requestId).
+            -- Serve ai rinvii dopo una caduta di rete: la seconda copia della richiesta
+            -- riceve questa riga invece di rieseguire l'acquisto. Sta su disco e non in
+            -- memoria perche' il client puo' rinviare al riavvio successivo, anche giorni
+            -- dopo, e un deploy del server nel frattempo non deve aprire una finestra di
+            -- doppia esecuzione. Nessuna FK: le righe scadono da sole.
+            CREATE TABLE IF NOT EXISTS request_dedup (
+                player_id     TEXT NOT NULL,
+                request_id    TEXT NOT NULL,
+                reply_type    TEXT NOT NULL,
+                reply_payload TEXT NOT NULL,
+                expires_at    TEXT NOT NULL,
+                PRIMARY KEY (player_id, request_id)
+            );
+            CREATE INDEX IF NOT EXISTS ix_request_dedup_expiry ON request_dedup(expires_at);
         ";
         command.ExecuteNonQuery();
         AddColumnIfMissing(connection, "single_player_progress", "account_level", "INTEGER NOT NULL DEFAULT 1");
@@ -374,6 +401,15 @@ public sealed class AccardDatabase
         AddColumnIfMissing(connection, "single_player_reward_claims", "base_account_experience", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "campaign_runs", "minibosses_defeated", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "campaign_runs", "defeated_boss_ids", "TEXT");
+        // Come si e' autenticato l'account esterno: 'google', 'google-play-games',
+        // 'anonymous'... NULL sulle righe create prima di questa colonna, si
+        // popola al primo login successivo.
+        AddColumnIfMissing(connection, "external_identities", "auth_method", "TEXT");
+        // Mail dell'account Google, letta dall'ID token verificato. NULL sulle righe
+        // create prima di questa colonna e su tutto cio' che non e' Google (gli
+        // account Play Games una mail non l'hanno mai esposta): si popola al primo
+        // login Google successivo.
+        AddColumnIfMissing(connection, "external_identities", "email", "TEXT");
     }
 
     private static void AddColumnIfMissing(

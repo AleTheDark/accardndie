@@ -4,7 +4,7 @@ namespace AccardND.Server.Progression;
 
 /// <summary>
 /// Esito di una partita da registrare. Winner: 0 = PlayerA, 1 = PlayerB, -1 = nessuno.
-/// EndedReason: 'normal' | 'forfeit' | 'timeout' | 'disconnect'.
+/// EndedReason: 'normal' | 'forfeit' | 'timeout' | 'disconnect' | 'server_shutdown'.
 /// </summary>
 public sealed record MatchOutcome(
     AccountIdentity PlayerA,

@@ -26,22 +26,43 @@ namespace AccardND.Network
     {
         private readonly ConcurrentQueue<Envelope> inbox = new();
 
+        /// <summary>
+        /// La caduta del socket viene segnalata una volta sola e sul thread di chi
+        /// pompa (cioè il main thread di Unity): il receive loop gira in background e
+        /// da lì non si possono toccare né UI né API di Unity.
+        /// </summary>
+        private bool disconnectReported = true;
+
         public bool TryDequeueMessage(out Envelope envelope)
         {
             PumpIncoming();
             return inbox.TryDequeue(out envelope);
         }
 
+        /// <summary>
+        /// true una volta sola, alla prima chiamata dopo che il socket è caduto.
+        /// Chiudere di proposito (Dispose) non conta come caduta.
+        /// </summary>
+        public bool PollDisconnected()
+        {
+            PumpIncoming();
+            if (disconnectReported || !HasClosed)
+                return false;
+            disconnectReported = true;
+            return true;
+        }
+
         public static T ParsePayload<T>(Envelope envelope) where T : class =>
             envelope?.payload != null ? JsonUtility.FromJson<T>(envelope.payload) : null;
 
         /// <summary>Doppia codifica: payload tipizzato dentro la busta di trasporto.</summary>
-        private static string BuildEnvelopeJson(string type, object payload)
+        private static string BuildEnvelopeJson(string type, object payload, string requestId)
         {
             var envelope = new Envelope
             {
                 type = type,
-                payload = payload != null ? JsonUtility.ToJson(payload) : "{}"
+                payload = payload != null ? JsonUtility.ToJson(payload) : "{}",
+                requestId = requestId
             };
             return JsonUtility.ToJson(envelope);
         }
@@ -58,26 +79,37 @@ namespace AccardND.Network
 #if !UNITY_WEBGL || UNITY_EDITOR
         private ClientWebSocket socket;
         private CancellationTokenSource lifetime;
+        private volatile bool socketClosed;
 
         public bool IsConnected => socket is { State: WebSocketState.Open };
+
+        private bool HasClosed => socketClosed;
 
         public async Task ConnectAsync(string url)
         {
             if (IsConnected)
                 return;
 
+            // La stessa istanza viene riusata dalla riconnessione: il socket vecchio
+            // va rilasciato, non lasciato appeso.
+            lifetime?.Cancel();
+            lifetime?.Dispose();
+            socket?.Dispose();
+
             socket = new ClientWebSocket();
             lifetime = new CancellationTokenSource();
+            socketClosed = false;
             await socket.ConnectAsync(new Uri(url), lifetime.Token);
-            _ = ReceiveLoopAsync(lifetime.Token);
+            disconnectReported = false;
+            _ = ReceiveLoopAsync(socket, lifetime.Token);
         }
 
-        public async Task SendAsync(string type, object payload = null)
+        public async Task SendAsync(string type, object payload = null, string requestId = null)
         {
             if (!IsConnected)
                 throw new InvalidOperationException("Client non connesso.");
 
-            byte[] bytes = Encoding.UTF8.GetBytes(BuildEnvelopeJson(type, payload));
+            byte[] bytes = Encoding.UTF8.GetBytes(BuildEnvelopeJson(type, payload, requestId));
             await socket.SendAsync(
                 new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, lifetime.Token);
         }
@@ -87,15 +119,15 @@ namespace AccardND.Network
         {
         }
 
-        private async Task ReceiveLoopAsync(CancellationToken cancellation)
+        private async Task ReceiveLoopAsync(ClientWebSocket owner, CancellationToken cancellation)
         {
             var buffer = new byte[16 * 1024];
             var message = new StringBuilder();
             try
             {
-                while (!cancellation.IsCancellationRequested && socket.State == WebSocketState.Open)
+                while (!cancellation.IsCancellationRequested && owner.State == WebSocketState.Open)
                 {
-                    WebSocketReceiveResult result = await socket.ReceiveAsync(
+                    WebSocketReceiveResult result = await owner.ReceiveAsync(
                         new ArraySegment<byte>(buffer), cancellation);
                     if (result.MessageType == WebSocketMessageType.Close)
                         break;
@@ -110,12 +142,20 @@ namespace AccardND.Network
             }
             catch (Exception exception) when (exception is WebSocketException or OperationCanceledException)
             {
-                // Connessione persa o chiusura volontaria: la coda smette di riempirsi.
+                // Connessione persa o chiusura volontaria.
+            }
+            finally
+            {
+                // Solo se e' ancora il socket corrente: un loop vecchio non deve
+                // dichiarare caduta la connessione appena riaperta.
+                if (ReferenceEquals(owner, socket))
+                    socketClosed = true;
             }
         }
 
         public void Dispose()
         {
+            disconnectReported = true;
             lifetime?.Cancel();
             socket?.Dispose();
             lifetime?.Dispose();
@@ -139,10 +179,18 @@ namespace AccardND.Network
 
         public bool IsConnected => opened && socketId >= 0 && AccardNdWsState(socketId) == StateOpen;
 
+        /// <summary>Caduta solo se il socket era stato aperto davvero: un connect fallito lo segnala da sé.</summary>
+        private bool HasClosed => opened && (socketId < 0 || AccardNdWsState(socketId) == StateClosed);
+
         public async Task ConnectAsync(string url)
         {
             if (IsConnected)
                 return;
+
+            // Riconnessione sulla stessa istanza: chiudi il socket precedente.
+            if (socketId >= 0)
+                AccardNdWsClose(socketId);
+            opened = false;
 
             socketId = AccardNdWsConnect(url);
             if (socketId < 0)
@@ -156,6 +204,7 @@ namespace AccardND.Network
                 if (state == StateOpen)
                 {
                     opened = true;
+                    disconnectReported = false;
                     return;
                 }
                 if (state == StateClosed)
@@ -166,12 +215,12 @@ namespace AccardND.Network
             }
         }
 
-        public Task SendAsync(string type, object payload = null)
+        public Task SendAsync(string type, object payload = null, string requestId = null)
         {
             if (!IsConnected)
                 throw new InvalidOperationException("Client non connesso.");
 
-            AccardNdWsSend(socketId, BuildEnvelopeJson(type, payload));
+            AccardNdWsSend(socketId, BuildEnvelopeJson(type, payload, requestId));
             return Task.CompletedTask;
         }
 
@@ -188,6 +237,7 @@ namespace AccardND.Network
 
         public void Dispose()
         {
+            disconnectReported = true;
             if (socketId >= 0)
                 AccardNdWsClose(socketId);
             socketId = -1;

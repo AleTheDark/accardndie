@@ -24,6 +24,9 @@ public sealed class ServerConfig
     /// <summary>Login username/password legacy (dev). Da spegnere in produzione.</summary>
     public bool AllowPasswordAuth { get; set; } = true;
 
+    /// <summary>Broker OAuth Google per i client senza browser integrato (Android nativo).</summary>
+    public GoogleOAuthConfig GoogleOAuth { get; set; } = new();
+
     public int LoadoutBudget { get; set; } = 60;
     public int LoadoutCardCount { get; set; } = 9;
     public int[] CardCostByValue { get; set; } = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
@@ -147,6 +150,38 @@ public sealed class ServerConfig
         .OrderBy(entry => entry.Key)
         .Select(entry => new DieCostDto { sides = entry.Key, cost = entry.Value })
         .ToArray();
+}
+
+/// <summary>
+/// Broker OAuth Google. Il client ID e' quello Web gia' usato dal login del
+/// browser: e' pubblico (sta nell'index.html della build WebGL) e va tenuto
+/// identico, perche' e' quello che il provider Google di UGS accetta ed e' cio'
+/// che fa coincidere il PlayerId tra APK e PWA. Il secret invece non si committa:
+/// va passato via env var ACCARDND_GOOGLE_CLIENT_SECRET.
+/// </summary>
+public sealed class GoogleOAuthConfig
+{
+    public string ClientId { get; set; } =
+        "866249556431-mgdm97uvov7mjvect4bp453dpp2oe48u.apps.googleusercontent.com";
+
+    /// <summary>Consigliato lasciarlo vuoto qui e usare l'env var.</summary>
+    public string ClientSecret { get; set; } = string.Empty;
+
+    /// <summary>Deve stare tra gli "URI di reindirizzamento autorizzati" del client OAuth.</summary>
+    public string RedirectUri { get; set; } = "https://accardndie.com/auth/google/callback";
+
+    /// <summary>Quanto resta valida una richiesta di login in attesa del browser.</summary>
+    public int RequestTtlMinutes { get; set; } = 10;
+
+    public string ResolveClientSecret()
+    {
+        string fromEnv = Environment.GetEnvironmentVariable("ACCARDND_GOOGLE_CLIENT_SECRET");
+        return string.IsNullOrEmpty(fromEnv) ? ClientSecret : fromEnv;
+    }
+
+    /// <summary>Senza secret il broker resta spento e Android ripiega sull'account locale.</summary>
+    public bool IsEnabled =>
+        !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ResolveClientSecret());
 }
 
 /// <summary>

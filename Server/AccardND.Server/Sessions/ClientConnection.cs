@@ -27,13 +27,53 @@ public sealed class ClientConnection
     public bool IsAuthenticated => Identity != null;
     public bool IsOpen => socket.State == WebSocketState.Open;
 
-    public async Task SendAsync(string type, object payload, CancellationToken cancellation = default)
+    // --- Correlazione richiesta/risposta ---
+    //
+    // Il router apre un "ambito di risposta" prima di eseguire un messaggio con
+    // requestId: la prima cosa che spediamo da lì lo eredita, così il client sa a
+    // quale richiesta appartiene. Gli invii verso l'altro giocatore (broadcast di
+    // match) partono da un'altra connessione e restano senza requestId, che è
+    // esattamente quello che vogliamo.
+    private string replyRequestId;
+    private RequestDedupStore.CachedReply? capturedReply;
+
+    public void BeginReplyScope(string requestId)
     {
-        var envelope = new Envelope
+        replyRequestId = requestId;
+        capturedReply = null;
+    }
+
+    /// <summary>Chiude l'ambito e restituisce la risposta spedita, se c'è stata.</summary>
+    public bool EndReplyScope(out RequestDedupStore.CachedReply reply)
+    {
+        reply = capturedReply ?? default;
+        bool captured = capturedReply.HasValue;
+        replyRequestId = null;
+        capturedReply = null;
+        return captured;
+    }
+
+    public Task SendAsync(string type, object payload, CancellationToken cancellation = default)
+    {
+        string json = payload != null
+            ? JsonSerializer.Serialize(payload, payload.GetType(), JsonOptions)
+            : "{}";
+        return SendRawAsync(type, json, cancellation);
+    }
+
+    /// <summary>Invia un payload già serializzato: usato per rigiocare una risposta memorizzata.</summary>
+    public async Task SendRawAsync(string type, string payloadJson, CancellationToken cancellation = default)
+    {
+        string requestId = replyRequestId;
+        if (requestId != null)
         {
-            type = type,
-            payload = payload != null ? JsonSerializer.Serialize(payload, payload.GetType(), JsonOptions) : "{}"
-        };
+            // Solo la prima risposta dell'ambito viene correlata e memorizzata:
+            // quello che segue è già flusso spontaneo.
+            replyRequestId = null;
+            capturedReply = new RequestDedupStore.CachedReply(type, payloadJson);
+        }
+
+        var envelope = new Envelope { type = type, payload = payloadJson ?? "{}", requestId = requestId };
         byte[] bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(envelope, JsonOptions));
 
         await sendLock.WaitAsync(cancellation);

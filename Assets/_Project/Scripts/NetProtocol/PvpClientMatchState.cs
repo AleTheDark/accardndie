@@ -520,6 +520,16 @@ namespace AccardND.NetProtocol
         private string PlayerName(int player) =>
             player == MyIndex ? "TU" : OpponentName.Length > 0 ? OpponentName : $"G{player}";
 
+        /// <summary>
+        /// Avviso di rete nel registro del match (disconnessioni, rientri): non viene
+        /// dal motore, ma il giocatore lo legge nello stesso posto.
+        /// </summary>
+        public void AddNotice(string message)
+        {
+            AddLog(message);
+            Changed?.Invoke();
+        }
+
         private void AddLog(string message)
         {
             log.Add(message);

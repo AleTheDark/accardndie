@@ -105,9 +105,9 @@ namespace AccardND.Network
         /// Compra un consumabile. Il miele cambia lato server, quindi la cache di
         /// progressione va poi riallineata con <see cref="RefreshAsync"/>.
         /// </summary>
-        public async Task<SanctuaryData> BuySanctuaryItemAsync(string itemId)
+        public async Task<SanctuaryData> BuySanctuaryItemAsync(string itemId, string offerId = null)
         {
-            SanctuaryData data = await server.BuySanctuaryItemAsync(itemId);
+            SanctuaryData data = await server.BuySanctuaryItemAsync(itemId, offerId);
             IsSynced = true;
             return data;
         }

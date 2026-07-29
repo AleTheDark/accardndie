@@ -11,6 +11,16 @@ namespace AccardND.NetProtocol
     {
         public string type;
         public string payload;
+
+        /// <summary>
+        /// Correlazione richiesta/risposta. Il client lo genera per ogni richiesta, il
+        /// server lo ricopia sulla risposta diretta: senza, due richieste in volo con la
+        /// stessa risposta attesa si scambierebbero l'esito. Sui messaggi spontanei del
+        /// server (eventi di match, presenza amici...) resta vuoto.
+        /// Vale anche da chiave di idempotenza: un rinvio dopo una riconnessione porta
+        /// lo stesso requestId e il server risponde senza rieseguire la mutazione.
+        /// </summary>
+        public string requestId;
     }
 
     public static class MessageTypes
@@ -20,6 +30,9 @@ namespace AccardND.NetProtocol
         public const string AuthRegister = "auth.register";
         public const string AuthLogin = "auth.login";
         public const string AuthUgs = "auth.ugs";
+
+        /// <summary>Riaggancio di una sessione già autenticata dopo una caduta di rete.</summary>
+        public const string AuthSession = "auth.session";
         public const string AuthResponse = "auth.response";
         public const string NicknameSet = "account.nickname.set";
         public const string NicknameResponse = "account.nickname.response";
@@ -42,8 +55,15 @@ namespace AccardND.NetProtocol
         public const string MatchStart = "match.start";
         public const string MatchHand = "match.hand";
         public const string MatchAction = "match.action";
+        public const string MatchActionAck = "match.action.ack";
         public const string MatchEvent = "match.event";
         public const string MatchOpponentLeft = "match.opponent_left";
+
+        // Riconnessione: la caduta del socket mette il match in pausa invece di
+        // assegnare subito la sconfitta (vedi ServerConfig.DisconnectTimeoutSeconds).
+        public const string MatchOpponentDisconnected = "match.opponent_disconnected";
+        public const string MatchOpponentReconnected = "match.opponent_reconnected";
+        public const string MatchResume = "match.resume";
 
         public const string StatsGet = "stats.get";
         public const string StatsData = "stats.data";
@@ -112,6 +132,7 @@ namespace AccardND.NetProtocol
         public const string InvalidLoadout = "invalid_loadout";
         public const string InvalidAction = "invalid_action";
         public const string NotInMatch = "not_in_match";
+        public const string MatchPaused = "match_paused";
         public const string InvalidProgressionRequest = "invalid_progression_request";
         public const string InsufficientHoney = "insufficient_honey";
         public const string RewardClaimNotFound = "reward_claim_not_found";

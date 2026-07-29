@@ -34,6 +34,7 @@ namespace AccardND.PvpUi
             public Action OnLeaveRoom;
             public Action OnLoadout;
             public Action OnProfile;
+            public Action OnSettings;
             public Action OnRefreshRooms;
         }
 
@@ -219,16 +220,12 @@ namespace AccardND.PvpUi
             statusText.color = Color.clear;
             PvpUiFactory.SetAnchors((RectTransform)statusText.transform, Vector2.zero, Vector2.zero);
 
-            CreateHeaderActionButton(
-                content, "Mail", 0, () => callbacks.OnProfile?.Invoke(),
-                new Vector2(0.735f, 0.872f), new Vector2(0.815f, 0.928f));
-            CreateHeaderActionButton(
-                content, "Inventory", 1, () => callbacks.OnLoadout?.Invoke(),
-                new Vector2(0.825f, 0.872f), new Vector2(0.905f, 0.928f));
-            CreateHeaderActionButton(
-                content, "Settings", 2, () => callbacks.OnClose?.Invoke(),
-                new Vector2(0.915f, 0.872f), new Vector2(0.995f, 0.928f));
-            AddMailNotification(content);
+            CreateSharedHeaderActionButton(
+                content, "Hub", "UI/SharedHeader/hub_house", () => callbacks.OnClose?.Invoke(),
+                new Vector2(0.80f, 0.883f), new Vector2(0.885f, 0.962f));
+            CreateSharedHeaderActionButton(
+                content, "Settings", "UI/SharedHeader/settings_gear", () => callbacks.OnSettings?.Invoke(),
+                new Vector2(0.90f, 0.883f), new Vector2(0.985f, 0.962f));
 
             // --- Fascia titolo del portale multiplayer ---
             RectTransform titleBand = PvpUiFactory.CreateScreenTitlePanel(
@@ -590,6 +587,31 @@ namespace AccardND.PvpUi
             }
             image.sprite = LoadCroppedSprite(
                 HeaderActionStripResource, crop, new Vector2(2048f, 684f));
+            image.preserveAspect = true;
+            image.color = Color.white;
+
+            Button button = holder.GetComponent<Button>();
+            button.targetGraphic = image;
+            if (onClick != null)
+                button.onClick.AddListener(onClick);
+            MmoUiTheme.ApplyButtonColors(button);
+            MmoUiTheme.AddMotion(button);
+            PvpUiFactory.SetAnchors((RectTransform)holder.transform, min, max);
+            return button;
+        }
+
+        private static Button CreateSharedHeaderActionButton(
+            Transform parent,
+            string name,
+            string resourcePath,
+            UnityAction onClick,
+            Vector2 min,
+            Vector2 max)
+        {
+            var holder = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            holder.transform.SetParent(parent, false);
+            Image image = holder.GetComponent<Image>();
+            image.sprite = Resources.Load<Sprite>(resourcePath);
             image.preserveAspect = true;
             image.color = Color.white;
 

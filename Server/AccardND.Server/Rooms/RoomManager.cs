@@ -59,6 +59,16 @@ public sealed class RoomManager
         return true;
     }
 
+    /// <summary>
+    /// Stanza in cui un giocatore è atteso dopo una caduta di rete, se la finestra
+    /// non è ancora scaduta. Le stanze vive sono poche: la scansione lineare basta.
+    /// </summary>
+    public Room FindAwaitingReconnect(string playerId) =>
+        string.IsNullOrEmpty(playerId)
+            ? null
+            : roomsByCode.Values.FirstOrDefault(
+                room => room.IsAwaitingReconnect && room.DisconnectedPlayerId == playerId);
+
     public void Remove(Room room)
     {
         if (room == null)
@@ -68,6 +78,18 @@ public sealed class RoomManager
             room.Host.CurrentRoom = null;
         if (room.Guest != null)
             room.Guest.CurrentRoom = null;
+    }
+
+    public async Task DrainMatchesAsync()
+    {
+        Room[] snapshot = roomsByCode.Values.ToArray();
+        foreach (Room room in snapshot)
+        {
+            room.EndReconnectWait()?.Cancel();
+            if (room.Session != null)
+                await room.Session.RecordServerShutdownAsync();
+            Remove(room);
+        }
     }
 
     private static string GenerateCode()

@@ -25,7 +25,9 @@ builder.Services.AddSingleton(provider =>
 });
 builder.Services.AddSingleton<AccardDatabase>();
 builder.Services.AddSingleton<AccountService>();
+builder.Services.AddSingleton<GoogleIdTokenReader>();
 builder.Services.AddSingleton<UgsAuthService>();
+builder.Services.AddSingleton<GoogleOAuthBroker>();
 builder.Services.AddSingleton<SeasonService>();
 builder.Services.AddSingleton<StatsService>();
 builder.Services.AddSingleton<RankedService>();
@@ -35,10 +37,13 @@ builder.Services.AddSingleton<HallOfFameService>();
 builder.Services.AddSingleton<AchievementService>();
 builder.Services.AddSingleton<SinglePlayerProgressService>();
 builder.Services.AddSingleton<PresenceRegistry>();
+builder.Services.AddSingleton<SessionTokenRegistry>();
+builder.Services.AddSingleton<RequestDedupStore>();
 builder.Services.AddSingleton<FriendService>();
 builder.Services.AddSingleton<MatchResultRecorder>();
 builder.Services.AddHostedService<SeasonRolloverService>();
 builder.Services.AddSingleton<RoomManager>();
+builder.Services.AddHostedService<MatchDrainService>();
 builder.Services.AddSingleton<MatchmakingQueue>();
 builder.Services.AddSingleton<MessageRouter>();
 builder.Services.AddSingleton<AdminAuth>();
@@ -55,6 +60,11 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 // Pannello admin (pagina + API su /admin/*). Attivo solo se e configurata una
 // password admin (env var ACCARDND_ADMIN_PASSWORD o serverconfig Admin.Password).
 app.MapAdminEndpoints();
+
+// Broker OAuth Google per i client senza browser integrato (APK Android):
+// scambia il codice col Web Client ID del login web, cosi' lo stesso account
+// Google resta lo stesso PlayerId UGS su APK e PWA.
+app.MapGoogleAuthEndpoints();
 
 app.Map("/ws", async context =>
 {

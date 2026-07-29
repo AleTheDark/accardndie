@@ -46,6 +46,13 @@ namespace AccardND.NetProtocol
         public int[] decisiveIndices;
     }
 
+    /// <summary>Conferma che il server ha accettato ed eseguito una mossa.</summary>
+    [Serializable]
+    public sealed class MatchActionAck
+    {
+        public bool accepted;
+    }
+
     /// <summary>Evento di match, forma appiattita per JsonUtility: i campi non
     /// pertinenti al tipo restano a zero. "type" replica il nome dell'evento
     /// del motore (es. "AttackResolved", "RoundStarted").</summary>
@@ -112,6 +119,39 @@ namespace AccardND.NetProtocol
     public sealed class MatchEventBatch
     {
         public MatchEventDto[] events;
+    }
+
+    /// <summary>
+    /// L'avversario ha perso la connessione: il match è in pausa e nessuno dei due
+    /// può agire finché non rientra o non scade la finestra di riconnessione.
+    /// </summary>
+    [Serializable]
+    public sealed class MatchOpponentDisconnected
+    {
+        public string opponentName;
+
+        /// <summary>Secondi che restano prima della vittoria a tavolino.</summary>
+        public int secondsRemaining;
+    }
+
+    [Serializable]
+    public sealed class MatchOpponentReconnected
+    {
+        public string opponentName;
+    }
+
+    /// <summary>
+    /// Stato completo spedito a chi rientra dopo una disconnessione: il client
+    /// ricostruisce la partita riapplicando il log eventi dall'inizio, senza animazioni.
+    /// La mano è privata e non passa dal log, quindi viaggia a parte.
+    /// </summary>
+    [Serializable]
+    public sealed class MatchResumeState
+    {
+        public string opponentName;
+        public int yourPlayerIndex;
+        public MatchEventDto[] events;
+        public MatchHand hand;
     }
 
     [Serializable]
