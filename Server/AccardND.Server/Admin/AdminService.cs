@@ -91,10 +91,25 @@ public sealed class AdminService
         var accountsBySource = new List<object>();
         using (SqliteCommand command = connection.CreateCommand())
         {
-            command.CommandText = "SELECT source, COUNT(*) FROM accounts GROUP BY source ORDER BY COUNT(*) DESC";
+            // Gli account 'external' arrivano tutti da un token UGS: quello che
+            // interessa e' il metodo dietro al token (Google o ospite anonimo).
+            command.CommandText = @"
+                SELECT a.source,
+                       (SELECT ei.auth_method FROM external_identities ei
+                        WHERE ei.player_id = a.player_id
+                        ORDER BY ei.last_login_at DESC LIMIT 1) AS auth_method,
+                       COUNT(*)
+                FROM accounts a
+                GROUP BY a.source, auth_method
+                ORDER BY COUNT(*) DESC";
             using SqliteDataReader reader = command.ExecuteReader();
             while (reader.Read())
-                accountsBySource.Add(new { source = reader.GetString(0), count = reader.GetInt32(1) });
+                accountsBySource.Add(new
+                {
+                    source = reader.GetString(0),
+                    authMethod = NullableString(reader, 1),
+                    count = reader.GetInt32(2)
+                });
         }
 
         string activeSeason = ScalarString(connection,
@@ -173,7 +188,51 @@ public sealed class AdminService
 
     // ---- Lista giocatori ----------------------------------------------------
 
-    public object GetPlayers(string search, int limit, int offset)
+    /// <summary>La ricerca copre anche la mail dell'identita' Google: e' il modo
+    /// piu' diretto per accorgersi che due account sono la stessa persona.</summary>
+    private const string PlayerSearchFilter = @"
+        a.username_ci LIKE $q OR lower(a.player_id) LIKE $q
+        OR EXISTS (SELECT 1 FROM external_identities ei
+                   WHERE ei.player_id = a.player_id AND lower(ei.email) LIKE $q)";
+
+    /// <summary>
+    /// Colonne ordinabili dalla tabella giocatori. E' una whitelist: la chiave
+    /// arriva dal client, il pezzo di SQL no, quindi nessun input finisce mai
+    /// dentro la query. Una chiave sconosciuta ricade sull'ordinamento di default.
+    /// </summary>
+    private static readonly Dictionary<string, string> PlayerSortColumns =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["name"] = "a.username_ci",
+            ["source"] = "a.source",
+            // Il livello da solo non basta: a parita' di livello conta l'esperienza.
+            ["level"] = "account_level, account_experience",
+            ["exp"] = "account_total_experience",
+            ["honey"] = "honey",
+            ["matches"] = "matches",
+            ["wins"] = "wins",
+            ["losses"] = "losses",
+            ["created"] = "a.created_at",
+            ["lastLogin"] = "a.last_login_at"
+        };
+
+    private static string BuildPlayerOrderBy(string sort, bool descending)
+    {
+        if (!PlayerSortColumns.TryGetValue(sort ?? string.Empty, out string columns))
+        {
+            // Default: ultimi accessi in cima, chi non ha mai fatto login in fondo.
+            return "(a.last_login_at IS NULL), a.last_login_at DESC";
+        }
+
+        string direction = descending ? "DESC" : "ASC";
+        string ordered = string.Join(", ",
+            columns.Split(',').Select(column => column.Trim() + " " + direction));
+        // Tiebreak stabile: senza, due righe uguali possono scambiarsi di posto
+        // tra una pagina e l'altra.
+        return ordered + ", a.player_id ASC";
+    }
+
+    public object GetPlayers(string search, int limit, int offset, string sort = null, bool descending = true)
     {
         limit = Math.Clamp(limit, 1, 200);
         offset = Math.Max(0, offset);
@@ -186,7 +245,7 @@ public sealed class AdminService
         using (SqliteCommand count = connection.CreateCommand())
         {
             count.CommandText = hasSearch
-                ? "SELECT COUNT(*) FROM accounts WHERE username_ci LIKE $q OR lower(player_id) LIKE $q"
+                ? "SELECT COUNT(*) FROM accounts a WHERE " + PlayerSearchFilter
                 : "SELECT COUNT(*) FROM accounts";
             if (hasSearch) count.Parameters.AddWithValue("$q", like);
             total = Convert.ToInt32(count.ExecuteScalar());
@@ -199,12 +258,25 @@ public sealed class AdminService
                 SELECT a.player_id, a.username, a.source, a.created_at, a.last_login_at,
                        COALESCE(sp.honey, 0) AS honey,
                        COALESCE(st.matches, 0) AS matches,
-                       COALESCE(st.wins, 0) AS wins
+                       COALESCE(st.wins, 0) AS wins,
+                       (SELECT ei.auth_method FROM external_identities ei
+                        WHERE ei.player_id = a.player_id
+                        ORDER BY ei.last_login_at DESC LIMIT 1) AS auth_method,
+                       (SELECT ei.email FROM external_identities ei
+                        WHERE ei.player_id = a.player_id AND ei.email IS NOT NULL
+                        ORDER BY ei.last_login_at DESC LIMIT 1) AS email,
+                       COALESCE(sp.account_level, 1) AS account_level,
+                       COALESCE(sp.account_experience, 0) AS account_experience,
+                       COALESCE(sp.account_experience_to_next_level, 100) AS account_experience_to_next,
+                       COALESCE(sp.account_total_experience, 0) AS account_total_experience,
+                       COALESCE(st.losses, 0) AS losses,
+                       n.nickname AS nickname
                 FROM accounts a
                 LEFT JOIN single_player_progress sp ON sp.player_id = a.player_id
+                LEFT JOIN account_nicknames n ON n.player_id = a.player_id
                 LEFT JOIN player_stats st ON st.player_id = a.player_id AND st.scope = 'lifetime'
-                " + (hasSearch ? "WHERE a.username_ci LIKE $q OR lower(a.player_id) LIKE $q " : "") + @"
-                ORDER BY (a.last_login_at IS NULL), a.last_login_at DESC
+                " + (hasSearch ? "WHERE " + PlayerSearchFilter + " " : "") + @"
+                ORDER BY " + BuildPlayerOrderBy(sort, descending) + @"
                 LIMIT $limit OFFSET $offset";
             if (hasSearch) command.Parameters.AddWithValue("$q", like);
             command.Parameters.AddWithValue("$limit", limit);
@@ -221,7 +293,16 @@ public sealed class AdminService
                     lastLoginAt = NullableString(reader, 4),
                     honey = reader.GetInt32(5),
                     matches = reader.GetInt32(6),
-                    wins = reader.GetInt32(7)
+                    wins = reader.GetInt32(7),
+                    authMethod = NullableString(reader, 8),
+                    email = NullableString(reader, 9),
+                    accountLevel = reader.GetInt32(10),
+                    accountExperience = reader.GetInt32(11),
+                    accountExperienceToNextLevel = reader.GetInt32(12),
+                    accountTotalExperience = reader.GetInt32(13),
+                    losses = reader.GetInt32(14),
+                    nickname = NullableString(reader, 15),
+                    online = presence.IsOnline(reader.GetString(0))
                 });
             }
         }
@@ -245,7 +326,13 @@ public sealed class AdminService
                        COALESCE(sp.account_level, 1), COALESCE(sp.account_experience, 0),
                        COALESCE(sp.account_experience_to_next_level, 100),
                        COALESCE(sp.account_total_experience, 0),
-                       sp.updated_at, p.selected_icon_id, p.bio, n.nickname
+                       sp.updated_at, p.selected_icon_id, p.bio, n.nickname,
+                       (SELECT ei.auth_method FROM external_identities ei
+                        WHERE ei.player_id = a.player_id
+                        ORDER BY ei.last_login_at DESC LIMIT 1) AS auth_method,
+                       (SELECT ei.email FROM external_identities ei
+                        WHERE ei.player_id = a.player_id AND ei.email IS NOT NULL
+                        ORDER BY ei.last_login_at DESC LIMIT 1) AS email
                 FROM accounts a
                 LEFT JOIN single_player_progress sp ON sp.player_id = a.player_id
                 LEFT JOIN profiles p ON p.player_id = a.player_id
@@ -273,6 +360,8 @@ public sealed class AdminService
                 selectedIconId = NullableString(reader, 13),
                 bio = NullableString(reader, 14),
                 nickname = NullableString(reader, 15),
+                authMethod = NullableString(reader, 16),
+                email = NullableString(reader, 17),
                 online = presence.IsOnline(playerId)
             };
         }

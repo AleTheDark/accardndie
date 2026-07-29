@@ -56,8 +56,15 @@ public static class AdminEndpoints
         app.MapGet("/admin/api/timeseries", (HttpContext context, int? days) =>
             Guard(context, auth, () => Results.Ok(service.GetTimeseries(days ?? 30))));
 
+        // sort/desc si leggono dalla query invece di farli legare: i minimal API
+        // risponderebbero 400 se un client vecchio non li mandasse.
         app.MapGet("/admin/api/players", (HttpContext context, string search, int? limit, int? offset) =>
-            Guard(context, auth, () => Results.Ok(service.GetPlayers(search, limit ?? 50, offset ?? 0))));
+            Guard(context, auth, () => Results.Ok(service.GetPlayers(
+                search,
+                limit ?? 50,
+                offset ?? 0,
+                context.Request.Query["sort"],
+                context.Request.Query["desc"] != "false"))));
 
         app.MapGet("/admin/api/players/{id}", (HttpContext context, string id) =>
             Guard(context, auth, () =>

@@ -51,6 +51,24 @@ Aggiungere il blocco `location /admin` di
 [`deploy/accardndie-nginx.conf`](deploy/accardndie-nginx.conf) dentro il `server { }`,
 `sudo nginx -t`, `sudo systemctl reload nginx`.
 
+## Colonne della tab Giocatori
+
+Nome (con nickname sotto, se diverso, e il badge *online*), fonte, **livello** con
+l'esperienza verso il prossimo (`40/220`), **esperienza totale**, miele, match,
+vittorie, sconfitte, data di registrazione e ultimo login. Cliccando la riga si
+apre il dettaglio completo. Chi non ha mai giocato al single player mostra i
+valori di partenza (livello 1, `0/100`), perché la riga di progressione non esiste
+ancora.
+
+## Mail degli account Google
+
+Nella lista giocatori, sotto la fonte, compare la mail dell'account Google; la
+ricerca la usa come chiave, quindi si possono trovare i doppioni cercando
+l'indirizzo. Si popola **solo dai login Google successivi al 2026-07-29** (prima
+non veniva salvata) e **non esiste per gli account Google Play Games**, che dal
+provider ricevevano un id giocatore e mai l'indirizzo. Dettagli in
+[login-google-android.md](login-google-android.md).
+
 ## Sicurezza
 
 - Login con username+password (confronto constant-time); il login riuscito emette

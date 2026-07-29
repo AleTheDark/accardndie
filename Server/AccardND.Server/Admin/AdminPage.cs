@@ -162,13 +162,16 @@ tbody tr:hover{background:var(--panel2)}
     <div id="tab-players" class="tab hidden">
       <section class="panel">
         <div class="toolbar">
-          <input id="playerSearch" placeholder="Cerca nome o player_id…" style="min-width:260px">
+          <input id="playerSearch" placeholder="Cerca nome, mail o player_id…" style="min-width:260px">
           <span class="spacer"></span>
           <span class="muted" id="playersCount"></span>
         </div>
-        <table><thead><tr>
-          <th>Nome</th><th>Fonte</th><th>Miele</th><th>Match</th><th>Win</th>
-          <th>Registrato</th><th>Ultimo login</th>
+        <table><thead><tr id="playersHead">
+          <th data-sort="name">Nome</th><th data-sort="source">Fonte</th>
+          <th data-sort="level">Liv.</th><th data-sort="exp">Exp tot.</th>
+          <th data-sort="honey">Miele</th><th data-sort="matches">Match</th>
+          <th data-sort="wins">Win</th><th data-sort="losses">Sconfitte</th>
+          <th data-sort="created">Registrato</th><th data-sort="lastLogin">Ultimo login</th>
         </tr></thead><tbody id="playersBody"></tbody></table>
       </section>
     </div>
@@ -250,6 +253,18 @@ function fmtDay(s){ if(!s) return '—'; const d=new Date(s); return isNaN(d)?s:
 function esc(s){ return (s??'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function el(id){ return document.getElementById(id); }
 
+// 'external' dice solo che l'account nasce da un token Unity Authentication:
+// il metodo vero (Google o ospite anonimo) sta in auth_method.
+// 'google.com' e' quello che arriva dal claim firmato nel token UGS; 'google' e'
+// il valore che dichiara il client quando il token non porta il provider.
+const AUTH_LABELS={'google':'Google','google.com':'Google',
+  'google-play-games':'Google Play Games','play-games':'Google Play Games',
+  'anonymous':'ospite anonimo','unknown':'metodo sconosciuto'};
+function authLabel(m){ return m ? (AUTH_LABELS[m]||m) : 'metodo sconosciuto'; }
+function sourceLabel(source,method){
+  return source==='external' ? authLabel(method) : source;
+}
+
 async function api(path, opts={}){
   const res = await fetch(API+path, {
     ...opts,
@@ -307,7 +322,7 @@ let seriesCache=null;
 async function loadOverview(){
   const o = await api('/overview');
   el('online').textContent=o.onlineNow;
-  const bySource=(o.accountsBySource||[]).map(s=>esc(s.source)+': '+s.count).join(' · ')||'—';
+  const bySource=(o.accountsBySource||[]).map(s=>esc(sourceLabel(s.source,s.authMethod))+': '+s.count).join(' · ')||'—';
   const kpis=[
     ['Account totali',o.totalAccounts,`+${o.newAccounts7d} in 7g · +${o.newAccounts30d} in 30g`],
     ['Attivi (24h)',o.activePlayers24h,`${o.activePlayers7d} in 7 giorni`],
@@ -374,18 +389,48 @@ function staticLegend(metrics){
 /* ---- Players ---- */
 let searchTimer=null;
 el('playerSearch').addEventListener('input',()=>{ clearTimeout(searchTimer); searchTimer=setTimeout(loadPlayers,250); });
+
+// L'ordinamento lo fa il server: ordinare qui riguarderebbe solo la pagina
+// caricata, e con piu' account della pagina il risultato sarebbe sbagliato.
+let playerSort={key:'lastLogin',desc:true};
+// I testuali partono crescenti (A->Z), i numerici e le date decrescenti.
+const SORT_STARTS_ASC=['name','source'];
+
+el('playersHead').addEventListener('click',event=>{
+  const th=event.target.closest('th[data-sort]');
+  if(!th) return;
+  const key=th.dataset.sort;
+  if(playerSort.key===key) playerSort.desc=!playerSort.desc;
+  else playerSort={key,desc:!SORT_STARTS_ASC.includes(key)};
+  loadPlayers();
+});
+
+function paintSortIndicators(){
+  el('playersHead').querySelectorAll('th[data-sort]').forEach(th=>{
+    if(th.dataset.label===undefined) th.dataset.label=th.textContent;
+    th.style.cursor='pointer';
+    th.style.userSelect='none';
+    const active=th.dataset.sort===playerSort.key;
+    th.textContent=th.dataset.label+(active?(playerSort.desc?' ▼':' ▲'):'');
+    th.style.color=active?'var(--gold)':'';
+  });
+}
+
 async function loadPlayers(){
   const q=encodeURIComponent(el('playerSearch').value||'');
-  const data=await api(`/players?search=${q}&limit=100`);
+  const data=await api(`/players?search=${q}&limit=100&sort=${playerSort.key}&desc=${playerSort.desc}`);
+  paintSortIndicators();
   el('playersCount').textContent=`${data.total} account`;
   el('playersBody').innerHTML=data.players.map(p=>`
     <tr data-id="${esc(p.playerId)}">
-      <td>${esc(p.username)}</td>
-      <td><span class="tag">${esc(p.source)}</span></td>
-      <td>${p.honey}</td><td>${p.matches}</td><td>${p.wins}</td>
+      <td>${esc(p.username)}${p.online?' <span class="tag win">online</span>':''}${p.nickname&&p.nickname!==p.username?`<div class="muted" style="font-size:12px;margin-top:3px">${esc(p.nickname)}</div>`:''}</td>
+      <td><span class="tag">${esc(p.source)}</span>${p.source==='external'?` <span class="tag">${esc(authLabel(p.authMethod))}</span>`:''}${p.email?`<div class="muted" style="font-size:12px;margin-top:3px">${esc(p.email)}</div>`:''}</td>
+      <td>${p.accountLevel}<div class="muted" style="font-size:12px">${p.accountExperience}/${p.accountExperienceToNextLevel}</div></td>
+      <td>${p.accountTotalExperience}</td>
+      <td>${p.honey}</td><td>${p.matches}</td><td>${p.wins}</td><td>${p.losses}</td>
       <td class="muted">${fmtDay(p.createdAt)}</td>
       <td class="muted">${fmtDate(p.lastLoginAt)}</td>
-    </tr>`).join('') || `<tr><td colspan="7" class="muted">Nessun risultato</td></tr>`;
+    </tr>`).join('') || `<tr><td colspan="10" class="muted">Nessun risultato</td></tr>`;
   el('playersBody').querySelectorAll('tr[data-id]').forEach(tr=>
     tr.addEventListener('click',()=>openPlayer(tr.dataset.id)));
 }
@@ -400,7 +445,8 @@ async function openPlayer(id){
   let html=`<h2>${esc(a.username)} ${a.online?'<span class="tag win">online</span>':''}</h2>
     <div class="mono muted" style="margin-bottom:1em">${esc(a.playerId)}</div>
     <div class="grid2">
-      ${f('Fonte',esc(a.source))}
+      ${f('Fonte',esc(a.source)+(a.source==='external'?' <span class="muted" style="font-size:12px">'+esc(authLabel(a.authMethod))+'</span>':''))}
+      ${f('Mail',a.email?esc(a.email):'<span class="muted">non registrata</span>')}
       ${f('Registrato',fmtDate(a.createdAt))}
       ${f('Ultimo login',fmtDate(a.lastLoginAt))}
       ${f('Miele',a.honey)}

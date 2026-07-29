@@ -21,16 +21,19 @@ Formato: ogni voce ha priorità, contesto e cosa fare. Aggiorna la data quando t
   in `PvpUgsAuth.cs`.
 - **Rischio se ignorato:** quando Unity dismette il provider, il login Google web smette di funzionare.
 
-### Completare la configurazione Google Play Games per Android
+### Google Play Games dismesso: setup del broker OAuth per Android
 - **Priorità:** alta quando si testerà l'APK (non è codice, è setup esterno)
-- **Aggiornato:** 2026-07-20
-- **Contesto:** il codice Android nativo è pronto (define `GPGS_AUTH` attivo, GameInfo configurato), ma il
-  login riesce solo con la config esterna completa.
-- **Cosa fare:**
-  1. Google Play Console → Play Games Services: registrare la **SHA-1** del keystore di firma sull'OAuth
-     client Android + aggiungere il proprio account come **tester**.
-  2. Unity Cloud → Authentication: il provider **Google Play Games** è già aggiunto; verificare client ID
-     (`866249556431-…`) e **client secret** del web client.
+- **Aggiornato:** 2026-07-29
+- **Contesto:** GPGS è stato **rimosso dal flusso di login** perché è un provider UGS distinto da
+  "Sign in with Google": lo stesso account Google otteneva due `PlayerId` diversi (browser vs APK) e
+  sdoppiava i profili. Android usa ora il broker OAuth sul nostro server
+  (`Server/AccardND.Server/Accounts/GoogleOAuthBroker.cs`), che scambia il codice con lo **stesso Web
+  Client ID** del login web. Vedi [`Docs/login-google-android.md`](Docs/login-google-android.md).
+- **Cosa fare:** completare il setup esterno (redirect URI in Google Cloud Console, env var
+  `ACCARDND_GOOGLE_CLIENT_SECRET`, blocco `location /auth/` in nginx) e poi testare l'APK.
+- **Residuo:** il plugin `Assets/GooglePlayGames/` e le dipendenze gradle sono ancora nel progetto ma non
+  più usati dal login. Andrebbero disinstallati per alleggerire l'APK ed evitare l'auto sign-in dell'SDK
+  Play Games v2 (che mostra il suo popup pur non entrando più nel nostro flusso).
 
 ---
 
@@ -47,6 +50,21 @@ Non sono bug bloccanti, ma debito di robustezza/UX/manutenzione.
   per 60s e poi vede un timeout generico.
 - **Cosa fare:** valutare un fallback con **`google.accounts.id.renderButton`** (bottone reale, robusto),
   oppure gestire l'errore FedCM, o accorciare il timeout con un messaggio di retry chiaro.
+
+### `PvpClientSmokeTest` usa ancora il login con password
+- **Priorità:** bassa
+- **Aggiornato:** 2026-07-29
+- **Contesto:** con `AllowPasswordAuth: false` gli account username/password sono
+  rifiutati dal server, ma `Assets/_Project/Scripts/Network/PvpClientSmokeTest.cs` continua a
+  registrarsi/loggarsi così: la sua autenticazione ora fallisce sempre.
+- **Cosa fare:** riscriverlo sul login UGS, oppure farlo puntare a un server locale con
+  `AllowPasswordAuth: true`, oppure rimuoverlo se non serve più.
+
+### `AccardND.GuestMode` è un PlayerPref scritto e mai letto
+- **Priorità:** molto bassa
+- **Contesto:** `LoginScreenPrototype` e `BattleBoardController.SetupViews` scrivono la chiave
+  (sempre a 0), nessuno la legge. Residuo di una modalità ospite mai completata.
+- **Cosa fare:** togliere le scritture.
 
 ### Manca il logout / cambio account
 - **Priorità:** media
@@ -70,12 +88,12 @@ Non sono bug bloccanti, ma debito di robustezza/UX/manutenzione.
   quando cambia uno solo.
 - **Cosa fare:** centralizzare in un unico punto di config (es. ScriptableObject) letto da tutti.
 
-### Timeout/cancellazione mancanti su resume e GPGS
+### Timeout/cancellazione mancanti sul resume di sessione
 - **Priorità:** bassa
-- **Contesto:** `TryResumeSessionAsync` e i `TaskCompletionSource` di GPGS
-  (`Authenticate`/`RequestServerSideAccess`) non hanno timeout: se una callback dell'SDK non scatta mai, il
-  flusso può restare appeso (a differenza del path web che ha il guard a 60s).
-- **Cosa fare:** aggiungere timeout/cancellazione anche a questi percorsi.
+- **Aggiornato:** 2026-07-29
+- **Contesto:** `TryResumeSessionAsync` non ha timeout: se la callback dell'SDK non scatta mai il flusso può
+  restare appeso. Gli altri percorsi ora un guard ce l'hanno (web 60s, Android brokerato 300s).
+- **Cosa fare:** aggiungere timeout/cancellazione anche a questo percorso.
 
 ### `LoginScreenPrototype` costruisce tutta la UI in codice
 - **Priorità:** bassa
@@ -141,6 +159,36 @@ Non sono bug bloccanti, ma debito di robustezza/UX/manutenzione.
   sblocco carte) è guidato da `BattleBoardController.Campaign`/`.CampaignProgress` (~1.480 righe), non
   coperti. Non esistono test PlayMode.
 - **Cosa fare:** estrarre la logica di progressione dal controller (vedi god object) e coprirla con test.
+
+---
+
+## Rete / resilienza (annotato 2026-07-29)
+
+### 18 test di gioco rossi: le regole sono cambiate, i test no
+- **Priorità:** alta (una suite rossa smette di proteggere: nessuno guarda più il risultato)
+- **Aggiornato:** 2026-07-29
+- **Contesto:** su 150 test PlayMode ne falliscono 18, tutti in `CombatResolverTests`,
+  `PvpMatchEngineTests`, `CampaignDeckStateTests`, `RunProgressStateTests`. Non c'entrano con la rete:
+  sono attese vecchie rispetto alle regole attuali (attachment 2-4, aure, ricompense miniboss, code di
+  tiri esaurite perché il motore ne consuma un numero diverso).
+- **Cosa fare:** decidere caso per caso se ha ragione il test o il codice, e riallineare.
+
+### `SendAsync` fire-and-forget può ancora perdere un messaggio in silenzio
+- **Priorità:** bassa (oggi riguarda solo messaggi idempotenti)
+- **Aggiornato:** 2026-07-29
+- **Contesto:** `PvpServerMessageDispatcher.SendAsync` mette in coda (con requestId) solo se il socket
+  risulta già chiuso. Nella finestra in cui il socket è ancora `Open` ma la rete è morta il frame parte,
+  muore nel buffer e nessuno se ne accorge. Le mutazioni critiche non passano più di qui — usano
+  `RequestAsync` con ACK e coda persistente — e `campaign.report_kills` è passato anche lui alla
+  richiesta correlata (2026-07-29). Restano `friends.*` e `profile.set_icon`.
+- **Cosa fare:** se uno di questi diventa non idempotente, dargli un ACK e farlo passare da `RequestAsync`.
+
+### Il dedup ricorda anche le mosse di match, che scadono in pochi minuti
+- **Priorità:** molto bassa (spazio, non correttezza)
+- **Contesto:** `request_dedup` tiene 8 giorni ogni riga, incluse le `match.action`, che sono rigiocabili
+  solo finché la partita è viva. Le righe si spazzano da sole a ogni scrittura, quindi non crescono senza
+  limite, ma è memoria sprecata.
+- **Cosa fare:** se il DB dovesse gonfiarsi, differenziare la scadenza per tipo di messaggio.
 
 ---
 
