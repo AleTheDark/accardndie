@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- Riusa i sorgenti di gioco della build Unity: unica fonte di verità per le regole. -->
+  <ItemGroup>
+    <Compile Include="..\..\Assets\_Project\Scripts\GameCore\**\*.cs" LinkBase="Shared\GameCore" />
+    <Compile Include="..\..\Assets\_Project\Scripts\NetProtocol\**\*.cs" LinkBase="Shared\NetProtocol" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="serverconfig.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="cardcatalog.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.3.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.2" />
+  </ItemGroup>
+
+</Project>

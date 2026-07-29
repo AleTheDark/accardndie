@@ -35,6 +35,10 @@ nul+
 .idea/
 
 # --- Server .NET ---
+# I progetti del server sono scritti a mano, non generati da Unity: la regola
+# *.csproj qui sopra li prenderebbe, e senza di loro il server non si compila
+# da un clone pulito.
+!Server/**/*.csproj
 [Bb]in/
 Server/**/appsettings.Development.json
 Server/AccardND.Server/accounts.json

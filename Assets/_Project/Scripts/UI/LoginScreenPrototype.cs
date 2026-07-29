@@ -22,6 +22,8 @@ namespace AccardND.UI
         private const string NicknamePrefsKey = "AccardND.PvpNickname";
         private const string PlayerHudNamePrefsKey = "AccardND.PlayerHudName";
         private const string GuestModePrefsKey = "AccardND.GuestMode";
+        private const string LoginProviderPrefsKey = "AccardND.LoginProvider";
+        private const string GoogleLoginProvider = "google";
         private const int NicknameMaxLength = 18;
         private static Sprite anonymousButtonSprite;
         private static Sprite rankedButtonSprite;
@@ -41,9 +43,10 @@ namespace AccardND.UI
 
         private async void Start()
         {
-            // Ripristina automaticamente solo l'identita' Google. Una sessione
-            // anonima salvata deve invece lasciare visibile la schermata di accesso.
-            if (PlayerPrefs.GetInt(GuestModePrefsKey, 0) == 0)
+            // Ripristina soltanto sessioni create da un accesso Google confermato.
+            // Token delle versioni precedenti o di origine incerta non devono
+            // saltare la scelta dell'account.
+            if (PlayerPrefs.GetString(LoginProviderPrefsKey, string.Empty) == GoogleLoginProvider)
                 await TryResumeSessionAsync();
             else
             {
@@ -75,11 +78,22 @@ namespace AccardND.UI
                     return;
                 }
 
+                if (!PvpUgsAuth.IsCurrentSessionGoogle())
+                {
+                    PvpUgsAuth.ForgetSession();
+                    PlayerPrefs.DeleteKey(LoginProviderPrefsKey);
+                    PlayerPrefs.Save();
+                    SetStatus("Accedi con Google per continuare.");
+                    SetButtonsInteractable(true);
+                    busy = false;
+                    return;
+                }
+
                 signedInAccessToken = accessToken;
                 SetGuestMode(false);
                 SetStatus($"Bentornato ({provider}).");
-                await ConnectAccountServerAsync();
-                OpenMainScene();
+                if (await ConnectAccountServerAsync(false))
+                    OpenMainScene();
             }
             catch (System.Exception exception)
             {
@@ -125,7 +139,7 @@ namespace AccardND.UI
                 panel,
                 "Status",
                 "Controllo aggiornamenti e accesso al tuo account di gioco.",
-                20,
+                24,
                 TextAnchor.MiddleCenter,
                 new Color(0.88f, 0.92f, 0.96f));
             MmoUiTheme.StyleAsScreenTitle(statusText);
@@ -159,11 +173,13 @@ namespace AccardND.UI
             SetButtonsInteractable(false);
             try
             {
+                PlayerPrefs.DeleteKey(LoginProviderPrefsKey);
+                PlayerPrefs.Save();
                 SetGuestMode(false);
                 await CheckForUpdatesAsync();
                 await AuthenticateWithGoogleAsync();
-                await ConnectAccountServerAsync();
-                OpenMainScene();
+                if (await ConnectAccountServerAsync(true))
+                    OpenMainScene();
             }
             catch (System.Exception exception)
             {
@@ -197,22 +213,22 @@ namespace AccardND.UI
                 throw new System.InvalidOperationException(provider ?? "token mancante");
 
             signedInAccessToken = accessToken;
+            PlayerPrefs.SetString(LoginProviderPrefsKey, GoogleLoginProvider);
+            PlayerPrefs.Save();
             SetStatus($"Accesso completato ({provider}).");
             await WaitSecondsAsync(0.25f);
         }
 
         private static string GoogleLoginLabel()
         {
-#if UNITY_WEBGL && !UNITY_EDITOR
-            return "Google";
-#elif UNITY_ANDROID
-            return "Google Play Games";
-#else
+#if UNITY_EDITOR
             return "Unity Authentication";
+#else
+            return "Google";
 #endif
         }
 
-        private async Task ConnectAccountServerAsync()
+        private async Task<bool> ConnectAccountServerAsync(bool allowNicknameSelection)
         {
             SetStatus("Controllo account di gioco...");
             serverClient?.Dispose();
@@ -225,7 +241,9 @@ namespace AccardND.UI
             await serverClient.SendAsync(MessageTypes.AuthUgs, new UgsLoginRequest
             {
                 accessToken = signedInAccessToken,
-                displayName = string.Empty
+                displayName = string.Empty,
+                authMethod = PvpUgsAuth.CurrentAuthMethod(),
+                googleIdToken = PvpUgsAuth.LastGoogleIdToken
             });
 
             AuthResponse auth = await WaitForMessageAsync<AuthResponse>(MessageTypes.AuthResponse, 12f);
@@ -234,6 +252,20 @@ namespace AccardND.UI
 
             if (auth.requiresNickname)
             {
+                if (!allowNicknameSelection)
+                {
+                    serverClient.Dispose();
+                    serverClient = null;
+                    signedInAccessToken = null;
+                    PvpUgsAuth.ForgetSession();
+                    PlayerPrefs.DeleteKey(LoginProviderPrefsKey);
+                    PlayerPrefs.Save();
+                    SetStatus("Accedi con Google per scegliere o recuperare il tuo account.");
+                    SetButtonsInteractable(true);
+                    busy = false;
+                    return false;
+                }
+
                 auth.username = await RequireNicknameAsync();
                 auth.requiresNickname = false;
             }
@@ -243,8 +275,26 @@ namespace AccardND.UI
             AccountServerSession.Adopt(
                 serverClient,
                 new PvpServerMessageDispatcher(serverClient),
-                auth);
+                auth,
+                ServerUrl,
+                BuildGoogleRefreshRequestAsync);
             serverClient = null;
+            return true;
+        }
+
+        private static async Task<UgsLoginRequest> BuildGoogleRefreshRequestAsync()
+        {
+            var resume = await PvpUgsAuth.TryResumeSessionAsync();
+            string accessToken = resume.AccessToken;
+            return string.IsNullOrEmpty(accessToken)
+                ? null
+                : new UgsLoginRequest
+                {
+                    accessToken = accessToken,
+                    displayName = string.Empty,
+                    authMethod = PvpUgsAuth.CurrentAuthMethod(),
+                    googleIdToken = PvpUgsAuth.LastGoogleIdToken
+                };
         }
 
         private async Task<string> RequireNicknameAsync()
@@ -421,8 +471,8 @@ namespace AccardND.UI
             SetRect(frame.rectTransform, position, new Vector2(510f, 58f));
 
             InputField input = frame.gameObject.AddComponent<InputField>();
-            Text text = CreateText(frame.transform, "Text", string.Empty, 24, TextAnchor.MiddleLeft, Color.white);
-            Text hint = CreateText(frame.transform, "Placeholder", placeholder, 20, TextAnchor.MiddleLeft, new Color(0.72f, 0.65f, 0.78f, 0.72f));
+            Text text = CreateText(frame.transform, "Text", string.Empty, 30, TextAnchor.MiddleLeft, Color.white);
+            Text hint = CreateText(frame.transform, "Placeholder", placeholder, 26, TextAnchor.MiddleLeft, new Color(0.72f, 0.65f, 0.78f, 0.72f));
             SetStretch(text.rectTransform, 24f, 18f);
             SetStretch(hint.rectTransform, 24f, 18f);
             input.textComponent = text;

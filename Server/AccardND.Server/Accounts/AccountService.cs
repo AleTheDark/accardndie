@@ -152,11 +152,13 @@ public sealed class AccountService
             link.Transaction = transaction;
             link.CommandText = @"
                 INSERT INTO external_identities
-                    (provider, external_id, player_id, created_at, last_login_at)
-                VALUES ($provider, $external, $player, $now, $now)";
+                    (provider, external_id, player_id, auth_method, email, created_at, last_login_at)
+                VALUES ($provider, $external, $player, $method, $email, $now, $now)";
             link.Parameters.AddWithValue("$provider", external.Provider);
             link.Parameters.AddWithValue("$external", external.ExternalId);
             link.Parameters.AddWithValue("$player", playerId);
+            link.Parameters.AddWithValue("$method", external.AuthMethod ?? UgsAuthService.AuthMethodUnknown);
+            link.Parameters.AddWithValue("$email", (object)external.Email ?? DBNull.Value);
             link.Parameters.AddWithValue("$now", now);
             link.ExecuteNonQuery();
         }
@@ -164,18 +166,33 @@ public sealed class AccountService
         using (SqliteCommand update = connection.CreateCommand())
         {
             update.Transaction = transaction;
+            // Un accesso che non sa dire come e' avvenuto (client vecchio, resume
+            // senza PlayerInfo) non deve cancellare il metodo gia' noto.
             update.CommandText = @"
                 UPDATE accounts SET last_login_at=$now WHERE player_id=$id;
-                UPDATE external_identities SET last_login_at=$now
+                UPDATE external_identities
+                SET last_login_at=$now,
+                    auth_method=CASE WHEN $method=$unknown THEN auth_method ELSE $method END,
+                    email=COALESCE($email, email)
                 WHERE provider=$provider AND external_id=$external;";
             update.Parameters.AddWithValue("$now", now);
+            update.Parameters.AddWithValue("$email", (object)external.Email ?? DBNull.Value);
             update.Parameters.AddWithValue("$id", playerId);
             update.Parameters.AddWithValue("$provider", external.Provider);
             update.Parameters.AddWithValue("$external", external.ExternalId);
+            update.Parameters.AddWithValue("$method", external.AuthMethod ?? UgsAuthService.AuthMethodUnknown);
+            update.Parameters.AddWithValue("$unknown", UgsAuthService.AuthMethodUnknown);
             update.ExecuteNonQuery();
         }
 
-        RecordLoginEvent(connection, transaction, playerId, external.Provider, now);
+        // Nello storico login finisce il metodo puntuale (google, anonymous...):
+        // cosi' resta traccia anche se in seguito l'account viene ricollegato.
+        string loginProvider =
+            string.IsNullOrEmpty(external.AuthMethod)
+            || external.AuthMethod == UgsAuthService.AuthMethodUnknown
+                ? external.Provider
+                : external.AuthMethod;
+        RecordLoginEvent(connection, transaction, playerId, loginProvider, now);
 
         string username;
         using (SqliteCommand query = connection.CreateCommand())
@@ -251,6 +268,27 @@ public sealed class AccountService
         {
             return new NicknameChangeResult(null, "Nickname gia in uso.");
         }
+    }
+
+    /// <summary>
+    /// Rilegge dal database l'account di un'identità già nota. Serve alla ripresa di
+    /// sessione: il token è stato emesso prima, e nel frattempo il nickname può essere
+    /// cambiato. Restituisce null se l'account non c'è più.
+    /// </summary>
+    public (AccountIdentity Identity, bool RequiresNickname) Reload(AccountIdentity current)
+    {
+        if (string.IsNullOrEmpty(current?.PlayerId))
+            return (null, false);
+
+        using SqliteConnection connection = database.Open();
+        using SqliteCommand query = connection.CreateCommand();
+        query.CommandText = "SELECT username FROM accounts WHERE player_id=$id";
+        query.Parameters.AddWithValue("$id", current.PlayerId);
+        string username = Convert.ToString(query.ExecuteScalar());
+        if (string.IsNullOrEmpty(username))
+            return (null, false);
+
+        return (new AccountIdentity(current.PlayerId, username), !HasNickname(connection, current.PlayerId));
     }
 
     private static bool HasNickname(SqliteConnection connection, string playerId)

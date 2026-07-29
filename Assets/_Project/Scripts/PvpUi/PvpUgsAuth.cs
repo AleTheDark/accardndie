@@ -2,22 +2,18 @@ using System.Threading.Tasks;
 using AccardND.Network;
 #if UGS_AUTH
 using System;
+using System.Security.Cryptography;
+using System.Text;
 using Unity.Services.Authentication;
 using Unity.Services.Core;
 using UnityEngine;
+using UnityEngine.Networking;
 #if UNITY_EDITOR
 using System.Net;
-using System.Security.Cryptography;
-using System.Text;
-using UnityEngine.Networking;
 #endif
 #endif
 #if UGS_AUTH && UNITY_WEBGL && !UNITY_EDITOR
 using System.Runtime.InteropServices;
-#endif
-#if UGS_AUTH && GPGS_AUTH
-using GooglePlayGames;
-using GooglePlayGames.BasicApi;
 #endif
 
 namespace AccardND.PvpUi
@@ -30,6 +26,12 @@ namespace AccardND.PvpUi
     /// </summary>
     public static class PvpUgsAuth
     {
+        /// <summary>Valori di <see cref="CurrentAuthMethod"/>, condivisi col server.</summary>
+        public const string AuthMethodGoogle = "google";
+        public const string AuthMethodGooglePlayGames = "google-play-games";
+        public const string AuthMethodAnonymous = "anonymous";
+        public const string AuthMethodUnknown = "unknown";
+
 #if UGS_AUTH
 #if UNITY_EDITOR
         public const string EditorGoogleClientIdPrefsKey = "AccardND.GoogleOAuth.EditorClientId";
@@ -40,6 +42,15 @@ namespace AccardND.PvpUi
 #endif
 
         public static bool IsAvailable => true;
+
+        /// <summary>
+        /// ID token dell'ultimo login Google interattivo, da mandare al server
+        /// insieme al token UGS: il server ne verifica la firma e ne ricava la
+        /// mail, che nel pannello admin dice a quale account Google corrisponde
+        /// un giocatore. Resta null sui resume di sessione, dove Google non entra
+        /// in gioco e la mail gia' salvata non va toccata.
+        /// </summary>
+        public static string LastGoogleIdToken { get; private set; }
 
         /// <summary>Ritorna (accessToken, provider) oppure (null, messaggio di errore).</summary>
         public static async Task<(string AccessToken, string Result)> SignInWithGoogleAsync()
@@ -57,10 +68,10 @@ namespace AccardND.PvpUi
 
 #if UNITY_EDITOR
                 return await SignInWithEditorGoogleAsync();
-#elif UNITY_WEBGL && !UNITY_EDITOR
+#elif UNITY_WEBGL
                 return await SignInWithWebGoogleAsync();
-#elif UNITY_ANDROID && GPGS_AUTH
-                return await SignInWithGooglePlayGamesAsync();
+#elif UNITY_ANDROID
+                return await SignInWithBrokeredGoogleAsync();
 #else
                 return (null, "Login Google non disponibile su questa piattaforma.");
 #endif
@@ -72,26 +83,57 @@ namespace AccardND.PvpUi
             }
         }
 
-        public static async Task<(string AccessToken, string Result)> SignInAnonymouslyAsync()
+        public static Task<(string AccessToken, string Result)> SignInAsync() => SignInWithGoogleAsync();
+
+        /// <summary>
+        /// Come si e' autenticata davvero la sessione UGS corrente: "google",
+        /// "google-play-games", "anonymous" o il TypeId dell'identita' collegata.
+        /// Va letto dopo il login (anche dopo un resume di sessione, dove il
+        /// risultato della SignIn dice solo "ugs-session") e mandato al server:
+        /// e' l'unico modo per sapere nel pannello admin se dietro l'account
+        /// esterno c'e' un Google vero o un ospite anonimo.
+        /// </summary>
+        public static string CurrentAuthMethod()
         {
             try
             {
-                if (UnityServices.State != ServicesInitializationState.Initialized)
-                    await UnityServices.InitializeAsync();
-
                 if (!AuthenticationService.Instance.IsSignedIn)
-                    await AuthenticationService.Instance.SignInAnonymouslyAsync();
-                return (AuthenticationService.Instance.AccessToken,
-                    "ugs-anonymous");
+                    return AuthMethodUnknown;
+
+                var identities = AuthenticationService.Instance.PlayerInfo?.Identities;
+                if (identities == null || identities.Count == 0)
+                    return AuthMethodAnonymous;
+
+                // TypeId sono gli id provider di UGS: "google.com" per il login
+                // Google, "google-play-games" per Google Play Games.
+                foreach (var identity in identities)
+                {
+                    string typeId = identity?.TypeId;
+                    if (string.IsNullOrEmpty(typeId))
+                        continue;
+                    if (typeId.IndexOf("play-games", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return AuthMethodGooglePlayGames;
+                    if (typeId.IndexOf("google", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return AuthMethodGoogle;
+                    return typeId.ToLowerInvariant();
+                }
+
+                return AuthMethodAnonymous;
             }
             catch (System.Exception exception)
             {
-                Debug.LogWarning($"[PvP] Login UGS fallito: {exception.Message}");
-                return (null, exception.Message);
+                Debug.LogWarning($"[PvP] Metodo di accesso UGS non determinabile: {exception.Message}");
+                return AuthMethodUnknown;
             }
         }
 
-        public static Task<(string AccessToken, string Result)> SignInAsync() => SignInWithGoogleAsync();
+        /// <summary>
+        /// Solo "google" vale come sessione buona. Google Play Games e' un provider
+        /// UGS distinto: lo stesso account Google ci arrivava con un PlayerId diverso
+        /// e sdoppiava il profilo, quindi le vecchie sessioni play-games vengono
+        /// scartate e l'utente rifa' l'accesso con Google.
+        /// </summary>
+        public static bool IsCurrentSessionGoogle() => CurrentAuthMethod() == AuthMethodGoogle;
 
 #if UNITY_EDITOR
         private static async Task<(string AccessToken, string Result)> SignInWithEditorGoogleAsync()
@@ -109,9 +151,7 @@ namespace AccardND.PvpUi
             string state = CreateUrlSafeRandom(32);
             string nonce = CreateUrlSafeRandom(32);
             string codeVerifier = CreateUrlSafeRandom(64);
-            string codeChallenge;
-            using (SHA256 sha = SHA256.Create())
-                codeChallenge = Base64Url(sha.ComputeHash(Encoding.ASCII.GetBytes(codeVerifier)));
+            string codeChallenge = Sha256Base64Url(codeVerifier);
 
             using var listener = new HttpListener();
             listener.Prefixes.Add(EditorGoogleRedirectUri);
@@ -192,6 +232,7 @@ namespace AccardND.PvpUi
                 return (null, "Google ha restituito un ID token con nonce non valido.");
 
             await AuthenticationService.Instance.SignInWithGoogleAsync(tokenResponse.id_token);
+            LastGoogleIdToken = tokenResponse.id_token;
             return (AuthenticationService.Instance.AccessToken, "google-editor");
         }
 
@@ -208,17 +249,6 @@ namespace AccardND.PvpUi
             await response.OutputStream.WriteAsync(bytes, 0, bytes.Length);
             response.Close();
         }
-
-        private static string CreateUrlSafeRandom(int byteCount)
-        {
-            byte[] bytes = new byte[byteCount];
-            using (RandomNumberGenerator random = RandomNumberGenerator.Create())
-                random.GetBytes(bytes);
-            return Base64Url(bytes);
-        }
-
-        private static string Base64Url(byte[] bytes) =>
-            Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
         private static bool IdTokenHasNonce(string idToken, string expectedNonce)
         {
@@ -254,6 +284,23 @@ namespace AccardND.PvpUi
         }
 #endif
 
+        private static string CreateUrlSafeRandom(int byteCount)
+        {
+            byte[] bytes = new byte[byteCount];
+            using (RandomNumberGenerator random = RandomNumberGenerator.Create())
+                random.GetBytes(bytes);
+            return Base64Url(bytes);
+        }
+
+        private static string Base64Url(byte[] bytes) =>
+            Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+        private static string Sha256Base64Url(string value)
+        {
+            using SHA256 sha = SHA256.Create();
+            return Base64Url(sha.ComputeHash(Encoding.ASCII.GetBytes(value)));
+        }
+
         /// <summary>
         /// Riprende una sessione già salvata senza login interattivo. Ritorna
         /// (accessToken, "ugs-session") se c'è una sessione valida, altrimenti
@@ -288,6 +335,18 @@ namespace AccardND.PvpUi
             }
         }
 
+        /// <summary>
+        /// Elimina la sessione UGS e il relativo token persistito, obbligando
+        /// il prossimo accesso a passare nuovamente dal provider Google.
+        /// </summary>
+        public static void ForgetSession()
+        {
+            LastGoogleIdToken = null;
+            if (AuthenticationService.Instance.IsSignedIn ||
+                AuthenticationService.Instance.SessionTokenExists)
+                AuthenticationService.Instance.SignOut(true);
+        }
+
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")] private static extern int AccardNdGoogleSignInStart();
         [DllImport("__Internal")] private static extern int AccardNdGoogleSignInState(int id);
@@ -314,6 +373,7 @@ namespace AccardND.PvpUi
                             return (null, "ID token Google vuoto.");
 
                         await AuthenticationService.Instance.SignInWithGoogleAsync(idToken);
+                        LastGoogleIdToken = idToken;
                         return (AuthenticationService.Instance.AccessToken, "google-web");
                     }
 
@@ -336,49 +396,183 @@ namespace AccardND.PvpUi
             ptr != IntPtr.Zero ? Marshal.PtrToStringUTF8(ptr) : null;
 #endif
 
-#if UNITY_ANDROID && GPGS_AUTH
-        private static async Task<(string AccessToken, string Result)> SignInWithGooglePlayGamesAsync()
+#if UNITY_ANDROID && !UNITY_EDITOR
+        // Stesso host del WebSocket di gioco (wss://accardndie.com/ws): se cambia
+        // il dominio vanno aggiornati entrambi.
+        private const string GoogleBrokerBaseUrl = "https://accardndie.com";
+
+        // Il giro passa dal browser di sistema: serve tempo per scegliere
+        // l'account, e nel frattempo l'app resta in background.
+        private const float BrokerTimeoutSeconds = 300f;
+        private const float BrokerPollSeconds = 2f;
+
+        /// <summary>
+        /// Login Google su Android nativo, mediato dal nostro server.
+        ///
+        /// L'app non parla direttamente con Google: un client OAuth "Android"
+        /// produrrebbe un ID token con audience diversa da quella configurata sul
+        /// provider Google di UGS, e Google non accetta redirect loopback per i
+        /// client Android. Il broker sul server usa invece lo stesso Web Client ID
+        /// del login web, quindi lo stesso account Google produce lo stesso
+        /// PlayerId UGS del browser: niente profili sdoppiati tra APK e PWA.
+        ///
+        /// Flusso: begin (l'app manda l'hash di un verifier monouso e riceve
+        /// requestId + URL) -> browser di sistema -> callback sul server, che
+        /// scambia il codice -> l'app ritira l'ID token mostrando il verifier.
+        /// </summary>
+        private static async Task<(string AccessToken, string Result)> SignInWithBrokeredGoogleAsync()
         {
-            PlayGamesPlatform.Activate();
+            string verifier = CreateUrlSafeRandom(48);
+            (string requestId, string authorizeUrl, string beginError) =
+                await BeginBrokeredGoogleAsync(Sha256Base64Url(verifier));
+            if (beginError != null)
+                return (null, beginError);
 
-            SignInStatus status = await AuthenticateGooglePlayGamesAsync();
-            if (status != SignInStatus.Success)
-                return (null, status.ToString());
+            Application.OpenURL(authorizeUrl);
 
-            string authCode = await RequestServerSideAccessAsync();
-            if (string.IsNullOrEmpty(authCode))
-                return (null, "Server auth code vuoto.");
+            // L'app finisce in background mentre l'utente sceglie l'account: il
+            // token resta in attesa sul server finche' non torna a ritirarlo.
+            float start = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - start < BrokerTimeoutSeconds)
+            {
+                await WaitSecondsAsync(BrokerPollSeconds);
 
-            await AuthenticationService.Instance.SignInWithGooglePlayGamesAsync(authCode);
-            return (AuthenticationService.Instance.AccessToken, "google-play-games");
+                (string idToken, string pollError, bool pending) =
+                    await PollBrokeredGoogleAsync(requestId, verifier);
+                if (pending)
+                    continue;
+                if (pollError != null)
+                    return (null, pollError);
+
+                await AuthenticationService.Instance.SignInWithGoogleAsync(idToken);
+                LastGoogleIdToken = idToken;
+                Debug.Log($"[Login][UGS] Google collegato al PlayerId {AuthenticationService.Instance.PlayerId}.");
+                return (AuthenticationService.Instance.AccessToken, "google-android");
+            }
+
+            return (null, "Timeout del login Google: riprova.");
         }
 
-        private static Task<SignInStatus> AuthenticateGooglePlayGamesAsync()
+        private static async Task<(string RequestId, string AuthorizeUrl, string Error)>
+            BeginBrokeredGoogleAsync(string challenge)
         {
-            var completion = new TaskCompletionSource<SignInStatus>();
-            PlayGamesPlatform.Instance.Authenticate(status => completion.TrySetResult(status));
-            return completion.Task;
+            string body = JsonUtility.ToJson(new BrokerBeginRequest { challenge = challenge });
+            (string payload, string error) = await PostJsonAsync(GoogleBrokerBaseUrl + "/auth/google/begin", body);
+            if (error != null)
+                return (null, null, error);
+
+            BrokerBeginResponse response = JsonUtility.FromJson<BrokerBeginResponse>(payload);
+            if (response == null || string.IsNullOrEmpty(response.requestId) ||
+                string.IsNullOrEmpty(response.authorizeUrl))
+            {
+                return (null, null, !string.IsNullOrEmpty(response?.error)
+                    ? response.error
+                    : "Il server non ha avviato il login Google.");
+            }
+
+            return (response.requestId, response.authorizeUrl, null);
         }
 
-        private static Task<string> RequestServerSideAccessAsync()
+        private static async Task<(string IdToken, string Error, bool Pending)>
+            PollBrokeredGoogleAsync(string requestId, string verifier)
         {
-            var completion = new TaskCompletionSource<string>();
-            PlayGamesPlatform.Instance.RequestServerSideAccess(false, code => completion.TrySetResult(code));
-            return completion.Task;
+            string body = JsonUtility.ToJson(new BrokerTokenRequest
+            {
+                requestId = requestId,
+                verifier = verifier
+            });
+            (string payload, string error) = await PostJsonAsync(GoogleBrokerBaseUrl + "/auth/google/token", body);
+            // Un errore di rete durante l'attesa non e' definitivo: il browser
+            // potrebbe non aver ancora finito. Si riprova al giro dopo.
+            if (error != null)
+                return (null, null, true);
+
+            BrokerTokenResponse response = JsonUtility.FromJson<BrokerTokenResponse>(payload);
+            if (response == null)
+                return (null, "Risposta del server non leggibile.", false);
+            if (response.status == "pending")
+                return (null, null, true);
+            if (response.status != "ready" || string.IsNullOrEmpty(response.idToken))
+                return (null, string.IsNullOrEmpty(response.error) ? "Login Google non riuscito." : response.error, false);
+
+            return (response.idToken, null, false);
+        }
+
+        private static async Task<(string Payload, string Error)> PostJsonAsync(string url, string json)
+        {
+            using UnityWebRequest request = new(url, "POST")
+            {
+                uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json)),
+                downloadHandler = new DownloadHandlerBuffer(),
+                timeout = 20
+            };
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            UnityWebRequestAsyncOperation operation = request.SendWebRequest();
+            while (!operation.isDone)
+                await PvpAsync.NextFrameAsync();
+
+            return request.result == UnityWebRequest.Result.Success
+                ? (request.downloadHandler.text, null)
+                : (null, $"Server non raggiungibile ({request.error}).");
+        }
+
+        private static async Task WaitSecondsAsync(float seconds)
+        {
+            float until = Time.realtimeSinceStartup + seconds;
+            while (Time.realtimeSinceStartup < until)
+                await PvpAsync.NextFrameAsync();
+        }
+
+        [Serializable]
+        private sealed class BrokerBeginRequest
+        {
+            public string challenge;
+        }
+
+        [Serializable]
+        private sealed class BrokerBeginResponse
+        {
+            public string requestId;
+            public string authorizeUrl;
+            public string error;
+        }
+
+        [Serializable]
+        private sealed class BrokerTokenRequest
+        {
+            public string requestId;
+            public string verifier;
+        }
+
+        [Serializable]
+        private sealed class BrokerTokenResponse
+        {
+            public string status;
+            public string idToken;
+            public string error;
         }
 #endif
 #else
         public static bool IsAvailable => false;
+
+        public static string LastGoogleIdToken => null;
 
         public static Task<(string AccessToken, string Result)> SignInAsync() =>
             Task.FromResult<(string, string)>((null, "Pacchetto Unity Authentication non installato."));
 
         public static Task<(string AccessToken, string Result)> SignInWithGoogleAsync() => SignInAsync();
 
-        public static Task<(string AccessToken, string Result)> SignInAnonymouslyAsync() => SignInAsync();
-
         public static Task<(string AccessToken, string Result)> TryResumeSessionAsync() =>
             Task.FromResult<(string, string)>((null, "no-session"));
+
+        public static string CurrentAuthMethod() => AuthMethodUnknown;
+
+        public static bool IsCurrentSessionGoogle() => false;
+
+        public static void ForgetSession()
+        {
+        }
 #endif
     }
 }
