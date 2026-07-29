@@ -49,7 +49,7 @@ namespace AccardND.GameData
                 HeroClass.Necromancer => "RIALZA UN ALLEATO ELIMINATO",
                 HeroClass.Priest => $"BENEDIZIONE +{blessing} A UN ALLEATO",
                 HeroClass.Assassin => "SCEGLIE UN NEMICO: SALTA IL TURNO",
-                HeroClass.Warrior => "PROSSIMO ATTACCO: SOMMA 2 DADI VIGORE",
+                HeroClass.Warrior => "PROSSIMO ATTACCO: SOMMA DADO VIGORE + DADO STEP -1",
                 HeroClass.Mage => "RIDUCE IL DADO VIGORE NEMICO",
                 HeroClass.Paladin => "SI RAFFORZA O PROTEGGE UN ALLEATO",
                 _ => string.Empty
@@ -64,7 +64,7 @@ namespace AccardND.GameData
 
             return heroClass switch
             {
-                HeroClass.Warrior => "Attiva l'abilita: al prossimo attacco tira due dadi Vigore e somma i risultati.",
+                HeroClass.Warrior => "Attiva l'abilita: al prossimo attacco tira il dado Vigore e un dado di uno step inferiore, poi somma i risultati.",
                 HeroClass.Barbarian => $"Se attacca ma non elimina il bersaglio, prepara Furia: +{rage} al prossimo attacco e alla prossima difesa.",
                 HeroClass.Paladin => "Il Paladino puo rafforzarsi o proteggere un alleato deviando un attacco su di se, si difendera con vantaggio.",
                 HeroClass.Rogue => "Abilita passiva: ogni dado Vigore ritira una volta se esce 1, in attacco e in difesa.",

@@ -1,5 +1,7 @@
 namespace AccardND.GameCore
 {
+    using AccardND.GameCore.Pvp;
+
     public enum CombatCertainty
     {
         Impossible,
@@ -58,7 +60,7 @@ namespace AccardND.GameCore
         {
             int attackerMinimumVigor = modifiers.SumAttackerVigor ? 2 : 1;
             int attackerMaximumVigor = modifiers.SumAttackerVigor
-                ? attackerDieSides * 2
+                ? attackerDieSides + PvpVigorScale.Lower(attackerDieSides)
                 : attackerDieSides;
             int defenderMinimumVigor = 1;
             int defenderMaximumVigor = defenderDieSides;

@@ -1,4 +1,5 @@
 using System;
+using AccardND.GameCore.Pvp;
 
 namespace AccardND.GameCore
 {
@@ -98,7 +99,7 @@ namespace AccardND.GameCore
         private VigorRollResult RollTwoAndSum(int dieSides, RerollRule reroll)
         {
             RollOutcome first = RollSingle(dieSides, reroll);
-            RollOutcome second = RollSingle(dieSides, reroll);
+            RollOutcome second = RollSingle(PvpVigorScale.Lower(dieSides), reroll);
             return new VigorRollResult(
                 dieSides,
                 first.Result,

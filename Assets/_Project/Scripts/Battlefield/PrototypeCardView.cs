@@ -556,6 +556,17 @@ namespace AccardND.Presentation
                 strengthText.text = value.ToString();
         }
 
+        public void SetCompactPreviewStrengthReadability(int fontSize)
+        {
+            if (strengthText == null)
+                return;
+
+            strengthText.fontSize = fontSize;
+            strengthText.resizeTextMaxSize = fontSize;
+            SetAnchors(strengthText.rectTransform, new Vector2(0.24f, -0.02f), new Vector2(0.76f, 0.36f));
+            strengthText.transform.SetAsLastSibling();
+        }
+
         public void SetComposableGolemForm(ComposableGolemForm form, bool animate = true)
         {
             composableGolemActiveForm = form;

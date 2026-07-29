@@ -39,7 +39,7 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
-        public void ResolveAttack_WarriorAbilitySumsTwoAttackerDice()
+        public void ResolveAttack_WarriorAbilitySumsVigorDieAndOneStepLowerDie()
         {
             var random = new FixedRandomSource(3, 4, 2);
             var resolver = new CombatResolver(random);
@@ -57,6 +57,29 @@ namespace AccardND.GameCore.Tests
             Assert.That(result.AttackerRoll.SecondRoll, Is.EqualTo(4));
             Assert.That(result.AttackerVigor, Is.EqualTo(7));
             Assert.That(result.DefenderRoll.HasSecondRoll, Is.False);
+        }
+
+        [TestCase(4, 3)]
+        [TestCase(6, 4)]
+        [TestCase(8, 6)]
+        [TestCase(10, 8)]
+        [TestCase(12, 10)]
+        [TestCase(20, 12)]
+        public void ResolveAttack_WarriorAbilityRollsSecondDieOneStepLower(int vigorDieSides, int expectedSecondDieSides)
+        {
+            var random = new RecordingRandomSource(1, 1, 1);
+            var resolver = new CombatResolver(random);
+            var attacker = new CombatCard("warrior", "Guerriero", HeroClass.Warrior, 5);
+            var defender = new CombatCard("tank", "Tank", HeroClass.Paladin, 5);
+
+            resolver.ResolveAttack(
+                attacker,
+                defender,
+                vigorDieSides,
+                new CombatModifiers(sumAttackerVigor: true, defenderAdvantage: false));
+
+            Assert.That(random.Maximums[0], Is.EqualTo(vigorDieSides));
+            Assert.That(random.Maximums[1], Is.EqualTo(expectedSecondDieSides));
         }
 
         [Test]
@@ -279,6 +302,24 @@ namespace AccardND.GameCore.Tests
 
             public int NextInclusive(int minimum, int maximum)
             {
+                return values.Dequeue();
+            }
+        }
+
+        private sealed class RecordingRandomSource : IRandomSource
+        {
+            private readonly Queue<int> values;
+
+            public RecordingRandomSource(params int[] values)
+            {
+                this.values = new Queue<int>(values);
+            }
+
+            public List<int> Maximums { get; } = new List<int>();
+
+            public int NextInclusive(int minimum, int maximum)
+            {
+                Maximums.Add(maximum);
                 return values.Dequeue();
             }
         }
