@@ -520,6 +520,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private Button modeSelectionHallOfFameButton;
 
 	private readonly List<Button> modeSelectionHotspotButtons = new List<Button>();
+	private readonly Dictionary<Button, RectTransform> modeSelectionHotspotRects = new Dictionary<Button, RectTransform>();
 	private Image accountBannerImage;
 	private RectTransform accountBannerPortraitRoot;
 	private Image accountBannerPortraitImage;
@@ -580,6 +581,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private Button adventureChapterBackButton;
 
 	private readonly List<GameObject> adventureChapterRows = new List<GameObject>();
+	private System.Threading.Tasks.Task pendingAdventureChapterClearTask = System.Threading.Tasks.Task.CompletedTask;
+	private System.Threading.Tasks.Task pendingCampaignRewardTask = System.Threading.Tasks.Task.CompletedTask;
 
 	private GameObject adventureTutorialConfirmPopup;
 
@@ -823,6 +826,14 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Sprite settingsButtonSprite;
 
+	private Sprite hubButtonSprite;
+
+	private Sprite accountHeaderSettingsSprite;
+
+	private Button accountHeaderHubButton;
+
+	private Button accountHeaderSettingsButton;
+
 	private GameObject logPanel;
 
 	private Text logText;
@@ -830,6 +841,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private GameObject optionsPanel;
 
 	private GameObject optionsBackdropPanel;
+
+	private Button optionsMainMenuButton;
 
 	private GameObject returnToMenuConfirmPanel;
 
@@ -1269,6 +1282,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		cancelActionSprite = LoadSpriteResource("UI/cancel_button");
 		infoActionSprite = LoadSpriteResource("UI/info_button");
 		settingsButtonSprite = LoadSpriteResource("UI/settings_button");
+		hubButtonSprite = LoadSpriteResource("UI/SharedHeader/hub_house");
+		accountHeaderSettingsSprite = LoadSpriteResource("UI/SharedHeader/settings_gear");
 		Canvas val = CreateCanvas();
 		canvasRect = (RectTransform)((Component)val).transform;
 		canvasScaler = ((Component)val).GetComponent<CanvasScaler>();
@@ -1346,7 +1361,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		((UnityEvent)optionsBackdropButton.onClick).AddListener(new UnityAction(CloseOptionsPanel));
 		Canvas optionsBackdropCanvas = optionsBackdropPanel.AddComponent<Canvas>();
 		optionsBackdropCanvas.overrideSorting = true;
-		optionsBackdropCanvas.sortingOrder = 519;
+		optionsBackdropCanvas.sortingOrder = 980;
 		optionsBackdropPanel.AddComponent<GraphicRaycaster>();
 		optionsBackdropPanel.SetActive(false);
 		Image imageOptions = CreateImage("Options Panel", (Transform)(object)safeAreaRoot, new Color(0.008f, 0.014f, 0.022f, 0.97f));
@@ -1355,7 +1370,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		SetRect(imageOptions.rectTransform, new Vector2(0.64f, 0.52f), new Vector2(0.98f, 0.92f));
 		Canvas optionsCanvas = optionsPanel.AddComponent<Canvas>();
 		optionsCanvas.overrideSorting = true;
-		optionsCanvas.sortingOrder = 520;
+		optionsCanvas.sortingOrder = 981;
 		optionsPanel.AddComponent<GraphicRaycaster>();
 		Text optionsTitle = CreateText("Options Title", optionsPanel.transform, builtinResource, 22, (FontStyle)1, (TextAnchor)4);
 		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(optionsTitle);
@@ -1408,10 +1423,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		((UnityEvent)closeOptionsButton.onClick).AddListener(new UnityAction(ToggleOptionsPanel));
 		ApplyBattleButtonVariant(closeOptionsButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Crimson);
 		SetRect((RectTransform)((Component)closeOptionsButton).transform, new Vector2(0.53f, 0.04f), new Vector2(0.94f, 0.14f));
-		Button mainMenuButton = CreateButton("Options Main Menu", optionsPanel.transform, builtinResource, "MENU");
-		((UnityEvent)mainMenuButton.onClick).AddListener(new UnityAction(ReturnToMainMenuFromOptions));
-		ApplyBattleButtonVariant(mainMenuButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Violet);
-		SetRect((RectTransform)((Component)mainMenuButton).transform, new Vector2(0.06f, 0.04f), new Vector2(0.47f, 0.14f));
+		optionsMainMenuButton = CreateButton("Options Main Menu", optionsPanel.transform, builtinResource, "MENU");
+		((UnityEvent)optionsMainMenuButton.onClick).AddListener(new UnityAction(ReturnToMainMenuFromOptions));
+		ApplyBattleButtonVariant(optionsMainMenuButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Violet);
+		SetRect((RectTransform)((Component)optionsMainMenuButton).transform, new Vector2(0.06f, 0.04f), new Vector2(0.47f, 0.14f));
 		SetOptionsPanelVisible(false);
 		CreateReturnToMenuConfirmation((Transform)(object)safeAreaRoot, builtinResource);
 		RefreshSfxOptionsUi();
@@ -1533,6 +1548,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		CreateLibraryView(((Component)val).transform, builtinResource);
 		CreateCampaignModeSelectionView(builtinResource);
 		CreateSanctuaryView(builtinResource);
+		CreateShopView(builtinResource);
 		CreateHintOverlay((Transform)(object)safeAreaRoot, builtinResource);
 		CreateAuraCodexView(((Component)val).transform, builtinResource);
 		CreateCampaignDefeatRewardPopup((Transform)(object)safeAreaRoot, builtinResource);

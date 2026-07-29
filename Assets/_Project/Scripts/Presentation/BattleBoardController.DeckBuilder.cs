@@ -479,6 +479,7 @@ public sealed partial class BattleBoardController
 			deckBuilderPanel.SetActive(false);
 			DestroyPrototypeViews(deckBuilderCardViews);
 			((Component)campaignZoneRect).gameObject.SetActive(false);
+			SetAccountHubHudActive(false);
 			AppendLog($"CAMPAGNA AVVIATA - {campaignDeck.Cards.Count} carte nel mazzo.");
 			PlayTransitionSfx();
 			BeginRoomChoice();

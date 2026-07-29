@@ -38,7 +38,7 @@ public sealed partial class BattleBoardController
 		implementationArchiveButtonRect = (RectTransform)((Component)implementationArchiveButton).transform;
 		SetRect(implementationArchiveButtonRect, new Vector2(0.71f, 0.902f), new Vector2(0.865f, 0.992f));
 		implementationArchiveButtonLabel = CreateText("Implementation Archive Button Label", (Transform)(object)safeAreaRoot, font, 20, (FontStyle)1, (TextAnchor)4);
-		implementationArchiveButtonLabel.text = "inventario";
+		implementationArchiveButtonLabel.text = "bisaccia";
 		implementationArchiveButtonLabel.color = new Color(0.95f, 0.79f, 0.34f);
 		implementationArchiveButtonLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
 		implementationArchiveButtonLabel.verticalOverflow = VerticalWrapMode.Truncate;
@@ -88,7 +88,7 @@ public sealed partial class BattleBoardController
 		((UnityEvent)button.onClick).AddListener(new UnityAction(CloseImplementationArchive));
 		SetRect((RectTransform)((Component)button).transform, new Vector2(0.86f, 0.895f), new Vector2(0.96f, 0.965f));
 		Text title = CreateText("Implementation Archive Title", ((Component)image).transform, font, 30, (FontStyle)1, (TextAnchor)4);
-		title.text = "INVENTARIO";
+		title.text = "BISACCIA";
 		title.color = new Color(0.95f, 0.79f, 0.34f);
 		title.horizontalOverflow = HorizontalWrapMode.Wrap;
 		title.verticalOverflow = VerticalWrapMode.Truncate;
@@ -233,6 +233,7 @@ public sealed partial class BattleBoardController
 		{
 			CardDefinition definition = item.Definition;
 			PrototypeCardView prototypeCardView = PrototypeCardView.CreateBattlefieldPreview((Transform)(object)root, definition, configuration);
+			prototypeCardView.SetCompactPreviewStrengthReadability(64);
 			prototypeCardView.SetInteractable((Object)(object)definition != (Object)null);
 			((UnityEvent)prototypeCardView.Button.onClick).AddListener((UnityAction)delegate
 			{
@@ -772,7 +773,7 @@ public sealed partial class BattleBoardController
 		((UnityEvent)button5.onClick).AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
-			PlayHubZoomThenOpen(button5, ShowUnderDevelopmentPopup);
+			PlayHubZoomThenOpen(button5, ShowShop);
 		});
 		modeSelectionShopButton = button5;
 		Button button6 = CreateHubBannerButton("Profile Hub", ((Component)image).transform, font, "UI/CampaignRestyle/campaign_cta_dark_gray", "PROFILO");
@@ -798,7 +799,7 @@ public sealed partial class BattleBoardController
 		modeSelectionTavernButton = tavernButton;
 		CreateHubHotspots(((Component)image).transform);
 		CreateAccountBanner(canvasTransform, font);
-		CreateAccountHoneyPanel(((Component)image).transform, font);
+		CreateAccountHoneyPanel(((Component)accountBannerImage).transform, font);
 		modeSelectionTutorialButton = null;
 		Button button8 = CreateTransparentButton("Tutorial Advance", ((Component)image).transform);
 		((UnityEvent)button8.onClick).AddListener((UnityAction)delegate
@@ -825,6 +826,7 @@ public sealed partial class BattleBoardController
 	private void CreateHubHotspots(Transform parent)
 	{
 		modeSelectionHotspotButtons.Clear();
+		modeSelectionHotspotRects.Clear();
 		AddHubHotspot("Portal Hotspot", parent, modeSelectionCampaignButton, new Vector2(0.375f, 0.612f), new Vector2(0.625f, 0.878f), new Color(0.65f, 0.2f, 0.96f, 1f), new Vector2(33.357f, 44.7885f), new Vector2(16.2f, -56.4727f));
 		AddHubHotspot("Arena Hotspot", parent, modeSelectionMultiplayerButton, new Vector2(0.036f, 0.575f), new Vector2(0.378f, 0.754f), new Color(0.96f, 0.12f, 0.1f, 1f), new Vector2(42.12f, -32.64f), new Vector2(-13.6313f, -37.973f), 0.45f);
 		AddHubHotspot("Sanctuary Hotspot", parent, modeSelectionSanctuaryButton, new Vector2(0.655f, 0.575f), new Vector2(0.955f, 0.754f), new Color(0.12f, 0.58f, 1f, 1f), new Vector2(-6.8156f, -51.6043f), new Vector2(-39.5014f, -23.3682f));
@@ -855,6 +857,7 @@ public sealed partial class BattleBoardController
 			}
 		});
 		modeSelectionHotspotButtons.Add(hotspot);
+		modeSelectionHotspotRects[target] = hotspotRect;
 		HubPortalVfx.Attach(hotspot, sparkleColor, 20, glowStrength);
 	}
 
@@ -918,12 +921,6 @@ public sealed partial class BattleBoardController
 		campaignModeHardcoreButtonText = ((Component)button2).GetComponentInChildren<Text>();
 		ApplyCampaignHardcoreCta(button2);
 		campaignModeDraftButtonRect = (RectTransform)((Component)button2).transform;
-		campaignModeBackButton = CreateButton("Campaign Mode Back", campaignContentRoot, font, "INDIETRO");
-		((UnityEvent)campaignModeBackButton.onClick).AddListener((UnityAction)delegate
-		{
-			PlayGenericButtonClickSfx();
-			ShowHubFromSinglePlayer();
-		});
 		CreateAdventureChapterView(font);
 		RefreshCampaignModeSelectionLayout();
 		campaignModeSelectionPanel.SetActive(false);
@@ -993,12 +990,6 @@ public sealed partial class BattleBoardController
 		layout.childAlignment = (TextAnchor)1;
 		layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
 		layout.constraintCount = 2;
-		adventureChapterBackButton = CreateButton("Adventure Back", adventureContentRoot, font, "INDIETRO");
-		((UnityEvent)adventureChapterBackButton.onClick).AddListener((UnityAction)delegate
-		{
-			PlayGenericButtonClickSfx();
-			ShowHubFromSinglePlayer();
-		});
 		CreateAdventureTutorialConfirmPopup(((Component)image).transform, font);
 		adventureChapterPanel.SetActive(false);
 	}
@@ -1172,14 +1163,6 @@ public sealed partial class BattleBoardController
 				0.4f,
 				width / height);
 		}
-		if ((Object)(object)campaignModeBackButton != (Object)null)
-		{
-			SetCampaignModeButtonNaturalRect(
-				(RectTransform)((Component)campaignModeBackButton).transform,
-				compact ? new Vector2(0.5f, 0.145f) : new Vector2(0.5f, 0.1625f),
-				compact ? 0.44f : 0.26f,
-				width / height);
-		}
 		RefreshSinglePlayerProgressView();
 	}
 
@@ -1235,10 +1218,6 @@ public sealed partial class BattleBoardController
 		adventureChapterListRoot.offsetMin = new Vector2(0f, -42f);
 		adventureChapterListRoot.offsetMax = new Vector2(0f, -42f);
 		ConfigureAdventureChapterGrid(compact);
-		SetRect(
-			(RectTransform)((Component)adventureChapterBackButton).transform,
-			compact ? new Vector2(0.28f, 0.105f) : new Vector2(0.37f, 0.12f),
-			compact ? new Vector2(0.72f, 0.185f) : new Vector2(0.63f, 0.205f));
 	}
 
 	private void ConfigureAdventureChapterGrid(bool compact)
@@ -1582,7 +1561,8 @@ public sealed partial class BattleBoardController
 		accountBannerImage.raycastTarget = false;
 		Canvas accountHeaderCanvas = ((Component)accountBannerImage).gameObject.AddComponent<Canvas>();
 		accountHeaderCanvas.overrideSorting = true;
-		accountHeaderCanvas.sortingOrder = 901;
+		accountHeaderCanvas.sortingOrder = 910;
+		((Component)accountBannerImage).gameObject.AddComponent<GraphicRaycaster>();
 
 		Image portraitRootImage = CreateImage(
 			"Account Portrait Root", ((Component)accountBannerImage).transform, Color.clear);
@@ -1661,6 +1641,28 @@ public sealed partial class BattleBoardController
 		Outline xpOutline = ((Component)accountBannerExperienceText).gameObject.AddComponent<Outline>();
 		xpOutline.effectColor = new Color(0f, 0f, 0f, 0.9f);
 		xpOutline.effectDistance = new Vector2(1f, -1f);
+
+		accountHeaderHubButton = CreateImageButton(
+			"Account Header Hub Button", ((Component)accountBannerImage).transform,
+			font, hubButtonSprite, string.Empty);
+		((UnityEvent)accountHeaderHubButton.onClick).AddListener((UnityAction)delegate
+		{
+			if (IsAccountHubVisible())
+			{
+				return;
+			}
+			PlayGenericButtonClickSfx();
+			ShowHubFromSinglePlayer();
+		});
+
+		accountHeaderSettingsButton = CreateImageButton(
+			"Account Header Settings Button", ((Component)accountBannerImage).transform,
+			font, accountHeaderSettingsSprite, string.Empty);
+		((UnityEvent)accountHeaderSettingsButton.onClick).AddListener((UnityAction)delegate
+		{
+			PlayGenericButtonClickSfx();
+			ToggleOptionsPanel();
+		});
 	}
 
 	private void RefreshAccountBannerLayout(bool landscape)
@@ -1689,6 +1691,14 @@ public sealed partial class BattleBoardController
 		SetRect(experienceBackRect, new Vector2(0.26f, 0.19f), new Vector2(0.57f, 0.42f));
 		experienceBackRect.anchoredPosition = Vector2.zero;
 		SetRect(accountBannerExperienceText.rectTransform, new Vector2(0.26f, 0.19f), new Vector2(0.57f, 0.42f));
+		if ((Object)(object)accountHeaderHubButton != (Object)null)
+			SetRect(
+				(RectTransform)((Component)accountHeaderHubButton).transform,
+				new Vector2(0.80f, -0.12f), new Vector2(0.885f, 0.48f));
+		if ((Object)(object)accountHeaderSettingsButton != (Object)null)
+			SetRect(
+				(RectTransform)((Component)accountHeaderSettingsButton).transform,
+				new Vector2(0.90f, -0.12f), new Vector2(0.985f, 0.48f));
 		accountBannerExperienceText.alignment = (TextAnchor)4;
 		accountBannerNameText.fontSize = 31;
 		accountBannerLevelText.fontSize = 24;
@@ -1704,11 +1714,10 @@ public sealed partial class BattleBoardController
 			return;
 
 		RectTransform rect = accountHoneyPanelImage.rectTransform;
-		rect.anchorMin = new Vector2(1f, 1f);
-		rect.anchorMax = new Vector2(1f, 1f);
-		rect.pivot = new Vector2(1f, 1f);
-		rect.sizeDelta = landscape ?new Vector2(220f, 48f) : new Vector2(210f, 46f);
-		rect.anchoredPosition = landscape ?new Vector2(-150f, -96f) : new Vector2(-120f, -80f);
+		rect.anchorMin = new Vector2(0.8f, 0.54f);
+		rect.anchorMax = new Vector2(0.985f, 1.08f);
+		rect.offsetMin = new Vector2(0f, 0.0001f);
+		rect.offsetMax = new Vector2(0f, -37.1579f);
 		((Component)accountHoneyPanelImage).transform.SetAsLastSibling();
 		if ((Object)(object)accountHoneyAmountText != (Object)null)
 		{
@@ -1760,6 +1769,19 @@ public sealed partial class BattleBoardController
 		}
 		if (active)
 			RefreshAccountBannerView();
+		if ((Object)(object)logButton != (Object)null)
+			((Component)logButton).gameObject.SetActive(!active);
+		if ((Object)(object)settingsButtonLabel != (Object)null)
+			((Component)settingsButtonLabel).gameObject.SetActive(!active);
+		if ((Object)(object)accountHeaderHubButton != (Object)null)
+			accountHeaderHubButton.interactable = active && !IsAccountHubVisible();
+	}
+
+	private bool IsAccountHubVisible()
+	{
+		return (Object)(object)modeSelectionPanel != (Object)null
+			&& modeSelectionPanel.activeInHierarchy
+			&& campaignHubZoomRoutine == null;
 	}
 
 	private void UpdateAccountBannerInfoRows(SinglePlayerProgressSave progress)
@@ -2077,6 +2099,39 @@ public sealed partial class BattleBoardController
 			campaignHubZoomRoutine = null;
 		}
 		DestroyCampaignHubCinematicOverlay();
+		// Home e' anche il punto di recupero della navigazione: nessun overlay aperto
+		// deve sopravvivere al ritorno all'hub, altrimenti puo' restare invisibile dietro
+		// altri pannelli continuando pero' a intercettare tutti i raycast.
+		CloseOptionsPanel();
+		if ((Object)(object)logPanel != (Object)null)
+		{
+			logPanel.SetActive(false);
+		}
+		if ((Object)(object)multiplayerPopup != (Object)null)
+		{
+			multiplayerPopup.SetActive(false);
+		}
+		if ((Object)(object)returnToMenuConfirmPanel != (Object)null)
+		{
+			returnToMenuConfirmPanel.SetActive(false);
+		}
+		if ((Object)(object)auraCodexPanel != (Object)null)
+		{
+			auraCodexPanel.SetActive(false);
+		}
+		if ((Object)(object)sanctuaryConfirmPopup != (Object)null)
+		{
+			sanctuaryConfirmPopup.SetActive(false);
+		}
+		if ((Object)(object)implementationArchivePanel != (Object)null
+			|| (Object)(object)implementationArchiveBackdropPanel != (Object)null)
+		{
+			SetImplementationArchiveVisible(false);
+		}
+		if ((Object)(object)cardInspectionPanel != (Object)null && cardInspectionPanel.activeSelf)
+		{
+			CloseCardInspection(playSfx: false);
+		}
 		if ((Object)(object)campaignModeSelectionPanel != (Object)null)
 		{
 			campaignModeSelectionPanel.SetActive(false);
@@ -2093,15 +2148,25 @@ public sealed partial class BattleBoardController
 		{
 			sanctuaryPanel.SetActive(false);
 		}
+		if ((Object)(object)tavernPanel != (Object)null)
+		{
+			tavernPanel.SetActive(false);
+		}
+		if ((Object)(object)libraryPanel != (Object)null)
+		{
+			libraryPanel.SetActive(false);
+		}
 		if ((Object)(object)guidedTutorialPanel != (Object)null)
 		{
 			guidedTutorialPanel.SetActive(false);
 		}
+		if ((Object)(object)adventureScriptedTutorialPanel != (Object)null)
+		{
+			adventureScriptedTutorialPanel.SetActive(false);
+		}
+		ResetHubZoomTransform();
 		if ((Object)(object)modeSelectionPanel != (Object)null)
 		{
-			RectTransform hubRect = (RectTransform)modeSelectionPanel.transform;
-			hubRect.localScale = Vector3.one;
-			hubRect.anchoredPosition = Vector2.zero;
 			modeSelectionPanel.SetActive(true);
 			modeSelectionPanel.transform.SetAsLastSibling();
 		}
@@ -2114,11 +2179,26 @@ public sealed partial class BattleBoardController
 		inputLocked = true;
 	}
 
+	private void ResetHubZoomTransform()
+	{
+		if ((Object)(object)modeSelectionPanel != (Object)null)
+		{
+			RectTransform hubRect = (RectTransform)modeSelectionPanel.transform;
+			hubRect.localScale = Vector3.one;
+			hubRect.anchoredPosition = Vector2.zero;
+		}
+		if ((Object)(object)modeSelectionAspectFitter != (Object)null)
+		{
+			((Behaviour)modeSelectionAspectFitter).enabled = true;
+		}
+	}
+
 	private void ShowModeSelection()
 	{
 		inputLocked = true;
 		modeSelectionTutorialActive = false;
 		tutorialPageIndex = 0;
+		ResetHubZoomTransform();
 		RefreshModeSelectionLayout();
 		if ((Object)(object)modeSelectionPanel != (Object)null)
 		{
@@ -2190,6 +2270,14 @@ public sealed partial class BattleBoardController
 	private IEnumerator PlayCampaignHubZoomThenOpen(Button focusButton, Action onComplete)
 	{
 		RectTransform hubRect = (RectTransform)modeSelectionPanel.transform;
+		// L'AspectRatioFitter in EnvelopeParent pilota anchoredPosition (la riazzera a ogni layout):
+		// va sospeso per la durata della cinematica, altrimenti la panoramica verso l'hotspot
+		// viene annullata e resta solo lo zoom sul centro.
+		bool aspectFitterWasEnabled = (Object)(object)modeSelectionAspectFitter != (Object)null && ((Behaviour)modeSelectionAspectFitter).enabled;
+		if (aspectFitterWasEnabled)
+		{
+			((Behaviour)modeSelectionAspectFitter).enabled = false;
+		}
 		Vector3 originalScale = hubRect.localScale;
 		Vector2 originalPosition = hubRect.anchoredPosition;
 		DestroyCampaignHubCinematicOverlay();
@@ -2201,9 +2289,18 @@ public sealed partial class BattleBoardController
 		Vector2 portalFocus = GetHubZoomFocus(focusButton, hubRect, landscape);
 		Vector2 size = hubRect.rect.size;
 		float zoomScale = 1.58f;
+		// Porta l'hotspot al centro dello schermo, non semplicemente ingrandisce il centro dell'hub.
 		Vector2 zoomPosition = new Vector2(
-			(0.5f - portalFocus.x) * size.x * (zoomScale - 1f),
-			(0.5f - portalFocus.y) * size.y * (zoomScale - 1f));
+			(0.5f - portalFocus.x) * size.x * zoomScale,
+			(0.5f - portalFocus.y) * size.y * zoomScale);
+		// Senza limite la panoramica scoprirebbe i bordi oltre l'artwork.
+		RectTransform hubParentRect = hubRect.parent as RectTransform;
+		Vector2 viewportSize = (Object)(object)hubParentRect != (Object)null ? hubParentRect.rect.size : size;
+		float maximumPanX = Mathf.Max(0f, (size.x * zoomScale - viewportSize.x) * 0.5f);
+		float maximumPanY = Mathf.Max(0f, (size.y * zoomScale - viewportSize.y) * 0.5f);
+		zoomPosition = new Vector2(
+			Mathf.Clamp(zoomPosition.x, 0f - maximumPanX, maximumPanX),
+			Mathf.Clamp(zoomPosition.y, 0f - maximumPanY, maximumPanY));
 
 		yield return AnimateCampaignHubCinematicOverlay(cinematicGroup, vignette, topBar, bottomBar, die, dieRect, 0f, 0.82f, 0f, 1f, 0f, -55f, 0f, 0f, 0.78f, 1f, 0.2f);
 		yield return AnimateHubZoom(hubRect, originalScale, originalPosition, Vector3.one * zoomScale, zoomPosition, 0.48f, die, dieRect, -55f, -210f, 0f, 0f, 1f, 1.08f);
@@ -2213,6 +2310,10 @@ public sealed partial class BattleBoardController
 
 		hubRect.localScale = originalScale;
 		hubRect.anchoredPosition = originalPosition;
+		if (aspectFitterWasEnabled && (Object)(object)modeSelectionAspectFitter != (Object)null)
+		{
+			((Behaviour)modeSelectionAspectFitter).enabled = true;
+		}
 		DestroyCampaignHubCinematicOverlay();
 		campaignHubZoomRoutine = null;
 		SetModeSelectionButtonsInteractable(true);
@@ -2224,43 +2325,30 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)focusButton == (Object)null)
 			return landscape ?new Vector2(0.5f, 0.53f) : new Vector2(0.5f, 0.675f);
 
-		if ((Object)(object)focusButton == (Object)(object)modeSelectionCampaignButton)
-			return landscape ?new Vector2(0.5f, 0.92f) : new Vector2(0.52f, 0.97f);
-		if ((Object)(object)focusButton == (Object)(object)modeSelectionMultiplayerButton)
-			return landscape ?new Vector2(0.3f, 0.88f) : new Vector2(0.27f, 0.94f);
-		if ((Object)(object)focusButton == (Object)(object)modeSelectionSanctuaryButton)
-			return landscape ?new Vector2(0.7f, 0.87f) : new Vector2(0.71f, 0.93f);
-		if ((Object)(object)focusButton == (Object)(object)modeSelectionLibraryButton)
-			return landscape ?new Vector2(0.27f, 0.76f) : new Vector2(0.26f, 0.74f);
-		if ((Object)(object)focusButton == (Object)(object)modeSelectionShopButton)
-			return landscape ?new Vector2(0.22f, 0.6f) : new Vector2(0.25f, 0.5f);
-		if ((Object)(object)focusButton == (Object)(object)modeSelectionTavernButton)
-			return landscape ?new Vector2(0.78f, 0.6f) : new Vector2(0.75f, 0.5f);
-		if ((Object)(object)focusButton == (Object)(object)modeSelectionProfileButton)
-			return landscape ?new Vector2(0.5f, 0.78f) : new Vector2(0.5f, 0.82f);
-		if ((Object)(object)focusButton == (Object)(object)modeSelectionHallOfFameButton)
-			return landscape ?new Vector2(0.72f, 0.76f) : new Vector2(0.76f, 0.76f);
-
-		RectTransform focusRect = (RectTransform)((Component)focusButton).transform;
-		if ((Object)(object)focusRect.parent == (Object)(object)hubRect)
+		// La località vera è l'hotspot disegnato sullo sfondo: il pulsante banner sta altrove,
+		// quindi la camera deve puntare al centro dell'hotspot associato.
+		if (modeSelectionHotspotRects.TryGetValue(focusButton, out RectTransform hotspotRect)
+			&& (Object)(object)hotspotRect != (Object)null)
 		{
-			Vector2 anchorCenter = (focusRect.anchorMin + focusRect.anchorMax) * 0.5f;
-			float height = Mathf.Max(0.01f, focusRect.anchorMax.y - focusRect.anchorMin.y);
-			return new Vector2(
-				Mathf.Clamp01(anchorCenter.x),
-				Mathf.Clamp01(focusRect.anchorMax.y + height * 1.6f));
+			return GetHubRectCenterNormalized(hotspotRect, hubRect);
 		}
 
+		return GetHubRectCenterNormalized((RectTransform)((Component)focusButton).transform, hubRect);
+	}
+
+	private static Vector2 GetHubRectCenterNormalized(RectTransform rect, RectTransform hubRect)
+	{
+		if ((Object)(object)rect == (Object)null || (Object)(object)hubRect == (Object)null)
+			return new Vector2(0.5f, 0.5f);
+
 		Vector3[] corners = new Vector3[4];
-		focusRect.GetWorldCorners(corners);
-		Vector3 topCenter = Vector3.Lerp(corners[1], corners[2], 0.5f);
-		Vector3 bottomCenter = Vector3.Lerp(corners[0], corners[3], 0.5f);
-		Vector3 worldPoint = topCenter + (topCenter - bottomCenter) * 1.6f;
-		Vector2 localPoint = hubRect.InverseTransformPoint(worldPoint);
+		rect.GetWorldCorners(corners);
+		Vector3 worldCenter = Vector3.Lerp(corners[0], corners[2], 0.5f);
+		Vector2 localPoint = hubRect.InverseTransformPoint(worldCenter);
 		Rect hub = hubRect.rect;
 		return new Vector2(
-			Mathf.InverseLerp(hub.xMin, hub.xMax, localPoint.x),
-			Mathf.InverseLerp(hub.yMin, hub.yMax, localPoint.y));
+			Mathf.Clamp01(Mathf.InverseLerp(hub.xMin, hub.xMax, localPoint.x)),
+			Mathf.Clamp01(Mathf.InverseLerp(hub.yMin, hub.yMax, localPoint.y)));
 	}
 
 	private GameObject CreateCampaignHubCinematicOverlay(
@@ -2472,7 +2560,7 @@ public sealed partial class BattleBoardController
 		{
 			modeSelectionPanel.SetActive(false);
 		}
-		SetAccountHubHudActive(false);
+		SetAccountHubHudActive(true);
 		if ((Object)(object)campaignModeSelectionPanel != (Object)null)
 		{
 			campaignModeSelectionPanel.SetActive(true);
@@ -2504,6 +2592,7 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)singlePlayerServerLink == (Object)null)
 		{
 			singlePlayerServerLink = gameObject.AddComponent<AccardND.Network.SinglePlayerServerLink>();
+			singlePlayerServerLink.Reconnected += HandleServerProgressReconnected;
 		}
 		AccardND.Network.ServerSinglePlayerProgressRepository repository =
 			await singlePlayerServerLink.EnsureRepositoryAsync();
@@ -2519,6 +2608,25 @@ public sealed partial class BattleBoardController
 			RefreshAdventureChapterList();
 		}
 		return true;
+	}
+
+	private void HandleServerProgressReconnected()
+	{
+		_ = RefreshCampaignPanelsAfterReconnectAsync();
+	}
+
+	private async System.Threading.Tasks.Task RefreshCampaignPanelsAfterReconnectAsync()
+	{
+		if (!await EnsureServerProgressAsync())
+			return;
+		MirrorServerProgress();
+		RefreshAccountBannerView();
+		if ((Object)(object)sanctuaryPanel != (Object)null && sanctuaryPanel.activeSelf)
+			LoadSanctuaryFromServer();
+		if ((Object)(object)shopPanel != (Object)null && shopPanel.activeSelf)
+			LoadShopFromServer();
+		if ((Object)(object)tavernPanel != (Object)null && tavernPanel.activeSelf)
+			await RefreshTavernFromServerAsync();
 	}
 
 	/// <summary>Copia lo stato autoritativo del server nella cache locale letta dalla UI.</summary>
@@ -2719,28 +2827,14 @@ public sealed partial class BattleBoardController
 				return;
 			}
 
-			singlePlayerProgressService.SetTutorialCompleted();
-			UnlockStarterHeroClassesLocally();
-			singlePlayerProgressService.Unlock(SinglePlayerUnlockType.Chapter, TutorialCompletionChapterId);
-			AppendLog("AVVENTURA - tutorial provvisorio completato: classi base e primo capitolo sbloccati offline.");
-			SetMessage("Tutorial completato: hai le classi base e il primo capitolo. Il miele si guadagna in taverna, con le quest del giorno.");
+			AppendLog("AVVENTURA - completamento tutorial non registrato: server non disponibile.");
+			SetMessage("Connessione al server necessaria per registrare il completamento del tutorial.");
 			RefreshAdventureChapterList();
 			return;
 		}
 
 		SetMessage("Avevi gia completato il tutorial: il primo capitolo e le classi base sono gia' tuoi.");
 		AppendLog("AVVENTURA - tutorial selezionato: director guidato non ancora implementato.");
-	}
-
-	private void UnlockStarterHeroClassesLocally()
-	{
-		foreach (HeroClass heroClass in StarterHeroClasses)
-		{
-			if (!singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Class, HeroClassUnlockId(heroClass)))
-			{
-				singlePlayerProgressService.Unlock(SinglePlayerUnlockType.Class, HeroClassUnlockId(heroClass));
-			}
-		}
 	}
 
 	private async void TryOpenAdventureChapter(string chapterId, int cost)
@@ -2765,16 +2859,8 @@ public sealed partial class BattleBoardController
 				return;
 			}
 
-			if (!singlePlayerProgressService.TrySpendHoney(cost))
-			{
-				SetMessage($"Capitolo bloccato. Servono {cost} vasetti di miele.");
-				AppendLog($"AVVENTURA - acquisto {chapterId} rifiutato: miele insufficiente.");
-				RefreshAdventureChapterList();
-				return;
-			}
-			singlePlayerProgressService.Unlock(SinglePlayerUnlockType.Chapter, chapterId);
-			SetMessage("Capitolo sbloccato.");
-			AppendLog($"AVVENTURA - {chapterId} sbloccato per {cost} miele.");
+			SetMessage("Connessione al server necessaria per sbloccare un capitolo.");
+			AppendLog($"AVVENTURA - acquisto {chapterId} non eseguito: server non disponibile.");
 			RefreshAdventureChapterList();
 			return;
 		}
@@ -2923,16 +3009,8 @@ public sealed partial class BattleBoardController
 				return;
 			}
 
-			if (!singlePlayerProgressService.TrySpendHoney(HardcoreUnlockHoneyCost))
-			{
-				SetMessage($"Hardcore bloccata. Servono {HardcoreUnlockHoneyCost} vasetti di miele.");
-				AppendLog("SINGLE PLAYER - acquisto Hardcore rifiutato: miele insufficiente.");
-				RefreshSinglePlayerProgressView();
-				return;
-			}
-			singlePlayerProgressService.SetHardcoreUnlocked();
-			SetMessage("Hardcore sbloccata.");
-			AppendLog($"SINGLE PLAYER - Hardcore sbloccata per {HardcoreUnlockHoneyCost} miele.");
+			SetMessage("Connessione al server necessaria per sbloccare Hardcore.");
+			AppendLog("SINGLE PLAYER - acquisto Hardcore non eseguito: server non disponibile.");
 			RefreshSinglePlayerProgressView();
 			return;
 		}
@@ -2942,6 +3020,8 @@ public sealed partial class BattleBoardController
 	private void StartCampaignBuilderMode()
 	{
 		campaignRunRewardId = System.Guid.NewGuid().ToString("N");
+		pendingAdventureChapterClearTask = System.Threading.Tasks.Task.CompletedTask;
+		pendingCampaignRewardTask = System.Threading.Tasks.Task.CompletedTask;
 		pendingCampaignRewardClaimId = null;
 		pendingCampaignRewardBaseAccountExperience = 0;
 		pendingCampaignRewardAdClaimed = false;
@@ -2971,6 +3051,7 @@ public sealed partial class BattleBoardController
 		// condivisa e il relativo socket restano aperti e vengono riusati dal bootstrap PvP.
 		if ((Object)(object)singlePlayerServerLink != (Object)null)
 		{
+			singlePlayerServerLink.Reconnected -= HandleServerProgressReconnected;
 			singlePlayerServerLink.Shutdown();
 		}
 		serverProgress = null;
@@ -3008,7 +3089,7 @@ public sealed partial class BattleBoardController
 		}
 		else
 		{
-			pvpBootstrap.Configure(cardDatabase, closed, this);
+			pvpBootstrap.Configure(cardDatabase, closed, this, ToggleOptionsPanel);
 		}
 	}
 
@@ -3279,15 +3360,15 @@ public sealed partial class BattleBoardController
 	private static readonly Dictionary<HeroClass, Sprite> classIconLockedSprites = new Dictionary<HeroClass, Sprite>();
 	private static readonly Dictionary<HeroClass, Rect> classIconFallbackRects = new Dictionary<HeroClass, Rect>
 	{
-		{ HeroClass.Warrior, new Rect(0f, 662f, 310f, 330f) },
+		{ HeroClass.Barbarian, new Rect(0f, 662f, 310f, 330f) },
 		{ HeroClass.Paladin, new Rect(310f, 662f, 309f, 330f) },
-		{ HeroClass.Barbarian, new Rect(619f, 662f, 310f, 330f) },
+		{ HeroClass.Warrior, new Rect(619f, 662f, 310f, 330f) },
 		{ HeroClass.Mage, new Rect(0f, 331f, 310f, 331f) },
 		{ HeroClass.Necromancer, new Rect(310f, 331f, 309f, 331f) },
 		{ HeroClass.Priest, new Rect(619f, 331f, 310f, 331f) },
-		{ HeroClass.Rogue, new Rect(0f, 0f, 310f, 331f) },
+		{ HeroClass.Assassin, new Rect(0f, 0f, 310f, 331f) },
 		{ HeroClass.Hunter, new Rect(310f, 0f, 309f, 331f) },
-		{ HeroClass.Assassin, new Rect(619f, 0f, 310f, 331f) }
+		{ HeroClass.Rogue, new Rect(619f, 0f, 310f, 331f) }
 	};
 
 	private static string ClassIconSpriteName(HeroClass heroClass)

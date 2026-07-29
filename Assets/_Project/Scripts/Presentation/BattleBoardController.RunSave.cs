@@ -150,6 +150,7 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)deckBuilderPanel != (Object)null)
 			deckBuilderPanel.SetActive(false);
 
+		SetAccountHubHudActive(false);
 		AppendLog($"CAMPAGNA RIPRESA - livello {runProgress.PlayerLevel}, stanze superate {runProgress.RoomsCleared}, {campaignDeck.Cards.Count} carte nel mazzo.");
 		PlayTransitionSfx();
 		BeginRoomChoice();

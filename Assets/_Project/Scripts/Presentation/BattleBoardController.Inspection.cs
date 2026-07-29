@@ -344,7 +344,7 @@ public sealed partial class BattleBoardController
 		}
 		if (state.AbilityArmed && state.Card.HeroClass == HeroClass.Warrior)
 		{
-			list.Add(new InspectionStatusDetail("ABILITA PRONTA", "Il prossimo attacco del Guerriero tira due dadi Vigore e li somma.", new Color(1f, 0.72f, 0.25f)));
+			list.Add(new InspectionStatusDetail("ABILITA PRONTA", "Il prossimo attacco del Guerriero tira il dado Vigore e un dado di uno step inferiore, poi li somma.", new Color(1f, 0.72f, 0.25f)));
 		}
 		if (state.IsSpirit)
 		{

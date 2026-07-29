@@ -26,15 +26,58 @@ public sealed partial class BattleBoardController
 		List<CardDefinition> list2 = list;
 		if (list2 != null)
 		{
-			return list2;
+			return ApplyChapterOnePreMinibossPowerCap(list2, monsterPoolForTier, formationSize);
 		}
 		if (monsterPoolForTier.Count >= formationSize)
 		{
-			return DrawWeightedMonsterCandidates(monsterPoolForTier, formationSize, currentMonsterTier);
+			list2 = DrawWeightedMonsterCandidates(monsterPoolForTier, formationSize, currentMonsterTier);
+			return ApplyChapterOnePreMinibossPowerCap(list2, monsterPoolForTier, formationSize);
 		}
 		AppendLog($"MOSTRI TIER {currentMonsterTier} FALLBACK - pool insufficiente ({monsterPoolForTier.Count}/{formationSize}).");
 		List<CardDefinition> list3 = cardDatabase.Cards.Where((CardDefinition card) => (Object)(object)card != (Object)null && card.Category == CardCategory.Monster && card.CanEnterCombat).ToList();
-		return DrawWeightedMonsterCandidates(list3, Mathf.Min(formationSize, list3.Count), currentMonsterTier);
+		list2 = DrawWeightedMonsterCandidates(list3, Mathf.Min(formationSize, list3.Count), currentMonsterTier);
+		return ApplyChapterOnePreMinibossPowerCap(list2, list3, formationSize);
+	}
+
+	private List<CardDefinition> ApplyChapterOnePreMinibossPowerCap(
+		List<CardDefinition> formation,
+		List<CardDefinition> preferredPool,
+		int formationSize)
+	{
+		const int maximumPower = 24;
+		bool beforeFirstMiniboss = runProgress != null
+			&& runProgress.RoomsCleared < configuration.Progression.MinibossEveryRooms;
+		bool isChapterOne = string.Equals(campaignScenarioId, "fog", StringComparison.OrdinalIgnoreCase);
+		if (!isChapterOne || !beforeFirstMiniboss || formation.Sum(card => card.Strength) <= maximumPower)
+		{
+			return formation;
+		}
+
+		List<List<CardDefinition>> candidates = BuildFormationCandidates(preferredPool, formationSize)
+			.Where(candidate => candidate.Sum(card => card.Strength) <= maximumPower)
+			.ToList();
+		if (candidates.Count == 0)
+		{
+			List<CardDefinition> allMonsters = cardDatabase.Cards
+				.Where(card => (Object)(object)card != (Object)null
+					&& card.Category == CardCategory.Monster
+					&& card.CanEnterCombat)
+				.ToList();
+			candidates = BuildFormationCandidates(allMonsters, formationSize)
+				.Where(candidate => candidate.Sum(card => card.Strength) <= maximumPower)
+				.ToList();
+		}
+		if (candidates.Count == 0)
+		{
+			AppendLog("CAPITOLO 1 - impossibile creare una formazione entro potenza 24.");
+			return formation;
+		}
+
+		List<CardDefinition> cappedFormation = PickScoredFormation(
+			candidates,
+			candidate => candidate.Sum(card => card.Strength));
+		AppendLog($"CAPITOLO 1 - formazione pre-miniboss limitata a potenza {cappedFormation.Sum(card => card.Strength)}/24.");
+		return cappedFormation;
 	}
 
 	private List<CardDefinition> DrawMonsterFormationForCurrentCombat()

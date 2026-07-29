@@ -42,8 +42,6 @@ public sealed partial class BattleBoardController
 
 	private RectTransform sanctuaryListRoot;
 
-	private Button sanctuaryBackButton;
-
 	private readonly List<Button> sanctuaryAltarButtons = new List<Button>();
 
 	private readonly List<Image> sanctuaryAltarIcons = new List<Image>();
@@ -173,13 +171,6 @@ public sealed partial class BattleBoardController
 		contentFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
 		contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 		sanctuaryScrollRect.content = sanctuaryListRoot;
-
-		sanctuaryBackButton = CreateButton("Sanctuary Back", content, font, "INDIETRO");
-		((UnityEvent)sanctuaryBackButton.onClick).AddListener((UnityAction)delegate
-		{
-			PlayGenericButtonClickSfx();
-			HideSanctuary();
-		});
 
 		CreateSanctuaryConfirmPopup(((Component)root).transform, font);
 		RefreshSanctuaryLayout();
@@ -314,7 +305,7 @@ public sealed partial class BattleBoardController
 			if ((Object)(object)headerCanvas != (Object)null)
 			{
 				headerCanvas.overrideSorting = true;
-				headerCanvas.sortingOrder = 901;
+				headerCanvas.sortingOrder = 910;
 			}
 		}
 
@@ -327,7 +318,7 @@ public sealed partial class BattleBoardController
 				honeyCanvas = honeyPanel.AddComponent<Canvas>();
 			}
 			honeyCanvas.overrideSorting = true;
-			honeyCanvas.sortingOrder = 902;
+			honeyCanvas.sortingOrder = 911;
 			if ((Object)(object)honeyPanel.GetComponent<GraphicRaycaster>() == (Object)null)
 			{
 				honeyPanel.AddComponent<GraphicRaycaster>();
@@ -375,7 +366,9 @@ public sealed partial class BattleBoardController
 			else
 			{
 				sanctuaryData = null;
-				sanctuaryNotice = "Santuario non disponibile offline: serve la connessione al server.";
+				sanctuaryNotice = AccardND.Network.AccountServerSession.IsReconnecting
+					? "Riconnessione in corso: il Santuario si aggiornerà automaticamente."
+					: "Santuario non disponibile offline: serve la connessione al server.";
 				AppendLog("SANTUARIO - nessuna connessione al server.");
 			}
 		}
@@ -1121,9 +1114,6 @@ public sealed partial class BattleBoardController
 			new Vector2(right, compact ? 0.674f : 0.667f));
 		ConfigureSanctuaryGrid(compact);
 
-		SetRect((RectTransform)((Component)sanctuaryBackButton).transform,
-			compact ? new Vector2(0.31f, 0.075f) : new Vector2(0.37f, 0.072f),
-			compact ? new Vector2(0.69f, 0.15f) : new Vector2(0.63f, 0.15f));
 	}
 
 	private void ConfigureSanctuaryGrid(bool compact)

@@ -129,18 +129,6 @@ public sealed partial class BattleBoardController
 		title.rectTransform.offsetMin = new Vector2(0f, -23f);
 		title.rectTransform.offsetMax = new Vector2(0f, -23f);
 
-		Button closeButton = CreateImageButton(
-			"Close Library",
-			root.transform,
-			fallbackFont,
-			cancelActionSprite,
-			string.Empty);
-		closeButton.onClick.AddListener(new UnityAction(HideLibrary));
-		SetRect(
-			(RectTransform)closeButton.transform,
-			new Vector2(0.91f, 0.895f),
-			new Vector2(0.975f, 0.955f));
-
 		libraryTabsRoot = CreateImage(
 			"Library Tabs",
 			root.transform,
@@ -305,6 +293,8 @@ public sealed partial class BattleBoardController
 		frame.preserveAspect = false;
 		frame.raycastTarget = false;
 		Stretch(frame.rectTransform);
+		frame.rectTransform.offsetMin = new Vector2(6f, 6f);
+		frame.rectTransform.offsetMax = new Vector2(-6f, -6f);
 
 		Image art = CreateImage("Library Entry Art", tile.transform, Color.white);
 		art.sprite = LoadSpriteResource(LibrarySectionIconPath(section));
@@ -521,13 +511,7 @@ public sealed partial class BattleBoardController
 
 	private void HideLibrary()
 	{
-		if ((Object)(object)libraryPanel != (Object)null)
-			libraryPanel.SetActive(false);
-		if ((Object)(object)modeSelectionPanel != (Object)null)
-			modeSelectionPanel.SetActive(true);
-		SetModeSelectionButtonsActive(true);
-		SetAccountHubHudActive(true);
-		RefreshModeSelectionLayout();
+		ShowHubFromSinglePlayer();
 	}
 
 	private void ShowLibraryOverview()
@@ -621,11 +605,11 @@ public sealed partial class BattleBoardController
 
 		Canvas.ForceUpdateCanvases();
 		int columns = landscape ? 2 : 1;
-		float spacing = landscape ? 14f : 12f;
+		float spacing = landscape ? 22f : 20f;
 		float viewportWidth = Mathf.Max(320f, libraryOverviewViewport.rect.width);
 		float usableWidth = viewportWidth - libraryOverviewGrid.padding.horizontal - spacing * (columns - 1);
 		float cellWidth = Mathf.Max(260f, usableWidth / columns);
-		float cellHeight = landscape ? 175f : 176f;
+		float cellHeight = landscape ? 168f : 166f;
 		libraryOverviewGrid.constraintCount = columns;
 		libraryOverviewGrid.spacing = new Vector2(spacing, spacing);
 		libraryOverviewGrid.cellSize = new Vector2(cellWidth, cellHeight);

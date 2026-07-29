@@ -26,6 +26,8 @@ namespace AccardND.NetProtocol
         public string name;
         public string description;
         public int honeyCost;
+        /// <summary>Prezzo di una singola copia nel catalogo del negozio.</summary>
+        public int copyCost;
 
         /// <summary>Gia' posseduta: la voce si mostra come ottenuta.</summary>
         public bool owned;
@@ -61,6 +63,9 @@ namespace AccardND.NetProtocol
 
         /// <summary>Id dei consumabili scelti per la prossima run.</summary>
         public string[] bag;
+
+        /// <summary>Offerte autoritative correnti del negozio.</summary>
+        public ShopOfferData[] shopOffers;
     }
 
     /// <summary>Quantita' posseduta di un consumabile.</summary>
@@ -76,6 +81,19 @@ namespace AccardND.NetProtocol
     public sealed class SanctuaryBuyItemRequest
     {
         public string itemId;
+        /// <summary>Vuoto per il catalogo; valorizzato per applicare un'offerta.</summary>
+        public string offerId;
+    }
+
+    [Serializable]
+    public sealed class ShopOfferData
+    {
+        public string offerId;
+        public string itemId;
+        public int regularCost;
+        public int offerCost;
+        public int remaining;
+        public int discountPercent;
     }
 
     /// <summary>

@@ -38,10 +38,11 @@ public sealed partial class BattleBoardController
 
 	private string FormatImpossibleAttackDetailed(BattleCardState attacker, BattleCardState defender, int attackerDieSides, int defenderDieSides, CombatModifiers modifiers)
 	{
-		int maximumVigor = modifiers.SumAttackerVigor ?attackerDieSides * 2 : attackerDieSides;
+		int lowerDieSides = AccardND.GameCore.Pvp.PvpVigorScale.Lower(attackerDieSides);
+		int maximumVigor = modifiers.SumAttackerVigor ?attackerDieSides + lowerDieSides : attackerDieSides;
 		int attackerMaximum = attacker.Card.Strength + maximumVigor + modifiers.AttackerFlatBonus;
 		int defenderMinimum = defender.Card.Strength + 1 + modifiers.DefenderFlatBonus;
-		string attackerDie = modifiers.SumAttackerVigor ?$"2D{attackerDieSides}" : $"D{attackerDieSides}";
+		string attackerDie = modifiers.SumAttackerVigor ?$"D{attackerDieSides}+D{lowerDieSides}" : $"D{attackerDieSides}";
 		string attackerBonus = FormatFlatBonus(modifiers.AttackerFlatBonus, FormatFlatBonusDetails(attacker, modifiers.AttackerFlatBonus, true, defender));
 		string defenderBonus = FormatFlatBonus(modifiers.DefenderFlatBonus, FormatFlatBonusDetails(defender, modifiers.DefenderFlatBonus, false, attacker));
 		return $"0%: {attacker.Card.Name} arriva al massimo a {attackerMaximum} " + $"({attacker.Card.Strength}{attackerBonus} + {attackerDie}), mentre {defender.Card.Name} parte da " + $"{defenderMinimum} ({defender.Card.Strength}{defenderBonus} + D{defenderDieSides}:1).";
@@ -391,6 +392,10 @@ public sealed partial class BattleBoardController
 
 	private void SetOptionsPanelVisible(bool visible)
 	{
+		if (visible && (Object)(object)optionsMainMenuButton != (Object)null)
+		{
+			optionsMainMenuButton.interactable = HasActiveCampaignSession();
+		}
 		if ((Object)(object)optionsBackdropPanel != (Object)null)
 		{
 			optionsBackdropPanel.SetActive(visible);
@@ -407,6 +412,13 @@ public sealed partial class BattleBoardController
 				optionsPanel.transform.SetAsLastSibling();
 			}
 		}
+	}
+
+	private bool HasActiveCampaignSession()
+	{
+		return campaignDeck != null
+			|| initialDeckBuilder != null
+			|| ((Object)(object)deckBuilderPanel != (Object)null && deckBuilderPanel.activeInHierarchy);
 	}
 
 	private void OpenLogFromOptions()

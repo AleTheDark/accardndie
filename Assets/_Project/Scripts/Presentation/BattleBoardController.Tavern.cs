@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
@@ -18,6 +19,7 @@ namespace AccardND.Presentation
 		private Image tavernCompletionFill;
 		private Button tavernBonusButton;
 		private Font tavernTitleFont;
+		private Coroutine tavernNoticeClearRoutine;
 		private readonly List<GameObject> tavernQuestRows = new List<GameObject>();
 
 		/// <summary>Ultima bacheca ricevuta dal server: e' l'unica verita' che la schermata disegna.</summary>
@@ -93,14 +95,45 @@ namespace AccardND.Presentation
 			tavernNoticeText = CreateText("Tavern Notice", root.transform, tavernTitleFont, 16, FontStyle.Normal, TextAnchor.MiddleCenter);
 			tavernNoticeText.color = new Color(0.86f, 0.74f, 0.52f, 1f);
 			tavernNoticeText.horizontalOverflow = HorizontalWrapMode.Wrap;
-			SetRect(tavernNoticeText.rectTransform, new Vector2(0.08f, 0.79f), new Vector2(0.92f, 0.85f));
+			SetRect(tavernNoticeText.rectTransform, new Vector2(0.08f, 0.025f), new Vector2(0.92f, 0.105f));
 
 			Image progressTrack = CreateImage("Tavern Daily Progress", root.transform, new Color(0.12f, 0.1f, 0.08f, 0.96f));
-			SetRect(progressTrack.rectTransform, new Vector2(0.075f, 0.642f), new Vector2(0.62f, 0.667f));
-			tavernCompletionFill = CreateImage("Tavern Daily Progress Fill", progressTrack.transform, new Color(0.57f, 0.22f, 0.75f, 1f));
+			SetRect(progressTrack.rectTransform, new Vector2(0.075f, 0.637f), new Vector2(0.62f, 0.674f));
+			Outline progressBorder = progressTrack.gameObject.AddComponent<Outline>();
+			progressBorder.effectColor = new Color(0.82f, 0.61f, 0.2f, 0.9f);
+			progressBorder.effectDistance = new Vector2(2f, -2f);
+
+			Image progressInset = CreateImage("Tavern Daily Progress Inset", progressTrack.transform, new Color(0.015f, 0.008f, 0.025f, 1f));
+			SetRect(progressInset.rectTransform, new Vector2(0.008f, 0.16f), new Vector2(0.992f, 0.84f));
+
+			tavernCompletionFill = CreateImage("Tavern Daily Progress Fill", progressInset.transform, new Color(0.47f, 0.08f, 0.72f, 1f));
 			tavernCompletionFill.type = Image.Type.Filled;
 			tavernCompletionFill.fillMethod = Image.FillMethod.Horizontal;
 			Stretch(tavernCompletionFill.rectTransform);
+
+			Image fillHighlight = CreateImage("Tavern Daily Progress Highlight", tavernCompletionFill.transform, new Color(0.86f, 0.48f, 1f, 0.38f));
+			SetRect(fillHighlight.rectTransform, new Vector2(0f, 0.56f), new Vector2(1f, 0.9f));
+			fillHighlight.raycastTarget = false;
+
+			Image movingShine = CreateImage("Tavern Daily Progress Shine", progressInset.transform, new Color(1f, 0.88f, 1f, 0.48f));
+			SetRect(movingShine.rectTransform, new Vector2(0f, 0.12f), new Vector2(0.055f, 0.88f));
+			movingShine.raycastTarget = false;
+
+			Image fillTipGlow = CreateImage("Tavern Daily Progress Tip Glow", progressInset.transform, new Color(0.88f, 0.42f, 1f, 0.72f));
+			SetRect(fillTipGlow.rectTransform, new Vector2(0f, -0.18f), new Vector2(0.018f, 1.18f));
+			fillTipGlow.raycastTarget = false;
+
+			for (int i = 1; i < 5; i++)
+			{
+				Image tick = CreateImage("Tavern Daily Progress Tick " + i, progressInset.transform, new Color(0.92f, 0.73f, 0.35f, 0.36f));
+				float x = i / 5f;
+				SetRect(tick.rectTransform, new Vector2(x - 0.0015f, 0.08f), new Vector2(x + 0.0015f, 0.92f));
+				tick.raycastTarget = false;
+			}
+
+			TavernProgressVfx progressVfx = progressTrack.gameObject.AddComponent<TavernProgressVfx>();
+			progressVfx.Initialize(tavernCompletionFill, movingShine.rectTransform, fillTipGlow.rectTransform);
+
 			tavernCompletionText = CreateText("Tavern Daily Progress Text", root.transform, tavernTitleFont, 20, FontStyle.Normal, TextAnchor.MiddleCenter);
 			tavernCompletionText.color = new Color(0.92f, 0.75f, 0.38f, 1f);
 			SetRect(tavernCompletionText.rectTransform, new Vector2(0.62f, 0.63f), new Vector2(0.72f, 0.68f));
@@ -111,7 +144,7 @@ namespace AccardND.Presentation
 			GameObject scrollObject = new GameObject("Tavern Quest Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(Image), typeof(Mask));
 			scrollObject.transform.SetParent(root.transform, false);
 			RectTransform scrollRect = (RectTransform)scrollObject.transform;
-			SetRect(scrollRect, new Vector2(0.055f, 0.055f), new Vector2(0.945f, 0.61f));
+			SetRect(scrollRect, new Vector2(0.055f, 0.12f), new Vector2(0.945f, 0.61f));
 			scrollObject.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.16f);
 			scrollObject.GetComponent<Mask>().showMaskGraphic = true;
 
@@ -141,7 +174,7 @@ namespace AccardND.Presentation
 		private async void ShowTavern()
 		{
 			modeSelectionPanel.SetActive(false);
-			SetAccountHubHudActive(false);
+			SetAccountHubHudActive(true);
 			tavernPanel.SetActive(true);
 			await RefreshTavernFromServerAsync();
 		}
@@ -154,8 +187,69 @@ namespace AccardND.Presentation
 
 		private void SetTavernNotice(string notice)
 		{
+			if (tavernNoticeText == null)
+				return;
+
+			if (tavernNoticeClearRoutine != null)
+			{
+				StopCoroutine(tavernNoticeClearRoutine);
+				tavernNoticeClearRoutine = null;
+			}
+
+			tavernNoticeText.text = notice ?? string.Empty;
+			if (!string.IsNullOrEmpty(tavernNoticeText.text))
+				tavernNoticeClearRoutine = StartCoroutine(ClearTavernNoticeAfterDelay());
+		}
+
+		private IEnumerator ClearTavernNoticeAfterDelay()
+		{
+			yield return new WaitForSecondsRealtime(15f);
 			if (tavernNoticeText != null)
-				tavernNoticeText.text = notice ?? string.Empty;
+				tavernNoticeText.text = string.Empty;
+			tavernNoticeClearRoutine = null;
+		}
+
+		private sealed class TavernProgressVfx : MonoBehaviour
+		{
+			private Image fill;
+			private RectTransform shine;
+			private RectTransform tipGlow;
+
+			public void Initialize(Image progressFill, RectTransform movingShine, RectTransform progressTipGlow)
+			{
+				fill = progressFill;
+				shine = movingShine;
+				tipGlow = progressTipGlow;
+			}
+
+			private void Update()
+			{
+				if (fill == null || shine == null || tipGlow == null)
+					return;
+
+				float amount = fill.fillAmount;
+				float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4.5f);
+				fill.color = Color.Lerp(
+					new Color(0.42f, 0.055f, 0.66f, 1f),
+					new Color(0.66f, 0.16f, 0.91f, 1f),
+					pulse);
+
+				float tipX = Mathf.Clamp01(amount);
+				tipGlow.anchorMin = new Vector2(Mathf.Max(0f, tipX - 0.012f), -0.18f);
+				tipGlow.anchorMax = new Vector2(Mathf.Min(1f, tipX + 0.012f), 1.18f);
+				tipGlow.gameObject.SetActive(amount > 0.01f);
+				float tipScale = 0.9f + pulse * 0.28f;
+				tipGlow.localScale = new Vector3(tipScale, tipScale, 1f);
+
+				float sweep = Mathf.Repeat(Time.unscaledTime * 0.24f, 1.2f) - 0.1f;
+				bool shineVisible = amount > 0.04f && sweep < amount;
+				shine.gameObject.SetActive(shineVisible);
+				if (shineVisible)
+				{
+					shine.anchorMin = new Vector2(sweep, 0.12f);
+					shine.anchorMax = new Vector2(Mathf.Min(sweep + 0.055f, amount), 0.88f);
+				}
+			}
 		}
 
 		/// <summary>
@@ -263,7 +357,9 @@ namespace AccardND.Presentation
 				{
 					ApplyTavernData(null);
 					AppendLog("TAVERNA - nessuna connessione al server.");
-					SetTavernNotice("Taverna non disponibile offline: serve la connessione al server.");
+					SetTavernNotice(AccardND.Network.AccountServerSession.IsReconnecting
+						? "Riconnessione in corso: la taverna si aggiornerà automaticamente."
+						: "Taverna non disponibile offline: serve la connessione al server.");
 				}
 			}
 			catch (Exception exception)

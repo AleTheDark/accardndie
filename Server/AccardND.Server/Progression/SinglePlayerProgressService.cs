@@ -2,6 +2,8 @@ using AccardND.NetProtocol;
 using AccardND.Server.Accounts;
 using AccardND.Server.Data;
 using Microsoft.Data.Sqlite;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace AccardND.Server.Progression;
 
@@ -164,6 +166,16 @@ public sealed class SinglePlayerProgressService
             return (null, ErrorCodes.InvalidProgressionRequest, "Oggetto non ancora sbloccato al Santuario.");
 
         int copyCost = SanctuaryCatalog.CopyCostOf(entry);
+        string offerId = NormalizeKey(request?.offerId);
+        if (!string.IsNullOrEmpty(offerId))
+        {
+            ShopOfferData offer = BuildShopOffers(connection, transaction, identity.PlayerId, current)
+                .FirstOrDefault(candidate => candidate.offerId == offerId && candidate.itemId == itemId);
+            if (offer == null || offer.remaining <= 0)
+                return (null, ErrorCodes.InvalidProgressionRequest, "Offerta scaduta o esaurita.");
+            copyCost = offer.offerCost;
+            IncrementShopOfferPurchase(connection, transaction, identity.PlayerId, ShopRotationKey(), itemId);
+        }
         if (current.honey < copyCost)
             return (null, ErrorCodes.InsufficientHoney, "Vasetti di miele insufficienti.");
 
@@ -237,6 +249,7 @@ public sealed class SinglePlayerProgressService
                 name = entry.Name,
                 description = entry.Description,
                 honeyCost = entry.HoneyCost,
+                copyCost = entry.Type == SanctuaryCatalog.TypeItem ? SanctuaryCatalog.CopyCostOf(entry) : 0,
                 owned = owned,
                 available = entry.Available && IsSanctuaryEntryOfferable(progress, entry),
                 requirementsMet = context.AreAllMet(entry.Requirements),
@@ -250,8 +263,75 @@ public sealed class SinglePlayerProgressService
             entries = entries.ToArray(),
             bagSlots = SanctuaryBag.ReadSlots(connection, transaction, playerId),
             stash = SanctuaryBag.ReadStash(connection, transaction, playerId),
-            bag = progress.bagItems
+            bag = progress.bagItems,
+            shopOffers = BuildShopOffers(connection, transaction, playerId, progress)
         };
+    }
+
+    private static string ShopRotationKey() => DateTime.UtcNow.ToString("yyyy-MM-dd");
+
+    private static ShopOfferData[] BuildShopOffers(
+        SqliteConnection connection, SqliteTransaction transaction, string playerId, SinglePlayerProgressData progress)
+    {
+        string rotation = ShopRotationKey();
+        var unlocked = SanctuaryCatalog.All
+            .Where(entry => entry.Type == SanctuaryCatalog.TypeItem && IsAlreadyUnlocked(progress, "item", entry.Id))
+            .OrderBy(entry => StableShopValue(playerId + "|" + rotation + "|" + entry.Id))
+            .Take(3)
+            .ToArray();
+        var offers = new List<ShopOfferData>();
+        foreach (SanctuaryCatalog.Entry entry in unlocked)
+        {
+            int seed = StableShopValue(rotation + "|" + playerId + "|" + entry.Id);
+            int quantity = 1 + Math.Abs(seed % 3);
+            int discount = 20 + Math.Abs((seed / 7) % 4) * 5;
+            int regular = SanctuaryCatalog.CopyCostOf(entry);
+            int purchased = ReadShopOfferPurchases(connection, transaction, playerId, rotation, entry.Id);
+            offers.Add(new ShopOfferData
+            {
+                offerId = rotation + "-" + entry.Id,
+                itemId = entry.Id,
+                regularCost = regular,
+                offerCost = Math.Max(1, regular * (100 - discount) / 100),
+                remaining = Math.Max(0, quantity - purchased),
+                discountPercent = discount
+            });
+        }
+        return offers.ToArray();
+    }
+
+    private static int StableShopValue(string value)
+    {
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return BitConverter.ToInt32(hash, 0) & int.MaxValue;
+    }
+
+    private static int ReadShopOfferPurchases(
+        SqliteConnection connection, SqliteTransaction transaction, string playerId, string rotation, string itemId)
+    {
+        using SqliteCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = @"SELECT count FROM player_shop_offer_purchases
+            WHERE player_id = $player AND rotation = $rotation AND item_id = $item";
+        command.Parameters.AddWithValue("$player", playerId);
+        command.Parameters.AddWithValue("$rotation", rotation);
+        command.Parameters.AddWithValue("$item", itemId);
+        object value = command.ExecuteScalar();
+        return value == null || value == DBNull.Value ? 0 : Convert.ToInt32(value);
+    }
+
+    private static void IncrementShopOfferPurchase(
+        SqliteConnection connection, SqliteTransaction transaction, string playerId, string rotation, string itemId)
+    {
+        using SqliteCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = @"INSERT INTO player_shop_offer_purchases(player_id, rotation, item_id, count)
+            VALUES($player, $rotation, $item, 1)
+            ON CONFLICT(player_id, rotation, item_id) DO UPDATE SET count = count + 1";
+        command.Parameters.AddWithValue("$player", playerId);
+        command.Parameters.AddWithValue("$rotation", rotation);
+        command.Parameters.AddWithValue("$item", itemId);
+        command.ExecuteNonQuery();
     }
 
     /// <summary>

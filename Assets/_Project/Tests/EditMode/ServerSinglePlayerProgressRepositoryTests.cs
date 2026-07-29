@@ -243,7 +243,7 @@ namespace AccardND.GameCore.Tests
             public string LastBoughtItemId;
             public string[] LastBag;
 
-            public Task<SanctuaryData> BuySanctuaryItemAsync(string itemId)
+            public Task<SanctuaryData> BuySanctuaryItemAsync(string itemId, string offerId = null)
             {
                 LastBoughtItemId = itemId;
                 return Task.FromResult(NextSanctuary);

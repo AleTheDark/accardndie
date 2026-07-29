@@ -191,7 +191,7 @@ public sealed partial class BattleBoardController
 			canRetryCampaignRoom = false;
 			SetTurnBanner(playerTurn: false, "GAME OVER");
 			SetMessage("GAME OVER. La CPU ha eliminato la tua formazione.");
-			ClaimCampaignRunAccountReward(completed: false);
+			pendingCampaignRewardTask = ClaimCampaignRunAccountReward(completed: false);
 		}
 		RefreshInitiativeDisplay();
 		((Component)restartButton).gameObject.SetActive(canAdvanceToNextRoom || flag);
@@ -228,6 +228,12 @@ public sealed partial class BattleBoardController
 		if (!returningToStartAfterGameOver)
 		{
 			returningToStartAfterGameOver = true;
+			// Non resettare la schermata mentre clear capitolo/reward stanno ancora
+			// applicando snapshot autoritativi alla cache della progressione.
+			while (!pendingCampaignRewardTask.IsCompleted)
+			{
+				yield return null;
+			}
 			float returnDelay = pendingCampaignRewardBaseAccountExperience > 0 && !pendingCampaignRewardAdClaimed ?15f : 5f;
 			yield return WaitForCardInspectionPause(returnDelay);
 			returningToStartAfterGameOver = false;
@@ -308,17 +314,16 @@ public sealed partial class BattleBoardController
 
 		AccardND.PvpUi.PvpCampaignKillTracker.RecordBossDefeat(bossId);
 		RecordDefeatedBossInRun(bossId);
-		ClearAdventureChapterForBoss(bossId);
+		pendingAdventureChapterClearTask = ClearAdventureChapterForBoss(bossId);
 		AppendLog("CAMPAGNA - boss finale battuto: achievement/icona boss registrati per il profilo.");
 	}
 
 	/// <summary>
 	/// Segnala al server il capitolo completato: e' il server a mappare boss -> capitolo, a
-	/// segnarlo completato e a concedere il capitolo successivo. Senza server raggiungibile si
-	/// ripiega sullo sblocco locale, che pero' vale solo finche' non arriva un'istantanea
-	/// autoritativa: la fonte di verita' resta il server.
+	/// segnarlo completato e a concedere il capitolo successivo. Senza server la progressione
+	/// permanente non viene modificata.
 	/// </summary>
-	private async void ClearAdventureChapterForBoss(string bossId)
+	private async System.Threading.Tasks.Task ClearAdventureChapterForBoss(string bossId)
 	{
 		if (ServerProgressReady)
 		{
@@ -336,7 +341,7 @@ public sealed partial class BattleBoardController
 			}
 		}
 
-		UnlockNextAdventureChapterForBoss(bossId);
+		AppendLog($"AVVENTURA - completamento capitolo {bossId} non registrato: server non disponibile.");
 	}
 
 	private string CurrentCampaignBossId()
@@ -354,27 +359,6 @@ public sealed partial class BattleBoardController
 		if (activePalatirBoss != null)
 			return PalatirBossCardId;
 		return null;
-	}
-
-	// Ripiego offline: rispecchia in cache locale quello che il server avrebbe registrato.
-	private void UnlockNextAdventureChapterForBoss(string bossId)
-	{
-		string clearedChapterId = AdventureChapterForBoss(bossId);
-		if (!string.IsNullOrWhiteSpace(clearedChapterId)
-			&& !singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.ChapterCleared, clearedChapterId))
-		{
-			singlePlayerProgressService.Unlock(SinglePlayerUnlockType.ChapterCleared, clearedChapterId);
-		}
-
-		string nextChapterId = NextAdventureChapterForBoss(bossId);
-		if (string.IsNullOrWhiteSpace(nextChapterId)
-			|| singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Chapter, nextChapterId))
-		{
-			return;
-		}
-
-		singlePlayerProgressService.Unlock(SinglePlayerUnlockType.Chapter, nextChapterId);
-		AppendLog($"AVVENTURA - {nextChapterId} sbloccato offline sconfiggendo {bossId}; da riconfermare col server.");
 	}
 
 	private static string AdventureChapterForBoss(string bossId)
@@ -407,18 +391,27 @@ public sealed partial class BattleBoardController
 		canRetryCampaignRoom = false;
 		SetTurnBanner(playerTurn: true, "CAMPAGNA COMPLETATA");
 		SetMessage("CAMPAGNA COMPLETATA. Boss finale sconfitto: icona achievement sbloccata. Ritorno all'inizio tra poco.");
-		ClaimCampaignRunAccountReward(completed: true);
+		pendingCampaignRewardTask = ClaimCampaignRunAccountReward(completed: true);
 		((Component)restartButton).gameObject.SetActive(false);
 		((MonoBehaviour)this).StartCoroutine(ReturnToStartAfterGameOver());
 	}
 
-	private async void ClaimCampaignRunAccountReward(bool completed)
+	private async System.Threading.Tasks.Task ClaimCampaignRunAccountReward(bool completed)
 	{
 		if (runProgress == null)
 		{
 			if (!completed)
 				ShowCampaignDefeatRewardPopup(0);
 			return;
+		}
+
+		// Il clear capitolo e la reward restituiscono entrambi uno snapshot completo.
+		// Se partono insieme, una reward calcolata prima del clear puo' arrivare per ultima
+		// e rimpiazzare la cache con lo stato vecchio, facendo sparire i capitoli dalla UI.
+		// Serializziamo le due mutazioni server: prima progressione capitolo, poi reward.
+		if (completed)
+		{
+			await pendingAdventureChapterClearTask;
 		}
 
 		if (string.IsNullOrWhiteSpace(campaignRunRewardId))
@@ -475,18 +468,13 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		int levelsGained = singlePlayerProgressService.AddAccountExperience(baseAccountExperience);
 		pendingCampaignRewardClaimId = null;
-		pendingCampaignRewardBaseAccountExperience = baseAccountExperience;
+		pendingCampaignRewardBaseAccountExperience = 0;
 		pendingCampaignRewardAdClaimed = false;
-		AppendLog($"ACCOUNT - fine campagna offline ({outcomeLabel}): {availableExperience} EXP disponibili /10 = +{baseAccountExperience} EXP account.");
-		SetMessage($"Fine campagna: +{baseAccountExperience} EXP account ({availableExperience}/10). Guarda ADV per triplicare la ricompensa.");
-		if (levelsGained > 0)
-			AppendLog($"ACCOUNT - level up account: +{levelsGained} livelli.");
-		if (completed)
-			ShowCampaignRewardAdButton();
-		else
-			ShowCampaignDefeatRewardPopup(baseAccountExperience);
+		AppendLog($"ACCOUNT - reward fine campagna ({outcomeLabel}) non registrata: server non disponibile.");
+		SetMessage("Connessione al server necessaria per registrare la ricompensa di fine campagna.");
+		if (!completed)
+			ShowCampaignDefeatRewardPopup(0);
 		RefreshSinglePlayerProgressView();
 	}
 
@@ -582,40 +570,36 @@ public sealed partial class BattleBoardController
 
 		pendingCampaignRewardAdClaimed = true;
 		merchantBuyButton.interactable = false;
-		if (ServerProgressReady && !string.IsNullOrWhiteSpace(pendingCampaignRewardClaimId))
+		if (!ServerProgressReady || string.IsNullOrWhiteSpace(pendingCampaignRewardClaimId))
 		{
-			try
-			{
-				AccardND.Network.SinglePlayerRewardOutcome outcome =
-					await serverProgress.ClaimAdMultiplierAsync(pendingCampaignRewardClaimId, System.Guid.NewGuid().ToString("N"));
-				MirrorServerProgress();
-				AppendLog($"ACCOUNT - ADV fine campagna: +{outcome.GrantedAccountExperience} EXP account extra.");
-				SetMessage($"ADV completata: +{outcome.GrantedAccountExperience} EXP account extra. Ricompensa triplicata.");
-				RefreshSinglePlayerProgressView();
-			}
-			catch (System.Exception exception)
-			{
-				pendingCampaignRewardAdClaimed = false;
-				merchantBuyButton.interactable = true;
-				AppendLog($"ACCOUNT - ADV fine campagna rifiutata dal server: {exception.Message}");
-				return;
-			}
+			pendingCampaignRewardAdClaimed = false;
+			merchantBuyButton.interactable = true;
+			SetMessage("Connessione al server necessaria per applicare il moltiplicatore.");
+			AppendLog("ACCOUNT - moltiplicatore ADV non applicato: server non disponibile.");
+			return;
 		}
-		else
+
+		try
 		{
-			int extraAccountExperience = pendingCampaignRewardBaseAccountExperience * 2;
-			int levelsGained = singlePlayerProgressService.AddAccountExperience(extraAccountExperience);
-			AppendLog($"ACCOUNT - ADV fine campagna offline: +{extraAccountExperience} EXP account extra.");
-			if (levelsGained > 0)
-				AppendLog($"ACCOUNT - level up account: +{levelsGained} livelli.");
-			SetMessage("ADV completata: premio account triplicato.");
+			AccardND.Network.SinglePlayerRewardOutcome outcome =
+				await serverProgress.ClaimAdMultiplierAsync(pendingCampaignRewardClaimId, System.Guid.NewGuid().ToString("N"));
+			MirrorServerProgress();
+			AppendLog($"ACCOUNT - ADV fine campagna: +{outcome.GrantedAccountExperience} EXP account extra.");
+			SetMessage($"+{outcome.GrantedAccountExperience} EXP account extra. Ricompensa triplicata.");
 			RefreshSinglePlayerProgressView();
+		}
+		catch (System.Exception exception)
+		{
+			pendingCampaignRewardAdClaimed = false;
+			merchantBuyButton.interactable = true;
+			AppendLog($"ACCOUNT - ADV fine campagna rifiutata dal server: {exception.Message}");
+			return;
 		}
 		if ((Object)(object)campaignDefeatRewardPopup != (Object)null && campaignDefeatRewardPopup.activeSelf)
 		{
 			int tripledExperience = pendingCampaignRewardBaseAccountExperience * 3;
 			campaignDefeatRewardBodyText.text =
-				$"Pubblicita placeholder completata!\n\n<size=30><b>+{tripledExperience} EXP totali</b></size>\n\nLa ricompensa e stata triplicata.";
+				$"<size=30><b>+{tripledExperience} EXP totali</b></size>\n\nLa ricompensa e stata triplicata.";
 			campaignDefeatRewardDoubleButton.interactable = false;
 			campaignDefeatRewardDoubleButtonText.text = "EXP TRIPLICATA";
 		}

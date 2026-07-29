@@ -42,6 +42,7 @@ public sealed partial class BattleBoardController
 		adventureScriptedTutorialObjectiveShown = false;
 		EnsureAdventureScriptedTutorialView();
 		ReturnToStart(showModeSelection: false);
+		SetAccountHubHudActive(false);
 		SetBattlefieldSurfaceVisible(visible: true);
 		SetCombatChromeVisible(visible: true);
 		SetAdventureTutorialTimelineVisible(visible: false);
@@ -400,7 +401,7 @@ public sealed partial class BattleBoardController
 		RectTransform abilityTarget = ActivePlayerAbilityActionRect();
 		ShowAdventureScriptedTutorialStep(
 			"Abilita Guerriero",
-			"Questo e il Guerriero. Le carte possono avere abilita speciali: premi ABILITA per preparare il suo colpo pesante. Nel prossimo attacco tirera due dadi Vigore e li sommeremo alla sua potenza.",
+			"Questo e il Guerriero. Le carte possono avere abilita speciali: premi ABILITA per preparare il suo colpo pesante. Nel prossimo attacco tirera il dado Vigore e un dado di uno step inferiore, sommandoli alla sua potenza.",
 			abilityTarget);
 		SetAdventureTutorialNextButtonEnabled(enabled: false);
 		MoveAdventureTutorialSpotlight(abilityTarget);

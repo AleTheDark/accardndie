@@ -1501,7 +1501,7 @@ public sealed partial class BattleBoardController
 		if (modifiers.SumAttackerVigor)
 		{
 			int first = random.NextInclusive(1, dieSides);
-			int second = random.NextInclusive(1, dieSides);
+			int second = random.NextInclusive(1, AccardND.GameCore.Pvp.PvpVigorScale.Lower(dieSides));
 			return new VigorRollResult(dieSides, first, second, hasSecondRoll: true, first + second, MatchupResult.Neutral, VigorSelectionMode.Sum);
 		}
 		return SingleRoll(dieSides, random.NextInclusive(1, dieSides));
@@ -2372,7 +2372,7 @@ public sealed partial class BattleBoardController
 			battleCardState.AbilityArmed = true;
 			attackTargetingActive = true;
 			ShowTargetHints(battleCardState);
-			SetMessage("ABILITA GUERRIERO: " + battleCardState.Card.Name + " sommera due dadi nel prossimo attacco.");
+			SetMessage("ABILITA GUERRIERO: " + battleCardState.Card.Name + " sommerà il dado Vigore e un dado di uno step inferiore nel prossimo attacco.");
 			break;
 		case HeroClass.Mage:
 			battleCardState.AbilityArmed = true;
@@ -2685,7 +2685,7 @@ public sealed partial class BattleBoardController
 		case HeroClass.Warrior:
 			card.AbilityArmed = true;
 			RefreshPersistentStatus(card);
-			message = "CPU ABILITA: " + card.Card.Name + " prepara un colpo pesante e tirera due dadi Vigore.";
+			message = "CPU ABILITA: " + card.Card.Name + " prepara un colpo pesante: tirera il dado Vigore e un dado di uno step inferiore.";
 			return true;
 		case HeroClass.Assassin:
 			return TryUseCpuAssassinAbility(card, out message);
