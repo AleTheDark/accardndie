@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
@@ -32,29 +34,25 @@ public sealed partial class BattleBoardController
 
 	private static string CampaignConsumableName(CampaignConsumableType itemType)
 	{
-		return itemType switch
-		{
-			CampaignConsumableType.Detector => "Detector",
-			CampaignConsumableType.SecondChance => "Seconda Chance",
-			CampaignConsumableType.Defrost => "Defrost",
-			CampaignConsumableType.Empower => "Empower",
-			CampaignConsumableType.SigilloRubino => "Sigillo Rubino",
-			CampaignConsumableType.DoubleExp => "Doppia EXP",
-			_ => "Consumabile",
-		};
+		return GameText.Get(GameTextKeys.Consumables.Name(CampaignConsumableLocalizationId(itemType)));
 	}
 
 	private static string CampaignConsumableDescription(CampaignConsumableType itemType)
 	{
+		return GameText.Get(GameTextKeys.Consumables.Description(CampaignConsumableLocalizationId(itemType)));
+	}
+
+	private static string CampaignConsumableLocalizationId(CampaignConsumableType itemType)
+	{
 		return itemType switch
 		{
-			CampaignConsumableType.Detector => "Rivela il contenuto delle tre porte nella prossima scelta della via. Le etichette compaiono sulle porte prima di entrare.",
-			CampaignConsumableType.SecondChance => "Resuscita tutte le carte nel cimitero e le rimette nel mazzo. Non puo essere usata in battaglia.",
-			CampaignConsumableType.Defrost => "Scongela tutte le carte in cooldown e le rimette nel mazzo. Non puo essere usata in battaglia.",
-			CampaignConsumableType.Empower => "Aumenta di uno step il tuo dado Vigore in attacco per la stanza corrente o per la prossima stanza. Non puo essere usato nelle stanze Boss o Miniboss.",
-			CampaignConsumableType.SigilloRubino => "Potenzia permanentemente di +2 una carta del mazzo. Ogni carta puo ricevere un solo Sigillo Rubino.",
-			CampaignConsumableType.DoubleExp => "Raddoppia tutta l'esperienza ottenuta nella prossima stanza.",
-			_ => "Oggetto consumabile da campagna.",
+			CampaignConsumableType.Detector => "detector",
+			CampaignConsumableType.SecondChance => "second_chance",
+			CampaignConsumableType.Defrost => "defrost",
+			CampaignConsumableType.Empower => "empower",
+			CampaignConsumableType.SigilloRubino => "ruby_seal",
+			CampaignConsumableType.DoubleExp => "double_experience",
+			_ => "generic",
 		};
 	}
 
@@ -85,14 +83,15 @@ public sealed partial class BattleBoardController
 	{
 		if (IsConsumableBlockedInBattle(itemType) && IsCampaignBattleActive())
 		{
-			SetMessage($"{CampaignConsumableName(itemType)} non puo essere usato in battaglia.");
-			AppendLog($"CONSUMABILE - {CampaignConsumableName(itemType)} bloccato: battaglia in corso.");
+			string itemName = CampaignConsumableName(itemType);
+			SetMessage(GameText.Format(GameTextKeys.Consumables.CannotUseInBattle, itemName));
+			AppendLog(GameText.Format(GameTextKeys.Consumables.BlockedByBattleLog, itemName));
 			return false;
 		}
 		if (itemType == CampaignConsumableType.Empower && IsEmpowerBlockedInCurrentRoom())
 		{
-			SetMessage("Empower non puo essere usato nelle stanze Boss o Miniboss.");
-			AppendLog("CONSUMABILE - Empower bloccato: stanza Boss/Miniboss.");
+			SetMessage(GameText.Get(GameTextKeys.Consumables.EmpowerBossBlocked));
+			AppendLog(GameText.Get(GameTextKeys.Consumables.EmpowerBossBlockedLog));
 			return false;
 		}
 		if (itemType == CampaignConsumableType.SigilloRubino)
@@ -111,36 +110,36 @@ public sealed partial class BattleBoardController
 			if ((Object)(object)roomChoicePanel != (Object)null && roomChoicePanel.activeSelf)
 			{
 				RevealCurrentCampaignDoorsWithDetector();
-				SetMessage("Detector attivato: i destini delle tre porte sono rivelati.");
+				SetMessage(GameText.Get(GameTextKeys.Consumables.DetectorRevealed));
 			}
 			else
 			{
 				nextDoorChoiceRevealed = true;
-				SetMessage("Detector attivato: la prossima scelta porte mostrera il destino di ogni porta.");
+				SetMessage(GameText.Get(GameTextKeys.Consumables.DetectorNextChoice));
 			}
-			AppendLog("CONSUMABILE - Detector attivato.");
+			AppendLog(GameText.Get(GameTextKeys.Consumables.DetectorActivatedLog));
 			return true;
 		case CampaignConsumableType.SecondChance:
 			int revived = RecoverAllGraveyardCards();
-			SetMessage($"Seconda Chance: {revived} carte tornano dal cimitero al mazzo.");
-			AppendLog($"CONSUMABILE - Seconda Chance recupera {revived} carte.");
+			SetMessage(GameText.Format(GameTextKeys.Consumables.SecondChanceUsed, revived));
+			AppendLog(GameText.Format(GameTextKeys.Consumables.SecondChanceUsedLog, revived));
 			return true;
 		case CampaignConsumableType.Defrost:
 			int defrosted = campaignDeck?.ReleaseCooldown() ?? 0;
-			SetMessage($"Defrost: {defrosted} carte tornano dal cooldown al mazzo.");
-			AppendLog($"CONSUMABILE - Defrost libera {defrosted} carte.");
+			SetMessage(GameText.Format(GameTextKeys.Consumables.DefrostUsed, defrosted));
+			AppendLog(GameText.Format(GameTextKeys.Consumables.DefrostUsedLog, defrosted));
 			return true;
 		case CampaignConsumableType.Empower:
 			PlayEmpowerItemUseSfx();
 			nextRoomEmpowered = true;
 			RefreshPlayerHud();
-			SetMessage("Empower attivato: il tuo dado Vigore in attacco sale di uno step per questa stanza o la prossima.");
-			AppendLog("CONSUMABILE - Empower pronto: dado Vigore d'attacco +1 step nella stanza corrente o prossima.");
+			SetMessage(GameText.Get(GameTextKeys.Consumables.EmpowerUsed));
+			AppendLog(GameText.Get(GameTextKeys.Consumables.EmpowerUsedLog));
 			return true;
 		case CampaignConsumableType.DoubleExp:
 			nextRoomDoubleExperience = true;
-			SetMessage("Doppia EXP attivata: la prossima stanza dara esperienza doppia.");
-			AppendLog("CONSUMABILE - Doppia EXP pronta per la prossima stanza.");
+			SetMessage(GameText.Get(GameTextKeys.Consumables.DoubleExperienceReady));
+			AppendLog(GameText.Get(GameTextKeys.Consumables.DoubleExperienceReadyLog));
 			return true;
 		default:
 			return false;
@@ -156,18 +155,14 @@ public sealed partial class BattleBoardController
 	{
 		if (!HasRubySealTarget())
 		{
-			SetMessage("Sigillo Rubino: nessuna carta valida nel mazzo. Le carte gia' sigillate non possono riceverne un altro.");
-			AppendLog("CONSUMABILE - Sigillo Rubino bloccato: nessun bersaglio valido.");
+			SetMessage(GameText.Get(GameTextKeys.Consumables.RubySealNoTarget));
+			AppendLog(GameText.Get(GameTextKeys.Consumables.RubySealNoTargetLog));
 			return false;
 		}
 		rubySealTargetSelectionActive = true;
-		if ((Object)(object)implementationArchivePanel != (Object)null)
-		{
-			SetImplementationArchiveVisible(true);
-			RefreshImplementationArchive();
-		}
-		SetMessage("Sigillo Rubino pronto: scegli una carta del mazzo o del cooldown nella borsa.");
-		AppendLog("CONSUMABILE - Sigillo Rubino: scelta bersaglio attiva.");
+		ShowRubySealTargetPanel();
+		SetMessage(GameText.Get(GameTextKeys.Consumables.RubySealSelectTarget));
+		AppendLog(GameText.Get(GameTextKeys.Consumables.RubySealSelectTargetLog));
 		return true;
 	}
 
@@ -185,7 +180,7 @@ public sealed partial class BattleBoardController
 	{
 		if (!IsRubySealTarget(target))
 		{
-			SetMessage("Sigillo Rubino: scegli una carta combattente non sigillata, fuori dal cimitero.");
+			SetMessage(GameText.Get(GameTextKeys.Consumables.RubySealInvalidTarget));
 			return false;
 		}
 		if (campaignConsumables == null || !campaignConsumables.TryConsume(CampaignConsumableType.SigilloRubino))
@@ -196,15 +191,15 @@ public sealed partial class BattleBoardController
 		if (!campaignDeck.TryApplyRubySeal(target, 2))
 		{
 			campaignConsumables.Add(CampaignConsumableType.SigilloRubino);
-			SetMessage("Sigillo Rubino: questa carta e' gia' sigillata.");
+			SetMessage(GameText.Get(GameTextKeys.Consumables.RubySealAlreadyApplied));
 			return false;
 		}
 		RecordConsumedBagItem(CampaignConsumableType.SigilloRubino);
 		rubySealTargetSelectionActive = false;
 		PlayEmpowerItemUseSfx();
 		string cardName = CardDisplayNames.MarketName(target.Definition);
-		SetMessage($"Sigillo Rubino inciso su {cardName}: forza permanente +2.");
-		AppendLog($"CONSUMABILE - Sigillo Rubino: {cardName} ottiene +2 permanente.");
+		SetMessage(GameText.Format(GameTextKeys.Consumables.RubySealApplied, cardName));
+		AppendLog(GameText.Format(GameTextKeys.Consumables.RubySealAppliedLog, cardName));
 		if ((Object)(object)implementationArchivePanel != (Object)null && implementationArchivePanel.activeSelf)
 		{
 			RefreshImplementationArchive();
@@ -214,11 +209,89 @@ public sealed partial class BattleBoardController
 
 	private bool HasRubySealTarget()
 	{
-		if (campaignDeck == null)
+		return playerCards.Any(IsRubySealBattleTarget);
+	}
+
+	private static bool IsRubySealBattleTarget(BattleCardState card)
+	{
+		return card != null && !card.Eliminated && IsRubySealTarget(card.CampaignCard);
+	}
+
+	private void ShowRubySealTargetPanel()
+	{
+		CloseRubySealTargetPanel(cancelSelection: false);
+		Font font = AccardND.Battlefield.MmoUiTheme.BodyFont;
+		Image backdrop = CreateImage("Ruby Seal Target Backdrop", (Transform)(object)safeAreaRoot, new Color(0.015f, 0.005f, 0.02f, 0.88f));
+		backdrop.raycastTarget = true;
+		Stretch(backdrop.rectTransform, 0f);
+		rubySealTargetPanel = ((Component)backdrop).gameObject;
+
+		Image window = CreateImage("Ruby Seal Target Window", ((Component)backdrop).transform, new Color(0.18f, 0.035f, 0.055f, 0.98f));
+		RectTransform windowRect = window.rectTransform;
+		windowRect.anchorMin = new Vector2(0.15f, 0.2f);
+		windowRect.anchorMax = new Vector2(0.85f, 0.8f);
+		windowRect.offsetMin = Vector2.zero;
+		windowRect.offsetMax = Vector2.zero;
+
+		Text title = CreateText("Ruby Seal Target Title", ((Component)window).transform, font, 30, FontStyle.Bold, TextAnchor.MiddleCenter);
+		title.text = GameText.GetOrFallbackSilent(
+			GameTextKeys.Consumables.RubySealTargetTitle,
+			"SIGILLO RUBINO - SCEGLI UNA PEDINA SCHIERATA");
+		RectTransform titleRect = title.rectTransform;
+		titleRect.anchorMin = new Vector2(0.05f, 0.82f);
+		titleRect.anchorMax = new Vector2(0.95f, 0.97f);
+		titleRect.offsetMin = Vector2.zero;
+		titleRect.offsetMax = Vector2.zero;
+
+		rubySealTargetCardsRoot = CreateCardRow("Ruby Seal Deployed Pawns", ((Component)window).transform, new Vector2(0.5f, 0.52f));
+		rubySealTargetCardsRoot.sizeDelta = new Vector2(1050f, 300f);
+		foreach (BattleCardState battleCard in playerCards.Where(IsRubySealBattleTarget))
 		{
-			return false;
+			PrototypeCardView view = PrototypeCardView.CreateBattlefieldPreview((Transform)(object)rubySealTargetCardsRoot, battleCard.Definition, configuration);
+			view.SetInteractable(true);
+			view.SetStrengthValue(DisplayStrength(battleCard));
+			((UnityEvent)view.Button.onClick).AddListener((UnityAction)delegate
+			{
+				ApplyRubySealToBattleCard(battleCard);
+			});
+			rubySealTargetCardViews.Add(view);
 		}
-		return campaignDeck.Cards.Any(IsRubySealTarget);
+
+		Button cancel = CreateButton(
+			"Cancel Ruby Seal Selection",
+			((Component)window).transform,
+			font,
+			GameText.GetOrFallbackSilent(GameTextKeys.Common.Cancel, "ANNULLA"));
+		RectTransform cancelRect = ((Component)cancel).GetComponent<RectTransform>();
+		cancelRect.anchorMin = new Vector2(0.4f, 0.04f);
+		cancelRect.anchorMax = new Vector2(0.6f, 0.16f);
+		cancelRect.offsetMin = Vector2.zero;
+		cancelRect.offsetMax = Vector2.zero;
+		((UnityEvent)cancel.onClick).AddListener((UnityAction)delegate { CloseRubySealTargetPanel(cancelSelection: true); });
+		rubySealTargetPanel.transform.SetAsLastSibling();
+	}
+
+	private void ApplyRubySealToBattleCard(BattleCardState battleCard)
+	{
+		if (!IsRubySealBattleTarget(battleCard) || !TryApplyRubySealTo(battleCard.CampaignCard))
+			return;
+		battleCard.PermanentCombatBonus += 2;
+		if ((Object)(object)battleCard.View != (Object)null)
+			battleCard.View.SetStrengthValue(DisplayStrength(battleCard));
+		CloseRubySealTargetPanel(cancelSelection: false);
+	}
+
+	private void CloseRubySealTargetPanel(bool cancelSelection)
+	{
+		if (cancelSelection)
+			rubySealTargetSelectionActive = false;
+		foreach (PrototypeCardView view in rubySealTargetCardViews)
+			if ((Object)(object)view != (Object)null) Object.Destroy(((Component)view).gameObject);
+		rubySealTargetCardViews.Clear();
+		if ((Object)(object)rubySealTargetPanel != (Object)null)
+			Object.Destroy(rubySealTargetPanel);
+		rubySealTargetPanel = null;
+		rubySealTargetCardsRoot = null;
 	}
 
 	private static bool IsRubySealTarget(CampaignCardInstance card)
@@ -283,8 +356,8 @@ public sealed partial class BattleBoardController
 		CampaignConsumableType itemType = pool[random.NextInclusive(0, pool.Length - 1)];
 		campaignConsumables.Add(itemType);
 		string itemName = CampaignConsumableName(itemType);
-		AppendLog(source + " - ottieni consumabile " + itemName + ".");
-		return (description: " " + source + ": ottieni " + itemName + ".", bonusExperience: 0);
+		AppendLog(GameText.Format(GameTextKeys.Consumables.GrantedLog, source, itemName));
+		return (description: GameText.Format(GameTextKeys.Consumables.GrantedDescription, source, itemName), bonusExperience: 0);
 	}
 
 	/// <summary>
@@ -300,7 +373,8 @@ public sealed partial class BattleBoardController
 		List<string> bag = singlePlayerProgressService.Progress?.bagItems;
 		if (bag == null || bag.Count == 0)
 		{
-			AppendLog("BISACCIA - vuota: nessun consumabile in questa run.");
+			AppendLog(GameText.Get(GameTextKeys.Consumables.BagEmptyLog));
+			WarmCampaignRunAds();
 			return;
 		}
 
@@ -313,7 +387,10 @@ public sealed partial class BattleBoardController
 			campaignConsumables.Add(itemType);
 			runBagItemIds.Add(itemId);
 		}
-		AppendLog($"BISACCIA - {runBagItemIds.Count} consumabili portati in run.");
+		AppendLog(GameText.Format(GameTextKeys.Consumables.BagLoadedLog, runBagItemIds.Count));
+		// La borsa e' composta: da qui in poi si sa se l'interstitial degli oggetti puo'
+		// servire, ed e' il primo momento in cui questa run puo' chiedere annunci.
+		WarmCampaignRunAds();
 	}
 
 	/// <summary>Id del catalogo Santuario -> tipo consumabile di run.</summary>
@@ -360,6 +437,12 @@ public sealed partial class BattleBoardController
 	/// <summary>
 	/// Segna come consumato un oggetto arrivato dalla bisaccia. Solo questi vengono scalati
 	/// dalla scorta a fine run: quelli trovati in run (loot, mercante) non ne fanno parte.
+	///
+	/// E' anche il punto in cui parte l'interstitial dell'uso oggetti, ed e' l'unico che va
+	/// bene: qui l'oggetto e' gia' stato tolto dalla borsa, quindi la pubblicita' non puo'
+	/// partire per un uso poi rifiutato (sigillo senza bersaglio, potenziamento in stanza
+	/// boss). Le regole di frequenza fanno il resto: tre oggetti di fila restano una
+	/// pubblicita' sola.
 	/// </summary>
 	private void RecordConsumedBagItem(CampaignConsumableType itemType)
 	{
@@ -369,6 +452,7 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		consumedBagItemIds.Add(itemId);
+		AccardND.Ads.AdService.ShowInterstitial(AccardND.Ads.AdPlacement.BagItemUsed);
 	}
 
 	private int ConsumeNextRoomExperienceMultiplier()
@@ -378,7 +462,7 @@ public sealed partial class BattleBoardController
 			return 1;
 		}
 		nextRoomDoubleExperience = false;
-		AppendLog("CONSUMABILE - Doppia EXP consumata.");
+		AppendLog(GameText.Get(GameTextKeys.Consumables.DoubleExperienceConsumedLog));
 		return 2;
 	}
 
@@ -402,8 +486,11 @@ public sealed partial class BattleBoardController
 		icon.raycastTarget = false;
 		Stretch(icon.rectTransform);
 		cardInspectionStatusRows.Add(((Component)icon).gameObject);
-		cardInspectionSummaryText.text = CampaignConsumableName(itemType) + "\n\n" + CampaignConsumableDescription(itemType)
-			+ $"\n\nQuantita: {campaignConsumables?.GetQuantity(itemType) ?? 0}\nUso singolo. Solo campagna.";
+		cardInspectionSummaryText.text = GameText.Format(
+			GameTextKeys.Consumables.InspectionSummary,
+			CampaignConsumableName(itemType),
+			CampaignConsumableDescription(itemType),
+			campaignConsumables?.GetQuantity(itemType) ?? 0);
 		if ((Object)(object)cardInspectionDraftConfirmButton != (Object)null)
 		{
 			bool canUse = campaignDeck != null
@@ -414,7 +501,7 @@ public sealed partial class BattleBoardController
 			cardInspectionDraftConfirmButton.interactable = canUse;
 			if ((Object)(object)cardInspectionDraftConfirmButtonText != (Object)null)
 			{
-				cardInspectionDraftConfirmButtonText.text = "USA";
+				cardInspectionDraftConfirmButtonText.text = GameText.Get(GameTextKeys.Common.Use);
 			}
 			if ((Object)(object)cardInspectionDraftConfirmButtonRect != (Object)null)
 			{

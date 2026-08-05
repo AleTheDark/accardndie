@@ -298,6 +298,9 @@ namespace AccardND.GameCore.Tests
                 LastAd = (rewardClaimId, adImpressionId);
                 return Task.FromResult(NextReward);
             }
+
+            public Task<SinglePlayerRewardOutcome> ClaimLevelRewardsAsync() =>
+                Task.FromResult(NextReward);
         }
 
         private sealed class InMemoryStore : ISinglePlayerProgressStore

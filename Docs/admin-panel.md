@@ -39,11 +39,11 @@ Username e durata sessione (opzionali) stanno in `serverconfig.json`:
 Aggiungere la env var al service unit del server .NET, es.:
 
 ```ini
-# /etc/systemd/system/accardnd-server.service  (dentro [Service])
+# /etc/systemd/system/accardnd.service  (dentro [Service])
 Environment=ACCARDND_ADMIN_PASSWORD=una-password-robusta
 ```
 
-Poi `sudo systemctl daemon-reload && sudo systemctl restart accardnd-server`.
+Poi `sudo systemctl daemon-reload && sudo systemctl restart accardnd`.
 
 ### nginx
 
@@ -103,6 +103,8 @@ provider ricevevano un id giocatore e mai l'indirizzo. Dettagli in
   prodotto. Utile perche' le quest sono l'unica fonte di miele del gioco.
 - **Partite PvP** — ultime partite con esito, punteggi, ranked/normale.
 - **Stagioni** — elenco stagioni con conteggi.
+- **Versione client** — la build ammessa all'accesso, cambiabile a caldo. Vedi
+  [Versione client richiesta](#versione-client-richiesta).
 
 > Nota sulle quest: "assegnata" conta i giocatori che hanno aperto la taverna quel
 > giorno (le righe nascono al primo contatto, non a mezzanotte), e lo storico dei
@@ -116,6 +118,59 @@ Dal dettaglio giocatore: **rinomina**, **imposta miele**, **reset progressi**
 (azzera miele/tutorial/hardcore/sblocchi, mantiene lo storico run per le
 statistiche), **elimina account** (rimuove il giocatore e tutti i suoi dati,
 inclusi i match che lo referenziano — irreversibile).
+
+## Sblocchi a mano (account di prova)
+
+Sempre nel dettaglio giocatore, il riquadro **Sblocchi a mano** concede e revoca
+classi, abilità supreme, oggetti, slot bisaccia, capitoli (accesso e completamento),
+hardcore e tutorial **senza costo in miele e senza le prove del Santuario**. Serve a
+tenere in piedi un account di testing: ogni casella è un interruttore, e i due
+bottoni fanno "sblocca tutto" / "blocca tutto". Il "blocca tutto" tocca solo gli
+sblocchi — miele, livello e contatori restano dove sono; per azzerare anche quelli
+c'è il reset progressi.
+
+Sotto ogni voce è scritto cosa si sta scavalcando (costo e prove), così il pannello
+non concede alla cieca.
+
+Dettagli che contano:
+
+- Il gioco vede i cambiamenti alla **prossima sincronizzazione della progressione**
+  (rientro nel menu campagna, o riavvio): non c'è push verso un client connesso.
+- Le **tre classi base** non si tolgono finché il tutorial risulta completato: il
+  server le rimette in lista a ogni lettura, quindi il pannello le mostra spuntate e
+  bloccate. Per toglierle si toglie prima il tutorial.
+- Dare il **tutorial** consegna anche classi base e primo capitolo, come a fine
+  tutorial nel gioco.
+- Gli **oggetti** sbloccano il diritto di comprarli al negozio: le copie si prendono
+  lì col miele (che si imposta con l'azione dedicata).
+- La lista è una whitelist (`Admin/AdminUnlockCatalog.cs`): un id non a catalogo
+  viene rifiutato, altrimenti resterebbe per sempre in `single_player_unlocks` senza
+  che nulla lo riconosca.
+
+API: `GET /admin/api/players/{id}/unlocks`, `POST .../unlocks`
+(`{type,id,granted}`), `POST .../unlocks/all` (`{granted}`). Le POST rispondono col
+catalogo aggiornato.
+
+## Versione client richiesta
+
+La scheda **Versione client** decide quali build possono accedere: chi si presenta
+con una versione diversa non entra e resta sulla schermata di login con l'avviso di
+aggiornare. Si imposta la versione target (il *bundleVersion* dei Project Settings
+Unity, es. `0.9.3`), il link di aggiornamento e l'interruttore del blocco.
+
+Il valore vive nella tabella `server_settings` del DB, **non** in `serverconfig.json`:
+quel file viene sovrascritto a ogni deploy del binario, e una versione alzata dal
+pannello deve sopravvivere alla pubblicazione successiva. `ClientVersion` in
+`serverconfig.json` e la env var `ACCARDND_CLIENT_VERSION` restano i valori di
+*avvio*, usati finché nessuno tocca il pannello; "Torna alla configurazione di
+avvio" cancella l'override e ci ritorna.
+
+> **Ordine del deploy.** Pubblica prima la build nuova, poi alza la versione qui.
+> Al contrario chiudi fuori tutti i giocatori finché la build non è online. La
+> versione deve **coincidere esatta**: un client più nuovo del target viene
+> respinto quanto uno più vecchio.
+
+Il cambio vale dai login successivi: chi sta già giocando non viene disconnesso.
 
 ## Dati "nel tempo"
 

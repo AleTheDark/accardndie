@@ -82,6 +82,27 @@ namespace AccardND.NetProtocol
                         targetSlot = e.TargetSlot,
                         magnitude = e.Magnitude
                     };
+                case SupremeUsedEvent e:
+                    return new MatchEventDto
+                    {
+                        type = "SupremeUsed",
+                        player = e.Player,
+                        slot = e.Slot,
+                        ability = (int)e.HeroClass,
+                        supreme = (int)e.Supreme,
+                        targetPlayer = e.TargetPlayer,
+                        targetSlot = e.TargetSlot,
+                        magnitude = e.Magnitude
+                    };
+                case ManaChangedEvent e:
+                    return new MatchEventDto
+                    {
+                        type = "ManaChanged",
+                        player = e.Player,
+                        mana = e.Current,
+                        manaDelta = e.Delta,
+                        reason = e.Reason
+                    };
                 case CardRevivedEvent e:
                     return new MatchEventDto { type = "CardRevived", player = e.Player, slot = e.Slot, lives = e.Lives };
                 case ProtectionTriggeredEvent e:

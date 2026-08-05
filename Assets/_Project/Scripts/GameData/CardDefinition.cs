@@ -1,5 +1,6 @@
 using System;
 using AccardND.GameCore;
+using AccardND.Localization;
 using UnityEngine;
 
 namespace AccardND.GameData
@@ -17,13 +18,17 @@ namespace AccardND.GameData
         [SerializeField, TextArea(2, 6)] private string rulesText;
 
         public string Id => id;
-        public string DisplayName => FormatDisplayName(displayName, id);
+        public string DisplayName => GameText.GetOrFallback(
+            GameTextKeys.Data.CardName(id),
+            FormatDisplayName(displayName, id));
         public CardCategory Category => category;
         public Sprite Artwork => artwork;
         public int Strength => IsMedusaBoss ? 8 : strength;
         public bool HasHeroClass => hasHeroClass || IsMedusaBoss;
         public HeroClass HeroClass => IsMedusaBoss ? HeroClass.Mage : heroClass;
-        public string RulesText => rulesText;
+        public string RulesText => string.IsNullOrWhiteSpace(rulesText)
+            ? string.Empty
+            : GameText.GetOrFallback(GameTextKeys.Data.CardRules(id), rulesText);
         private bool IsMedusaBoss => string.Equals(id, "boss-medusa", StringComparison.OrdinalIgnoreCase);
 
         public bool CanEnterCombat =>

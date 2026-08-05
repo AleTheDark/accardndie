@@ -10,6 +10,7 @@ namespace AccardND.Presentation
 public sealed partial class BattleBoardController
 {
 	private const string HintSeenPrefsPrefix = "AccardHint_";
+	private const string FleckHintsEnabledPrefsKey = "AccardFleckHintsEnabled";
 	private const string FleckMascotResource = "UI/Mascots/Fleck";
 	private const bool FleckMouthDebug = false;
 
@@ -184,6 +185,11 @@ public sealed partial class BattleBoardController
 		return PlayerPrefs.GetInt(HintSeenPrefsPrefix + key, 0) != 0;
 	}
 
+	private static bool AreFleckHintsEnabled()
+	{
+		return PlayerPrefs.GetInt(FleckHintsEnabledPrefsKey, 0) != 0;
+	}
+
 	private static void MarkHintSeen(string key)
 	{
 		PlayerPrefs.SetInt(HintSeenPrefsPrefix + key, 1);
@@ -194,6 +200,7 @@ public sealed partial class BattleBoardController
 	// vengono di nuovo spiegate. Utile per un pulsante "rivedi i suggerimenti".
 	private void ResetHints()
 	{
+		PlayerPrefs.SetInt(FleckHintsEnabledPrefsKey, 1);
 		PlayerPrefs.DeleteKey(HintSeenPrefsPrefix + HintKeyCampaignIntro);
 		PlayerPrefs.DeleteKey(HintSeenPrefsPrefix + HintKeyRoomChoice);
 		PlayerPrefs.DeleteKey(HintSeenPrefsPrefix + HintKeyInitialDraft);
@@ -220,7 +227,7 @@ public sealed partial class BattleBoardController
 
 	private void ShowHintOnce(string key, string title, params string[] pages)
 	{
-		if (pvpPresentationActive)
+		if (pvpPresentationActive || !AreFleckHintsEnabled())
 		{
 			return;
 		}

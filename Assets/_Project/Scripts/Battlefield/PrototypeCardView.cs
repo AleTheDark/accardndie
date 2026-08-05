@@ -3,7 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using AccardND.Battlefield;
 using AccardND.GameCore;
+using AccardND.GameCore.Pvp;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
@@ -42,11 +44,14 @@ namespace AccardND.Presentation
         private const float ScreenDiceAreaWidth = 0.38f;
         private const float CardAspect = 848f / 1264f;
         private const float ArtworkCropOverscan = 0.86f;
+        private const float TurnActionMaximumVerticalLift = 0.20f;
         private static readonly Color ActionLabelOutline = new(0.02f, 0.01f, 0f);
         private static readonly Color ActionLabelGreen = new(0.05f, 0.56f, 0.24f);
         private static readonly Color ActionLabelRed = new(0.66f, 0.08f, 0.05f);
         private static readonly Color ActionLabelOrange = new(0.78f, 0.32f, 0.06f);
         private static readonly Color ActionLabelBlue = new(0.05f, 0.28f, 0.76f);
+        private static readonly Color ActionLabelPurple = new(0.48f, 0.08f, 0.68f);
+        private static readonly Color ActionLabelSupreme = new Color32(0x54, 0xB3, 0x3E, 0xFF);
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatusIconCaches()
@@ -139,6 +144,8 @@ namespace AccardND.Presentation
         private Coroutine battleAuraCoroutine;
         private Coroutine targetHintAuraCoroutine;
         private Coroutine selectedAuraCoroutine;
+        private Coroutine actionCalloutCoroutine;
+        private GameObject actionCalloutRoot;
         private RectTransform actionOverlayRoot;
         private RectTransform attackActionRect;
         private RectTransform abilityActionRect;
@@ -502,6 +509,7 @@ namespace AccardND.Presentation
                 preview.color = Color.clear;
             preview.preserveAspect = true;
             Stretch(preview.rectTransform);
+            ApplyPawnDepthEffect(preview);
             CreateComposableGolemOrbitIfNeeded(definition, preview);
             CreatePalatirShieldOrbitIfNeeded(definition, preview);
 
@@ -567,11 +575,20 @@ namespace AccardND.Presentation
             strengthText.transform.SetAsLastSibling();
         }
 
-        public void SetComposableGolemForm(ComposableGolemForm form, bool animate = true)
+        public void SetComposableGolemForm(
+            ComposableGolemForm form,
+            bool animate = true,
+            Color? actionColor = null)
         {
+            bool formChanged = composableGolemActiveForm != form;
             composableGolemActiveForm = form;
             SetComposableGolemOrbitVisible(true);
             RefreshComposableGolemOrbitVisuals();
+            if (animate && formChanged && isActiveAndEnabled)
+            {
+                PlayFormChangeActionCallout(actionColor ?? GolemVfxPrimary(form));
+                StartCoroutine(PlayComposableGolemFormShiftVfx(form));
+            }
         }
 
         public void SetPalatirShields(IReadOnlyCollection<ClassFamily> shields)
@@ -1372,11 +1389,11 @@ namespace AccardND.Presentation
             ClearActionOverlay();
             RectTransform root = EnsureActionOverlay();
             SetActionOverlayBounds(new Vector2(0.03f, 0.94f), new Vector2(0.97f, 1.48f));
-            Button button = CreateIconActionButton("Attack Action", root, icon, "Attacca", ActionLabelRed);
+            string label = AttackActionText();
+            Button button = CreateIconActionButton("Attack Action", root, icon, label, ActionLabelRed);
             attackActionRect = button.GetComponent<RectTransform>();
             SetAnchors(button.GetComponent<RectTransform>(), new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.93f));
-            if (action != null)
-                button.onClick.AddListener(action);
+            BindActionCallout(button, action, label, ActionLabelRed);
         }
 
         public void ShowAbilityAction(Sprite icon, UnityAction action)
@@ -1384,11 +1401,11 @@ namespace AccardND.Presentation
             ClearActionOverlay();
             RectTransform root = EnsureActionOverlay();
             SetActionOverlayBounds(new Vector2(0.03f, 0.94f), new Vector2(0.97f, 1.48f));
-            Button button = CreateIconActionButton("Ability Action", root, icon, "Abilita", ActionLabelBlue);
+            string label = AbilityActionText();
+            Button button = CreateIconActionButton("Ability Action", root, icon, label, ActionLabelBlue);
             abilityActionRect = button.GetComponent<RectTransform>();
             SetAnchors(button.GetComponent<RectTransform>(), new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.93f));
-            if (action != null)
-                button.onClick.AddListener(action);
+            BindActionCallout(button, action, label, ActionLabelBlue);
         }
 
         public void ShowDualActions(
@@ -1401,22 +1418,23 @@ namespace AccardND.Presentation
             RectTransform root = EnsureActionOverlay();
             SetActionOverlayBounds(new Vector2(0.03f, 0.94f), new Vector2(0.97f, 1.48f));
 
-            Button first = CreateIconActionButton("Attack Action", root, firstIcon, "Attacca", ActionLabelRed);
+            string attackLabel = AttackActionText();
+            Button first = CreateIconActionButton("Attack Action", root, firstIcon, attackLabel, ActionLabelRed);
             attackActionRect = first.GetComponent<RectTransform>();
             SetAnchors(first.GetComponent<RectTransform>(), new Vector2(0.02f, 0.03f), new Vector2(0.47f, 0.93f));
-            if (firstAction != null)
-                first.onClick.AddListener(firstAction);
+            BindActionCallout(first, firstAction, attackLabel, ActionLabelRed);
 
+            string secondLabel = GetActionLabelForSprite(secondIcon);
+            Color secondLabelColor = GetActionLabelColorForSprite(secondIcon);
             Button second = CreateIconActionButton(
                 "Secondary Card Action",
                 root,
                 secondIcon,
-                GetActionLabelForSprite(secondIcon),
-                GetActionLabelColorForSprite(secondIcon));
+                secondLabel,
+                secondLabelColor);
             abilityActionRect = second.GetComponent<RectTransform>();
             SetAnchors(second.GetComponent<RectTransform>(), new Vector2(0.53f, 0.03f), new Vector2(0.98f, 0.93f));
-            if (secondAction != null)
-                second.onClick.AddListener(secondAction);
+            BindActionCallout(second, secondAction, secondLabel, secondLabelColor);
         }
 
         public void ShowTripleActions(
@@ -1431,22 +1449,165 @@ namespace AccardND.Presentation
             RectTransform root = EnsureActionOverlay();
             SetActionOverlayBounds(new Vector2(-0.02f, 0.92f), new Vector2(1.02f, 1.54f));
 
-            Button first = CreateIconActionButton("Attack Action", root, firstIcon, "Attacca", ActionLabelRed);
+            string attackLabel = AttackActionText();
+            string abilityLabel = AbilityActionText();
+            string equipLabel = EquipActionText();
+
+            Button first = CreateIconActionButton("Attack Action", root, firstIcon, attackLabel, ActionLabelRed);
             attackActionRect = first.GetComponent<RectTransform>();
             SetAnchors(first.GetComponent<RectTransform>(), new Vector2(0.00f, 0.02f), new Vector2(0.34f, 0.72f));
-            if (firstAction != null)
-                first.onClick.AddListener(firstAction);
+            BindActionCallout(first, firstAction, attackLabel, ActionLabelRed);
 
-            Button second = CreateIconActionButton("Ability Action", root, secondIcon, "Abilit\u00E0", ActionLabelBlue);
+            Button second = CreateIconActionButton("Ability Action", root, secondIcon, abilityLabel, ActionLabelBlue);
             abilityActionRect = second.GetComponent<RectTransform>();
             SetAnchors(second.GetComponent<RectTransform>(), new Vector2(0.33f, 0.26f), new Vector2(0.67f, 0.96f));
-            if (secondAction != null)
-                second.onClick.AddListener(secondAction);
+            BindActionCallout(second, secondAction, abilityLabel, ActionLabelBlue);
 
-            Button third = CreateIconActionButton("Attachment Action", root, thirdIcon, "Equipaggia", ActionLabelOrange);
+            Button third = CreateIconActionButton("Attachment Action", root, thirdIcon, equipLabel, ActionLabelOrange);
             SetAnchors(third.GetComponent<RectTransform>(), new Vector2(0.66f, 0.02f), new Vector2(1.00f, 0.72f));
-            if (thirdAction != null)
-                third.onClick.AddListener(thirdAction);
+            BindActionCallout(third, thirdAction, equipLabel, ActionLabelOrange);
+        }
+
+        public void ShowTurnActions(
+            Sprite attackIcon,
+            UnityAction attackAction,
+            Sprite abilityIcon,
+            UnityAction abilityAction,
+            Sprite attachmentIcon,
+            UnityAction attachmentAction,
+            Sprite skipIcon,
+            UnityAction skipAction,
+            Sprite supremeIcon = null,
+            UnityAction supremeAction = null,
+            int? attackMana = null,
+            int? abilityMana = null,
+            int? skipMana = null,
+            int? supremeMana = null)
+        {
+            ClearActionOverlay();
+            RectTransform root = EnsureActionOverlay();
+
+            int actionCount = 2;
+            if (abilityAction != null)
+                actionCount++;
+            if (supremeAction != null)
+                actionCount++;
+            if (attachmentAction != null)
+                actionCount++;
+
+            float edgeBias = ConfigureTurnActionOverlay(actionCount);
+
+            int actionIndex = 0;
+            string attackLabel = AttackActionText();
+            string abilityLabel = AbilityActionText();
+            string equipLabel = EquipActionText();
+            string skipLabel = SkipActionText();
+
+            Button attack = CreateIconActionButton("Attack Action", root, attackIcon, attackLabel, ActionLabelRed, attackMana);
+            attackActionRect = attack.GetComponent<RectTransform>();
+            SetTurnActionSlot(attack, actionIndex++, actionCount, edgeBias);
+            BindActionCallout(attack, attackAction, attackLabel, ActionLabelRed);
+
+            if (abilityAction != null)
+            {
+                Button ability = CreateIconActionButton("Ability Action", root, abilityIcon, abilityLabel, ActionLabelBlue, abilityMana);
+                abilityActionRect = ability.GetComponent<RectTransform>();
+                SetTurnActionSlot(ability, actionIndex++, actionCount, edgeBias);
+                BindActionCallout(ability, abilityAction, abilityLabel, ActionLabelBlue);
+            }
+
+            // La suprema sta accanto all'abilita' base: sono la stessa famiglia di
+            // azioni, e il verde la distingue senza spezzare la lettura da sinistra.
+            if (supremeAction != null)
+            {
+                string supremeLabel = SupremeActionText();
+                Button supreme = CreateIconActionButton("Supreme Action", root, supremeIcon, supremeLabel, ActionLabelSupreme, supremeMana);
+                SetTurnActionSlot(supreme, actionIndex++, actionCount, edgeBias);
+                BindActionCallout(supreme, supremeAction, supremeLabel, ActionLabelSupreme);
+            }
+
+            if (attachmentAction != null)
+            {
+                Button attachment = CreateIconActionButton("Attachment Action", root, attachmentIcon, equipLabel, ActionLabelOrange);
+                SetTurnActionSlot(attachment, actionIndex++, actionCount, edgeBias);
+                BindActionCallout(attachment, attachmentAction, equipLabel, ActionLabelOrange);
+            }
+
+            Button skip = CreateIconActionButton("Skip Action", root, skipIcon, skipLabel, ActionLabelPurple, skipMana);
+            SetTurnActionSlot(skip, actionIndex, actionCount, edgeBias);
+            BindActionCallout(skip, skipAction, skipLabel, ActionLabelPurple);
+        }
+
+        private float ConfigureTurnActionOverlay(int actionCount)
+        {
+            float horizontalOverflow = actionCount >= 5
+                ? 0.34f
+                : actionCount == 4
+                    ? 0.24f
+                    : actionCount == 3
+                        ? 0.10f
+                        : 0f;
+            float minimumX = 0.03f - horizontalOverflow;
+            float maximumX = 0.97f + horizontalOverflow;
+            if (actionCount <= 3)
+            {
+                SetActionOverlayBounds(
+                    new Vector2(minimumX, 0.94f),
+                    new Vector2(maximumX, 1.52f));
+                SetActionOverlayOffsets(new Vector2(0f, -42f));
+                return 0f;
+            }
+
+            SetActionOverlayBounds(
+                new Vector2(minimumX, 0.94f),
+                new Vector2(maximumX, 1.52f));
+            SetActionOverlayOffsets(new Vector2(0f, -42f));
+
+			// Le pedine agiscono sempre al centro: esiste un solo layout dei comandi,
+			// indipendente dal lato dello schermo da cui proveniva la pedina.
+			return 0f;
+        }
+
+        private void SetActionOverlayOffsets(Vector2 offset)
+        {
+            actionOverlayRoot.offsetMin = offset;
+            actionOverlayRoot.offsetMax = offset;
+        }
+
+        private static void SetTurnActionSlot(Button button, int index, int count, float edgeBias)
+        {
+            int safeCount = Mathf.Clamp(count, 1, 5);
+            int safeIndex = Mathf.Clamp(index, 0, safeCount - 1);
+
+            float gap = safeCount >= 4 ? 0.018f : 0.025f;
+            float width = (1f - gap * (safeCount - 1)) / safeCount;
+            float minimumX = safeIndex * (width + gap);
+            float verticalLift = CalculateTurnActionVerticalLift(safeIndex, safeCount, 0f);
+            SetAnchors(
+                button.GetComponent<RectTransform>(),
+                new Vector2(minimumX, 0.03f + verticalLift),
+                new Vector2(minimumX + width, 0.91f + verticalLift));
+
+            // Con due o tre comandi le label possono avere anche la seconda riga
+            // del costo mana: le teniamo più alte per non coprirle con le icone.
+            if (safeCount <= 3)
+                SetActionButtonLabelAnchors(
+                    button,
+                    new Vector2(-0.08f, 0.98f),
+                    new Vector2(1.08f, 1.46f));
+        }
+
+        private static float CalculateTurnActionVerticalLift(int index, int count, float edgeBias)
+        {
+            if (count <= 2)
+                return 0f;
+
+            float normalizedPosition = index / (count - 1f);
+			float apex = 0.5f;
+            float radius = Mathf.Max(apex, 1f - apex);
+            float distance = (normalizedPosition - apex) / radius;
+            float arc = Mathf.Max(0f, 1f - distance * distance);
+			return arc * TurnActionMaximumVerticalLift;
         }
 
         public void ShowConfirmCancelActions(Sprite confirmIcon, Sprite cancelIcon, UnityAction confirmAction, UnityAction cancelAction)
@@ -1470,17 +1631,17 @@ namespace AccardND.Presentation
         {
             ClearActionOverlay();
             RectTransform root = EnsureActionOverlay();
-            SetActionOverlayBounds(new Vector2(0.08f, 0.94f), new Vector2(0.92f, 1.46f));
+            SetActionOverlayBounds(new Vector2(0.03f, 0.92f), new Vector2(0.97f, 1.52f));
 
             Button confirm = CreateIconActionButton("Confirm Action", root, confirmIcon, "Conferma", ActionLabelGreen);
-            SetAnchors(confirm.GetComponent<RectTransform>(), new Vector2(0.00f, 0.03f), new Vector2(0.43f, 0.93f));
-            SetActionButtonLabelAnchors(confirm, new Vector2(-0.08f, 0.78f), new Vector2(1.08f, 1.12f));
+            SetAnchors(confirm.GetComponent<RectTransform>(), new Vector2(0.00f, 0.01f), new Vector2(0.46f, 0.98f));
+            SetActionButtonLabelAnchors(confirm, new Vector2(-0.08f, 0.9f), new Vector2(1.08f, 1.24f));
             if (confirmAction != null)
                 confirm.onClick.AddListener(confirmAction);
 
             Button info = CreateIconActionButton("Info Action", root, infoIcon, "Info", ActionLabelBlue);
-            SetAnchors(info.GetComponent<RectTransform>(), new Vector2(0.57f, 0.03f), new Vector2(1.00f, 0.93f));
-            SetActionButtonLabelAnchors(info, new Vector2(-0.08f, 0.78f), new Vector2(1.08f, 1.12f));
+            SetAnchors(info.GetComponent<RectTransform>(), new Vector2(0.54f, 0.01f), new Vector2(1.00f, 0.98f));
+            SetActionButtonLabelAnchors(info, new Vector2(-0.08f, 0.9f), new Vector2(1.08f, 1.24f));
             if (infoAction != null)
                 info.onClick.AddListener(infoAction);
         }
@@ -1493,7 +1654,7 @@ namespace AccardND.Presentation
 
             Button confirm = CreateIconActionButton("Confirm Action", root, confirmIcon, "Conferma", ActionLabelGreen);
             SetAnchors(confirm.GetComponent<RectTransform>(), new Vector2(0.00f, 0.03f), new Vector2(1.00f, 0.93f));
-            SetActionButtonLabelAnchors(confirm, new Vector2(-0.08f, 0.78f), new Vector2(1.08f, 1.12f));
+            SetActionButtonLabelAnchors(confirm, new Vector2(-0.08f, 0.9f), new Vector2(1.08f, 1.24f));
             if (confirmAction != null)
                 confirm.onClick.AddListener(confirmAction);
         }
@@ -1633,10 +1794,9 @@ namespace AccardND.Presentation
             };
 
             Sprite sprite = string.IsNullOrWhiteSpace(resourcePath) ? null : LoadPreviewSprite(resourcePath);
-            if (sprite == null)
-                return;
-
-            StartCoroutine(PlayComposableGolemHitEffectRoutine(sprite, form));
+            StartCoroutine(PlayComposableGolemLocalVfx("Golem Material Shatter", form, strong: true, shield: false));
+            if (sprite != null)
+                StartCoroutine(PlayComposableGolemHitEffectRoutine(sprite, form));
         }
 
         public IEnumerator PlayComposableGolemAttackEffect(PrototypeCardView defender, ComposableGolemForm form, bool hit)
@@ -1658,7 +1818,10 @@ namespace AccardND.Presentation
 
         public IEnumerator PlayComposableGolemDefenseEffect(ComposableGolemForm form, bool resisted)
         {
-            yield return PlayComposableGolemLocalVfx("Golem Defense VFX", form, resisted, shield: true);
+            if (!resisted)
+                yield break;
+
+            yield return PlayComposableGolemPerfectGuardVfx(form);
         }
 
         public IEnumerator PlayPalatirShieldBreakEffect(ClassFamily family)
@@ -3418,6 +3581,11 @@ namespace AccardND.Presentation
                 CreateTrailImage(parent, "Golem Attack Trail Edge B", secondary, length, angle, 7f),
                 CreateTrailImage(parent, "Golem Attack Trail Spark", Color.Lerp(primary, Color.white, 0.62f), length, angle, 4f)
             };
+            for (int i = 0; i < trails.Length; i++)
+            {
+                trails[i].sprite = ComposableGolemVfxSprites.Trail(form, i);
+                trails[i].type = Image.Type.Simple;
+            }
             const int moteCount = 28;
             Image[] motes = new Image[moteCount];
             float[] moteOffsets = new float[moteCount];
@@ -3426,6 +3594,8 @@ namespace AccardND.Presentation
             {
                 Color moteColor = i % 3 == 0 ? Color.Lerp(secondary, Color.white, 0.42f) : primary;
                 motes[i] = CreateImage("Golem Attack Arc Mote " + i, parent, moteColor);
+                motes[i].sprite = ComposableGolemVfxSprites.Particle(form, i);
+                motes[i].type = Image.Type.Simple;
                 motes[i].raycastTarget = false;
                 RectTransform moteRect = motes[i].rectTransform;
                 moteRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -3439,6 +3609,8 @@ namespace AccardND.Presentation
             }
 
             Image targetTelegraph = CreateImage("Golem Attack Target Telegraph", parent, primary);
+            targetTelegraph.sprite = ComposableGolemVfxSprites.Telegraph(form);
+            targetTelegraph.type = Image.Type.Simple;
             targetTelegraph.raycastTarget = false;
             targetTelegraph.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
             targetTelegraph.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
@@ -3525,11 +3697,15 @@ namespace AccardND.Presentation
             Color secondary = GolemVfxSecondary(form);
             Color whiteHot = Color.Lerp(primary, Color.white, form == ComposableGolemForm.Iron ? 0.28f : 0.7f);
             Image flash = CreateImage(effectName + " Flash", transform, whiteHot);
+            flash.sprite = ComposableGolemVfxSprites.Glow;
+            flash.type = Image.Type.Simple;
             flash.raycastTarget = false;
             SetAnchors(flash.rectTransform, new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f));
             flash.transform.SetAsLastSibling();
 
             Image ring = CreateImage(effectName + " Ring", transform, primary);
+            ring.sprite = ComposableGolemVfxSprites.Telegraph(form);
+            ring.type = Image.Type.Simple;
             ring.raycastTarget = false;
             SetAnchors(ring.rectTransform, new Vector2(-0.1f, -0.1f), new Vector2(1.1f, 1.1f));
             ring.transform.SetAsLastSibling();
@@ -3538,6 +3714,8 @@ namespace AccardND.Presentation
             ringOutline.effectDistance = shield ? new Vector2(6f, -6f) : new Vector2(3.5f, -3.5f);
 
             Image innerRing = CreateImage(effectName + " Inner Rune Ring", transform, secondary);
+            innerRing.sprite = ComposableGolemVfxSprites.Telegraph(form);
+            innerRing.type = Image.Type.Simple;
             innerRing.raycastTarget = false;
             SetAnchors(innerRing.rectTransform, new Vector2(0.16f, 0.16f), new Vector2(0.84f, 0.84f));
             innerRing.transform.SetAsLastSibling();
@@ -3552,6 +3730,8 @@ namespace AccardND.Presentation
             {
                 Color particleTint = i % 4 == 0 ? whiteHot : i % 2 == 0 ? primary : secondary;
                 particles[i] = CreateImage(effectName + " Spark " + i, transform, particleTint);
+                particles[i].sprite = ComposableGolemVfxSprites.Particle(form, i);
+                particles[i].type = Image.Type.Simple;
                 particles[i].raycastTarget = false;
                 SetAnchors(particles[i].rectTransform, new Vector2(0.48f, 0.48f), new Vector2(0.52f, 0.52f));
                 particles[i].transform.SetAsLastSibling();
@@ -3566,6 +3746,8 @@ namespace AccardND.Presentation
                 {
                     Color facetTint = i % 2 == 0 ? Color.Lerp(primary, Color.white, 0.28f) : secondary;
                     shieldFacets[i] = CreateImage(effectName + " Defensive Facet " + i, transform, facetTint);
+                    shieldFacets[i].sprite = ComposableGolemVfxSprites.Facet(form, i);
+                    shieldFacets[i].type = Image.Type.Simple;
                     shieldFacets[i].raycastTarget = false;
                     SetAnchors(shieldFacets[i].rectTransform, new Vector2(0.48f, 0.48f), new Vector2(0.52f, 0.52f));
                     shieldFacets[i].transform.SetAsLastSibling();
@@ -3650,11 +3832,236 @@ namespace AccardND.Presentation
             }
         }
 
+        private IEnumerator PlayComposableGolemPerfectGuardVfx(ComposableGolemForm form)
+        {
+            StartCoroutine(PlayComposableGolemLocalVfx(
+                "Golem Perfect Guard Backplate",
+                form,
+                strong: true,
+                shield: true));
+
+            Color primary = GolemVfxPrimary(form);
+            Color secondary = GolemVfxSecondary(form);
+            Color edge = Color.Lerp(secondary, Color.white, form == ComposableGolemForm.Iron ? 0.3f : 0.68f);
+            Vector3 cardBaseScale = rectTransform != null ? rectTransform.localScale : Vector3.one;
+
+            Image guardFlash = CreateImage("Golem Perfect Guard Material Flash", transform, edge);
+            guardFlash.sprite = ComposableGolemVfxSprites.Glow;
+            guardFlash.type = Image.Type.Simple;
+            guardFlash.raycastTarget = false;
+            SetAnchors(guardFlash.rectTransform, new Vector2(0.04f, 0.04f), new Vector2(0.96f, 0.96f));
+            guardFlash.transform.SetAsLastSibling();
+
+            Image outerSeal = CreateImage("Golem Perfect Guard Outer Seal", transform, primary);
+            outerSeal.sprite = ComposableGolemVfxSprites.Telegraph(form);
+            outerSeal.type = Image.Type.Simple;
+            outerSeal.raycastTarget = false;
+            SetAnchors(outerSeal.rectTransform, new Vector2(-0.2f, -0.2f), new Vector2(1.2f, 1.2f));
+            outerSeal.transform.SetAsLastSibling();
+            Outline outerOutline = outerSeal.gameObject.AddComponent<Outline>();
+            outerOutline.effectColor = new Color(edge.r, edge.g, edge.b, 0.72f);
+            outerOutline.effectDistance = new Vector2(4f, -4f);
+
+            Image innerSeal = CreateImage("Golem Perfect Guard Inner Seal", transform, secondary);
+            innerSeal.sprite = ComposableGolemVfxSprites.Telegraph(form);
+            innerSeal.type = Image.Type.Simple;
+            innerSeal.raycastTarget = false;
+            SetAnchors(innerSeal.rectTransform, new Vector2(0.1f, 0.1f), new Vector2(0.9f, 0.9f));
+            innerSeal.transform.SetAsLastSibling();
+
+            int plateCount = form switch
+            {
+                ComposableGolemForm.Iron => 10,
+                ComposableGolemForm.Crystal => 6,
+                ComposableGolemForm.Glass => 8,
+                _ => 8
+            };
+            Image[] plates = new Image[plateCount];
+            Vector2[] plateDirections = new Vector2[plateCount];
+            float[] plateAngles = new float[plateCount];
+            for (int i = 0; i < plateCount; i++)
+            {
+                float angle = i * (360f / plateCount)
+                    + (form == ComposableGolemForm.Glass ? (i % 2 == 0 ? 9f : -6f) : 0f);
+                plateAngles[i] = angle;
+                plateDirections[i] = new Vector2(
+                    Mathf.Cos(angle * Mathf.Deg2Rad),
+                    Mathf.Sin(angle * Mathf.Deg2Rad));
+
+                Color plateTint = i % 3 == 0
+                    ? Color.Lerp(primary, Color.white, 0.5f)
+                    : i % 2 == 0 ? primary : secondary;
+                plates[i] = CreateImage("Golem Perfect Guard Material Plate " + i, transform, plateTint);
+                plates[i].sprite = ComposableGolemVfxSprites.Facet(form, i);
+                plates[i].type = Image.Type.Simple;
+                plates[i].raycastTarget = false;
+                SetAnchors(plates[i].rectTransform, new Vector2(0.48f, 0.48f), new Vector2(0.52f, 0.52f));
+                plates[i].rectTransform.sizeDelta = FormShieldFacetSize(form, i);
+                plates[i].transform.SetAsLastSibling();
+                Outline plateOutline = plates[i].gameObject.AddComponent<Outline>();
+                plateOutline.effectColor = new Color(edge.r, edge.g, edge.b, form == ComposableGolemForm.Glass ? 0.36f : 0.62f);
+                plateOutline.effectDistance = form == ComposableGolemForm.Iron
+                    ? new Vector2(3f, -3f)
+                    : new Vector2(2f, -2f);
+            }
+
+            const int reboundCount = 16;
+            Image[] rebounds = new Image[reboundCount];
+            Vector2[] reboundDirections = new Vector2[reboundCount];
+            for (int i = 0; i < reboundCount; i++)
+            {
+                float angle = i * (360f / reboundCount) + (i % 4) * 5f;
+                reboundDirections[i] = new Vector2(
+                    Mathf.Cos(angle * Mathf.Deg2Rad),
+                    Mathf.Sin(angle * Mathf.Deg2Rad));
+                Color reboundTint = i % 4 == 0 ? edge : i % 2 == 0 ? primary : secondary;
+                rebounds[i] = CreateImage("Golem Perfect Guard Rebound Shard " + i, transform, reboundTint);
+                rebounds[i].sprite = ComposableGolemVfxSprites.Particle(form, i);
+                rebounds[i].type = Image.Type.Simple;
+                rebounds[i].raycastTarget = false;
+                SetAnchors(rebounds[i].rectTransform, new Vector2(0.49f, 0.49f), new Vector2(0.51f, 0.51f));
+                rebounds[i].rectTransform.sizeDelta = FormParticleSize(form, shield: true, i)
+                    * (i % 5 == 0 ? 1.1f : 0.72f);
+                rebounds[i].transform.SetAsLastSibling();
+            }
+
+            float elapsed = 0f;
+            const float duration = 0.94f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+                float assemble = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.3f));
+                float release = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((progress - 0.48f) / 0.52f));
+                float guardPulse = Mathf.Sin(Mathf.Clamp01(progress / 0.62f) * Mathf.PI);
+                float fade = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((progress - 0.66f) / 0.34f));
+
+                guardFlash.color = new Color(edge.r, edge.g, edge.b, guardPulse * fade * 0.42f);
+                guardFlash.rectTransform.localScale = Vector3.one * Mathf.Lerp(0.58f, 1.34f, assemble);
+
+                outerSeal.color = new Color(primary.r, primary.g, primary.b, fade * 0.72f);
+                outerSeal.rectTransform.localScale = Vector3.one
+                    * Mathf.Lerp(1.46f, 0.78f + release * 0.52f, assemble);
+                outerSeal.rectTransform.localRotation = Quaternion.Euler(
+                    0f,
+                    0f,
+                    Mathf.Lerp(
+                        form == ComposableGolemForm.Iron ? 54f : -72f,
+                        form == ComposableGolemForm.Iron ? -18f : 34f,
+                        assemble) + release * (form == ComposableGolemForm.Glass ? 58f : 22f));
+
+                innerSeal.color = new Color(secondary.r, secondary.g, secondary.b, fade * 0.64f);
+                innerSeal.rectTransform.localScale = Vector3.one * Mathf.Lerp(0.42f, 1.08f + release * 0.18f, assemble);
+                innerSeal.rectTransform.localRotation = Quaternion.Euler(
+                    0f,
+                    0f,
+                    Mathf.Lerp(-90f, 20f, assemble) - release * 76f);
+
+                if (rectTransform != null)
+                {
+                    float recoil = Mathf.Sin(Mathf.Clamp01((progress - 0.12f) / 0.42f) * Mathf.PI) * 0.045f;
+                    rectTransform.localScale = cardBaseScale * (1f - recoil + guardPulse * 0.018f);
+                }
+
+                float lockedRadius = form switch
+                {
+                    ComposableGolemForm.Iron => 76f,
+                    ComposableGolemForm.Crystal => 82f,
+                    ComposableGolemForm.Glass => 88f,
+                    _ => 80f
+                };
+                for (int i = 0; i < plates.Length; i++)
+                {
+                    Image plate = plates[i];
+                    if (plate == null)
+                        continue;
+
+                    Vector2 direction = plateDirections[i];
+                    Vector2 tangent = Perpendicular(direction);
+                    float stagger = i * 0.012f;
+                    float localAssemble = Mathf.SmoothStep(
+                        0f,
+                        1f,
+                        Mathf.Clamp01((progress - stagger) / Mathf.Max(0.08f, 0.28f - stagger)));
+                    float startRadius = form == ComposableGolemForm.Iron ? 152f : 132f;
+                    float radius = Mathf.Lerp(startRadius, lockedRadius, localAssemble) + release * (42f + (i % 3) * 8f);
+                    float refract = form == ComposableGolemForm.Glass
+                        ? Mathf.Sin(progress * Mathf.PI * 5f + i) * 9f * fade
+                        : 0f;
+                    plate.rectTransform.anchoredPosition = direction * radius + tangent * refract;
+
+                    float plateRotation = form switch
+                    {
+                        ComposableGolemForm.Iron => plateAngles[i] + 90f,
+                        ComposableGolemForm.Crystal => plateAngles[i],
+                        ComposableGolemForm.Glass => plateAngles[i] + (i % 2 == 0 ? 24f : -18f),
+                        _ => plateAngles[i]
+                    };
+                    plate.rectTransform.localRotation = Quaternion.Euler(
+                        0f,
+                        0f,
+                        plateRotation + (1f - localAssemble) * 55f + release * 26f);
+                    plate.rectTransform.localScale = Vector3.one
+                        * Mathf.Lerp(0.42f, 1.18f, localAssemble)
+                        * Mathf.Lerp(1f, 0.76f, release);
+                    Color plateColor = plate.color;
+                    plateColor.a = localAssemble * fade * (form == ComposableGolemForm.Glass ? 0.68f : 0.9f);
+                    plate.color = plateColor;
+                }
+
+                for (int i = 0; i < rebounds.Length; i++)
+                {
+                    Image rebound = rebounds[i];
+                    if (rebound == null)
+                        continue;
+
+                    float localProgress = Mathf.Clamp01((progress - 0.3f - i * 0.006f) / 0.58f);
+                    Vector2 direction = reboundDirections[i];
+                    Vector2 tangent = Perpendicular(direction);
+                    float distance = Mathf.Lerp(24f, 150f + (i % 4) * 13f, Mathf.SmoothStep(0f, 1f, localProgress));
+                    float deflection = form == ComposableGolemForm.Glass
+                        ? Mathf.Sin(localProgress * Mathf.PI * 3f + i) * 20f
+                        : Mathf.Sin(localProgress * Mathf.PI + i) * 8f;
+                    rebound.rectTransform.anchoredPosition = direction * distance + tangent * deflection;
+                    rebound.rectTransform.localRotation = Quaternion.Euler(
+                        0f,
+                        0f,
+                        Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg
+                            + localProgress * (form == ComposableGolemForm.Crystal ? 520f : 320f));
+                    Color reboundColor = rebound.color;
+                    reboundColor.a = Mathf.Sin(localProgress * Mathf.PI) * 0.92f;
+                    rebound.color = reboundColor;
+                }
+                yield return null;
+            }
+
+            if (rectTransform != null)
+                rectTransform.localScale = cardBaseScale;
+            if (guardFlash != null)
+                Destroy(guardFlash.gameObject);
+            if (outerSeal != null)
+                Destroy(outerSeal.gameObject);
+            if (innerSeal != null)
+                Destroy(innerSeal.gameObject);
+            for (int i = 0; i < plates.Length; i++)
+            {
+                if (plates[i] != null)
+                    Destroy(plates[i].gameObject);
+            }
+            for (int i = 0; i < rebounds.Length; i++)
+            {
+                if (rebounds[i] != null)
+                    Destroy(rebounds[i].gameObject);
+            }
+        }
+
         private IEnumerator PlayComposableGolemAttackAnticipation(ComposableGolemForm form)
         {
             Vector3 baseScale = rectTransform != null ? rectTransform.localScale : Vector3.one;
             Color primary = GolemVfxPrimary(form);
             Image aura = CreateImage("Golem Attack AAA Anticipation Aura", transform, primary);
+            aura.sprite = ComposableGolemVfxSprites.Glow;
+            aura.type = Image.Type.Simple;
             aura.raycastTarget = false;
             SetAnchors(aura.rectTransform, new Vector2(-0.18f, -0.18f), new Vector2(1.18f, 1.18f));
             aura.transform.SetAsLastSibling();
@@ -3677,6 +4084,103 @@ namespace AccardND.Presentation
                 rectTransform.localScale = baseScale;
             if (aura != null)
                 Destroy(aura.gameObject);
+        }
+
+        private IEnumerator PlayComposableGolemFormShiftVfx(ComposableGolemForm form)
+        {
+            StartCoroutine(PlayComposableGolemLocalVfx("Golem Form Ascension", form, strong: true, shield: true));
+
+            RectTransform orbitRect = composableGolemOrbitRoot;
+            Vector3 orbitBaseScale = orbitRect != null ? orbitRect.localScale : Vector3.one;
+            Quaternion orbitBaseRotation = orbitRect != null ? orbitRect.localRotation : Quaternion.identity;
+            Color primary = GolemVfxPrimary(form);
+            Color secondary = GolemVfxSecondary(form);
+
+            Image seal = CreateImage("Golem Form Material Seal", transform, primary);
+            seal.sprite = ComposableGolemVfxSprites.Telegraph(form);
+            seal.type = Image.Type.Simple;
+            seal.raycastTarget = false;
+            SetAnchors(seal.rectTransform, new Vector2(-0.22f, -0.22f), new Vector2(1.22f, 1.22f));
+            seal.transform.SetAsLastSibling();
+
+            const int shardCount = 12;
+            Image[] shards = new Image[shardCount];
+            Vector2[] shardDirections = new Vector2[shardCount];
+            for (int i = 0; i < shardCount; i++)
+            {
+                float angle = i * (360f / shardCount) + (i % 3) * 8f;
+                shardDirections[i] = new Vector2(
+                    Mathf.Cos(angle * Mathf.Deg2Rad),
+                    Mathf.Sin(angle * Mathf.Deg2Rad));
+                Color tint = i % 3 == 0 ? Color.Lerp(secondary, Color.white, 0.5f) : primary;
+                shards[i] = CreateImage("Golem Form Material Shard " + i, transform, tint);
+                shards[i].sprite = ComposableGolemVfxSprites.Particle(form, i);
+                shards[i].type = Image.Type.Simple;
+                shards[i].raycastTarget = false;
+                SetAnchors(shards[i].rectTransform, new Vector2(0.48f, 0.48f), new Vector2(0.52f, 0.52f));
+                shards[i].rectTransform.sizeDelta = FormParticleSize(form, shield: true, i) * 1.18f;
+                shards[i].transform.SetAsLastSibling();
+            }
+
+            float elapsed = 0f;
+            const float duration = 0.86f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+                float pulse = Mathf.Sin(progress * Mathf.PI);
+                float snap = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.58f));
+
+                seal.color = new Color(primary.r, primary.g, primary.b, pulse * 0.58f);
+                seal.rectTransform.localScale = Vector3.one * Mathf.Lerp(1.38f, 0.62f, snap);
+                seal.rectTransform.localRotation = Quaternion.Euler(
+                    0f,
+                    0f,
+                    progress * (form == ComposableGolemForm.Iron ? -210f : 320f));
+
+                if (orbitRect != null)
+                {
+                    orbitRect.localScale = orbitBaseScale * (1f + pulse * 0.16f);
+                    orbitRect.localRotation = orbitBaseRotation * Quaternion.Euler(0f, 0f, pulse * 7f);
+                }
+
+                for (int i = 0; i < shards.Length; i++)
+                {
+                    Image shard = shards[i];
+                    if (shard == null)
+                        continue;
+
+                    float phase = Mathf.Clamp01(progress * 1.18f - i * 0.012f);
+                    float distance = phase < 0.58f
+                        ? Mathf.Lerp(126f, 24f, Mathf.SmoothStep(0f, 1f, phase / 0.58f))
+                        : Mathf.Lerp(24f, 102f, Mathf.SmoothStep(0f, 1f, (phase - 0.58f) / 0.42f));
+                    Vector2 tangent = Perpendicular(shardDirections[i]);
+                    shard.rectTransform.anchoredPosition = shardDirections[i] * distance
+                        + tangent * Mathf.Sin(phase * Mathf.PI * 2f + i) * 18f;
+                    shard.rectTransform.localRotation = Quaternion.Euler(
+                        0f,
+                        0f,
+                        Mathf.Atan2(shardDirections[i].y, shardDirections[i].x) * Mathf.Rad2Deg
+                            + progress * (form == ComposableGolemForm.Crystal ? 480f : 300f));
+                    Color color = shard.color;
+                    color.a = Mathf.Sin(phase * Mathf.PI) * 0.9f;
+                    shard.color = color;
+                }
+                yield return null;
+            }
+
+            if (orbitRect != null)
+            {
+                orbitRect.localScale = orbitBaseScale;
+                orbitRect.localRotation = orbitBaseRotation;
+            }
+            if (seal != null)
+                Destroy(seal.gameObject);
+            for (int i = 0; i < shards.Length; i++)
+            {
+                if (shards[i] != null)
+                    Destroy(shards[i].gameObject);
+            }
         }
 
         private IEnumerator PlayComposableGolemImpactShake(float strength)
@@ -4360,9 +4864,30 @@ namespace AccardND.Presentation
             background.color = Color.clear;
             background.raycastTarget = false;
 
-            diceCaption = CreateText("Caption", diceRoot.transform, font, 20, FontStyle.Bold, TextAnchor.MiddleCenter);
-            diceCaption.color = new Color(0.92f, 0.82f, 0.42f);
-            SetAnchors(diceCaption.rectTransform, new Vector2(0.03f, 0.82f), new Vector2(0.97f, 0.99f));
+			diceCaption = CreateText(
+				"Caption",
+				diceRoot.transform,
+				GetActionLabelFont(),
+				40,
+				FontStyle.BoldAndItalic,
+				TextAnchor.MiddleCenter);
+			diceCaption.color = Color.Lerp(new Color(0.92f, 0.82f, 0.42f), Color.white, 0.2f);
+			diceCaption.resizeTextForBestFit = true;
+			diceCaption.resizeTextMinSize = 20;
+			diceCaption.resizeTextMaxSize = 40;
+			diceCaption.horizontalOverflow = HorizontalWrapMode.Overflow;
+			diceCaption.verticalOverflow = VerticalWrapMode.Overflow;
+
+			Outline captionOutline = diceCaption.gameObject.AddComponent<Outline>();
+			captionOutline.effectColor = new Color(ActionLabelOutline.r, ActionLabelOutline.g, ActionLabelOutline.b, 0.96f);
+			captionOutline.effectDistance = new Vector2(2.8f, -2.8f);
+			captionOutline.useGraphicAlpha = true;
+
+			Shadow captionShadow = diceCaption.gameObject.AddComponent<Shadow>();
+			captionShadow.effectColor = new Color(0f, 0f, 0f, 0.88f);
+			captionShadow.effectDistance = new Vector2(0f, -4f);
+			captionShadow.useGraphicAlpha = true;
+			SetAnchors(diceCaption.rectTransform, new Vector2(0.03f, 0.82f), new Vector2(0.97f, 0.99f));
 
             firstAnimatedDiceRoot = CreateAnimatedDice(
                 "Animated Die",
@@ -4653,6 +5178,7 @@ namespace AccardND.Presentation
                 "buff_attachment" => "UI/attachment_button",
                 "buff_spirit" => "buff_spirit",
                 "ability" => "UI/ability_button",
+                "supreme" => "UI/ability_secondary_button",
                 _ => null
             };
         }
@@ -4700,6 +5226,8 @@ namespace AccardND.Presentation
                 return "aura_priest";
             if (normalized.Contains("ABILITA") || normalized.Contains("ABILITÀ") || normalized.Contains("ABILITY"))
                 return "ability";
+            if (normalized.Contains("SUPREMA") || normalized.Contains("SUPREME"))
+                return "supreme";
             if (normalized.Contains("DIFESA DADO +1"))
                 return "aura_magic";
             if (normalized.Contains("INIB"))
@@ -4903,7 +5431,8 @@ namespace AccardND.Presentation
             Transform parent,
             Sprite sprite,
             string label = null,
-            Color? labelColor = null)
+            Color? labelColor = null,
+            int? manaDelta = null)
         {
             var buttonObject = new GameObject(
                 name,
@@ -4935,9 +5464,17 @@ namespace AccardND.Presentation
             button.colors = colors;
 
             if (!string.IsNullOrWhiteSpace(label))
-                CreateActionButtonLabel(buttonObject.transform, label, labelColor ?? Color.white);
+                CreateActionButtonLabel(
+                    buttonObject.transform,
+                    FormatActionButtonLabel(label, manaDelta),
+                    labelColor ?? Color.white);
             return button;
         }
+
+        private static string FormatActionButtonLabel(string label, int? manaDelta) =>
+            manaDelta.HasValue
+                ? $"{label}\n{(manaDelta.Value >= 0 ? "+" : string.Empty)}{manaDelta.Value}"
+                : label;
 
         private static void CreateActionButtonLabel(Transform parent, string label, Color labelColor)
         {
@@ -4959,10 +5496,10 @@ namespace AccardND.Presentation
             shadow.effectDistance = new Vector2(1.8f, -1.8f);
 
             RectTransform rect = text.rectTransform;
-            rect.anchorMin = new Vector2(-0.08f, 0.9f);
-            rect.anchorMax = new Vector2(1.08f, 1.24f);
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
+            rect.anchorMin = new Vector2(-0.08f, 0.82f);
+            rect.anchorMax = new Vector2(1.08f, 1.30f);
+            rect.offsetMin = new Vector2(0f, -23f);
+            rect.offsetMax = new Vector2(0f, -23f);
         }
 
         private static void SetActionButtonLabelAnchors(Button button, Vector2 anchorMin, Vector2 anchorMax)
@@ -4977,8 +5514,8 @@ namespace AccardND.Presentation
             RectTransform rect = label.rectTransform;
             rect.anchorMin = anchorMin;
             rect.anchorMax = anchorMax;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
+            rect.offsetMin = new Vector2(0f, -23f);
+            rect.offsetMax = new Vector2(0f, -23f);
         }
 
         private static Font GetActionLabelFont()
@@ -4994,15 +5531,17 @@ namespace AccardND.Presentation
         {
             string spriteName = sprite == null ? string.Empty : sprite.name;
             if (spriteName.IndexOf("ability_button", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "Abilit\u00E0";
+                return AbilityActionText();
             if (spriteName.IndexOf("attachment_button", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "Equipaggia";
+                return EquipActionText();
             if (spriteName.IndexOf("cancel_button", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "Cancella";
             if (spriteName.IndexOf("confirm_button", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "Conferma";
             if (spriteName.IndexOf("attack_button", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "Attacca";
+                return AttackActionText();
+            if (spriteName.IndexOf("skip_button", StringComparison.OrdinalIgnoreCase) >= 0)
+                return SkipActionText();
 
             return null;
         }
@@ -5016,8 +5555,200 @@ namespace AccardND.Presentation
                 return ActionLabelOrange;
             if (spriteName.IndexOf("confirm_button", StringComparison.OrdinalIgnoreCase) >= 0)
                 return ActionLabelGreen;
+            if (spriteName.IndexOf("skip_button", StringComparison.OrdinalIgnoreCase) >= 0)
+                return ActionLabelPurple;
 
             return ActionLabelRed;
+        }
+
+        private static string AttackActionText() => LocalizedActionText(
+            GameTextKeys.Combat.ActionAttack,
+            "Attacca",
+            "Attack");
+
+        private static string AbilityActionText() => LocalizedActionText(
+            GameTextKeys.Combat.ActionAbility,
+            "Abilit\u00E0",
+            "Ability");
+
+        private static string EquipActionText() => LocalizedActionText(
+            GameTextKeys.Combat.ActionEquip,
+            "Equipaggia",
+            "Equip");
+
+        private static string SkipActionText() => LocalizedActionText(
+            GameTextKeys.Combat.ActionSkip,
+            "Salta",
+            "Skip");
+
+        private static string FormChangeActionText() => LocalizedActionText(
+            GameTextKeys.Combat.ActionChangeForm,
+            "Cambia forma",
+            "Change form");
+
+        private static string SupremeActionText() => LocalizedActionText(
+            GameTextKeys.Combat.ActionSupreme,
+            "Suprema",
+            "Ultimate");
+
+        private static string LocalizedActionText(string key, string italianFallback, string englishFallback)
+        {
+            return GameText.GetLocalizedFallback(key, italianFallback, englishFallback);
+        }
+
+        private void BindActionCallout(Button button, UnityAction action, string label, Color color)
+        {
+            if (button == null || action == null)
+                return;
+
+            button.onClick.AddListener(() =>
+            {
+                if (!string.IsNullOrWhiteSpace(label))
+                    PlayActionCallout(label, color);
+                action.Invoke();
+            });
+        }
+
+        public void PlayAttackActionCallout()
+        {
+            PlayActionCallout(AttackActionText(), ActionLabelRed);
+        }
+
+        public void PlayAbilityActionCallout()
+        {
+            PlayActionCallout(AbilityActionText(), ActionLabelBlue);
+        }
+
+        public void PlayEquipActionCallout()
+        {
+            PlayActionCallout(EquipActionText(), ActionLabelOrange);
+        }
+
+        public void PlaySkipActionCallout()
+        {
+            PlayActionCallout(SkipActionText(), ActionLabelPurple);
+        }
+
+        public void PlaySupremeActionCallout()
+        {
+            PlayActionCallout(SupremeActionText(), ActionLabelSupreme);
+        }
+
+        public void PlayFormChangeActionCallout(Color formColor)
+        {
+            PlayActionCallout(FormChangeActionText(), formColor);
+        }
+
+        public void PlayActionCallout(string label, Color color)
+        {
+            if (!isActiveAndEnabled || string.IsNullOrWhiteSpace(label))
+                return;
+
+            if (actionCalloutCoroutine != null)
+            {
+                StopCoroutine(actionCalloutCoroutine);
+                actionCalloutCoroutine = null;
+            }
+            if (actionCalloutRoot != null)
+                Destroy(actionCalloutRoot);
+
+            actionCalloutCoroutine = StartCoroutine(PlayActionCalloutRoutine(label, color));
+        }
+
+        private IEnumerator PlayActionCalloutRoutine(string label, Color color)
+        {
+            var root = new GameObject(
+                "Action Callout - " + label,
+                typeof(RectTransform),
+                typeof(Canvas),
+                typeof(CanvasGroup),
+                typeof(LayoutElement));
+            root.transform.SetParent(transform, false);
+            root.transform.SetAsLastSibling();
+            actionCalloutRoot = root;
+
+            RectTransform calloutRect = (RectTransform)root.transform;
+            calloutRect.anchorMin = new Vector2(0.5f, 0.5f);
+            calloutRect.anchorMax = new Vector2(0.5f, 0.5f);
+            calloutRect.pivot = new Vector2(0.5f, 0.5f);
+            calloutRect.sizeDelta = new Vector2(Mathf.Max(380f, RectTransform.rect.width * 2.3f), 104f);
+
+            LayoutElement layout = root.GetComponent<LayoutElement>();
+            layout.ignoreLayout = true;
+
+            Canvas canvas = root.GetComponent<Canvas>();
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = 460;
+
+            CanvasGroup group = root.GetComponent<CanvasGroup>();
+            group.alpha = 0f;
+            group.ignoreParentGroups = true;
+            group.interactable = false;
+            group.blocksRaycasts = false;
+
+            Text text = CreateText(
+                "Action Callout Text",
+                calloutRect,
+                GetActionLabelFont(),
+                52,
+                FontStyle.BoldAndItalic,
+                TextAnchor.MiddleCenter);
+            text.text = label;
+            text.color = Color.Lerp(color, Color.white, 0.2f);
+            text.resizeTextMinSize = 25;
+            text.resizeTextMaxSize = 52;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            Stretch(text.rectTransform);
+
+            Outline outline = text.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(ActionLabelOutline.r, ActionLabelOutline.g, ActionLabelOutline.b, 0.96f);
+            outline.effectDistance = new Vector2(2.8f, -2.8f);
+            outline.useGraphicAlpha = true;
+
+            Shadow shadow = text.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.88f);
+            shadow.effectDistance = new Vector2(0f, -4f);
+            shadow.useGraphicAlpha = true;
+
+            float startY = Mathf.Max(24f, RectTransform.rect.height * 0.08f);
+            float endY = Mathf.Max(132f, RectTransform.rect.height * 0.58f);
+            const float duration = 0.78f;
+            float elapsed = 0f;
+            while (elapsed < duration && root != null)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+                float rise = Mathf.SmoothStep(0f, 1f, progress);
+                calloutRect.anchoredPosition = new Vector2(0f, Mathf.Lerp(startY, endY, rise));
+
+                float scale;
+                if (progress < 0.38f)
+                {
+                    float pop = Mathf.Clamp01(progress / 0.38f);
+                    float shifted = pop - 1f;
+                    float backEase = 1f + 2.70158f * shifted * shifted * shifted
+                        + 1.70158f * shifted * shifted;
+                    scale = Mathf.LerpUnclamped(0.2f, 1.08f, backEase);
+                }
+                else
+                {
+                    float expand = Mathf.SmoothStep(0f, 1f, (progress - 0.38f) / 0.62f);
+                    scale = Mathf.Lerp(1.08f, 1.26f, expand);
+                }
+                calloutRect.localScale = Vector3.one * scale;
+
+                float fadeIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.1f));
+                float fadeOut = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((progress - 0.42f) / 0.58f));
+                group.alpha = fadeIn * fadeOut;
+                yield return null;
+            }
+
+            if (root != null)
+                Destroy(root);
+            if (actionCalloutRoot == root)
+                actionCalloutRoot = null;
+            actionCalloutCoroutine = null;
         }
 
         private static Button CreateTransparentActionButton(string name, Transform parent)
@@ -5069,7 +5800,13 @@ namespace AccardND.Presentation
             secondDiceImage.rectTransform.localScale = Vector3.one;
             ConfigureDiceLayout(hasSecondResult);
 
-            bool uses3DDice = use3DDice && Dice3DRollView.IsSupported(visualSides);
+            int secondLogicalSides = selectionMode == VigorSelectionMode.Sum
+                ? PvpVigorScale.Lower(displaySides)
+                : displaySides;
+            int secondVisualSides = ResolveVisualDieSides(catalog, secondLogicalSides);
+            bool uses3DDice = use3DDice
+                && Dice3DRollView.IsSupported(visualSides)
+                && (!hasSecondResult || Dice3DRollView.IsSupported(secondVisualSides));
             bool usesAnimatedDice = !uses3DDice && firstAnimatedDiceRoot != null;
             bool firstRerolls = firstBeforeReroll > 0;
             bool secondRerolls = hasSecondResult && secondBeforeReroll > 0;
@@ -5087,7 +5824,7 @@ namespace AccardND.Presentation
                 EnsureDice3DViews(hasSecondResult, visualSides);
                 firstDice3D.StartScriptedRoll(visualSides, cardHeroClass, firstInitialResult, rollDuration);
                 if (hasSecondResult)
-                    secondDice3D.StartScriptedRoll(visualSides, cardHeroClass, secondInitialResult, rollDuration);
+                    secondDice3D.StartScriptedRoll(secondVisualSides, cardHeroClass, secondInitialResult, rollDuration);
                 yield return new WaitForSecondsRealtime(rollDuration);
             }
             else if (usesAnimatedDice)
@@ -5110,14 +5847,17 @@ namespace AccardND.Presentation
             else
             {
                 Sprite[] frames = catalog != null ? catalog.FindFrames(visualSides) : Array.Empty<Sprite>();
+                Sprite[] secondFrames = hasSecondResult && catalog != null
+                    ? catalog.FindFrames(secondVisualSides)
+                    : Array.Empty<Sprite>();
                 if (frames.Length > 0)
                 {
                     float frameDuration = rollDuration / frames.Length;
                     for (int frameIndex = 0; frameIndex < frames.Length; frameIndex++)
                     {
                         diceImage.sprite = frames[frameIndex];
-                        if (hasSecondResult)
-                            secondDiceImage.sprite = frames[(frameIndex + frames.Length / 2) % frames.Length];
+                        if (hasSecondResult && secondFrames.Length > 0)
+                            secondDiceImage.sprite = secondFrames[(frameIndex + secondFrames.Length / 2) % secondFrames.Length];
                         diceImage.rectTransform.localScale = Vector3.one * (frameIndex % 2 == 0 ? 0.94f : 1.04f);
                         secondDiceImage.rectTransform.localScale = Vector3.one * (frameIndex % 2 == 0 ? 1.04f : 0.94f);
                         yield return new WaitForSecondsRealtime(frameDuration);
@@ -5143,7 +5883,7 @@ namespace AccardND.Presentation
             {
                 Sprite secondResultSprite = usesAnimatedDice
                     ? FindAnimatedResult(secondAnimatedDiceResults, secondInitialResult)
-                    : catalog != null ? catalog.FindResult(visualSides, secondInitialResult) : null;
+                    : catalog != null ? catalog.FindResult(secondVisualSides, secondInitialResult) : null;
                 if (secondResultSprite != null)
                     secondDiceImage.sprite = secondResultSprite;
                 if (usesAnimatedDice)
@@ -5167,7 +5907,7 @@ namespace AccardND.Presentation
                     if (firstRerolls)
                         firstDice3D.StartScriptedRoll(visualSides, cardHeroClass, firstResult, rerollDuration);
                     if (secondRerolls && secondDice3D != null)
-                        secondDice3D.StartScriptedRoll(visualSides, cardHeroClass, secondResult, rerollDuration);
+                        secondDice3D.StartScriptedRoll(secondVisualSides, cardHeroClass, secondResult, rerollDuration);
                     yield return new WaitForSecondsRealtime(rerollDuration);
                 }
                 else if (usesAnimatedDice)
@@ -5195,6 +5935,9 @@ namespace AccardND.Presentation
                 else
                 {
                     Sprite[] frames = catalog != null ? catalog.FindFrames(visualSides) : Array.Empty<Sprite>();
+                    Sprite[] secondFrames = hasSecondResult && catalog != null
+                        ? catalog.FindFrames(secondVisualSides)
+                        : Array.Empty<Sprite>();
                     if (frames.Length > 0)
                     {
                         float frameDuration = rerollDuration / frames.Length;
@@ -5205,9 +5948,9 @@ namespace AccardND.Presentation
                                 diceImage.sprite = frames[frameIndex];
                                 diceImage.rectTransform.localScale = Vector3.one * (frameIndex % 2 == 0 ? 0.94f : 1.04f);
                             }
-                            if (secondRerolls)
+                            if (secondRerolls && secondFrames.Length > 0)
                             {
-                                secondDiceImage.sprite = frames[(frameIndex + frames.Length / 2) % frames.Length];
+                                secondDiceImage.sprite = secondFrames[(frameIndex + secondFrames.Length / 2) % secondFrames.Length];
                                 secondDiceImage.rectTransform.localScale = Vector3.one * (frameIndex % 2 == 0 ? 1.04f : 0.94f);
                             }
                             yield return new WaitForSecondsRealtime(frameDuration);
@@ -5233,7 +5976,7 @@ namespace AccardND.Presentation
                 {
                     Sprite secondResultSprite = usesAnimatedDice
                         ? FindAnimatedResult(secondAnimatedDiceResults, secondResult)
-                        : catalog != null ? catalog.FindResult(visualSides, secondResult) : null;
+                        : catalog != null ? catalog.FindResult(secondVisualSides, secondResult) : null;
                     if (secondResultSprite != null)
                         secondDiceImage.sprite = secondResultSprite;
                     if (usesAnimatedDice)
@@ -6197,6 +6940,22 @@ namespace AccardND.Presentation
             petrifiedFragmentSprite.name = "Petrified Fragment";
             petrifiedFragmentSprite.hideFlags = HideFlags.HideAndDontSave;
             return petrifiedFragmentSprite;
+        }
+
+        private static void ApplyPawnDepthEffect(Image pawn)
+        {
+            if (pawn == null)
+                return;
+
+            Outline outline = pawn.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(0.035f, 0.025f, 0.055f, 0.88f);
+            outline.effectDistance = new Vector2(2.6f, -2.6f);
+            outline.useGraphicAlpha = true;
+
+            Shadow shadow = pawn.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0.015f, 0.01f, 0.025f, 0.58f);
+            shadow.effectDistance = new Vector2(6f, -8f);
+            shadow.useGraphicAlpha = true;
         }
 
         private static Image CreateImage(string name, Transform parent, Color color)

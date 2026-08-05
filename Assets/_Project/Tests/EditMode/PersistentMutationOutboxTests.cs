@@ -78,6 +78,38 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void QueueDeathRewardForReplay_PersistsRewardAndAllQuestStats()
+        {
+            var storage = new MemoryStorage();
+            var outbox = new PersistentMutationOutbox(storage);
+            var summary = new DeathRewardSummary(
+                "run-offline", "campaign", "chapter-2", "stage-4",
+                7, 19, 1, 43, 2,
+                new[] { "golem", "boss" }, new[] { "potion", "bomb" },
+                31, 6, 125);
+
+            bool queued = ServerSinglePlayerProgressClient.QueueDeathRewardForReplay(
+                summary, "player-a", outbox);
+
+            Assert.That(queued, Is.True);
+            var pending = outbox.PendingFor("player-a");
+            Assert.That(pending.Count, Is.EqualTo(1));
+            var payload = UnityEngine.JsonUtility.FromJson<SinglePlayerDeathRewardRequest>(pending[0].payloadJson);
+            Assert.That(payload.runId, Is.EqualTo("run-offline"));
+            Assert.That(payload.matchExperience, Is.EqualTo(43));
+            Assert.That(payload.roomsCleared, Is.EqualTo(7));
+            Assert.That(payload.enemiesDefeated, Is.EqualTo(19));
+            Assert.That(payload.minibossesDefeated, Is.EqualTo(2));
+            Assert.That(payload.bossesDefeated, Is.EqualTo(1));
+            Assert.That(payload.diceRolled, Is.EqualTo(31));
+            Assert.That(payload.abilitiesUsed, Is.EqualTo(6));
+            Assert.That(payload.experienceEarned, Is.EqualTo(125));
+            Assert.That(payload.itemsUsed, Is.EqualTo(2));
+            Assert.That(payload.defeatedBossIds, Is.EqualTo(new[] { "golem", "boss" }));
+            Assert.That(payload.consumedItemIds, Is.EqualTo(new[] { "potion", "bomb" }));
+        }
+
+        [Test]
         public void PendingFor_DropsMutationsOlderThanTheServerMemory()
         {
             // Oltre la vita del dedup lato server rigiocare non è più sicuro: meglio

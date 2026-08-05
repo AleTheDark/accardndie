@@ -29,6 +29,8 @@ public sealed partial class BattleBoardController
 		EnsureSelectedDeckBuilderClassIsUnlocked();
 		initialDeckBuilder = new InitialDeckBuilder(GetUnlockedCombatCards(), random, configuration.DeckBuilding.ToRules());
 		deckBuilderPanel.SetActive(true);
+		SetAccountHubHudActive(true);
+		SetDeckBuilderAccountHeaderMode(true);
 		HideDeckBuilderToast();
 		RefreshDeckBuilderView();
 		AppendLog($"COSTRUZIONE MAZZO - scegli campione, vice campione e completa {configuration.DeckBuilding.DeckSize} carte.");
@@ -514,12 +516,25 @@ public sealed partial class BattleBoardController
 	{
 		ProgressionConfiguration progression = configuration.Progression;
 		int startingVigorDieSides = debugForceFirstRoomMedusa ? 12 : configuration.Gameplay.VigorDieSides;
-		return new RunProgressState(
+		var progress = new RunProgressState(
 			progression.ExperienceThresholdsByLevel,
 			progression.MonsterRoomClearExperience,
 			progression.MaximumLevel,
 			progression.RoomsPerMasterLevel,
 			progression.BuildVigorDiceByLevel(startingVigorDieSides));
+
+		if (IsComposableGolemDebugSession)
+		{
+			int debugLevel = Math.Min(MinibossGolemDebugPlayerLevel, progression.MaximumLevel);
+			progress.RestoreProgress(
+				debugLevel,
+				currentExperience: 0,
+				totalExperience: 0,
+				availableExperience: 0,
+				roomsCleared: 0);
+		}
+
+		return progress;
 	}
 
 	private List<CardDefinition> GetUnlockedCombatCards()

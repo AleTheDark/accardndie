@@ -10,7 +10,10 @@
   <!-- Riusa i sorgenti di gioco della build Unity: unica fonte di verità per le regole. -->
   <ItemGroup>
     <Compile Include="..\..\Assets\_Project\Scripts\GameCore\**\*.cs" LinkBase="Shared\GameCore" />
-    <Compile Include="..\..\Assets\_Project\Scripts\NetProtocol\**\*.cs" LinkBase="Shared\NetProtocol" />
+    <Compile
+      Include="..\..\Assets\_Project\Scripts\NetProtocol\**\*.cs"
+      Exclude="..\..\Assets\_Project\Scripts\NetProtocol\PvpClientMatchState.cs"
+      LinkBase="Shared\NetProtocol" />
   </ItemGroup>
 
   <ItemGroup>

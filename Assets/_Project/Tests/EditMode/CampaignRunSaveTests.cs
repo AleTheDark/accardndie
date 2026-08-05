@@ -98,6 +98,7 @@ namespace AccardND.GameCore.Tests
             {
                 playerLevel = 3,
                 roomsCleared = 7,
+				playerMana = 8,
                 campaignScenarioId = "mirror",
                 merchantRoomsBlockedUntilMonster = true,
                 nextMonsterTierBonus = 2
@@ -116,6 +117,7 @@ namespace AccardND.GameCore.Tests
 
             Assert.That(loaded.playerLevel, Is.EqualTo(3));
             Assert.That(loaded.roomsCleared, Is.EqualTo(7));
+			Assert.That(loaded.playerMana, Is.EqualTo(8));
             Assert.That(loaded.campaignScenarioId, Is.EqualTo("mirror"));
             Assert.That(loaded.merchantRoomsBlockedUntilMonster, Is.True);
             Assert.That(loaded.nextMonsterTierBonus, Is.EqualTo(2));
@@ -127,6 +129,17 @@ namespace AccardND.GameCore.Tests
             service.Clear();
             Assert.That(service.HasSave, Is.False);
         }
+
+		[Test]
+		public void Service_LegacySaveWithoutMana_UsesCampaignDefault()
+		{
+			var store = new InMemoryStore();
+			store.Save("{\"version\":1}");
+			var service = new CampaignRunSaveService(store);
+
+			Assert.That(service.TryLoad(out CampaignRunSave loaded), Is.True);
+			Assert.That(loaded.playerMana, Is.EqualTo(CampaignRunSave.DefaultPlayerMana));
+		}
 
         private static RunProgressState CreateProgress()
         {

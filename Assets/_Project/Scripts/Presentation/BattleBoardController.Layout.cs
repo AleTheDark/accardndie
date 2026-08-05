@@ -55,6 +55,11 @@ public sealed partial class BattleBoardController
 			bool flag2 = !flag && num5 >= 1.65f;
 			canvasScaler.referenceResolution = (flag ?responsiveLayout.PortraitReferenceResolution : responsiveLayout.LandscapeReferenceResolution);
 			canvasScaler.matchWidthOrHeight = (flag ?1f : (flag2 ?0.25f : 0f));
+			ApplyCombatHudRefactorLayout();
+			if (turnOrder.Count > 0 && playerCards.Count > 0)
+			{
+				RefreshCombatPawnCarousel(animate: false);
+			}
 			Canvas.ForceUpdateCanvases();
 			Rect rect = safeAreaRoot.rect;
 			float width = rect.width;
@@ -77,6 +82,10 @@ public sealed partial class BattleBoardController
 			bool flag3 = (currentRoomType == RoomType.Monster || currentRoomType == RoomType.Boss) && (draftActive || deploymentDraftActive || playerCards.Count > 0 || cpuCards.Count > 0);
 			bool flag4 = IsMerchantActionHudVisible() || IsSingleActionNonCombatHudVisible();
 			bool merchantActionHud = IsMerchantActionHudVisible();
+			bool useNonCombatArchiveButtonPosition = currentRoomType == RoomType.Merchant
+				|| currentRoomType == RoomType.Loot
+				|| currentRoomType == RoomType.UnexpectedOpportunity
+				|| IsRoomChoiceActive();
 			float anchor = ((!flag3) ?(flag ?0.775f : (flag2 ?0.845f : 0.79f)) : (flag ?0.76f : (flag2 ?0.845f : 0.79f)));
 			anchor += OpponentFormationLift;
 			anchor = ClampBattlefieldAnchor(anchor, num11, height, flag ?0.055f : 0.08f, (!flag3) ?(flag ?0.87f : (flag2 ?0.995f : 0.94f)) : (flag ?0.835f : (flag2 ?0.995f : 0.94f)));
@@ -117,7 +126,10 @@ public sealed partial class BattleBoardController
 			{
 				SetRect(tableGlowRect, new Vector2(0.025f, 0.035f), new Vector2(0.975f, 0.965f));
 				SetRect(topInfoBarRect, new Vector2(0.035f, 0.952f), new Vector2(0.7f, 0.992f));
-				SetRect(playerHud.Rect, new Vector2(0.2275f, 0.002f), new Vector2(0.7725f, 0.09f));
+				playerHud.Rect.anchorMin = new Vector2(0.2275f, 0.002f);
+				playerHud.Rect.anchorMax = new Vector2(0.7725f, 0.09f);
+				playerHud.Rect.offsetMin = new Vector2(0f, 11f);
+				playerHud.Rect.offsetMax = new Vector2(0f, 11f);
 				SetRect(cpuHud.Rect, new Vector2(0.2275f, 0.907f), new Vector2(0.7725f, 0.992f));
 				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.81f, 0.917f), new Vector2(0.982f, 0.995f));
 				if ((Object)(object)settingsButtonLabel != (Object)null)
@@ -129,10 +141,16 @@ public sealed partial class BattleBoardController
 				{
 					SetRect((RectTransform)optionsPanel.transform, new Vector2(0.08f, 0.48f), new Vector2(0.92f, 0.9f));
 				}
-				SetRect(implementationArchiveButtonRect, new Vector2(0.81f, 0.02f), new Vector2(0.982f, 0.102f));
+				implementationArchiveButtonRect.anchorMin = new Vector2(0.81f, 0.885f);
+				implementationArchiveButtonRect.anchorMax = new Vector2(0.982f, 0.965f);
+				implementationArchiveButtonRect.offsetMin = new Vector2(0f, -76.8f);
+				implementationArchiveButtonRect.offsetMax = new Vector2(0f, -76.8f);
 				if ((Object)(object)implementationArchiveButtonLabel != (Object)null)
 				{
-					SetRect(implementationArchiveButtonLabel.rectTransform, new Vector2(0.785f, 0f), new Vector2(1f, 0.042f));
+					implementationArchiveButtonLabel.rectTransform.anchorMin = new Vector2(0.785f, 0f);
+					implementationArchiveButtonLabel.rectTransform.anchorMax = new Vector2(1f, 0.042f);
+					implementationArchiveButtonLabel.rectTransform.offsetMin = new Vector2(-142.0064f, -35.041f);
+					implementationArchiveButtonLabel.rectTransform.offsetMax = new Vector2(15.9738f, 32.5111f);
 				}
 				SetRect(implementationArchivePanelRect, new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.94f));
 				SetRect(
@@ -169,10 +187,10 @@ public sealed partial class BattleBoardController
 				{
 					SetRect((RectTransform)optionsPanel.transform, new Vector2(0.64f, 0.52f), new Vector2(0.98f, 0.92f));
 				}
-				SetRect(implementationArchiveButtonRect, new Vector2(0.84f, 0.068f), new Vector2(0.995f, 0.218f));
+				SetRect(implementationArchiveButtonRect, new Vector2(0.84f, 0.79f), new Vector2(0.995f, 0.94f));
 				if ((Object)(object)implementationArchiveButtonLabel != (Object)null)
 				{
-					SetRect(implementationArchiveButtonLabel.rectTransform, new Vector2(0.81f, 0.012f), new Vector2(1f, 0.068f));
+					SetRect(implementationArchiveButtonLabel.rectTransform, new Vector2(-0.1935484f, -0.3733333f), new Vector2(1.0322581f, 0f));
 				}
 				SetRect(implementationArchivePanelRect, new Vector2(0.62f, 0.05f), new Vector2(0.98f, 0.94f));
 				SetRect(
@@ -192,6 +210,15 @@ public sealed partial class BattleBoardController
 				{
 					SetRect(playerTitleRect, new Vector2(0.12f, 0.32f), new Vector2(0.88f, 0.38f));
 				}
+			}
+			if (useNonCombatArchiveButtonPosition)
+			{
+				// Posizione calibrata per Mercato, Loot, Imprevisto e Scelta Via.
+				// Gli offset non nulli vanno preservati: SetRect() li azzererebbe.
+				implementationArchiveButtonRect.anchorMin = new Vector2(0.81f, 0.885f);
+				implementationArchiveButtonRect.anchorMax = new Vector2(0.982f, 0.965f);
+				implementationArchiveButtonRect.offsetMin = new Vector2(0f, -1545f);
+				implementationArchiveButtonRect.offsetMax = new Vector2(0f, -1545f);
 			}
 			if (IsCampaignEndedBannerVisible())
 			{

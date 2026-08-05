@@ -34,6 +34,12 @@ namespace AccardND.NetProtocol
         /// <summary>Riaggancio di una sessione già autenticata dopo una caduta di rete.</summary>
         public const string AuthSession = "auth.session";
         public const string AuthResponse = "auth.response";
+
+        /// <summary>
+        /// Il server chiude questa sessione perché l'account è entrato altrove.
+        /// Messaggio spontaneo: arriva senza che il client abbia chiesto nulla.
+        /// </summary>
+        public const string SessionKicked = "session.kicked";
         public const string NicknameSet = "account.nickname.set";
         public const string NicknameResponse = "account.nickname.response";
 
@@ -58,6 +64,13 @@ namespace AccardND.NetProtocol
         public const string MatchActionAck = "match.action.ack";
         public const string MatchEvent = "match.event";
         public const string MatchOpponentLeft = "match.opponent_left";
+
+        /// <summary>
+        /// Resa volontaria: il giocatore si dichiara sconfitto e la vittoria va
+        /// all'avversario. Non è un'azione di gioco come le altre — vale anche a
+        /// partita in pausa — quindi ha un messaggio suo.
+        /// </summary>
+        public const string MatchForfeit = "match.forfeit";
 
         // Riconnessione: la caduta del socket mette il match in pausa invece di
         // assegnare subito la sconfitta (vedi ServerConfig.DisconnectTimeoutSeconds).
@@ -106,6 +119,7 @@ namespace AccardND.NetProtocol
         public const string SinglePlayerClaimTutorialReward = "singleplayer.reward.tutorial";
         public const string SinglePlayerClaimDeathReward = "singleplayer.reward.death";
         public const string SinglePlayerClaimAdMultiplier = "singleplayer.reward.ad_multiplier";
+        public const string SinglePlayerClaimLevelRewards = "singleplayer.reward.levels";
         public const string SinglePlayerRewardResult = "singleplayer.reward.result";
         public const string SinglePlayerClearChapter = "singleplayer.chapter.cleared";
 
@@ -125,6 +139,9 @@ namespace AccardND.NetProtocol
         public const string NotAuthenticated = "not_authenticated";
         public const string InvalidMessage = "invalid_message";
         public const string InvalidCredentials = "invalid_credentials";
+
+        /// <summary>Build più vecchia della versione target: si aggiorna, non si riprova.</summary>
+        public const string ClientOutdated = "client_outdated";
         public const string UsernameTaken = "username_taken";
         public const string RoomNotFound = "room_not_found";
         public const string RoomFull = "room_full";

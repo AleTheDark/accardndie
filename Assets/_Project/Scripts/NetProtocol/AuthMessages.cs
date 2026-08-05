@@ -35,6 +35,10 @@ namespace AccardND.NetProtocol
         /// Google e ne estrae la mail, che serve solo al pannello admin per
         /// riconoscere a quale account Google corrisponde un giocatore.</summary>
         public string googleIdToken;
+
+        /// <summary>Versione della build che sta accedendo. Il server la confronta
+        /// con la versione target e blocca i client vecchi.</summary>
+        public string clientVersion;
     }
 
     /// <summary>
@@ -46,6 +50,10 @@ namespace AccardND.NetProtocol
     public sealed class SessionResumeRequest
     {
         public string sessionToken;
+
+        /// <summary>Come in <see cref="UgsLoginRequest.clientVersion"/>: anche il
+        /// riaggancio passa dal controllo di versione.</summary>
+        public string clientVersion;
     }
 
     [Serializable]
@@ -65,6 +73,19 @@ namespace AccardND.NetProtocol
         /// riconnettersi senza rifare il login. Vive solo in memoria sul client.
         /// </summary>
         public string sessionToken;
+
+        /// <summary>
+        /// L'accesso è stato rifiutato perché la build è più vecchia di quella
+        /// richiesta dal server. Non è un errore da riprovare: il client deve
+        /// fermarsi sul login e chiedere l'aggiornamento.
+        /// </summary>
+        public bool requiresUpdate;
+
+        /// <summary>Versione che il server pretende, da mostrare nell'avviso.</summary>
+        public string requiredVersion;
+
+        /// <summary>Dove si scarica la versione nuova (store o sito). Può essere vuoto.</summary>
+        public string updateUrl;
     }
 
     [Serializable]
@@ -79,6 +100,27 @@ namespace AccardND.NetProtocol
         public bool ok;
         public string error;
         public string nickname;
+    }
+
+    /// <summary>
+    /// La sessione è stata chiusa dal server perché l'account ha fatto accesso da
+    /// un'altra parte. Non è un errore da riprovare: il client avvisa e chiude.
+    /// </summary>
+    [Serializable]
+    public sealed class SessionKickedMessage
+    {
+        public string message;
+    }
+
+    /// <summary>
+    /// Vista minima su un payload di accesso: serve al server per leggere la
+    /// versione del client da qualunque messaggio di autenticazione, senza dover
+    /// sapere quale dei tipi di login sta arrivando.
+    /// </summary>
+    [Serializable]
+    public sealed class ClientVersionInfo
+    {
+        public string clientVersion;
     }
 
     [Serializable]

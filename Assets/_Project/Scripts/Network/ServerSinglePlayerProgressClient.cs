@@ -21,6 +21,7 @@ namespace AccardND.Network
         Task<SinglePlayerRewardOutcome> ClaimTutorialRewardAsync(string tutorialRunId);
         Task<SinglePlayerRewardOutcome> ClaimDeathRewardAsync(DeathRewardSummary summary);
         Task<SinglePlayerRewardOutcome> ClaimAdMultiplierAsync(string rewardClaimId, string adImpressionId);
+        Task<SinglePlayerRewardOutcome> ClaimLevelRewardsAsync();
     }
 
     /// <summary>Esito autoritativo di una reward: nuovo stato, id reward (per l'ad) e miele accreditato.</summary>
@@ -170,30 +171,62 @@ namespace AccardND.Network
 
         public async Task<SinglePlayerRewardOutcome> ClaimDeathRewardAsync(DeathRewardSummary summary)
         {
-            var request = new SinglePlayerDeathRewardRequest
-            {
-                runId = summary.RunId,
-                mode = summary.Mode,
-                chapterId = summary.ChapterId,
-                stageId = summary.StageId,
-                roomsCleared = summary.RoomsCleared,
-                enemiesDefeated = summary.EnemiesDefeated,
-                bossesDefeated = summary.BossesDefeated,
-                matchExperience = summary.MatchExperience,
-                minibossesDefeated = summary.MinibossesDefeated,
-                defeatedBossIds = summary.DefeatedBossIds,
-                consumedItemIds = summary.ConsumedItemIds,
-                diceRolled = summary.DiceRolled,
-                abilitiesUsed = summary.AbilitiesUsed,
-                itemsUsed = summary.ConsumedItemIds.Length,
-                experienceEarned = summary.ExperienceEarned
-            };
+            SinglePlayerDeathRewardRequest request = CreateDeathRewardRequest(summary);
             SinglePlayerRewardResult result = await RequestRewardAsync(
                 MessageTypes.SinglePlayerClaimDeathReward,
                 request,
                 persistent: true);
             return ToOutcome(result);
         }
+
+        public async Task<SinglePlayerRewardOutcome> ClaimLevelRewardsAsync()
+        {
+            SinglePlayerRewardResult result = await RequestRewardAsync(
+                MessageTypes.SinglePlayerClaimLevelRewards, null, persistent: false);
+            return ToOutcome(result);
+        }
+
+        /// <summary>
+        /// Salva il riepilogo anche quando, a fine run, non e' possibile costruire un client
+        /// connesso. Alla prossima riconnessione il normale replay applichera' reward, stats
+        /// e progressi quest usando lo stesso payload completo della richiesta online.
+        /// </summary>
+        public static bool QueueDeathRewardForReplay(
+            DeathRewardSummary summary,
+            string playerId = null,
+            PersistentMutationOutbox persistentOutbox = null)
+        {
+            string owner = playerId ?? AccountServerSession.PlayerId;
+            if (string.IsNullOrWhiteSpace(owner))
+                return false;
+
+            SinglePlayerDeathRewardRequest request = CreateDeathRewardRequest(summary);
+            (persistentOutbox ?? new PersistentMutationOutbox()).Add(
+                owner,
+                MessageTypes.SinglePlayerClaimDeathReward,
+                MessageTypes.SinglePlayerRewardResult,
+                JsonUtility.ToJson(request));
+            return true;
+        }
+
+        private static SinglePlayerDeathRewardRequest CreateDeathRewardRequest(DeathRewardSummary summary) => new()
+        {
+            runId = summary.RunId,
+            mode = summary.Mode,
+            chapterId = summary.ChapterId,
+            stageId = summary.StageId,
+            roomsCleared = summary.RoomsCleared,
+            enemiesDefeated = summary.EnemiesDefeated,
+            bossesDefeated = summary.BossesDefeated,
+            matchExperience = summary.MatchExperience,
+            minibossesDefeated = summary.MinibossesDefeated,
+            defeatedBossIds = summary.DefeatedBossIds,
+            consumedItemIds = summary.ConsumedItemIds,
+            diceRolled = summary.DiceRolled,
+            abilitiesUsed = summary.AbilitiesUsed,
+            itemsUsed = summary.ConsumedItemIds.Length,
+            experienceEarned = summary.ExperienceEarned
+        };
 
         public async Task<SinglePlayerRewardOutcome> ClaimAdMultiplierAsync(string rewardClaimId, string adImpressionId)
         {
@@ -402,6 +435,7 @@ namespace AccardND.Network
                 accountExperienceToNextLevel = data.accountExperienceToNextLevel <= 0
                     ? 100
                     : data.accountExperienceToNextLevel,
+                pendingLevelRewards = Mathf.Max(0, data.pendingLevelRewards),
                 tutorialCompleted = data.tutorialCompleted,
                 hardcoreUnlocked = data.hardcoreUnlocked,
                 unlockedChapters = ToList(data.unlockedChapters),

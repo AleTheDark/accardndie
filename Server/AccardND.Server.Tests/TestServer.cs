@@ -56,6 +56,13 @@ public sealed class TestServer : IDisposable
     public RequestDedupStore RestartAndCreateDedupStore() =>
         new(new AccardDatabase(Config), NullLogger<RequestDedupStore>.Instance);
 
+    public ClientVersionGate CreateClientVersionGate() =>
+        new(Database, Config, NullLogger<ClientVersionGate>.Instance);
+
+    /// <summary>Il gate come lo troverebbe un server appena riavviato: DB riaperto.</summary>
+    public ClientVersionGate RestartAndCreateClientVersionGate() =>
+        new(new AccardDatabase(Config), Config, NullLogger<ClientVersionGate>.Instance);
+
     public AccountIdentity RegisterAccount(string username)
     {
         (AccountIdentity identity, _, string error) = Accounts.Register(username, "password-di-prova");

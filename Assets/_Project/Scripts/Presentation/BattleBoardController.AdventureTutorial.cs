@@ -73,6 +73,7 @@ public sealed partial class BattleBoardController
 		pendingRoomDifficulty = RoomDifficulty.Normal;
 		currentScenarioDisplayOverride = "Tutorial - Primo Scontro";
 		ResetScenarioRuleState();
+		RestoreCampaignMana(10);
 		((Component)campaignZoneRect).gameObject.SetActive(false);
 		AppendLog("TUTORIAL AVVENTURA - run scriptata avviata.");
 		PrepareNextCampaignCombatDraft();
@@ -466,6 +467,97 @@ public sealed partial class BattleBoardController
 		SetAdventureTutorialNextButtonEnabled(enabled: true);
 		MoveAdventureTutorialSpotlight(null);
 		return true;
+	}
+
+	/// <summary>
+	/// Rende deterministici i confronti della battaglia guidata. Il resolver normale
+	/// continua a stabilire numero di dadi, vantaggio e reroll; qui sostituiamo solo
+	/// i valori mostrati e usati dal risultato finale.
+	/// </summary>
+	private CombatResult ScriptAdventureTutorialCombatResult(
+		BattleCardState attacker,
+		BattleCardState defender,
+		CombatResult resolved)
+	{
+		if (!adventureScriptedTutorialActive || attacker == null || defender == null)
+		{
+			return resolved;
+		}
+
+		string attackerId = attacker.Card.Id;
+		string defenderId = defender.Card.Id;
+		VigorRollResult attackerRoll;
+		VigorRollResult defenderRoll;
+
+		// 1. Mago 8 del giocatore contro Guerriero 8: 4 e 3 con vantaggio, contro 3.
+		if (IsTutorialCard(attackerId, "8-spirit-mage") && IsTutorialCard(defenderId, "8-spirit-warrior"))
+		{
+			attackerRoll = ScriptRoll(resolved.AttackerRoll, 4, 3);
+			defenderRoll = ScriptRoll(resolved.DefenderRoll, 3);
+		}
+		// 2. Ladro 7 del giocatore perde contro la pedina scelta rimasta.
+		else if (IsTutorialCard(attackerId, "7-whitealien-rogue")
+			&& (IsTutorialCard(defenderId, "6-chimera-rogue") || IsTutorialCard(defenderId, "7-whitealien-mage")))
+		{
+			attackerRoll = ScriptRoll(resolved.AttackerRoll, 2, 2);
+			defenderRoll = ScriptRoll(resolved.DefenderRoll,
+				IsTutorialCard(defenderId, "6-chimera-rogue") ? 4 : 3);
+		}
+		// 3. Il Ladro 6 CPU elimina il Ladro 7: 4 contro 1.
+		else if (IsTutorialCard(attackerId, "6-chimera-rogue") && IsTutorialCard(defenderId, "7-whitealien-rogue"))
+		{
+			attackerRoll = ScriptRoll(resolved.AttackerRoll, 4);
+			defenderRoll = ScriptRoll(resolved.DefenderRoll, 1);
+		}
+		// Se resta il Mago 7, il suo contrattacco non elimina il Guerriero 10.
+		else if (IsTutorialCard(attackerId, "7-whitealien-mage") && IsTutorialCard(defenderId, "10-champion-warrior"))
+		{
+			attackerRoll = ScriptRoll(resolved.AttackerRoll, 1, 1);
+			defenderRoll = ScriptRoll(resolved.DefenderRoll, 4);
+		}
+		// Il successivo attacco del Guerriero chiude lo scontro con l'eventuale Mago.
+		else if (IsTutorialCard(attackerId, "10-champion-warrior") && IsTutorialCard(defenderId, "7-whitealien-mage"))
+		{
+			attackerRoll = ScriptRoll(resolved.AttackerRoll, 4, 3);
+			defenderRoll = ScriptRoll(resolved.DefenderRoll, 1);
+		}
+		else
+		{
+			return resolved;
+		}
+
+		return new CombatResult(
+			attackerRoll,
+			defenderRoll,
+			attacker.Card.Strength + attackerRoll.SelectedRoll,
+			defender.Card.Strength + defenderRoll.SelectedRoll);
+	}
+
+	private static bool IsTutorialCard(string actualId, string expectedId)
+	{
+		return string.Equals(actualId, expectedId, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static VigorRollResult ScriptRoll(VigorRollResult template, int first, int second = 0)
+	{
+		first = Mathf.Clamp(first, 1, template.DieSides);
+		bool hasSecond = template.HasSecondRoll;
+		second = hasSecond ? Mathf.Clamp(second > 0 ? second : first, 1, template.DieSides) : 0;
+		int selected = template.SelectionMode switch
+		{
+			VigorSelectionMode.Sum => first + second,
+			VigorSelectionMode.Highest => Mathf.Max(first, second),
+			VigorSelectionMode.Lowest => Mathf.Min(first, second),
+			_ => first
+		};
+		return new VigorRollResult(
+			template.DieSides,
+			first,
+			second,
+			hasSecond,
+			selected,
+			template.Matchup,
+			template.SelectionMode);
 	}
 
 	private string FormatAdventureTutorialCombatRollText(BattleCardState attacker, BattleCardState defender, CombatResult result)

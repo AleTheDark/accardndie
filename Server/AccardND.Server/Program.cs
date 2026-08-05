@@ -28,6 +28,8 @@ builder.Services.AddSingleton<AccountService>();
 builder.Services.AddSingleton<GoogleIdTokenReader>();
 builder.Services.AddSingleton<UgsAuthService>();
 builder.Services.AddSingleton<GoogleOAuthBroker>();
+builder.Services.AddSingleton<AccountEraser>();
+builder.Services.AddSingleton<AccountDeletionService>();
 builder.Services.AddSingleton<SeasonService>();
 builder.Services.AddSingleton<StatsService>();
 builder.Services.AddSingleton<RankedService>();
@@ -45,6 +47,7 @@ builder.Services.AddHostedService<SeasonRolloverService>();
 builder.Services.AddSingleton<RoomManager>();
 builder.Services.AddHostedService<MatchDrainService>();
 builder.Services.AddSingleton<MatchmakingQueue>();
+builder.Services.AddSingleton<ClientVersionGate>();
 builder.Services.AddSingleton<MessageRouter>();
 builder.Services.AddSingleton<AdminAuth>();
 builder.Services.AddSingleton<AdminService>();
@@ -65,6 +68,11 @@ app.MapAdminEndpoints();
 // scambia il codice col Web Client ID del login web, cosi' lo stesso account
 // Google resta lo stesso PlayerId UGS su APK e PWA.
 app.MapGoogleAuthEndpoints();
+
+// Pagina pubblica di cancellazione account: Google Play la richiede raggiungibile
+// dal web, senza installare il gioco. L'URL da dichiarare in "Sicurezza dei dati"
+// e' https://<dominio>/account/delete.
+app.MapAccountDeletionEndpoints();
 
 app.Map("/ws", async context =>
 {

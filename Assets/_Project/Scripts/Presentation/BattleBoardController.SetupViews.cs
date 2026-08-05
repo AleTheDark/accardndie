@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -30,23 +31,14 @@ public sealed partial class BattleBoardController
 	private RectTransform cardInspectionContentViewport;
 	private RectTransform cardInspectionContentRoot;
 	private ScrollRect cardInspectionContentScroll;
+	private ScrollRect implementationConsumablesScroll;
 
 	private void CreateImplementationArchiveView(Transform canvasTransform, Font font)
 	{
-		implementationArchiveButton = CreateImageButton("Implementation Archive Button", (Transform)(object)safeAreaRoot, font, LoadSpriteResource("UI/bag_button"), string.Empty);
+		implementationArchiveButton = CreateImageButton("Implementation Archive Button", (Transform)(object)safeAreaRoot, font, LoadSpriteResource("UI/SharedHeader/bag_satchel"), string.Empty);
 		((UnityEvent)implementationArchiveButton.onClick).AddListener(new UnityAction(ToggleImplementationArchive));
 		implementationArchiveButtonRect = (RectTransform)((Component)implementationArchiveButton).transform;
 		SetRect(implementationArchiveButtonRect, new Vector2(0.71f, 0.902f), new Vector2(0.865f, 0.992f));
-		implementationArchiveButtonLabel = CreateText("Implementation Archive Button Label", (Transform)(object)safeAreaRoot, font, 20, (FontStyle)1, (TextAnchor)4);
-		implementationArchiveButtonLabel.text = "bisaccia";
-		implementationArchiveButtonLabel.color = new Color(0.95f, 0.79f, 0.34f);
-		implementationArchiveButtonLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
-		implementationArchiveButtonLabel.verticalOverflow = VerticalWrapMode.Truncate;
-		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(implementationArchiveButtonLabel);
-		Outline implementationArchiveButtonLabelOutline = ((Component)implementationArchiveButtonLabel).gameObject.AddComponent<Outline>();
-		implementationArchiveButtonLabelOutline.effectColor = new Color(0.04f, 0.02f, 0.01f, 0.95f);
-		implementationArchiveButtonLabelOutline.effectDistance = new Vector2(2f, -2f);
-		SetRect(implementationArchiveButtonLabel.rectTransform, new Vector2(0.695f, 0.86f), new Vector2(0.875f, 0.902f));
 		Shadow shadow = ((Component)implementationArchiveButton).gameObject.AddComponent<Shadow>();
 		shadow.effectColor = new Color(0f, 0f, 0f, 0.68f);
 		shadow.effectDistance = new Vector2(0f, -8f);
@@ -74,12 +66,6 @@ public sealed partial class BattleBoardController
 		obj2.overrideSorting = true;
 		obj2.sortingOrder = 640;
 		implementationArchivePanel.AddComponent<GraphicRaycaster>();
-		Image innerFrame = CreateImage("Implementation Archive Inner Frame", ((Component)image).transform, Color.white);
-		innerFrame.sprite = LoadSpriteResource("UI/Common/screen_outer_frame");
-		innerFrame.type = Image.Type.Simple;
-		innerFrame.preserveAspect = false;
-		innerFrame.raycastTarget = false;
-		SetRect(innerFrame.rectTransform, new Vector2(0.018f, 0.018f), new Vector2(0.982f, 0.982f));
 		Image outerFrame = CreateImage("Implementation Archive Outer Frame", ((Component)image).transform, Color.white);
 		AccardND.Battlefield.MmoUiTheme.ApplyScreenOuterFrame(outerFrame);
 		outerFrame.raycastTarget = false;
@@ -116,18 +102,56 @@ public sealed partial class BattleBoardController
 		text.verticalOverflow = VerticalWrapMode.Truncate;
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(text);
 		SetRect(text.rectTransform, new Vector2(0.02f, 0.94f), new Vector2(0.98f, 1.08f));
+		bool isConsumablesSection = string.Equals(title, "CONSUMABILI", StringComparison.OrdinalIgnoreCase);
+		RectTransform cardsViewport = null;
+		if (isConsumablesSection)
+		{
+			GameObject viewportObject = new GameObject(
+				title + " Viewport",
+				typeof(RectTransform),
+				typeof(Image),
+				typeof(RectMask2D),
+				typeof(ScrollRect));
+			viewportObject.transform.SetParent(((Component)image).transform, false);
+			cardsViewport = viewportObject.GetComponent<RectTransform>();
+			SetRect(cardsViewport, new Vector2(0.11f, 0.02f), new Vector2(0.94f, 0.71f));
+			Image viewportImage = viewportObject.GetComponent<Image>();
+			viewportImage.color = Color.clear;
+			viewportImage.raycastTarget = true;
+			implementationConsumablesScroll = viewportObject.GetComponent<ScrollRect>();
+			implementationConsumablesScroll.viewport = cardsViewport;
+			implementationConsumablesScroll.horizontal = true;
+			implementationConsumablesScroll.vertical = false;
+			implementationConsumablesScroll.inertia = true;
+			implementationConsumablesScroll.decelerationRate = 0.16f;
+			implementationConsumablesScroll.scrollSensitivity = 32f;
+			implementationConsumablesScroll.movementType = ScrollRect.MovementType.Clamped;
+		}
 		cardRoot = new GameObject(title + " Cards", new Type[2]
 		{
 			typeof(RectTransform),
 			typeof(GridLayoutGroup)
 		}).GetComponent<RectTransform>();
-		((Transform)cardRoot).SetParent(((Component)image).transform, false);
-		((Component)cardRoot).gameObject.AddComponent<RectMask2D>();
-		bool isConsumablesSection = string.Equals(title, "CONSUMABILI", StringComparison.OrdinalIgnoreCase);
-		SetRect(
-			cardRoot,
-			new Vector2(0.11f, isConsumablesSection ? 0.02f : 0.1f),
-			new Vector2(0.94f, isConsumablesSection ? 0.71f : 0.86f));
+		((Transform)cardRoot).SetParent(
+			isConsumablesSection ? (Transform)cardsViewport : ((Component)image).transform,
+			false);
+		if (isConsumablesSection)
+		{
+			cardRoot.anchorMin = new Vector2(0f, 0f);
+			cardRoot.anchorMax = new Vector2(0f, 1f);
+			cardRoot.pivot = new Vector2(0f, 0.5f);
+			cardRoot.anchoredPosition = Vector2.zero;
+			cardRoot.sizeDelta = Vector2.zero;
+			ContentSizeFitter fitter = ((Component)cardRoot).gameObject.AddComponent<ContentSizeFitter>();
+			fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+			fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+			implementationConsumablesScroll.content = cardRoot;
+		}
+		else
+		{
+			((Component)cardRoot).gameObject.AddComponent<RectMask2D>();
+			SetRect(cardRoot, new Vector2(0.11f, 0.1f), new Vector2(0.94f, 0.86f));
+		}
 		GridLayoutGroup component = ((Component)cardRoot).GetComponent<GridLayoutGroup>();
 		component.cellSize = new Vector2(ImplementationArchiveCardSize, ImplementationArchiveCardSize);
 		component.spacing = new Vector2(12f, 8f);
@@ -272,15 +296,17 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
-		CampaignConsumableType[] itemTypes =
-		{
-			CampaignConsumableType.Detector,
-			CampaignConsumableType.SecondChance,
-			CampaignConsumableType.Defrost,
-			CampaignConsumableType.Empower,
-			CampaignConsumableType.SigilloRubino,
-			CampaignConsumableType.DoubleExp
-		};
+		CampaignConsumableType[] itemTypes = new[]
+			{
+				CampaignConsumableType.Detector,
+				CampaignConsumableType.SecondChance,
+				CampaignConsumableType.Defrost,
+				CampaignConsumableType.Empower,
+				CampaignConsumableType.SigilloRubino,
+				CampaignConsumableType.DoubleExp
+			}
+			.OrderByDescending(itemType => (campaignConsumables?.GetQuantity(itemType) ?? 0) > 0)
+			.ToArray();
 		if ((Object)(object)implementationConsumablesEmptyText != (Object)null)
 		{
 			((Component)implementationConsumablesEmptyText).gameObject.SetActive(false);
@@ -288,6 +314,11 @@ public sealed partial class BattleBoardController
 		foreach (CampaignConsumableType itemType in itemTypes)
 		{
 			CreateImplementationConsumableView(itemType);
+		}
+		Canvas.ForceUpdateCanvases();
+		if ((Object)(object)implementationConsumablesScroll != (Object)null)
+		{
+			implementationConsumablesScroll.horizontalNormalizedPosition = 0f;
 		}
 	}
 
@@ -752,54 +783,55 @@ public sealed partial class BattleBoardController
 		((UnityEvent)button2.onClick).AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
-			PlayHubZoomThenOpen(button2, StartPvpMode);
+			StartPvpMode();
 		});
 		modeSelectionMultiplayerButton = button2;
 		Button button3 = CreateHubBannerButton("Sanctuary Hub", ((Component)image).transform, font, "UI/CampaignRestyle/campaign_cta_blue", "SANTUARIO");
 		((UnityEvent)button3.onClick).AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
-			PlayHubZoomThenOpen(button3, ShowSanctuary);
+			ShowSanctuary();
 		});
 		modeSelectionSanctuaryButton = button3;
 		Button button4 = CreateHubBannerButton("Library Hub", ((Component)image).transform, font, "UI/CampaignRestyle/campaign_cta_brown", "BIBLIOTECA");
 		((UnityEvent)button4.onClick).AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
-			PlayHubZoomThenOpen(button4, ShowLibrary);
+			ShowLibrary();
 		});
 		modeSelectionLibraryButton = button4;
 		Button button5 = CreateHubBannerButton("Shop Hub", ((Component)image).transform, font, "UI/CampaignRestyle/campaign_cta_olive", "NEGOZIO");
 		((UnityEvent)button5.onClick).AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
-			PlayHubZoomThenOpen(button5, ShowShop);
+			ShowShop();
 		});
 		modeSelectionShopButton = button5;
 		Button button6 = CreateHubBannerButton("Profile Hub", ((Component)image).transform, font, "UI/CampaignRestyle/campaign_cta_dark_gray", "PROFILO");
 		((UnityEvent)button6.onClick).AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
-			PlayHubZoomThenOpen(button6, ShowUnderDevelopmentPopup);
+			ShowProfile();
 		});
 		modeSelectionProfileButton = button6;
 		Button button7 = CreateHubBannerButton("Hall Of Fame Hub", ((Component)image).transform, font, "UI/CampaignRestyle/campaign_cta_black", "CLASSIFICA");
 		((UnityEvent)button7.onClick).AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
-			PlayHubZoomThenOpen(button7, ShowHallOfFame);
+			ShowHallOfFame();
 		});
 		modeSelectionHallOfFameButton = button7;
 		Button tavernButton = CreateHubBannerButton("Tavern Hub", ((Component)image).transform, font, "UI/CampaignRestyle/campaign_cta_orange", "TAVERNA");
 		((UnityEvent)tavernButton.onClick).AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
-			PlayHubZoomThenOpen(tavernButton, ShowTavern);
+			ShowTavern();
 		});
 		modeSelectionTavernButton = tavernButton;
+		CreateTavernNotificationBadge(tavernButton, font);
 		CreateHubHotspots(((Component)image).transform);
 		CreateAccountBanner(canvasTransform, font);
-		CreateAccountHoneyPanel(((Component)accountBannerImage).transform, font);
+		CreateAccountHoneyIndicator(canvasTransform, font);
 		modeSelectionTutorialButton = null;
 		Button button8 = CreateTransparentButton("Tutorial Advance", ((Component)image).transform);
 		((UnityEvent)button8.onClick).AddListener((UnityAction)delegate
@@ -812,6 +844,7 @@ public sealed partial class BattleBoardController
 		((Component)tutorialAdvanceButton).gameObject.SetActive(false);
 		RefreshModeSelectionLayout();
 		CreateMultiplayerPopup(((Component)image).transform, font);
+		CreateLevelUpRewardPopup(((Component)image).transform, font);
 		modeSelectionPanel.SetActive(false);
 		if ((Object)(object)accountBannerImage != (Object)null)
 		{
@@ -1215,8 +1248,9 @@ public sealed partial class BattleBoardController
 		adventureChapterHeadingText.fontSize = compact ? 46 : 44;
 		adventureChapterListRoot.anchorMin = new Vector2(0.06f, 0.17f);
 		adventureChapterListRoot.anchorMax = new Vector2(0.94f, 0.77f);
-		adventureChapterListRoot.offsetMin = new Vector2(0f, -42f);
-		adventureChapterListRoot.offsetMax = new Vector2(0f, -42f);
+		adventureChapterListRoot.offsetMin = new Vector2(0f, -220f);
+		adventureChapterListRoot.offsetMax = new Vector2(0f, -220f);
+		adventureChapterListRoot.localScale = Vector3.one;
 		ConfigureAdventureChapterGrid(compact);
 	}
 
@@ -1235,10 +1269,11 @@ public sealed partial class BattleBoardController
 		Rect rect = adventureChapterListRoot.rect;
 		int columns = 3;
 		float horizontalSpacing = compact ? 10f : 16f;
-		float verticalSpacing = compact ? 14f : 18f;
+		float verticalSpacing = 30f;
+		float sizingVerticalSpacing = compact ? 14f : 18f;
 		float captionHeight = compact ? 32f : 60f;
 		float width = Mathf.Max(1f, rect.width - horizontalSpacing * (columns - 1));
-		float height = Mathf.Max(1f, rect.height - verticalSpacing);
+		float height = Mathf.Max(1f, rect.height - sizingVerticalSpacing);
 		float verticalLimit = compact
 			? height / 2f - captionHeight
 			: height / 2f - 56f;
@@ -1299,6 +1334,7 @@ public sealed partial class BattleBoardController
 			action?.Invoke();
 		});
 		bool useLockedImage = !unlocked && cost > 0;
+		bool completed = id != "tutorial" && IsAdventureChapterCompleted(id);
 		Image cover = CreateImage("Cover", row.transform, AdventureChapterPlaceholderColor(id, unlocked || cost == 0));
 		cover.raycastTarget = false;
 		if (!unlocked && cost > 0)
@@ -1323,7 +1359,17 @@ public sealed partial class BattleBoardController
 		}
 		else
 		{
-			StylePanel(cover);
+			Sprite scenarioBackground = AdventureChapterBackgroundSprite(id);
+			if ((Object)(object)scenarioBackground != (Object)null)
+			{
+				cover.sprite = scenarioBackground;
+				cover.color = Color.white;
+				cover.preserveAspect = false;
+			}
+			else
+			{
+				StylePanel(cover);
+			}
 		}
 		GridLayoutGroup chapterGrid = ((Component)adventureChapterListRoot).GetComponent<GridLayoutGroup>();
 		float captionRatio = (Object)(object)chapterGrid != (Object)null && chapterGrid.cellSize.y > 0f
@@ -1333,10 +1379,20 @@ public sealed partial class BattleBoardController
 		Image veil = CreateImage("Lock Veil", ((Component)cover).transform, useLockedImage ? new Color(0f, 0f, 0f, 0.12f) : (button.interactable ? new Color(0f, 0f, 0f, 0f) : new Color(0f, 0f, 0f, 0.48f)));
 		veil.raycastTarget = false;
 		Stretch(veil.rectTransform);
+		string completedLabel = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterCompleted, "completato");
 		string status = cost == 0
-			? (singlePlayerProgressService.TutorialCompleted ? "completato" : "sblocca il primo capitolo")
-			: (unlocked ? "sbloccato" : $"costo {cost} miele");
-		Text coverText = CreateText("Cover Status", ((Component)cover).transform, AccardND.Battlefield.MmoUiTheme.BodyFont, 16, (FontStyle)1, (TextAnchor)7);
+			? (singlePlayerProgressService.TutorialCompleted
+				? completedLabel
+				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterUnlockFirst, "sblocca il primo capitolo"))
+			: (completed
+				? completedLabel
+				: (unlocked
+					? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterUnlocked, "sbloccato")
+					: GameText.GetOrFallbackSilent(
+						GameTextKeys.Campaign.ChapterHoneyCost,
+						"costo {0} miele",
+						cost)));
+		Text coverText = CreateText("Cover Status", ((Component)cover).transform, AccardND.Battlefield.MmoUiTheme.BodyFont, 20, (FontStyle)1, (TextAnchor)7);
 		coverText.raycastTarget = false;
 		coverText.text = subtitle.ToUpperInvariant() + "\n" + status.ToUpperInvariant();
 		coverText.color = Color.white;
@@ -1344,7 +1400,7 @@ public sealed partial class BattleBoardController
 		coverText.verticalOverflow = VerticalWrapMode.Truncate;
 		coverText.resizeTextForBestFit = true;
 		coverText.resizeTextMinSize = 10;
-		coverText.resizeTextMaxSize = 16;
+		coverText.resizeTextMaxSize = 20;
 		Outline outline = ((Component)coverText).gameObject.AddComponent<Outline>();
 		outline.effectColor = Color.black;
 		outline.effectDistance = new Vector2(2f, -2f);
@@ -1359,7 +1415,36 @@ public sealed partial class BattleBoardController
 		titleText.resizeTextMinSize = 10;
 		titleText.resizeTextMaxSize = 17;
 		SetRect(titleText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, Mathf.Max(0.12f, captionRatio - 0.015f)));
+		titleText.rectTransform.offsetMin = new Vector2(titleText.rectTransform.offsetMin.x, -24f);
 		adventureChapterRows.Add(row);
+	}
+
+	private Sprite AdventureChapterBackgroundSprite(string chapterId)
+	{
+		if (!TryGetAdventureChapterConfig(chapterId, out string scenarioId, out string bossId, out _))
+		{
+			return null;
+		}
+		if ((Object)(object)scenarioCatalog == (Object)null)
+		{
+			scenarioCatalog = Resources.Load<ScenarioCatalog>("ScenarioCatalog");
+		}
+		ScenarioDefinition scenario = (Object)(object)scenarioCatalog != (Object)null
+			? scenarioCatalog.Select(RoomType.Boss, RoomDifficulty.Hard, bossId, scenarioId)
+			: null;
+		if ((Object)(object)scenario == (Object)null)
+		{
+			return null;
+		}
+		return Screen.width > Screen.height && (Object)(object)scenario.BackgroundLandscape != (Object)null
+			? scenario.BackgroundLandscape
+			: scenario.Background;
+	}
+
+	private bool IsAdventureChapterCompleted(string chapterId)
+	{
+		return singlePlayerProgressService != null
+			&& singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.ChapterCleared, chapterId);
 	}
 
 	private static Color AdventureChapterPlaceholderColor(string id, bool available)
@@ -1482,73 +1567,28 @@ public sealed partial class BattleBoardController
 			hallOfFameRect.anchoredPosition = landscape ?Vector2.zero : new Vector2(5f, -16f);
 		}
 		RefreshAccountBannerLayout(landscape);
-		RefreshAccountHoneyPanelLayout(landscape);
+		RefreshAccountHoneyIndicatorLayout(landscape);
 		RefreshAccountBannerView();
 	}
 
-	private void CreateAccountHoneyPanel(Transform parent, Font font)
+	private void CreateAccountHoneyIndicator(Transform parent, Font font)
 	{
-		accountHoneyPanelImage = CreateImage("Account Honey Panel", parent, new Color(0.025f, 0.02f, 0.015f, 0.88f));
+		accountHoneyPanelImage = CreateImage("Account Honey Currency", parent, Color.white);
+		accountHoneyPanelImage.sprite = LoadHoneyPotCurrencySprite();
+		accountHoneyPanelImage.preserveAspect = true;
 		accountHoneyPanelImage.raycastTarget = false;
-		StylePanel(accountHoneyPanelImage);
+		Canvas honeyCanvas = ((Component)accountHoneyPanelImage).gameObject.AddComponent<Canvas>();
+		honeyCanvas.overrideSorting = true;
+		honeyCanvas.sortingOrder = 911;
 
-		Image honeyIcon = CreateImage("Account Honey Icon", ((Component)accountHoneyPanelImage).transform, Color.white);
-		honeyIcon.sprite = LoadSpriteResource("UI/honey_pot_currency");
-		honeyIcon.preserveAspect = true;
-
-		accountHoneyAmountText = CreateText("Account Honey Amount", ((Component)accountHoneyPanelImage).transform, font, 18, (FontStyle)1, (TextAnchor)3);
-		accountHoneyAmountText.color = new Color(0.98f, 0.9f, 0.68f, 1f);
+		accountHoneyAmountText = CreateText("Account Honey Amount", ((Component)accountHoneyPanelImage).transform, font, 35, FontStyle.Bold, TextAnchor.MiddleCenter);
+		accountHoneyAmountText.color = Color.white;
 		accountHoneyAmountText.horizontalOverflow = HorizontalWrapMode.Overflow;
+		accountHoneyAmountText.verticalOverflow = VerticalWrapMode.Overflow;
 		Outline amountOutline = ((Component)accountHoneyAmountText).gameObject.AddComponent<Outline>();
-		amountOutline.effectColor = new Color(0f, 0f, 0f, 0.9f);
-		amountOutline.effectDistance = new Vector2(1f, -1f);
-
-		Button plusButton = CreateButton("Account Honey Plus", ((Component)accountHoneyPanelImage).transform, font, "+");
-		ApplyBattleButtonVariant(plusButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Gold);
-
-		Image plusGlow = CreateImage(
-			"Account Honey Plus Glow",
-			((Component)accountHoneyPanelImage).transform,
-			new Color(0.1f, 0.78f, 1f, 0.32f));
-		plusGlow.sprite = AccardND.Battlefield.MmoUiTheme.GetRadialGlowSprite();
-		plusGlow.raycastTarget = false;
-		plusGlow.rectTransform.SetSiblingIndex(((Component)plusButton).transform.GetSiblingIndex());
-
-		Image plusGem = CreateImage(
-			"Account Honey Plus Gem",
-			((Component)plusButton).transform,
-			new Color(0.08f, 0.72f, 0.96f, 0.96f));
-		plusGem.sprite = AccardND.Battlefield.MmoUiTheme.GetGemSprite();
-		plusGem.preserveAspect = true;
-		plusGem.raycastTarget = false;
-		plusGem.rectTransform.SetAsFirstSibling();
-		SetRect(plusGem.rectTransform, new Vector2(0.18f, 0.1f), new Vector2(0.82f, 0.9f));
-
-		Text plusLabel = ((Component)plusButton).GetComponentInChildren<Text>();
-		if ((Object)(object)plusLabel != (Object)null)
-		{
-			plusLabel.font = AccardND.Battlefield.MmoUiTheme.BodyBoldFont;
-			plusLabel.fontStyle = FontStyle.Bold;
-			plusLabel.fontSize = 25;
-			plusLabel.resizeTextForBestFit = true;
-			plusLabel.resizeTextMinSize = 18;
-			plusLabel.resizeTextMaxSize = 25;
-			plusLabel.color = new Color(1f, 0.94f, 0.7f, 1f);
-			plusLabel.transform.SetAsLastSibling();
-			Shadow plusShadow = ((Component)plusLabel).gameObject.AddComponent<Shadow>();
-			plusShadow.effectColor = new Color(0.02f, 0.16f, 0.24f, 0.95f);
-			plusShadow.effectDistance = new Vector2(2f, -2f);
-		}
-		((UnityEvent)plusButton.onClick).AddListener((UnityAction)delegate
-		{
-			PlayGenericButtonClickSfx();
-			ShowUnderDevelopmentPopup();
-		});
-
-		SetRect(honeyIcon.rectTransform, new Vector2(0.05f, 0.15f), new Vector2(0.22f, 0.85f));
-		SetRect(accountHoneyAmountText.rectTransform, new Vector2(0.25f, 0.18f), new Vector2(0.76f, 0.82f));
-		SetRect(plusGlow.rectTransform, new Vector2(0.745f, -0.04f), new Vector2(1.015f, 1.04f));
-		SetRect((RectTransform)((Component)plusButton).transform, new Vector2(0.775f, 0.08f), new Vector2(0.985f, 0.92f));
+		amountOutline.effectColor = new Color(0.08f, 0.035f, 0f, 1f);
+		amountOutline.effectDistance = new Vector2(2f, -2f);
+		Stretch(accountHoneyAmountText.rectTransform);
 	}
 
 	private void CreateAccountBanner(Transform parent, Font font)
@@ -1652,6 +1692,11 @@ public sealed partial class BattleBoardController
 				return;
 			}
 			PlayGenericButtonClickSfx();
+			if ((Object)(object)activePvpBootstrap != (Object)null)
+			{
+				activePvpBootstrap.CloseToHub();
+				return;
+			}
 			ShowHubFromSinglePlayer();
 		});
 
@@ -1708,20 +1753,28 @@ public sealed partial class BattleBoardController
 		accountBannerExperienceText.resizeTextMaxSize = accountBannerExperienceText.fontSize;
 	}
 
-	private void RefreshAccountHoneyPanelLayout(bool landscape)
+	private void RefreshAccountHoneyIndicatorLayout(bool landscape)
 	{
 		if ((Object)(object)accountHoneyPanelImage == (Object)null)
 			return;
 
 		RectTransform rect = accountHoneyPanelImage.rectTransform;
-		rect.anchorMin = new Vector2(0.8f, 0.54f);
-		rect.anchorMax = new Vector2(0.985f, 1.08f);
-		rect.offsetMin = new Vector2(0f, 0.0001f);
-		rect.offsetMax = new Vector2(0f, -37.1579f);
+		rect.anchorMin = Vector2.one;
+		rect.anchorMax = Vector2.one;
+		rect.pivot = new Vector2(0.5f, 0.5f);
+		rect.localScale = Vector3.one;
+		rect.localRotation = Quaternion.identity;
+		rect.anchoredPosition = new Vector2(-232.7f, -196.6f);
+		rect.sizeDelta = new Vector2(120f, 120f);
 		((Component)accountHoneyPanelImage).transform.SetAsLastSibling();
 		if ((Object)(object)accountHoneyAmountText != (Object)null)
 		{
-			accountHoneyAmountText.fontSize = landscape ?18 : 16;
+			RectTransform amountRect = accountHoneyAmountText.rectTransform;
+			amountRect.anchorMin = Vector2.zero;
+			amountRect.anchorMax = Vector2.one;
+			amountRect.offsetMin = new Vector2(0f, -6.7f);
+			amountRect.offsetMax = new Vector2(0f, -6.7f);
+			accountHoneyAmountText.fontSize = 35;
 			accountHoneyAmountText.resizeTextMaxSize = accountHoneyAmountText.fontSize;
 		}
 	}
@@ -1755,14 +1808,39 @@ public sealed partial class BattleBoardController
 
 	private void SetAccountHubHudActive(bool active)
 	{
+		if (active
+			&& (Object)(object)accountHoneyPanelImage == (Object)null
+			&& (Object)(object)accountBannerImage != (Object)null)
+		{
+			Font honeyFont = AccardND.Battlefield.MmoUiTheme.BodyBoldFont
+				?? AccardND.Battlefield.MmoUiTheme.BodyFont;
+			CreateAccountHoneyIndicator(((Component)accountBannerImage).transform.parent, honeyFont);
+			RefreshAccountHoneyIndicatorLayout(Screen.width > Screen.height);
+		}
 		if ((Object)(object)accountBannerImage != (Object)null)
 		{
 			((Component)accountBannerImage).gameObject.SetActive(active);
 			if (active)
+			{
+				SetDeckBuilderAccountHeaderMode(false);
 				((Component)accountBannerImage).transform.SetAsLastSibling();
+			}
 		}
 		if ((Object)(object)accountHoneyPanelImage != (Object)null)
 		{
+			if (active)
+			{
+				RefreshAccountHoneyIndicatorLayout(Screen.width > Screen.height);
+				Canvas honeyCanvas = ((Component)accountHoneyPanelImage).GetComponent<Canvas>();
+				if ((Object)(object)honeyCanvas == (Object)null)
+				{
+					honeyCanvas = ((Component)accountHoneyPanelImage).gameObject.AddComponent<Canvas>();
+				}
+				honeyCanvas.overrideSorting = true;
+				honeyCanvas.sortingOrder = 911;
+				accountHoneyPanelImage.sprite = LoadHoneyPotCurrencySprite();
+				accountHoneyPanelImage.preserveAspect = true;
+			}
 			((Component)accountHoneyPanelImage).gameObject.SetActive(active);
 			if (active)
 				((Component)accountHoneyPanelImage).transform.SetAsLastSibling();
@@ -1775,6 +1853,24 @@ public sealed partial class BattleBoardController
 			((Component)settingsButtonLabel).gameObject.SetActive(!active);
 		if ((Object)(object)accountHeaderHubButton != (Object)null)
 			accountHeaderHubButton.interactable = active && !IsAccountHubVisible();
+	}
+
+	private void SetDeckBuilderAccountHeaderMode(bool active)
+	{
+		if ((Object)(object)accountBannerPortraitRoot != (Object)null)
+			((Component)accountBannerPortraitRoot).gameObject.SetActive(!active);
+		if ((Object)(object)accountBannerNameText != (Object)null)
+			((Component)accountBannerNameText).gameObject.SetActive(!active);
+		if ((Object)(object)accountBannerLevelText != (Object)null)
+			((Component)accountBannerLevelText).gameObject.SetActive(!active);
+		if ((Object)(object)accountBannerExperienceFill != (Object)null)
+			((Component)accountBannerExperienceFill).transform.parent.gameObject.SetActive(!active);
+		if ((Object)(object)accountBannerExperienceText != (Object)null)
+			((Component)accountBannerExperienceText).gameObject.SetActive(!active);
+		if ((Object)(object)accountHeaderHubButton != (Object)null)
+			((Component)accountHeaderHubButton).gameObject.SetActive(!active);
+		if ((Object)(object)accountHoneyPanelImage != (Object)null)
+			((Component)accountHoneyPanelImage).gameObject.SetActive(!active);
 	}
 
 	private bool IsAccountHubVisible()
@@ -2156,6 +2252,14 @@ public sealed partial class BattleBoardController
 		{
 			libraryPanel.SetActive(false);
 		}
+		if ((Object)(object)shopPanel != (Object)null)
+		{
+			shopPanel.SetActive(false);
+		}
+		if ((Object)(object)profilePanel != (Object)null)
+		{
+			profilePanel.SetActive(false);
+		}
 		if ((Object)(object)guidedTutorialPanel != (Object)null)
 		{
 			guidedTutorialPanel.SetActive(false);
@@ -2175,7 +2279,9 @@ public sealed partial class BattleBoardController
 		SetModeSelectionButtonsActive(true);
 		SetModeSelectionButtonsInteractable(true);
 		SetAccountHubHudActive(true);
+		TryShowLevelUpRewardPopup();
 		RefreshModeSelectionLayout();
+		_ = RefreshTavernNotificationBadgeAsync();
 		inputLocked = true;
 	}
 
@@ -2210,6 +2316,7 @@ public sealed partial class BattleBoardController
 		}
 		SetModeSelectionButtonsActive(true);
 		SetAccountHubHudActive(true);
+		_ = RefreshTavernNotificationBadgeAsync();
 		if ((Object)(object)tutorialAdvanceButton != (Object)null)
 		{
 			((Component)tutorialAdvanceButton).gameObject.SetActive(false);
@@ -2603,6 +2710,7 @@ public sealed partial class BattleBoardController
 		serverProgress = repository;
 		MirrorServerProgress();
 		RefreshSinglePlayerProgressView();
+		TryShowLevelUpRewardPopup();
 		if ((Object)(object)adventureChapterPanel != (Object)null && adventureChapterPanel.activeSelf)
 		{
 			RefreshAdventureChapterList();
@@ -2621,12 +2729,15 @@ public sealed partial class BattleBoardController
 			return;
 		MirrorServerProgress();
 		RefreshAccountBannerView();
+		TryShowLevelUpRewardPopup();
 		if ((Object)(object)sanctuaryPanel != (Object)null && sanctuaryPanel.activeSelf)
 			LoadSanctuaryFromServer();
 		if ((Object)(object)shopPanel != (Object)null && shopPanel.activeSelf)
 			LoadShopFromServer();
 		if ((Object)(object)tavernPanel != (Object)null && tavernPanel.activeSelf)
 			await RefreshTavernFromServerAsync();
+		else if ((Object)(object)modeSelectionPanel != (Object)null && modeSelectionPanel.activeSelf)
+			await RefreshTavernNotificationBadgeAsync();
 	}
 
 	/// <summary>Copia lo stato autoritativo del server nella cache locale letta dalla UI.</summary>
@@ -3077,11 +3188,10 @@ public sealed partial class BattleBoardController
 			{
 				activePvpBootstrap = null;
 			}
-			if ((Object)(object)modeSelectionPanel != (Object)null)
-			{
-				modeSelectionPanel.SetActive(true);
-			}
-			SetAccountHubHudActive(true);
+			ShowHubFromSinglePlayer();
+			// Entrando nel PvP il link dell'Hub viene rilasciato. Al ritorno va ricreato
+			// e risincronizzato prima di ridisegnare livello, EXP e valuta del banner.
+			_ = RefreshCampaignPanelsAfterReconnectAsync();
 		};
 		if (openLeaderboard)
 		{
@@ -3147,7 +3257,7 @@ public sealed partial class BattleBoardController
 		SetRect(text.rectTransform, new Vector2(0.08f, 0.18f), new Vector2(0.92f, 0.72f));
 		text.rectTransform.offsetMin = new Vector2(0f, -21f);
 		text.rectTransform.offsetMax = new Vector2(0f, -21f);
-		deckBuilderStatusText = CreateText("Budget", deckBuilderContentRoot, font, 25, (FontStyle)1, (TextAnchor)4);
+		deckBuilderStatusText = CreateText("Budget", deckBuilderContentRoot, font, 50, (FontStyle)1, (TextAnchor)4);
 		SetRect(deckBuilderStatusText.rectTransform, new Vector2(0.18f, 0.775f), new Vector2(0.82f, 0.84f));
 		deckBuilderCardsRoot = new GameObject("Deck Preview Grid", new Type[2]
 		{
@@ -3162,7 +3272,7 @@ public sealed partial class BattleBoardController
 		component.spacing = new Vector2(12f, 12f);
 		component.childAlignment = (TextAnchor)4;
 		component.cellSize = new Vector2(210f, 210f);
-		deckBuilderCardsText = CreateText("Empty Deck Hint", deckBuilderContentRoot, font, 24, (FontStyle)1, (TextAnchor)4);
+		deckBuilderCardsText = CreateText("Empty Deck Hint", deckBuilderContentRoot, font, 50, (FontStyle)1, (TextAnchor)4);
 		deckBuilderCardsText.color = new Color(0.88f, 0.92f, 0.96f);
 		SetRect(deckBuilderCardsText.rectTransform, new Vector2(0.24f, 0.55f), new Vector2(0.76f, 0.66f));
 		Button button = CreateImageButton("Buy Blind Random", deckBuilderContentRoot, font, LoadSpriteResource("UI/random_value_draw"), string.Empty);
@@ -3311,14 +3421,14 @@ public sealed partial class BattleBoardController
 		Vector2 iconOffset = GetDeckBuilderClassIconOffset(heroClass);
 		SetRect(icon.rectTransform, new Vector2(0.08f, 0.31f) + iconOffset, new Vector2(0.92f, 0.96f) + iconOffset);
 
-		Text label = CreateText("Label", ((Component)hitTarget).transform, font, 17, (FontStyle)1, (TextAnchor)4);
+		Text label = CreateText("Label", ((Component)hitTarget).transform, font, 28, (FontStyle)1, (TextAnchor)4);
 		label.text = HeroClassDisplayName(heroClass).ToUpperInvariant();
 		label.color = new Color(1f, 0.84f, 0.16f, 1f);
 		label.horizontalOverflow = HorizontalWrapMode.Wrap;
 		label.verticalOverflow = VerticalWrapMode.Truncate;
 		label.resizeTextForBestFit = true;
 		label.resizeTextMinSize = 8;
-		label.resizeTextMaxSize = 17;
+		label.resizeTextMaxSize = 28;
 		Outline outline = ((Component)label).gameObject.AddComponent<Outline>();
 		outline.effectColor = new Color(0f, 0f, 0f, 0.92f);
 		outline.effectDistance = new Vector2(1.5f, -1.5f);

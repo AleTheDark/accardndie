@@ -207,7 +207,10 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
-		golem.View.SetComposableGolemForm(activeComposableGolem.ActiveForm.Form);
+		ComposableGolemForm activeForm = activeComposableGolem.ActiveForm.Form;
+		golem.View.SetComposableGolemForm(
+			activeForm,
+			actionColor: GolemFormColor(activeForm));
 		golem.View.SetStrengthValue(activeComposableGolem.ActiveForm.Power);
 		UpdateComposableGolemHealthBar(golem);
 		RefreshPersistentStatus(golem);
@@ -376,7 +379,9 @@ public sealed partial class BattleBoardController
 		{
 			BattleCardState battleCardState2 = cpuCards[index];
 			int num = 1;
-			int baseDieSides = runProgress != null ? runProgress.MasterVigorDieSides : configuration.Gameplay.VigorDieSides;
+			int baseDieSides = IsComposableGolemProxy(battleCardState2) && activeComposableGolem != null
+				? activeComposableGolem.ActiveForm.VigorDieSides
+				: runProgress != null ? runProgress.MasterVigorDieSides : configuration.Gameplay.VigorDieSides;
 			int startDieSides = EffectiveVigorDieSides(battleCardState2, baseDieSides);
 			battleCardState2.PendingVigorStepPenalty = Math.Max(battleCardState2.PendingVigorStepPenalty, num);
 			int endDieSides = EffectiveVigorDieSides(battleCardState2, baseDieSides);
@@ -490,6 +495,8 @@ public sealed partial class BattleBoardController
 			}
 			else if (abilityTargetMode == AbilityTargetMode.PaladinAlly && !target.Eliminated)
 			{
+				if (!TrySpendCampaignPrimaryMana(activeAbilityUser))
+					return;
 				activeAbilityUser.AbilityArmed = true;
 				activeAbilityUser.ProtectedAlly = target;
 				RefreshPersistentStatus(activeAbilityUser);

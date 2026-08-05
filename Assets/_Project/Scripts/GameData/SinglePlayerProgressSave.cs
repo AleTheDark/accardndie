@@ -15,6 +15,7 @@ namespace AccardND.GameData
         public int accountExperience;
         public int accountTotalExperience;
         public int accountExperienceToNextLevel = 100;
+        public int pendingLevelRewards;
         public bool tutorialCompleted;
         public bool hardcoreUnlocked;
         public List<string> unlockedChapters = new List<string>();
@@ -281,6 +282,7 @@ namespace AccardND.GameData
             save.accountExperienceToNextLevel = save.accountExperienceToNextLevel <= 0
                 ? 100
                 : save.accountExperienceToNextLevel;
+            save.pendingLevelRewards = Math.Max(0, save.pendingLevelRewards);
             save.unlockedChapters ??= new List<string>();
             save.unlockedStages ??= new List<string>();
             save.unlockedClasses ??= new List<string>();
@@ -304,6 +306,7 @@ namespace AccardND.GameData
             accountExperience = source.accountExperience,
             accountTotalExperience = source.accountTotalExperience,
             accountExperienceToNextLevel = source.accountExperienceToNextLevel,
+            pendingLevelRewards = source.pendingLevelRewards,
             tutorialCompleted = source.tutorialCompleted,
             hardcoreUnlocked = source.hardcoreUnlocked,
             unlockedChapters = new List<string>(source.unlockedChapters ?? new List<string>()),

@@ -5,6 +5,7 @@ using System.Linq;
 using AccardND.Battlefield;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -18,6 +19,35 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	private enum PrimaryActionLabel
+	{
+		Continue,
+		Advance,
+		RetryRoom
+	}
+
+	private static void SetPrimaryActionLabel(Text target, PrimaryActionLabel label)
+	{
+		if ((Object)(object)target == (Object)null)
+			return;
+
+		string key = label switch
+		{
+			PrimaryActionLabel.Advance => GameTextKeys.Campaign.Advance,
+			PrimaryActionLabel.RetryRoom => GameTextKeys.Campaign.RetryRoom,
+			_ => GameTextKeys.Common.Continue
+		};
+		string italianFallback = label switch
+		{
+			PrimaryActionLabel.Advance => "VAI AVANTI!",
+			PrimaryActionLabel.RetryRoom => "RIPROVA STANZA",
+			_ => "CONTINUA"
+		};
+		string fallback = GameText.GetOrFallbackSilent(key, italianFallback);
+		target.text = fallback;
+		global::AccardND.Battlefield.EditableRuntimeText.BindLocalized(target, key, fallback);
+	}
+
 	private static Canvas CreateCanvas()
 	{
 		GameObject val = new GameObject("Battle Canvas", new Type[4]
@@ -146,15 +176,25 @@ public sealed partial class BattleBoardController
 		labelOutline.effectColor = new Color(0f, 0f, 0f, 0.85f);
 		labelOutline.effectDistance = new Vector2(1.5f, -1.5f);
 		Stretch(text.rectTransform, 6f);
-		if (MmoUiTheme.IsBackButtonLabel(label))
-			MmoUiTheme.ApplyBackButtonStyle(button, text);
-		else if (MmoUiTheme.IsLightButtonLabel(label))
-			MmoUiTheme.ApplyLightButtonStyle(button, text);
+        if (MmoUiTheme.IsBackButton(name, label))
+            MmoUiTheme.ApplyBackButtonStyle(button, text);
+        else if (MmoUiTheme.IsLightButton(name, label))
+            MmoUiTheme.ApplyLightButtonStyle(button, text);
 		return button;
 	}
 
 	private static MmoUiTheme.ButtonVariant ResolveBattleButtonVariant(string name, string label)
 	{
+		string semanticName = (name ?? string.Empty).ToUpperInvariant();
+		if (semanticName.Contains("CANCEL") || semanticName.Contains("CLOSE") || semanticName.Contains("BACK") || semanticName.Contains("RETURN"))
+			return MmoUiTheme.ButtonVariant.Crimson;
+		if (semanticName.Contains("CONFIRM") || semanticName.Contains("SAVE") || semanticName.Contains("START") || semanticName.Contains("CONTINUE"))
+			return MmoUiTheme.ButtonVariant.Emerald;
+		if (semanticName.Contains("DRAFT") || semanticName.Contains("PROFILE") || semanticName.Contains("PVP") || semanticName.Contains("MULTIPLAYER"))
+			return MmoUiTheme.ButtonVariant.Violet;
+		if (semanticName.Contains("BUILDER") || semanticName.Contains("BAG") || semanticName.Contains("LOADOUT"))
+			return MmoUiTheme.ButtonVariant.Gold;
+
 		string value = ((name ?? string.Empty) + " " + (label ?? string.Empty)).ToUpperInvariant();
 		if (value.Contains("ANNULLA") || value.Contains("CANCEL") || value.Contains("CLOSE") || value.Contains("CHIUDI") || value.Contains("INDIETRO"))
 			return MmoUiTheme.ButtonVariant.Crimson;

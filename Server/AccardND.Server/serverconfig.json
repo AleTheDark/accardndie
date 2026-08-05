@@ -38,6 +38,11 @@
     "DurationDays": 90,
     "SoftResetFactor": 0.5
   },
+  "ClientVersion": {
+    "Target": "0.9.2",
+    "Enforce": true,
+    "UpdateUrl": "https://accardndie.com"
+  },
   "GoogleOAuth": {
     "ClientId": "866249556431-mgdm97uvov7mjvect4bp453dpp2oe48u.apps.googleusercontent.com",
     "RedirectUri": "https://accardndie.com/auth/google/callback",

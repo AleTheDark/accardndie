@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -17,17 +18,28 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	private bool campaignEndedBannerVisible;
+
 	private string FormatResultDetailed(string actor, BattleCardState attacker, BattleCardState defender, CombatResult result, CombatModifiers modifiers)
 	{
-		string text = (result.DefenderIsDefeated ?"eliminata" : "resiste");
-		return actor + ": " + attacker.Card.Name + " [" + FormatCombatTotalDetailed(attacker, modifiers.AttackerFlatBonus, result.AttackerRoll, result.AttackerTotal, true, defender) + "] contro " + defender.Card.Name + " [" + FormatCombatTotalDetailed(defender, modifiers.DefenderFlatBonus, result.DefenderRoll, result.DefenderTotal, false, attacker) + "] - " + text + ".";
+		string outcome = GameText.Get(result.DefenderIsDefeated
+			? GameTextKeys.Combat.OutcomeEliminated
+			: GameTextKeys.Combat.OutcomeResists);
+		return GameText.Format(
+			GameTextKeys.Combat.ResultDetailed,
+			actor,
+			attacker.Card.Name,
+			FormatCombatTotalDetailed(attacker, modifiers.AttackerFlatBonus, result.AttackerRoll, result.AttackerTotal, true, defender),
+			defender.Card.Name,
+			FormatCombatTotalDetailed(defender, modifiers.DefenderFlatBonus, result.DefenderRoll, result.DefenderTotal, false, attacker),
+			outcome);
 	}
 
 	private static string FormatResultSummary(BattleCardState attacker, BattleCardState defender, CombatResult result)
 	{
 		return result.DefenderIsDefeated
-			?$"{attacker.Card.Name} elimina {defender.Card.Name}."
-			:$"{defender.Card.Name} resiste all'attacco di {attacker.Card.Name}.";
+			? GameText.Format(GameTextKeys.Combat.ResultEliminates, attacker.Card.Name, defender.Card.Name)
+			: GameText.Format(GameTextKeys.Combat.ResultResists, defender.Card.Name, attacker.Card.Name);
 	}
 
 	private string FormatCombatTotalDetailed(BattleCardState card, int flatBonus, VigorRollResult roll, int total, bool attacking, BattleCardState opponent)
@@ -45,7 +57,18 @@ public sealed partial class BattleBoardController
 		string attackerDie = modifiers.SumAttackerVigor ?$"D{attackerDieSides}+D{lowerDieSides}" : $"D{attackerDieSides}";
 		string attackerBonus = FormatFlatBonus(modifiers.AttackerFlatBonus, FormatFlatBonusDetails(attacker, modifiers.AttackerFlatBonus, true, defender));
 		string defenderBonus = FormatFlatBonus(modifiers.DefenderFlatBonus, FormatFlatBonusDetails(defender, modifiers.DefenderFlatBonus, false, attacker));
-		return $"0%: {attacker.Card.Name} arriva al massimo a {attackerMaximum} " + $"({attacker.Card.Strength}{attackerBonus} + {attackerDie}), mentre {defender.Card.Name} parte da " + $"{defenderMinimum} ({defender.Card.Strength}{defenderBonus} + D{defenderDieSides}:1).";
+		return GameText.Format(
+			GameTextKeys.Combat.ImpossibleAttackDetailed,
+			attacker.Card.Name,
+			attackerMaximum,
+			attacker.Card.Strength,
+			attackerBonus,
+			attackerDie,
+			defender.Card.Name,
+			defenderMinimum,
+			defender.Card.Strength,
+			defenderBonus,
+			defenderDieSides);
 	}
 
 	private string FormatFlatBonusDetails(BattleCardState card, int flatBonus, bool attacking, BattleCardState opponent)
@@ -68,19 +91,19 @@ public sealed partial class BattleBoardController
 				&& opponent != null
 				&& card.Card.Strength < opponent.Card.Strength)
 			{
-				parts.Add("Aura Guerriero +2");
+				parts.Add(GameText.Get(GameTextKeys.Combat.BonusAuraWarrior));
 				described += 2;
 			}
 			int hunterBonus = HunterMarkAttackBonus(card, opponent);
 			if (hunterBonus > 0)
 			{
-				parts.Add($"Preda Hunter +{hunterBonus}");
+				parts.Add(GameText.Format(GameTextKeys.Combat.BonusHunterPrey, hunterBonus));
 				described += hunterBonus;
 			}
 		}
 		else if (card.PendingAttackBonusKind == PendingAttackBonusKind.Fury && card.PendingAttackBonus > 0)
 		{
-			parts.Add($"Furia +{card.PendingAttackBonus}");
+			parts.Add(GameText.Format(GameTextKeys.Combat.BonusFury, card.PendingAttackBonus));
 			described += card.PendingAttackBonus;
 		}
 		if (!attacking
@@ -89,22 +112,22 @@ public sealed partial class BattleBoardController
 			&& opponent != null
 			&& card.Card.Strength < opponent.Card.Strength)
 		{
-			parts.Add("Aura Guerriero +2");
+			parts.Add(GameText.Get(GameTextKeys.Combat.BonusAuraWarrior));
 			described += 2;
 		}
 		if (card.PermanentCombatBonus != 0)
 		{
-			parts.Add(FormatSignedBonus("Equip/Malus", card.PermanentCombatBonus));
+			parts.Add(FormatSignedBonus(GameText.Get(GameTextKeys.Combat.BonusEquipmentMalus), card.PermanentCombatBonus));
 			described += card.PermanentCombatBonus;
 		}
 		if (card.MightAuraCombatBonus != 0)
 		{
-			parts.Add(FormatSignedBonus("Aura Forzuta", card.MightAuraCombatBonus));
+			parts.Add(FormatSignedBonus(GameText.Get(GameTextKeys.Combat.BonusMightAura), card.MightAuraCombatBonus));
 			described += card.MightAuraCombatBonus;
 		}
 		if (described != flatBonus)
 		{
-			parts.Add(FormatSignedBonus("Altro", flatBonus - described));
+			parts.Add(FormatSignedBonus(GameText.Get(GameTextKeys.Combat.BonusOther), flatBonus - described));
 		}
 		return parts.Count > 0 ?string.Join(", ", parts) : string.Empty;
 	}
@@ -128,9 +151,9 @@ public sealed partial class BattleBoardController
 	{
 		return card.PendingAttackBonusKind switch
 		{
-			PendingAttackBonusKind.Fury => "Furia",
-			PendingAttackBonusKind.Blessing => "Benedizione",
-			_ => "Bonus",
+			PendingAttackBonusKind.Fury => GameText.Get(GameTextKeys.Combat.BonusSourceFury),
+			PendingAttackBonusKind.Blessing => GameText.Get(GameTextKeys.Combat.BonusSourceBlessing),
+			_ => GameText.Get(GameTextKeys.Combat.BonusSourceGeneric),
 		};
 	}
 
@@ -143,10 +166,10 @@ public sealed partial class BattleBoardController
 		}
 		string text2 = roll.SelectionMode switch
 		{
-			VigorSelectionMode.Highest => "max", 
-			VigorSelectionMode.Lowest => "min", 
-			VigorSelectionMode.Sum => "somma", 
-			_ => "risultato", 
+			VigorSelectionMode.Highest => GameText.Get(GameTextKeys.PvpLog.RollHighest),
+			VigorSelectionMode.Lowest => GameText.Get(GameTextKeys.PvpLog.RollLowest),
+			VigorSelectionMode.Sum => GameText.Get(GameTextKeys.PvpLog.RollSum),
+			_ => GameText.Get(GameTextKeys.PvpLog.RollResult),
 		};
 		return $"{text}[{roll.FirstRoll},{roll.SecondRoll}] {text2}:{roll.SelectedRoll}";
 	}
@@ -178,6 +201,7 @@ public sealed partial class BattleBoardController
 
 	private void UpdateMessageTextLayout()
 	{
+		RefreshMessagePanelVisibility();
 		if ((Object)(object)messageText == (Object)null)
 		{
 			return;
@@ -219,7 +243,28 @@ public sealed partial class BattleBoardController
 
 	private static bool IsActionButtonVisible(Button button)
 	{
-		return !((Object)(object)button == (Object)null) && ((Component)button).gameObject.activeInHierarchy;
+		return !((Object)(object)button == (Object)null) && ((Component)button).gameObject.activeSelf;
+	}
+
+	private void RefreshMessagePanelVisibility()
+	{
+		if (adventureScriptedTutorialActive || (Object)(object)messagePanelRect == (Object)null)
+		{
+			return;
+		}
+
+		bool hasVisibleAction = IsActionButtonVisible(restartButton)
+			|| IsActionButtonVisible(confirmActionButton)
+			|| IsActionButtonVisible(cancelActionButton)
+			|| IsActionButtonVisible(abilityButton)
+			|| IsActionButtonVisible(attachmentButton)
+			|| IsActionButtonVisible(merchantBuyButton);
+		GameObject panel = ((Component)messagePanelRect).gameObject;
+		bool shouldBeVisible = hasVisibleAction && !messagePanelHiddenForDuel;
+		if (panel.activeSelf != shouldBeVisible)
+		{
+			panel.SetActive(shouldBeVisible);
+		}
 	}
 
 	private bool IsMerchantActionHudVisible()
@@ -234,12 +279,14 @@ public sealed partial class BattleBoardController
 			&& !IsActionButtonVisible(merchantBuyButton);
 	}
 
-	private void SetTurnBanner(bool playerTurn, string label)
+	private void SetTurnBanner(bool playerTurn, string label, bool defeat = false, bool campaignEnded = false)
 	{
+		campaignEndedBannerVisible = campaignEnded;
+		SetTurnCoinState(playerTurn, !defeat && !campaignEnded);
 		if ((Object)(object)turnBannerImage != (Object)null)
 		{
 			Color val = (playerTurn ?configuration.Visual.PlayerTurnColor : configuration.Visual.CpuTurnColor);
-			if (!playerTurn && !string.IsNullOrEmpty(label) && label.IndexOf("SCONFITTA", StringComparison.OrdinalIgnoreCase) >= 0)
+			if (!playerTurn && defeat)
 			{
 				val = Color.Lerp(val, Color.black, 0.35f);
 			}
@@ -255,10 +302,7 @@ public sealed partial class BattleBoardController
 
 	private bool IsCampaignEndedBannerVisible()
 	{
-		return gameFinished
-			&& (Object)(object)turnBannerText != (Object)null
-			&& !string.IsNullOrEmpty(turnBannerText.text)
-			&& turnBannerText.text.IndexOf("CAMPAGNA TERMINATA", StringComparison.OrdinalIgnoreCase) >= 0;
+		return gameFinished && campaignEndedBannerVisible;
 	}
 
 	private void SetCenteredCampaignEndedMessagePanel()
@@ -294,7 +338,7 @@ public sealed partial class BattleBoardController
 			LoggingConfiguration logging = configuration.Logging;
 			string text = (logging.IncludeTimestamp ?$"[{DateTime.Now:HH:mm:ss}] " : string.Empty);
 			int num = ((runProgress != null) ?(runProgress.RoomsCleared + 1) : 0);
-			string text2 = $"{text}[STANZA {num} / ROUND {roundNumber}] {message}";
+			string text2 = text + GameText.Format(GameTextKeys.GameLog.EntryContext, num, roundNumber, message);
 			gameLogEntries.Add(text2);
 			int num2 = Mathf.Max(10, logging.MaximumEntries);
 			if (gameLogEntries.Count > num2)
@@ -382,7 +426,27 @@ public sealed partial class BattleBoardController
 				logPanel.SetActive(false);
 			}
 			RefreshSfxOptionsUi();
+			RefreshPrivacyOptionsButton();
 		}
+	}
+
+	/// <summary>
+	/// Il bottone delle opzioni privacy compare solo dove serve. Non e' una scelta estetica:
+	/// dove il consenso e' stato raccolto Google pretende che il giocatore possa tornare
+	/// sulle proprie scelte, e dove non e' mai stato chiesto (fuori dall'Europa, o senza
+	/// pubblicita' del tutto) un bottone che apre un modulo vuoto e' solo confusione.
+	/// </summary>
+	private void RefreshPrivacyOptionsButton()
+	{
+		if ((Object)(object)optionsPrivacyButton == (Object)null)
+			return;
+		((Component)optionsPrivacyButton).gameObject.SetActive(AccardND.Ads.AdConsent.IsPrivacyOptionsRequired);
+	}
+
+	private async void ShowPrivacyOptions()
+	{
+		CloseOptionsPanel();
+		await AccardND.Ads.AdConsent.ShowPrivacyOptionsAsync();
 	}
 
 	private void CloseOptionsPanel()
@@ -394,7 +458,16 @@ public sealed partial class BattleBoardController
 	{
 		if (visible && (Object)(object)optionsMainMenuButton != (Object)null)
 		{
-			optionsMainMenuButton.interactable = HasActiveCampaignSession();
+			// In arena non si "torna al menu": si molla la partita, e mollare una
+			// partita PvP è una resa. Stesso bottone, significato diverso.
+			bool surrender = IsPvpMatchInProgress;
+			optionsMainMenuButton.interactable = surrender || HasActiveCampaignSession();
+			if ((Object)(object)optionsMainMenuButtonText != (Object)null)
+			{
+				optionsMainMenuButtonText.text = surrender
+					? GameText.GetLocalizedFallback(GameTextKeys.Options.Surrender, "ARRENDITI", "SURRENDER")
+					: GameText.GetLocalizedFallback(GameTextKeys.Options.MainMenu, "MENU", "MENU");
+			}
 		}
 		if ((Object)(object)optionsBackdropPanel != (Object)null)
 		{
@@ -447,7 +520,9 @@ public sealed partial class BattleBoardController
 		returnToMenuConfirmPanel = ((Component)overlay).gameObject;
 		Canvas canvas = returnToMenuConfirmPanel.AddComponent<Canvas>();
 		canvas.overrideSorting = true;
-		canvas.sortingOrder = 940;
+		// Sopra il canvas del PvP (950) e sopra le opzioni (981): è una domanda a cui
+		// bisogna rispondere, e in arena la risposta costa la partita.
+		canvas.sortingOrder = 990;
 		returnToMenuConfirmPanel.AddComponent<GraphicRaycaster>();
 
 		Image dialog = CreateImage("Return To Menu Dialog", ((Component)overlay).transform, new Color(0.01f, 0.018f, 0.028f, 0.98f));
@@ -457,12 +532,14 @@ public sealed partial class BattleBoardController
 
 		Text title = CreateText("Return To Menu Title", ((Component)dialog).transform, font, 29, (FontStyle)1, (TextAnchor)4);
 		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(title);
-		title.text = "USCIRE AL MENU?";
+		title.text = GameText.Get(GameTextKeys.Options.ReturnToMenuTitle);
 		title.color = new Color(0.95f, 0.79f, 0.34f);
 		SetRect(title.rectTransform, new Vector2(0.06f, 0.68f), new Vector2(0.94f, 0.9f));
+		returnToMenuTitleText = title;
 
 		Text body = CreateText("Return To Menu Body", ((Component)dialog).transform, font, 20, (FontStyle)0, (TextAnchor)4);
-		body.text = "La campagna in corso verra' abbandonata. I progressi di questa sessione andranno persi.";
+		body.text = GameText.Get(GameTextKeys.Options.ReturnToMenuBody);
+		returnToMenuBodyText = body;
 		body.color = new Color(0.86f, 0.92f, 0.94f);
 		body.horizontalOverflow = HorizontalWrapMode.Wrap;
 		body.verticalOverflow = VerticalWrapMode.Truncate;
@@ -471,24 +548,59 @@ public sealed partial class BattleBoardController
 		body.resizeTextMaxSize = 20;
 		SetRect(body.rectTransform, new Vector2(0.08f, 0.36f), new Vector2(0.92f, 0.66f));
 
-		Button cancelButton = CreateButton("Cancel Return To Menu", ((Component)dialog).transform, font, "ANNULLA");
+		Button cancelButton = CreateButton("Cancel Return To Menu", ((Component)dialog).transform, font, GameText.Get(GameTextKeys.Common.Cancel));
 		((UnityEvent)cancelButton.onClick).AddListener(new UnityAction(HideReturnToMenuConfirmation));
 		SetRect((RectTransform)((Component)cancelButton).transform, new Vector2(0.08f, 0.09f), new Vector2(0.46f, 0.28f));
 
-		Button confirmButton = CreateButton("Confirm Return To Menu", ((Component)dialog).transform, font, "ESCI");
+		Button confirmButton = CreateButton("Confirm Return To Menu", ((Component)dialog).transform, font, GameText.Get(GameTextKeys.Common.Exit));
 		((UnityEvent)confirmButton.onClick).AddListener(new UnityAction(ConfirmReturnToMainMenu));
 		SetRect((RectTransform)((Component)confirmButton).transform, new Vector2(0.54f, 0.09f), new Vector2(0.92f, 0.28f));
+		returnToMenuConfirmButtonText = ((Component)confirmButton).GetComponentInChildren<Text>();
 
 		returnToMenuConfirmPanel.SetActive(false);
 	}
 
+	/// <summary>
+	/// Stesso pannello, due domande diverse: in campagna si chiede se tornare al menu,
+	/// in arena se arrendersi. La resa è irreversibile e regala la partita
+	/// all'avversario: chiederlo a chiare lettere è il minimo.
+	/// </summary>
+	private void ApplyReturnToMenuConfirmationCopy(bool surrender)
+	{
+		returnToMenuConfirmIsSurrender = surrender;
+		if ((Object)(object)returnToMenuTitleText != (Object)null)
+		{
+			returnToMenuTitleText.text = surrender
+				? GameText.GetLocalizedFallback(GameTextKeys.Options.SurrenderTitle, "ARRENDERSI?", "SURRENDER?")
+				: GameText.Get(GameTextKeys.Options.ReturnToMenuTitle);
+		}
+		if ((Object)(object)returnToMenuBodyText != (Object)null)
+		{
+			returnToMenuBodyText.text = surrender
+				? GameText.GetLocalizedFallback(
+					GameTextKeys.Options.SurrenderBody,
+					"Ti arrendi: la partita è persa e la vittoria va al tuo avversario.",
+					"You surrender: the match is lost and your opponent wins.")
+				: GameText.Get(GameTextKeys.Options.ReturnToMenuBody);
+		}
+		if ((Object)(object)returnToMenuConfirmButtonText != (Object)null)
+		{
+			returnToMenuConfirmButtonText.text = surrender
+				? GameText.GetLocalizedFallback(GameTextKeys.Options.Surrender, "ARRENDITI", "SURRENDER")
+				: GameText.Get(GameTextKeys.Common.Exit);
+		}
+	}
+
 	private void ShowReturnToMenuConfirmation()
 	{
+		bool surrender = IsPvpMatchInProgress;
 		if ((Object)(object)returnToMenuConfirmPanel == (Object)null)
 		{
+			returnToMenuConfirmIsSurrender = surrender;
 			ConfirmReturnToMainMenu();
 			return;
 		}
+		ApplyReturnToMenuConfirmationCopy(surrender);
 		if ((Object)(object)optionsPanel != (Object)null)
 		{
 			CloseOptionsPanel();
@@ -511,6 +623,15 @@ public sealed partial class BattleBoardController
 
 	private void ConfirmReturnToMainMenu()
 	{
+		if (returnToMenuConfirmIsSurrender)
+		{
+			returnToMenuConfirmIsSurrender = false;
+			CloseOptionsPanel();
+			HideReturnToMenuConfirmation();
+			SurrenderPvpMatch();
+			return;
+		}
+
 		if ((Object)(object)optionsPanel != (Object)null)
 		{
 			CloseOptionsPanel();

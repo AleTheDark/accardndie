@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using AccardND.Battlefield;
+using AccardND.GameCore.Pvp;
 using AccardND.GameData;
+using AccardND.Localization;
 using AccardND.Network;
 using AccardND.NetProtocol;
 using UnityEngine;
@@ -57,6 +59,7 @@ namespace AccardND.PvpUi
         private bool rankedQueueRequested;
         private BattleSfxPlayer battleSfx;
         private readonly List<BattlePresentationEvent> pendingAnimationEvents = new();
+        private bool surrenderSent;
         private RectTransform reconnectOverlay;
         private Text reconnectOverlayText;
         private float opponentReconnectDeadline;
@@ -152,7 +155,8 @@ namespace AccardND.PvpUi
                             accessToken = accessToken,
                             displayName = username,
                             authMethod = PvpUgsAuth.CurrentAuthMethod(),
-                            googleIdToken = PvpUgsAuth.LastGoogleIdToken
+                            googleIdToken = PvpUgsAuth.LastGoogleIdToken,
+                            clientVersion = GameVersion.Current
                         });
                         return;
                     }
@@ -249,6 +253,11 @@ namespace AccardND.PvpUi
             if (dispatcher == null)
                 return;
             dispatcher.Pump();
+            // Una partita da riprendere può essere arrivata prima che questa schermata
+            // esistesse (login, Hub): la sessione la tiene da parte e noi la raccogliamo
+            // appena siamo in piedi.
+            if (AccountServerSession.TryConsumeMatchResume(out MatchResumeState resume))
+                ResumeMatch(resume);
             if (stateDirty)
             {
                 stateDirty = false;
@@ -327,10 +336,15 @@ namespace AccardND.PvpUi
                 case MessageTypes.MatchStart:
                 {
                     rankedQueueRequested = false;
+                    surrenderSent = false;
                     state = new PvpClientMatchState();
                     state.Changed += () => stateDirty = true;
                     state.ApplyMatchStart(PvpServerClient.ParsePayload<MatchStart>(envelope));
                     Debug.Log($"[PvP] Match iniziato: sono G{state.MyIndex} contro '{state.OpponentName}'.");
+                    // Il triplicatore si offre a fine partita, ma solo se l'annuncio e' gia'
+                    // pronto: si chiede adesso, che e' l'unico anticipo disponibile. Chi resta
+                    // in lobby senza giocare non costa nessuna richiesta.
+                    AccardND.Ads.AdService.Warm(AccardND.Ads.AdPlacement.PvpExperienceTriple);
                     ShowMatch();
                     break;
                 }
@@ -448,10 +462,6 @@ namespace AccardND.PvpUi
                     break;
                 }
 
-                case MessageTypes.MatchResume:
-                    ResumeMatch(PvpServerClient.ParsePayload<MatchResumeState>(envelope));
-                    break;
-
                 case MessageTypes.MatchOpponentLeft:
                     if (state != null)
                         lobby.SetStatus("L'avversario ha lasciato la partita.");
@@ -487,6 +497,12 @@ namespace AccardND.PvpUi
             if (resume == null)
                 return;
 
+            // Il loadout arriva dal server: dopo un riavvio dell'app non ce l'abbiamo
+            // più, e quello salvato in locale potrebbe essere stato cambiato nel builder
+            // dopo l'inizio della partita.
+            if (resume.yourLoadout?.cards is { Length: > 0 })
+                myLoadout = new List<LoadoutCardDto>(resume.yourLoadout.cards);
+
             state = new PvpClientMatchState();
             state.Changed += () => stateDirty = true;
             state.ApplyMatchStart(new MatchStart
@@ -504,9 +520,17 @@ namespace AccardND.PvpUi
                 state.ApplyHand(resume.hand);
 
             pendingAnimationEvents.Clear();
+            HideReconnectOverlay();
             Debug.Log($"[PvP] Partita ripresa: {resume.events?.Length ?? 0} eventi riapplicati.");
             ShowMatch();
-            state.AddNotice("Partita ripresa dopo la disconnessione.");
+            state.AddNotice(resume.reconnectSecondsRemaining > 0
+                ? GameText.GetOrFallbackSilent(
+                    GameTextKeys.PvpStatus.ReconnectRemaining,
+                    "Partita ripresa: restano {0}s di riconnessione per questo match.",
+                    resume.reconnectSecondsRemaining)
+                : GameText.GetOrFallbackSilent(
+                    GameTextKeys.PvpStatus.ReconnectExpired,
+                    "Partita ripresa: hai esaurito il tempo di riconnessione, un'altra caduta è sconfitta."));
             stateDirty = true;
         }
 
@@ -809,14 +833,67 @@ namespace AccardND.PvpUi
 
         private void ShowMatchResult(MatchResultData result)
         {
+            if (surrenderSent)
+            {
+                // Ci siamo arresi noi: il verdetto lo conosciamo già, e restare davanti
+                // al riepilogo della propria resa non serve a niente. Si torna al menu.
+                surrenderSent = false;
+                LeaveToLobby();
+                lobby.SetStatus(GameText.GetOrFallbackSilent(
+                    GameTextKeys.PvpResult.SurrenderLobbyStatus,
+                    "Ti sei arreso: la vittoria è andata all'avversario."));
+                return;
+            }
+
             resultOverlay?.Destroy();
             resultOverlay = new PvpMatchResultOverlay(canvasRoot, result, () =>
             {
                 resultOverlay?.Destroy();
                 resultOverlay = null;
                 LeaveToLobby();
-            });
+            }, ClaimRankedExperienceAdMultiplier);
         }
+
+		private async void ClaimRankedExperienceAdMultiplier(
+			MatchResultData result, System.Action<bool> completed)
+		{
+			if (dispatcher == null || result == null
+				|| string.IsNullOrWhiteSpace(result.accountExperienceRewardClaimId))
+			{
+				completed?.Invoke(false);
+				return;
+			}
+
+			// L'EXP di base della partita e' gia' accreditata: il x3 e' l'extra che paga la
+			// pubblicita'. Video non visto, niente moltiplicatore e niente chiamata al server.
+			AccardND.Ads.AdResult ad = await AccardND.Ads.AdService.ShowAsync(
+				AccardND.Ads.AdPlacement.PvpExperienceTriple,
+				AccardND.Ads.AdRewardContext.ForClaim(result.accountExperienceRewardClaimId));
+			if (!ad.Watched)
+			{
+				completed?.Invoke(false);
+				return;
+			}
+
+			try
+			{
+				Envelope response = await dispatcher.RequestAsync(
+					MessageTypes.SinglePlayerClaimAdMultiplier,
+					new SinglePlayerAdMultiplierRequest
+					{
+						rewardClaimId = result.accountExperienceRewardClaimId,
+						adImpressionId = ad.ImpressionId
+					},
+					MessageTypes.SinglePlayerRewardResult,
+					timeoutSeconds: 12f);
+				completed?.Invoke(response != null && response.type != MessageTypes.Error);
+			}
+			catch (System.Exception exception)
+			{
+				Debug.LogWarning($"[PvP] Triplicatore EXP non applicato: {exception.Message}");
+				completed?.Invoke(false);
+			}
+		}
 
         private void ShowChallengePrompt(FriendChallengeReceived challenge)
         {
@@ -909,6 +986,14 @@ namespace AccardND.PvpUi
                 targetSlot = targetSlot
             });
 
+        public void UseSupreme(bool targetIsEnemy, int targetSlot) =>
+            SendMatchAction(new MatchActionDto
+            {
+                action = MatchActionDto.Supreme,
+                targetIsEnemy = targetIsEnemy,
+                targetSlot = targetSlot
+            });
+
         public void Attach(int allySlot) =>
             SendMatchAction(new MatchActionDto
             {
@@ -926,6 +1011,31 @@ namespace AccardND.PvpUi
                 action = MatchActionDto.Decisive,
                 decisiveIndices = loadoutIndices
             });
+
+        /// <summary>
+        /// Resa. Non passa dalle azioni di gioco: vale anche a partita in pausa, e la
+        /// conferma è il risultato che il server manda subito dopo. Chi si arrende non
+        /// si ferma a guardare il tabellone, torna alla lobby.
+        /// </summary>
+        public async void Surrender()
+        {
+            if (dispatcher == null || state == null || surrenderSent)
+                return;
+            surrenderSent = true;
+            try
+            {
+                await dispatcher.SendAsync(MessageTypes.MatchForfeit);
+            }
+            catch (System.Exception exception)
+            {
+                surrenderSent = false;
+                state?.AddNotice(GameText.GetOrFallbackSilent(
+                    GameTextKeys.PvpStatus.SurrenderNotSent,
+                    "Resa non inviata: connessione persa."));
+                stateDirty = true;
+                Debug.LogWarning($"[PvP] Invio resa fallito: {exception.Message}");
+            }
+        }
 
         private async void SendMatchAction(MatchActionDto action)
         {
@@ -945,7 +1055,8 @@ namespace AccardND.PvpUi
                 if (response?.type == MessageTypes.Error)
                 {
                     var error = PvpServerClient.ParsePayload<ErrorMessage>(response);
-                    state?.AddNotice(error?.message ?? "Mossa rifiutata dal server.");
+                    string notice = LocalizedPvpActionError(error);
+                    state?.AddNotice(notice);
                     stateDirty = true;
                 }
             }
@@ -954,11 +1065,35 @@ namespace AccardND.PvpUi
                 // Senza questo avviso una mossa non confermata è indistinguibile da un
                 // gioco che non risponde: il tavolo resta com'era e nessuno spiega perché.
                 state?.AddNotice(exception is System.TimeoutException
-                    ? "Mossa non confermata dal server: riprova."
-                    : "Mossa non inviata: connessione persa.");
+                    ? GameText.GetOrFallbackSilent(
+                        GameTextKeys.PvpStatus.ActionNotConfirmed,
+                        "Mossa non confermata dal server: riprova.")
+                    : GameText.GetOrFallbackSilent(
+                        GameTextKeys.PvpStatus.ActionNotSent,
+                        "Mossa non inviata: connessione persa."));
                 stateDirty = true;
                 Debug.LogWarning($"[PvP] Invio azione fallito: {exception.Message}");
             }
+        }
+
+        private static string LocalizedPvpActionError(ErrorMessage error)
+        {
+            return error?.code switch
+            {
+                PvpActionErrorCodes.AbilityRequiresAction => GameText.GetLocalizedFallback(
+                    GameTextKeys.PvpError.AbilityRequiresAction,
+                    "Dopo aver usato un'abilità devi attaccare o equipaggiarti.",
+                    "After using an ability, you must attack or equip."),
+                PvpActionErrorCodes.NotEnoughMana => GameText.GetOrFallbackSilent(
+                    GameTextKeys.PvpError.ManaInsufficientGeneric,
+                    "Mana insufficiente per eseguire l'azione."),
+                PvpActionErrorCodes.SupremeNotAvailable => GameText.GetOrFallbackSilent(
+                    GameTextKeys.PvpError.SupremeNotAvailable,
+                    "La suprema non è ancora disponibile."),
+                _ => error?.message ?? GameText.GetOrFallbackSilent(
+                    GameTextKeys.PvpStatus.MoveRejected,
+                    "Mossa rifiutata dal server.")
+            };
         }
 
         public async void LeaveToLobby()
@@ -984,6 +1119,12 @@ namespace AccardND.PvpUi
         public void CloseFromMainMenu()
         {
             Close(invokeCallback: false);
+        }
+
+        /// <summary>Chiude il PvP e notifica l'Hub, usato dal pulsante Home condiviso.</summary>
+        public void CloseToHub()
+        {
+            Close(invokeCallback: true);
         }
 
         // --- Setup ---

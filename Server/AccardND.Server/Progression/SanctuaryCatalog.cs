@@ -1,3 +1,5 @@
+using AccardND.GameCore;
+using AccardND.GameCore.Mana;
 using AccardND.NetProtocol;
 
 namespace AccardND.Server.Progression;
@@ -8,8 +10,10 @@ namespace AccardND.Server.Progression;
 /// Prima i costi erano duplicati a mano tra client e server ("allineato alle costanti
 /// client"), con l'ovvio rischio di divergenza a ogni ritocco di bilanciamento.
 ///
-/// Principio di design: il miele non compra lo sblocco, lo conferma. Ogni classe avanzata
-/// chiede una prova guadagnata giocando, e la difficolta' della prova sale insieme al costo.
+/// Le classi si comprano col solo miele: il prezzo e' l'unico cancello, e sale con la classe.
+/// Le prove guadagnate giocando che chiedevano un tot di boss o un livello account sono state
+/// tolte. Il motore dei requisiti resta in piedi - lo usa la tecnica, che chiede di possedere
+/// la classe corrispondente - quindi rimetterne una e' aggiungere una riga qui sotto.
 /// </summary>
 public static class SanctuaryCatalog
 {
@@ -70,25 +74,18 @@ public static class SanctuaryCatalog
             StarterClass("warrior", "Guerriero"),
             StarterClass("rogue", "Ladro"),
 
-            AdvancedClass("assassin", "Assassino", 40,
-                Counter("boss_bragus", 2, "Sconfiggi Bragus 2 volte")),
-            AdvancedClass("hunter", "Cacciatore", 40,
-                Counter("boss_trentor", 2, "Sconfiggi Trentor 2 volte")),
-            AdvancedClass("paladin", "Paladino", 40,
-                Counter("miniboss_golem", 3, "Sconfiggi il Golem 3 volte")),
-            AdvancedClass("barbarian", "Barbaro", 60,
-                Counter("boss_medusa", 2, "Sconfiggi Medusa 2 volte")),
-            AdvancedClass("necromancer", "Negromante", 60,
-                AccountLevel(5, "Raggiungi il livello account 5"),
-                Counter("enemies_defeated", 300, "Sconfiggi 300 nemici")),
-            AdvancedClass("priest", "Sacerdote", 60,
-                Counter("boss_palatir", 2, "Sconfiggi Palatir 2 volte"),
-                Counter("daily_completed", 5, "Completa 5 giornate di quest in taverna"))
+            AdvancedClass("assassin", "Assassino", 40),
+            AdvancedClass("hunter", "Cacciatore", 40),
+            AdvancedClass("paladin", "Paladino", 40),
+            AdvancedClass("barbarian", "Barbaro", 60),
+            AdvancedClass("necromancer", "Negromante", 60),
+            AdvancedClass("priest", "Sacerdote", 60)
         };
 
-        // Tecniche: gli effetti non sono ancora definiti, quindi restano visibili col prezzo
-        // ma bloccate. Gli id sono definitivi da subito perche' finiscono nel DB degli unlock
-        // e non si rinominano piu'.
+        // Tecniche: una per classe, con l'effetto vero preso da GameCore. Sono acquistabili
+        // quando la suprema e' implementata nel motore; quella del Negromante non lo e'
+        // ancora, quindi resta visibile col prezzo ma bloccata. Gli id sono definitivi da
+        // subito perche' finiscono nel DB degli unlock e non si rinominano piu'.
         foreach (Entry classEntry in entries.Where(entry => entry.Type == TypeClass).ToArray())
             entries.Add(SecondAbility(classEntry.Id, classEntry.Name));
 
@@ -119,17 +116,27 @@ public static class SanctuaryCatalog
     private static Entry StarterClass(string id, string name) => new(
         TypeClass, id, name, "Ottenuta completando il tutorial.", 0, false, Array.Empty<Requirement>());
 
-    private static Entry AdvancedClass(string id, string name, int cost, params Requirement[] requirements) => new(
-        TypeClass, id, name, "Classe avanzata.", cost, true, requirements);
+    private static Entry AdvancedClass(string id, string name, int cost) => new(
+        TypeClass, id, name, "Classe avanzata.", cost, true, Array.Empty<Requirement>());
 
-    private static Entry SecondAbility(string classId, string className) => new(
-        TypeSecondAbility,
-        $"ability-{classId}-2",
-        $"Tecnica di {className}",
-        "In preparazione: sara' acquistabile quando l'effetto sara' definito.",
-        SecondAbilityCost,
-        false,
-        new[] { new Requirement(KindClassOwned, classId, 1, $"Possiedi la classe {className}") });
+    private static Entry SecondAbility(string classId, string className)
+    {
+        // Gli id delle classi a catalogo sono i nomi dell'enum in minuscolo: se un domani
+        // divergessero, meglio una tecnica bloccata che una venduta con l'effetto sbagliato.
+        bool known = Enum.TryParse(classId, ignoreCase: true, out HeroClass heroClass);
+        bool implemented = known && AbilityManaCosts.IsSupremeImplemented(heroClass);
+
+        return new Entry(
+            TypeSecondAbility,
+            $"ability-{classId}-2",
+            known ? $"{className}: {SupremeAbilityText.Name(heroClass)}" : $"Tecnica di {className}",
+            implemented
+                ? SupremeAbilityText.Description(heroClass)
+                : "In preparazione: sara' acquistabile quando l'effetto sara' definito.",
+            SecondAbilityCost,
+            implemented,
+            new[] { new Requirement(KindClassOwned, classId, 1, $"Possiedi la classe {className}") });
+    }
 
     private static Entry Item(string id, string name, int cost, string description) => new(
         TypeItem, id, name, description, cost, true, Array.Empty<Requirement>());
@@ -143,12 +150,6 @@ public static class SanctuaryCatalog
 
     private static Entry Slot(string id, string name, int cost) => new(
         TypeSlot, id, name, "Uno slot in piu' nella bisaccia.", cost, true, Array.Empty<Requirement>());
-
-    private static Requirement Counter(string key, int threshold, string description) =>
-        new(KindCounter, key, threshold, description);
-
-    private static Requirement AccountLevel(int threshold, string description) =>
-        new(KindAccountLevel, string.Empty, threshold, description);
 }
 
 /// <summary>

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using AccardND.GameCore;
+using AccardND.GameCore.Mana;
 using AccardND.GameCore.Pvp;
+using AccardND.Localization;
 
 namespace AccardND.NetProtocol
 {
@@ -30,12 +32,19 @@ namespace AccardND.NetProtocol
         public bool Marked;
         public bool Protecting;
         public bool AbilityUsed;
+        public bool AbilityUsedThisTurn;
         public bool AbilityArmed;
         public int PermanentBonus;
         public int MightAuraBonus;
         public int PendingBonus;
         public PvpPendingBonusKind PendingBonusKind;
         public int DiePenaltySteps;
+
+        /// <summary>La suprema e' gia' stata usata da questa pedina nel round corrente.</summary>
+        public bool SupremeUsedThisRound;
+
+        /// <summary>Invisibilita' dell'Assassino: non selezionabile come bersaglio.</summary>
+        public bool Untargetable;
     }
 
     public sealed class PvpClientDeploymentToken
@@ -71,6 +80,9 @@ namespace AccardND.NetProtocol
         public List<PvpClientCard>[] Boards { get; } = { new(), new() };
         public List<PvpClientDeploymentToken> DeploymentOrder { get; } = new();
         public int[] Wins { get; } = new int[2];
+
+        /// <summary>Riserva di mana dei due giocatori, allineata dagli eventi del server.</summary>
+        public int[] Mana { get; } = new int[2];
         public PvpAuraType[] Auras { get; } = new PvpAuraType[2];
         public bool[] FormationAuraUsed { get; } = new bool[2];
 
@@ -87,7 +99,7 @@ namespace AccardND.NetProtocol
         {
             MyIndex = start.yourPlayerIndex;
             OpponentName = start.opponentName ?? string.Empty;
-            AddLog($"Match contro {OpponentName}.");
+            AddLog(GameText.Format(GameTextKeys.PvpLog.MatchAgainst, OpponentName));
             Changed?.Invoke();
         }
 
@@ -120,19 +132,19 @@ namespace AccardND.NetProtocol
                     Phase = PvpClientPhase.Waiting;
                     ActivePlayer = -1;
                     DeployPlayer = -1;
-                    AddLog($"--- Round {MatchRound}: dado vigore D{VigorDieSides} ---");
+                    AddLog(GameText.Format(GameTextKeys.PvpLog.RoundStarted, MatchRound, VigorDieSides));
                     break;
 
                 case "DecisiveSelectionStarted":
                     Phase = PvpClientPhase.DecisiveSelection;
                     DecisiveRequiredCount = e.requiredCount;
-                    AddLog($"Round decisivo: scegli {e.requiredCount} carte tra tutte le 9.");
+                    AddLog(GameText.Format(GameTextKeys.PvpLog.DecisiveSelection, e.requiredCount));
                     break;
 
                 case "DeploymentStarted":
                     Phase = PvpClientPhase.Deployment;
                     DeploymentOrder.Clear();
-                    AddLog($"Iniziative schieramento: {PlayerName(e.firstPlayer)} apre la sequenza.");
+                    AddLog(GameText.Format(GameTextKeys.PvpLog.DeploymentStarted, PlayerName(e.firstPlayer)));
                     break;
 
                 case "DeploymentInitiative":
@@ -152,11 +164,14 @@ namespace AccardND.NetProtocol
 
                 case "CardDeployed":
                 {
+                    string localizedCardName = GameText.GetOrFallback(
+                        GameTextKeys.Data.CardName(e.cardId),
+                        e.cardName);
                     Boards[e.player].Add(new PvpClientCard
                     {
                         Slot = e.slot,
                         CardId = e.cardId,
-                        CardName = e.cardName,
+                        CardName = localizedCardName,
                         HeroClass = (HeroClass)e.heroClass,
                         Strength = e.strength,
                         Lives = e.lives,
@@ -164,7 +179,11 @@ namespace AccardND.NetProtocol
                     });
                     if (e.player == MyIndex)
                         RemoveFromHand(e.cardId);
-                    AddLog($"{PlayerName(e.player)} schiera {e.cardName} ({e.strength}).");
+                    AddLog(GameText.Format(
+                        GameTextKeys.PvpLog.CardDeployed,
+                        PlayerName(e.player),
+                        localizedCardName,
+                        e.strength));
                     break;
                 }
 
@@ -175,7 +194,7 @@ namespace AccardND.NetProtocol
                     FormationAuraUsed[0] = false;
                     FormationAuraUsed[1] = false;
                     if (Auras[0] != PvpAuraType.None || Auras[1] != PvpAuraType.None)
-                        AddLog($"Aure: {Auras[0]} contro {Auras[1]}.");
+                        AddLog(GameText.Format(GameTextKeys.PvpLog.Auras, Auras[0], Auras[1]));
                     break;
 
                 case "CardInitiative":
@@ -188,9 +207,13 @@ namespace AccardND.NetProtocol
 
                 case "TurnStarted":
                     Phase = PvpClientPhase.Battle;
+                    ClearAbilityUsedThisTurn();
                     ActivePlayer = e.player;
                     ActiveSlot = e.slot;
                     Cycle = e.cycle;
+					PvpClientCard activeCard = CardAt(e.player, e.slot);
+					if (activeCard != null && !activeCard.AbilityArmed)
+						activeCard.AbilityUsed = false;
                     break;
 
                 case "TurnSkipped":
@@ -199,7 +222,7 @@ namespace AccardND.NetProtocol
                     if (card != null)
                     {
                         card.Inhibited = false;
-                        AddLog($"{card.CardName} è inibito e salta il turno.");
+                        AddLog(GameText.Format(GameTextKeys.PvpLog.TurnSkipped, card.CardName));
                     }
                     break;
                 }
@@ -207,6 +230,25 @@ namespace AccardND.NetProtocol
                 case "AbilityUsed":
                     ApplyAbility(e);
                     break;
+
+                case "ManaChanged":
+                    // Il server manda il valore assoluto: il client si allinea invece di
+                    // ricalcolare, cosi' non puo' divergere dall'autorita'.
+                    if (e.player >= 0 && e.player < Mana.Length)
+                        Mana[e.player] = e.mana;
+                    break;
+
+                case "SupremeUsed":
+                {
+                    PvpClientCard card = CardAt(e.player, e.slot);
+                    if (card != null)
+                    {
+                        card.SupremeUsedThisRound = true;
+                        if ((SupremeAbilityType)e.supreme == SupremeAbilityType.Vanish)
+                            card.Untargetable = true;
+                    }
+                    break;
+                }
 
                 case "CardRevived":
                 {
@@ -216,8 +258,9 @@ namespace AccardND.NetProtocol
                         card.Eliminated = false;
                         card.Lives = e.lives;
                         card.AbilityUsed = false;
+                        card.AbilityUsedThisTurn = false;
                         card.AbilityArmed = false;
-                        AddLog($"{card.CardName} torna in gioco con {e.lives} vita.");
+                        AddLog(GameText.Format(GameTextKeys.PvpLog.CardRevived, card.CardName, e.lives));
                     }
                     break;
                 }
@@ -230,9 +273,11 @@ namespace AccardND.NetProtocol
                         paladin.Protecting = false;
                         paladin.AbilityArmed = false;
                         paladin.AbilityUsed = true;
-                        AddLog(e.redirected
-                            ? $"{paladin.CardName} devia l'attacco su di sé."
-                            : $"{paladin.CardName} si difende con vantaggio.");
+                        AddLog(GameText.Format(
+                            e.redirected
+                                ? GameTextKeys.PvpLog.ProtectionRedirect
+                                : GameTextKeys.PvpLog.ProtectionAdvantage,
+                            paladin.CardName));
                     }
                     break;
                 }
@@ -252,7 +297,11 @@ namespace AccardND.NetProtocol
                     }
                     if (target != null)
                         target.PermanentBonus += e.bonus;
-                    AddLog($"{source?.CardName} si sacrifica: +{e.bonus} a {target?.CardName}.");
+                    AddLog(GameText.Format(
+                        GameTextKeys.PvpLog.Attachment,
+                        source?.CardName,
+                        e.bonus,
+                        target?.CardName));
                     break;
                 }
 
@@ -263,7 +312,7 @@ namespace AccardND.NetProtocol
                     {
                         card.PendingBonus = e.amount;
                         card.PendingBonusKind = PvpPendingBonusKind.Fury;
-                        AddLog($"{card.CardName} entra in Furia (+{e.amount}).");
+                        AddLog(GameText.Format(GameTextKeys.PvpLog.Fury, card.CardName, e.amount));
                     }
                     break;
                 }
@@ -275,7 +324,7 @@ namespace AccardND.NetProtocol
                     {
                         card.PermanentBonus++;
                         card.MightAuraBonus++;
-                        AddLog($"Aura Might: {card.CardName} guadagna +1 permanente.");
+                        AddLog(GameText.Format(GameTextKeys.PvpLog.MightAura, card.CardName));
                     }
                     break;
                 }
@@ -286,7 +335,7 @@ namespace AccardND.NetProtocol
                     if (card != null)
                     {
                         card.PermanentBonus -= e.amount;
-                        AddLog($"Aura Mago: {card.CardName} subisce -{e.amount} permanente.");
+                        AddLog(GameText.Format(GameTextKeys.PvpLog.MageAura, card.CardName, e.amount));
                     }
                     break;
                 }
@@ -298,24 +347,32 @@ namespace AccardND.NetProtocol
                     {
                         card.IsSpirit = false;
                         card.Eliminated = true;
-                        AddLog($"Lo spirito di {card.CardName} svanisce.");
+                        AddLog(GameText.Format(GameTextKeys.PvpLog.SpiritExpired, card.CardName));
                     }
                     break;
                 }
 
                 case "ActionTimeout":
-                    AddLog($"Tempo scaduto per {PlayerName(e.player)} ({e.amount}° timeout).");
+                    AddLog(GameText.Format(GameTextKeys.PvpLog.Timeout, PlayerName(e.player), e.amount));
                     break;
 
                 case "MatchForfeited":
                     EndedByForfeit = true;
-                    AddLog($"{PlayerName(e.player)} abbandona: vittoria a {PlayerName(e.winner)}.");
+                    AddLog(GameText.Format(
+                        GameTextKeys.PvpLog.Forfeit,
+                        PlayerName(e.player),
+                        PlayerName(e.winner)));
                     break;
 
                 case "RoundEnded":
                     Wins[0] = e.winsPlayer0;
                     Wins[1] = e.winsPlayer1;
-                    AddLog($"Round {e.matchRound} a {PlayerName(e.winner)}. Parziale {Wins[0]}-{Wins[1]}.");
+                    AddLog(GameText.Format(
+                        GameTextKeys.PvpLog.RoundEnded,
+                        e.matchRound,
+                        PlayerName(e.winner),
+                        Wins[0],
+                        Wins[1]));
                     break;
 
                 case "MatchEnded":
@@ -324,14 +381,14 @@ namespace AccardND.NetProtocol
                     Winner = e.winner;
                     Phase = PvpClientPhase.Finished;
                     if (!EndedByForfeit && !HasEliminatedFormation)
-                        AddLog("Risultato ricevuto dal server, ma il replay locale non mostra ancora una formazione eliminata.");
+                        AddLog(GameText.Get(GameTextKeys.PvpLog.ReplayMismatch));
                     AddLog(EndedByForfeit
                         ? Winner == MyIndex
-                            ? "HAI VINTO PER ABBANDONO DELL'AVVERSARIO!"
-                            : "Hai perso per abbandono."
+                            ? GameText.Get(GameTextKeys.PvpLog.WonByForfeit)
+                            : GameText.Get(GameTextKeys.PvpLog.LostByForfeit)
                         : Winner == MyIndex
-                            ? $"HAI VINTO IL MATCH {Wins[MyIndex]}-{Wins[1 - MyIndex]}!"
-                            : $"Hai perso il match {Wins[MyIndex]}-{Wins[1 - MyIndex]}.");
+                            ? GameText.Format(GameTextKeys.PvpLog.WonMatch, Wins[MyIndex], Wins[1 - MyIndex])
+                            : GameText.Format(GameTextKeys.PvpLog.LostMatch, Wins[MyIndex], Wins[1 - MyIndex]));
                     break;
             }
             Changed?.Invoke();
@@ -352,24 +409,24 @@ namespace AccardND.NetProtocol
                         if (e.magnitude > 0)
                             target.PermanentBonus -= e.magnitude;
                     }
-                    AddLog($"{actor?.CardName} inibisce {target?.CardName}.");
+                    AddLog(GameText.Format(GameTextKeys.PvpLog.Assassin, actor?.CardName, target?.CardName));
                     break;
                 case HeroClass.Mage:
                     if (target != null)
                         target.DiePenaltySteps = e.magnitude;
-                    AddLog($"{actor?.CardName} abbassa il dado di {target?.CardName} di {e.magnitude} step.");
+                    AddLog(GameText.Format(GameTextKeys.PvpLog.Mage, actor?.CardName, target?.CardName, e.magnitude));
                     break;
                 case HeroClass.Hunter:
                     if (target != null)
                         target.Marked = true;
-                    AddLog($"{actor?.CardName} marca {target?.CardName} (+{e.magnitude} a chi lo attacca).");
+                    AddLog(GameText.Format(GameTextKeys.PvpLog.Hunter, actor?.CardName, target?.CardName, e.magnitude));
                     break;
                 case HeroClass.Paladin:
                     if (actor != null)
                         actor.Protecting = true;
                     AddLog(actor == target
-                        ? $"{actor?.CardName} si prepara a difendersi con vantaggio."
-                        : $"{actor?.CardName} protegge {target?.CardName}.");
+                        ? GameText.Format(GameTextKeys.PvpLog.PaladinSelf, actor?.CardName)
+                        : GameText.Format(GameTextKeys.PvpLog.PaladinOther, actor?.CardName, target?.CardName));
                     break;
                 case HeroClass.Priest:
                     if (target != null)
@@ -378,13 +435,13 @@ namespace AccardND.NetProtocol
                         if (target.PendingBonusKind != PvpPendingBonusKind.Fury)
                             target.PendingBonusKind = PvpPendingBonusKind.Blessing;
                     }
-                    AddLog($"{actor?.CardName} benedice {target?.CardName} (+{e.magnitude}).");
+                    AddLog(GameText.Format(GameTextKeys.PvpLog.Priest, actor?.CardName, target?.CardName, e.magnitude));
                     break;
                 case HeroClass.Warrior:
-                    AddLog($"{actor?.CardName} prepara un colpo a due dadi.");
+                    AddLog(GameText.Format(GameTextKeys.PvpLog.Warrior, actor?.CardName));
                     break;
                 case HeroClass.Necromancer:
-                    AddLog($"{actor?.CardName} rialza {target?.CardName}.");
+                    AddLog(GameText.Format(GameTextKeys.PvpLog.Necromancer, actor?.CardName, target?.CardName));
                     break;
             }
         }
@@ -393,15 +450,6 @@ namespace AccardND.NetProtocol
         {
             PvpClientCard attacker = CardAt(e.player, e.slot);
             PvpClientCard defender = CardAt(e.targetPlayer, e.targetSlot);
-            if (attacker != null
-                && defender != null
-                && Auras[e.player] == PvpAuraType.Formation
-                && !FormationAuraUsed[e.player]
-                && ClassMatchup.Compare(attacker.HeroClass, defender.HeroClass) == MatchupResult.Disadvantage)
-            {
-                FormationAuraUsed[e.player] = true;
-            }
-
             if (attacker != null)
             {
                 attacker.PendingBonus = 0;
@@ -428,19 +476,30 @@ namespace AccardND.NetProtocol
                 }
             }
 
-            string prefix = e.isCounter ? "CONTRATTACCO: " : string.Empty;
+            string prefix = e.isCounter ? GameText.Get(GameTextKeys.PvpLog.CounterattackPrefix) : string.Empty;
             string outcome = e.certainty == "Impossible"
-                ? "attacco impossibile, turno perso"
-                : $"{e.attackerTotal} contro {e.defenderTotal} ({FormatCombatantRoll(attacker, e.attackerDieSides, e.attackerRollFirst, e.attackerRollSecond, e.attackerRollHasSecond, e.attackerRollSelected, e.attackerRollSelectionMode)}; {FormatCombatantRoll(defender, e.defenderDieSides, e.defenderRollFirst, e.defenderRollSecond, e.defenderRollHasSecond, e.defenderRollSelected, e.defenderRollSelectionMode)})";
-            string overkillTag = e.overkill ? " OVERKILL!" : string.Empty;
+                ? GameText.Get(GameTextKeys.PvpLog.Impossible)
+                : GameText.Format(
+                    GameTextKeys.PvpLog.RollOutcome,
+                    e.attackerTotal,
+                    e.defenderTotal,
+                    FormatCombatantRoll(attacker, e.attackerDieSides, e.attackerRollFirst, e.attackerRollSecond, e.attackerRollHasSecond, e.attackerRollSelected, e.attackerRollSelectionMode),
+                    FormatCombatantRoll(defender, e.defenderDieSides, e.defenderRollFirst, e.defenderRollSecond, e.defenderRollHasSecond, e.defenderRollSelected, e.defenderRollSelectionMode));
+            string overkillTag = e.overkill ? GameText.Get(GameTextKeys.PvpLog.OverkillTag) : string.Empty;
             string effect = !e.defenderLostLife
-                ? defender != null ? $" {defender.CardName} resiste." : string.Empty
+                ? defender != null ? GameText.Format(GameTextKeys.PvpLog.Resists, defender.CardName) : string.Empty
                 : e.becameSpirit
-                    ? $"{overkillTag} {defender?.CardName} resta come spirito!"
+                    ? GameText.Format(GameTextKeys.PvpLog.BecomesSpirit, overkillTag, defender?.CardName)
                     : e.defenderEliminated
-                        ? $"{overkillTag} {defender?.CardName} eliminato!"
-                        : $" {defender?.CardName} perde una vita ({e.defenderRemainingLives}).";
-            AddLog($"{prefix}{attacker?.CardName} attacca {defender?.CardName}: {outcome}.{effect}");
+                        ? GameText.Format(GameTextKeys.PvpLog.Eliminated, overkillTag, defender?.CardName)
+                        : GameText.Format(GameTextKeys.PvpLog.LosesLife, defender?.CardName, e.defenderRemainingLives);
+            AddLog(GameText.Format(
+                GameTextKeys.PvpLog.Attack,
+                prefix,
+                attacker?.CardName,
+                defender?.CardName,
+                outcome,
+                effect));
         }
 
         private static string FormatCombatantRoll(
@@ -452,22 +511,29 @@ namespace AccardND.NetProtocol
             int selectedRoll,
             int selectionMode)
         {
-            string name = card?.CardName ?? "Carta";
+            string name = card?.CardName ?? GameText.Get(GameTextKeys.Common.Card);
             string die = dieSides > 0 ? $"D{dieSides}" : "D?";
             if (!hasSecondRoll)
             {
                 int roll = selectedRoll > 0 ? selectedRoll : firstRoll;
-                return $"{name} {die}:{roll}";
+                return GameText.Format(GameTextKeys.PvpLog.RollSingle, name, die, roll);
             }
 
             string mode = ((VigorSelectionMode)selectionMode) switch
             {
-                VigorSelectionMode.Highest => "max",
-                VigorSelectionMode.Lowest => "min",
-                VigorSelectionMode.Sum => "somma",
-                _ => "risultato"
+                VigorSelectionMode.Highest => GameText.Get(GameTextKeys.PvpLog.RollHighest),
+                VigorSelectionMode.Lowest => GameText.Get(GameTextKeys.PvpLog.RollLowest),
+                VigorSelectionMode.Sum => GameText.Get(GameTextKeys.PvpLog.RollSum),
+                _ => GameText.Get(GameTextKeys.PvpLog.RollResult)
             };
-            return $"{name} {die}[{firstRoll},{secondRoll}] {mode}:{selectedRoll}";
+            return GameText.Format(
+                GameTextKeys.PvpLog.RollDouble,
+                name,
+                die,
+                firstRoll,
+                secondRoll,
+                mode,
+                selectedRoll);
         }
 
         private static void MarkAbilityState(PvpClientCard actor, HeroClass ability)
@@ -475,10 +541,20 @@ namespace AccardND.NetProtocol
             if (actor == null)
                 return;
 
+            actor.AbilityUsedThisTurn = true;
             if (ability is HeroClass.Warrior or HeroClass.Rogue or HeroClass.Paladin)
                 actor.AbilityArmed = true;
             else
                 actor.AbilityUsed = true;
+        }
+
+        private void ClearAbilityUsedThisTurn()
+        {
+            foreach (List<PvpClientCard> board in Boards)
+            {
+                foreach (PvpClientCard card in board)
+                    card.AbilityUsedThisTurn = false;
+            }
         }
 
         private void RemoveFromHand(string definitionId)
@@ -518,7 +594,11 @@ namespace AccardND.NetProtocol
         }
 
         private string PlayerName(int player) =>
-            player == MyIndex ? "TU" : OpponentName.Length > 0 ? OpponentName : $"G{player}";
+            player == MyIndex
+                ? GameText.Get(GameTextKeys.Common.You)
+                : OpponentName.Length > 0
+                    ? OpponentName
+                    : GameText.Format(GameTextKeys.PvpLog.UnknownPlayer, player);
 
         /// <summary>
         /// Avviso di rete nel registro del match (disconnessioni, rientri): non viene

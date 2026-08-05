@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using AccardND.GameCore;
+using AccardND.Localization;
 using AccardND.NetProtocol;
 using UnityEngine;
 using UnityEngine.Events;
@@ -32,7 +33,21 @@ public sealed partial class BattleBoardController
 
 	private Text sanctuaryHeadingText;
 
+	private Text sanctuarySubtitleText;
+
 	private Text sanctuaryStatusText;
+
+	private Image sanctuaryDiscoveryPanelImage;
+
+	private Image sanctuaryDiscoveryIconImage;
+
+	private Text sanctuaryDiscoveryTitleText;
+
+	private Text sanctuaryDiscoveryCountText;
+
+	private Text sanctuaryDiscoveryPercentText;
+
+	private Image sanctuaryDiscoveryProgressFillImage;
 
 
 
@@ -48,13 +63,23 @@ public sealed partial class BattleBoardController
 
 	private readonly List<GameObject> sanctuaryCards = new List<GameObject>();
 
-	private SanctuaryAltar sanctuaryActiveAltar = SanctuaryAltar.Classes;
+	private SanctuaryAltar sanctuaryActiveAltar = SanctuaryAltar.Techniques;
 
 	private SanctuaryData sanctuaryData;
 
 	private bool sanctuaryLoading;
 
+	private bool sanctuaryUsesPrefabLayout;
+
 	private GameObject sanctuaryConfirmPopup;
+
+	private Image sanctuaryConfirmDialogImage;
+
+	private Sprite sanctuaryConfirmDialogDefaultSprite;
+
+	private Color sanctuaryConfirmDialogDefaultColor;
+
+	private Image.Type sanctuaryConfirmDialogDefaultType;
 
 	private Text sanctuaryConfirmTitleText;
 
@@ -82,6 +107,13 @@ public sealed partial class BattleBoardController
 
 	private void CreateSanctuaryView(Font font)
 	{
+		GameObject sanctuaryPrefab = Resources.Load<GameObject>("UI/Prefabs/SanctuaryRoom");
+		if ((Object)(object)sanctuaryPrefab != (Object)null)
+		{
+			CreateSanctuaryViewFromPrefab(sanctuaryPrefab);
+			return;
+		}
+
 		Image root = CreateImage("Sanctuary", (Transform)(object)canvasRect, new Color(0.006f, 0.008f, 0.01f, 1f));
 		root.raycastTarget = true;
 		sanctuaryPanel = ((Component)root).gameObject;
@@ -123,21 +155,126 @@ public sealed partial class BattleBoardController
 		sanctuaryTitlePanel.type = Image.Type.Simple;
 		sanctuaryTitlePanel.preserveAspect = false;
 
-		sanctuaryHeadingText = CreateText("Sanctuary Heading", ((Component)sanctuaryTitlePanel).transform, font, 40, (FontStyle)1, (TextAnchor)4);
+		sanctuaryHeadingText = CreateText(
+			"Sanctuary Heading",
+			((Component)sanctuaryTitlePanel).transform,
+			AccardND.Battlefield.MmoUiTheme.TitleFont ?? font,
+			48,
+			FontStyle.Normal,
+			TextAnchor.MiddleCenter);
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(sanctuaryHeadingText);
-		sanctuaryHeadingText.text = "SANTUARIO";
+		sanctuaryHeadingText.text = GameText.GetOrFallbackSilent(
+			GameTextKeys.Sanctuary.Title,
+			"SANTUARIO");
 		sanctuaryHeadingText.color = SanctuaryGold;
 		AddSanctuaryTextOutline(sanctuaryHeadingText);
 		SetRect(sanctuaryHeadingText.rectTransform, new Vector2(0.08f, 0.18f), new Vector2(0.92f, 0.72f));
-		sanctuaryHeadingText.rectTransform.offsetMin = new Vector2(0f, -18f);
-		sanctuaryHeadingText.rectTransform.offsetMax = new Vector2(0f, -18f);
+		sanctuaryHeadingText.rectTransform.offsetMin = new Vector2(0f, -23f);
+		sanctuaryHeadingText.rectTransform.offsetMax = new Vector2(0f, -23f);
 
-		CreateSanctuaryAltarButton(content, font, "CLASSI", SanctuaryAltar.Classes);
-		CreateSanctuaryAltarButton(content, font, "TECNICHE", SanctuaryAltar.Techniques);
-		CreateSanctuaryAltarButton(content, font, "RELIQUIE", SanctuaryAltar.Relics);
+		sanctuarySubtitleText = CreateText(
+			"Sanctuary Subtitle",
+			((Component)sanctuaryTitlePanel).transform,
+			AccardND.Battlefield.MmoUiTheme.BodyFont,
+			15,
+			FontStyle.Normal,
+			TextAnchor.MiddleCenter);
+		sanctuarySubtitleText.text = string.Empty;
+		sanctuarySubtitleText.color = new Color(0.82f, 0.68f, 0.4f);
+		sanctuarySubtitleText.raycastTarget = false;
+		sanctuarySubtitleText.resizeTextForBestFit = true;
+		sanctuarySubtitleText.resizeTextMinSize = 10;
+		sanctuarySubtitleText.resizeTextMaxSize = 15;
+		SetRect(sanctuarySubtitleText.rectTransform, new Vector2(0.1f, 0.08f), new Vector2(0.9f, 0.34f));
+		((Component)sanctuarySubtitleText).gameObject.SetActive(false);
+
+		CreateSanctuaryAltarButton(content, font, SanctuaryAltarLabel(SanctuaryAltar.Classes), SanctuaryAltar.Classes);
+		CreateSanctuaryAltarButton(content, font, SanctuaryAltarLabel(SanctuaryAltar.Techniques), SanctuaryAltar.Techniques);
+		CreateSanctuaryAltarButton(content, font, SanctuaryAltarLabel(SanctuaryAltar.Relics), SanctuaryAltar.Relics);
+
+		sanctuaryDiscoveryPanelImage = CreateImage("Sanctuary Discovery Summary", content, Color.white);
+		sanctuaryDiscoveryPanelImage.sprite = LoadSpriteResource("UI/Sanctuary/sanctuary_tab_frame_v2");
+		sanctuaryDiscoveryPanelImage.type = Image.Type.Simple;
+		sanctuaryDiscoveryPanelImage.preserveAspect = false;
+		sanctuaryDiscoveryPanelImage.raycastTarget = false;
+
+		sanctuaryDiscoveryIconImage = CreateImage(
+			"Discovery Icon",
+			((Component)sanctuaryDiscoveryPanelImage).transform,
+			new Color(0.9f, 0.76f, 1f));
+		sanctuaryDiscoveryIconImage.preserveAspect = true;
+		sanctuaryDiscoveryIconImage.raycastTarget = false;
+		SetRect(sanctuaryDiscoveryIconImage.rectTransform, new Vector2(0.035f, 0.16f), new Vector2(0.155f, 0.84f));
+
+		sanctuaryDiscoveryTitleText = CreateText(
+			"Discovery Title",
+			((Component)sanctuaryDiscoveryPanelImage).transform,
+			AccardND.Battlefield.MmoUiTheme.TitleBoldFont,
+			16,
+			FontStyle.Normal,
+			TextAnchor.MiddleLeft);
+		sanctuaryDiscoveryTitleText.color = SanctuaryGold;
+		sanctuaryDiscoveryTitleText.raycastTarget = false;
+		AddSanctuaryTextOutline(sanctuaryDiscoveryTitleText);
+		SetRect(sanctuaryDiscoveryTitleText.rectTransform, new Vector2(0.18f, 0.58f), new Vector2(0.72f, 0.9f));
+
+		sanctuaryStatusText = CreateText(
+			"Discovery Description",
+			((Component)sanctuaryDiscoveryPanelImage).transform,
+			AccardND.Battlefield.MmoUiTheme.BodyFont,
+			12,
+			FontStyle.Normal,
+			TextAnchor.UpperLeft);
+		sanctuaryStatusText.color = new Color(0.82f, 0.81f, 0.78f);
+		sanctuaryStatusText.raycastTarget = false;
+		sanctuaryStatusText.horizontalOverflow = HorizontalWrapMode.Wrap;
+		sanctuaryStatusText.verticalOverflow = VerticalWrapMode.Truncate;
+		sanctuaryStatusText.resizeTextForBestFit = true;
+		sanctuaryStatusText.resizeTextMinSize = 8;
+		sanctuaryStatusText.resizeTextMaxSize = 12;
+		SetRect(sanctuaryStatusText.rectTransform, new Vector2(0.18f, 0.12f), new Vector2(0.72f, 0.6f));
+
+		sanctuaryDiscoveryCountText = CreateText(
+			"Discovery Count",
+			((Component)sanctuaryDiscoveryPanelImage).transform,
+			AccardND.Battlefield.MmoUiTheme.TitleBoldFont,
+			17,
+			FontStyle.Normal,
+			TextAnchor.MiddleRight);
+		sanctuaryDiscoveryCountText.color = new Color(0.93f, 0.91f, 0.88f);
+		sanctuaryDiscoveryCountText.raycastTarget = false;
+		AddSanctuaryTextOutline(sanctuaryDiscoveryCountText);
+		SetRect(sanctuaryDiscoveryCountText.rectTransform, new Vector2(0.73f, 0.56f), new Vector2(0.96f, 0.91f));
+
+		sanctuaryDiscoveryPercentText = CreateText(
+			"Discovery Percent",
+			((Component)sanctuaryDiscoveryPanelImage).transform,
+			AccardND.Battlefield.MmoUiTheme.BodyFont,
+			11,
+			FontStyle.Bold,
+			TextAnchor.MiddleCenter);
+		sanctuaryDiscoveryPercentText.color = new Color(0.75f, 0.39f, 0.96f);
+		sanctuaryDiscoveryPercentText.raycastTarget = false;
+		SetRect(sanctuaryDiscoveryPercentText.rectTransform, new Vector2(0.78f, 0.36f), new Vector2(0.96f, 0.58f));
+
+		Image progressTrack = CreateImage(
+			"Discovery Progress Track",
+			((Component)sanctuaryDiscoveryPanelImage).transform,
+			new Color(0.12f, 0.035f, 0.19f, 0.95f));
+		progressTrack.raycastTarget = false;
+		SetRect(progressTrack.rectTransform, new Vector2(0.72f, 0.14f), new Vector2(0.96f, 0.25f));
+
+		sanctuaryDiscoveryProgressFillImage = CreateImage(
+			"Discovery Progress Fill",
+			((Component)progressTrack).transform,
+			new Color(0.48f, 0.16f, 0.82f, 1f));
+		sanctuaryDiscoveryProgressFillImage.raycastTarget = false;
+		SetRect(sanctuaryDiscoveryProgressFillImage.rectTransform, Vector2.zero, new Vector2(0.01f, 1f));
+		((Component)sanctuaryDiscoveryPanelImage).gameObject.SetActive(false);
 
 		Image viewport = CreateImage("Sanctuary Viewport", content, new Color(0.005f, 0.007f, 0.012f, 0.18f));
 		sanctuaryListViewportImage = viewport;
+		viewport.rectTransform.localScale = new Vector3(0.95f, 0.95f, 1f);
 		viewport.sprite = null;
 		viewport.type = Image.Type.Simple;
 		viewport.raycastTarget = true;
@@ -177,6 +314,206 @@ public sealed partial class BattleBoardController
 		sanctuaryPanel.SetActive(false);
 	}
 
+	private void CreateSanctuaryViewFromPrefab(GameObject prefab)
+	{
+		sanctuaryPanel = Object.Instantiate(prefab, (Transform)(object)canvasRect, false);
+		sanctuaryPanel.name = "Sanctuary";
+		sanctuaryUsesPrefabLayout = true;
+
+		RectTransform rootRect = sanctuaryPanel.GetComponent<RectTransform>();
+		SetRect(rootRect, Vector2.zero, Vector2.one);
+		Canvas rootCanvas = sanctuaryPanel.GetComponent<Canvas>();
+		if ((Object)(object)rootCanvas == (Object)null)
+		{
+			rootCanvas = sanctuaryPanel.AddComponent<Canvas>();
+		}
+		rootCanvas.overrideSorting = true;
+		rootCanvas.sortingOrder = 900;
+		if ((Object)(object)sanctuaryPanel.GetComponent<GraphicRaycaster>() == (Object)null)
+		{
+			sanctuaryPanel.AddComponent<GraphicRaycaster>();
+		}
+
+		sanctuaryBackgroundImage = SanctuaryPrefabComponent<Image>("Sanctuary Background");
+		sanctuaryScreenOuterFrameImage = SanctuaryPrefabComponent<Image>("Screen Outer Frame");
+		sanctuaryTitlePanel = SanctuaryPrefabComponent<Image>("Sanctuary Title Panel");
+		sanctuaryHeadingText = SanctuaryPrefabComponent<Text>("Sanctuary Heading");
+		sanctuarySubtitleText = SanctuaryPrefabComponent<Text>("Sanctuary Subtitle");
+		if ((Object)(object)sanctuaryHeadingText != (Object)null)
+		{
+			sanctuaryHeadingText.text = GameText.GetOrFallbackSilent(
+				GameTextKeys.Sanctuary.Title,
+				"SANTUARIO");
+			sanctuaryHeadingText.fontSize = 48;
+			sanctuaryHeadingText.resizeTextMaxSize = 48;
+			sanctuaryHeadingText.alignment = TextAnchor.MiddleCenter;
+			SetRect(sanctuaryHeadingText.rectTransform, new Vector2(0.08f, 0.18f), new Vector2(0.92f, 0.72f));
+			sanctuaryHeadingText.rectTransform.offsetMin = new Vector2(0f, -23f);
+			sanctuaryHeadingText.rectTransform.offsetMax = new Vector2(0f, -23f);
+		}
+		if ((Object)(object)sanctuarySubtitleText != (Object)null)
+		{
+			sanctuarySubtitleText.text = string.Empty;
+			((Component)sanctuarySubtitleText).gameObject.SetActive(false);
+		}
+		sanctuaryDiscoveryPanelImage = SanctuaryPrefabComponent<Image>("Sanctuary Discovery Summary");
+		sanctuaryDiscoveryIconImage = SanctuaryPrefabComponent<Image>("Discovery Icon");
+		sanctuaryDiscoveryTitleText = SanctuaryPrefabComponent<Text>("Discovery Title");
+		sanctuaryStatusText = SanctuaryPrefabComponent<Text>("Discovery Description");
+		sanctuaryDiscoveryCountText = SanctuaryPrefabComponent<Text>("Discovery Count");
+		sanctuaryDiscoveryPercentText = SanctuaryPrefabComponent<Text>("Discovery Percent");
+		sanctuaryDiscoveryProgressFillImage = SanctuaryPrefabComponent<Image>("Discovery Progress Fill");
+		if ((Object)(object)sanctuaryDiscoveryPanelImage != (Object)null)
+		{
+			((Component)sanctuaryDiscoveryPanelImage).gameObject.SetActive(false);
+		}
+		sanctuaryListViewportImage = SanctuaryPrefabComponent<Image>("Sanctuary Viewport");
+		sanctuaryScrollRect = SanctuaryPrefabComponent<ScrollRect>("Sanctuary Viewport");
+		sanctuaryListRoot = SanctuaryPrefabComponent<RectTransform>("Sanctuary List");
+		if ((Object)(object)sanctuaryScrollRect != (Object)null)
+		{
+			sanctuaryScrollRect.viewport = sanctuaryListViewportImage.rectTransform;
+			sanctuaryScrollRect.content = sanctuaryListRoot;
+		}
+
+		sanctuaryAltarButtons.Clear();
+		sanctuaryAltarIcons.Clear();
+		BindSanctuaryPrefabAltar(SanctuaryAltar.Classes);
+		BindSanctuaryPrefabAltar(SanctuaryAltar.Techniques);
+		BindSanctuaryPrefabAltar(SanctuaryAltar.Relics);
+
+		sanctuaryConfirmPopup = SanctuaryPrefabObject("Sanctuary Confirm Popup");
+		Image popupOverlay = SanctuaryPrefabComponent<Image>("Sanctuary Confirm Popup");
+		if ((Object)(object)popupOverlay != (Object)null)
+		{
+			popupOverlay.sprite = null;
+			popupOverlay.type = Image.Type.Simple;
+			popupOverlay.color = new Color(0f, 0f, 0f, 0.68f);
+		}
+		sanctuaryConfirmDialogImage = SanctuaryPrefabComponent<Image>("Sanctuary Confirm Dialog");
+		if ((Object)(object)sanctuaryConfirmDialogImage != (Object)null)
+		{
+			sanctuaryConfirmDialogImage.color = new Color(0.012f, 0.018f, 0.032f, 0.98f);
+			StylePanel(sanctuaryConfirmDialogImage);
+			CacheSanctuaryConfirmDialogStyle();
+		}
+		Image confirmCrest = SanctuaryPrefabComponent<Image>("Sanctuary Confirm Crest");
+		if ((Object)(object)confirmCrest != (Object)null)
+		{
+			confirmCrest.sprite = AccardND.Battlefield.MmoUiTheme.GetGemSprite();
+			confirmCrest.type = Image.Type.Simple;
+			confirmCrest.preserveAspect = true;
+			confirmCrest.color = Color.white;
+			confirmCrest.raycastTarget = false;
+		}
+		sanctuaryConfirmTitleText = SanctuaryPrefabComponent<Text>("Sanctuary Confirm Title");
+		sanctuaryConfirmBodyText = SanctuaryPrefabComponent<Text>("Sanctuary Confirm Body");
+		StyleSanctuaryConfirmTypography();
+		Button cancelButton = SanctuaryPrefabComponent<Button>("Sanctuary Confirm Cancel");
+		if ((Object)(object)cancelButton != (Object)null)
+		{
+			Text cancelLabel = ((Component)cancelButton).GetComponentInChildren<Text>();
+			if ((Object)(object)cancelLabel != (Object)null)
+				cancelLabel.text = GameText.GetOrFallbackSilent(GameTextKeys.Common.Cancel, "ANNULLA");
+			ApplySanctuaryCampaignCta(cancelButton, "UI/CampaignRestyle/campaign_cta_back_red");
+			cancelButton.onClick.RemoveAllListeners();
+			((UnityEvent)cancelButton.onClick).AddListener((UnityAction)delegate
+			{
+				PlayGenericButtonClickSfx();
+				HideSanctuaryConfirmPopup();
+			});
+		}
+		sanctuaryConfirmButton = SanctuaryPrefabComponent<Button>("Sanctuary Confirm Accept");
+		if ((Object)(object)sanctuaryConfirmButton != (Object)null)
+		{
+			ApplyBattleButtonVariant(
+				sanctuaryConfirmButton,
+				AccardND.Battlefield.MmoUiTheme.ButtonVariant.Gold);
+			sanctuaryConfirmButton.onClick.RemoveAllListeners();
+			((UnityEvent)sanctuaryConfirmButton.onClick).AddListener((UnityAction)delegate
+			{
+				PlayGenericButtonClickSfx();
+				ConfirmSanctuaryPurchase();
+			});
+			sanctuaryConfirmButtonText = ((Component)sanctuaryConfirmButton).GetComponentInChildren<Text>();
+			if ((Object)(object)sanctuaryConfirmButtonText != (Object)null)
+				sanctuaryConfirmButtonText.text = GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.OfferHoney,
+					"OFFRI IL MIELE");
+		}
+
+		HideSanctuaryConfirmPopup();
+		RefreshSanctuaryAltarButtons();
+		RefreshSanctuaryDiscoverySummary();
+		ConfigureSanctuaryGrid(IsCompactLayout(
+			Mathf.Max(1f, safeAreaRoot.rect.width) / Mathf.Max(1f, safeAreaRoot.rect.height),
+			configuration.ResponsiveLayout));
+		sanctuaryPanel.SetActive(false);
+	}
+
+	private void BindSanctuaryPrefabAltar(SanctuaryAltar altar)
+	{
+		Button button = SanctuaryPrefabComponent<Button>("Sanctuary Altar " + altar);
+		if ((Object)(object)button == (Object)null)
+		{
+			return;
+		}
+
+		SanctuaryAltar boundAltar = altar;
+		button.onClick.RemoveAllListeners();
+		((UnityEvent)button.onClick).AddListener((UnityAction)delegate
+		{
+			PlayGenericButtonClickSfx();
+			SelectSanctuaryAltar(boundAltar);
+		});
+		sanctuaryAltarButtons.Add(button);
+		Text altarLabel = ((Component)button).GetComponentInChildren<Text>();
+		if ((Object)(object)altarLabel != (Object)null)
+			altarLabel.text = SanctuaryAltarLabel(altar);
+		Transform iconTransform = FindSanctuaryPrefabTransform(((Component)button).transform, "Icon");
+		sanctuaryAltarIcons.Add(
+			(Object)(object)iconTransform != (Object)null ? ((Component)iconTransform).GetComponent<Image>() : null);
+		StyleSanctuaryAltarButton(button);
+		AttachSanctuaryAltarVfx(button);
+	}
+
+	private T SanctuaryPrefabComponent<T>(string objectName) where T : Component
+	{
+		GameObject target = SanctuaryPrefabObject(objectName);
+		return (Object)(object)target != (Object)null ? target.GetComponent<T>() : null;
+	}
+
+	private GameObject SanctuaryPrefabObject(string objectName)
+	{
+		if ((Object)(object)sanctuaryPanel == (Object)null)
+		{
+			return null;
+		}
+		Transform found = FindSanctuaryPrefabTransform(sanctuaryPanel.transform, objectName);
+		return (Object)(object)found != (Object)null ? ((Component)found).gameObject : null;
+	}
+
+	private static Transform FindSanctuaryPrefabTransform(Transform root, string objectName)
+	{
+		if ((Object)(object)root == (Object)null)
+		{
+			return null;
+		}
+		if (root.name == objectName)
+		{
+			return root;
+		}
+		for (int index = 0; index < root.childCount; index++)
+		{
+			Transform found = FindSanctuaryPrefabTransform(root.GetChild(index), objectName);
+			if ((Object)(object)found != (Object)null)
+			{
+				return found;
+			}
+		}
+		return null;
+	}
+
 	private void CreateSanctuaryConfirmPopup(Transform parent, Font font)
 	{
 		Image overlay = CreateImage("Sanctuary Confirm Popup", parent, new Color(0f, 0f, 0f, 0.68f));
@@ -188,27 +525,34 @@ public sealed partial class BattleBoardController
 		canvas.sortingOrder = 921;
 		sanctuaryConfirmPopup.AddComponent<GraphicRaycaster>();
 
-		Image dialog = CreateImage("Sanctuary Confirm Dialog", ((Component)overlay).transform, new Color(0.012f, 0.018f, 0.032f, 0.98f));
-		dialog.raycastTarget = true;
-		StylePanel(dialog);
-		AccardND.Battlefield.MmoUiTheme.AddPanelGem(dialog.rectTransform, "Sanctuary Confirm Crest", new Vector2(0.5f, 1f), new Vector2(42f, 42f), Color.white);
-		SetRect(dialog.rectTransform, new Vector2(0.12f, 0.32f), new Vector2(0.88f, 0.68f));
+		sanctuaryConfirmDialogImage = CreateImage("Sanctuary Confirm Dialog", ((Component)overlay).transform, new Color(0.012f, 0.018f, 0.032f, 0.98f));
+		sanctuaryConfirmDialogImage.raycastTarget = true;
+		StylePanel(sanctuaryConfirmDialogImage);
+		CacheSanctuaryConfirmDialogStyle();
+		AccardND.Battlefield.MmoUiTheme.AddPanelGem(sanctuaryConfirmDialogImage.rectTransform, "Sanctuary Confirm Crest", new Vector2(0.5f, 1f), new Vector2(42f, 42f), Color.white);
+		SetRect(sanctuaryConfirmDialogImage.rectTransform, new Vector2(0.12f, 0.32f), new Vector2(0.88f, 0.68f));
 
-		sanctuaryConfirmTitleText = CreateText("Sanctuary Confirm Title", ((Component)dialog).transform, font, 30, (FontStyle)1, (TextAnchor)4);
+		sanctuaryConfirmTitleText = CreateText("Sanctuary Confirm Title", ((Component)sanctuaryConfirmDialogImage).transform, font, 34, FontStyle.Normal, TextAnchor.MiddleCenter);
 		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(sanctuaryConfirmTitleText);
 		sanctuaryConfirmTitleText.color = SanctuaryGold;
 		SetRect(sanctuaryConfirmTitleText.rectTransform, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.91f));
 
-		sanctuaryConfirmBodyText = CreateText("Sanctuary Confirm Body", ((Component)dialog).transform, font, 20, (FontStyle)1, (TextAnchor)4);
+		sanctuaryConfirmBodyText = CreateText("Sanctuary Confirm Body", ((Component)sanctuaryConfirmDialogImage).transform, font, 26, FontStyle.Bold, TextAnchor.MiddleCenter);
 		sanctuaryConfirmBodyText.color = new Color(0.88f, 0.92f, 0.96f);
 		sanctuaryConfirmBodyText.horizontalOverflow = HorizontalWrapMode.Wrap;
 		sanctuaryConfirmBodyText.verticalOverflow = VerticalWrapMode.Truncate;
 		sanctuaryConfirmBodyText.resizeTextForBestFit = true;
-		sanctuaryConfirmBodyText.resizeTextMinSize = 13;
-		sanctuaryConfirmBodyText.resizeTextMaxSize = 20;
+		sanctuaryConfirmBodyText.resizeTextMinSize = 16;
+		sanctuaryConfirmBodyText.resizeTextMaxSize = 26;
 		SetRect(sanctuaryConfirmBodyText.rectTransform, new Vector2(0.08f, 0.34f), new Vector2(0.92f, 0.7f));
+		StyleSanctuaryConfirmTypography();
 
-		Button cancelButton = CreateButton("Sanctuary Confirm Cancel", ((Component)dialog).transform, font, "ANNULLA");
+		Button cancelButton = CreateButton(
+			"Sanctuary Confirm Cancel",
+			((Component)sanctuaryConfirmDialogImage).transform,
+			font,
+			GameText.GetOrFallbackSilent(GameTextKeys.Common.Cancel, "ANNULLA"));
+		ApplySanctuaryCampaignCta(cancelButton, "UI/CampaignRestyle/campaign_cta_back_red");
 		((UnityEvent)cancelButton.onClick).AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
@@ -216,7 +560,14 @@ public sealed partial class BattleBoardController
 		});
 		SetRect((RectTransform)((Component)cancelButton).transform, new Vector2(0.08f, 0.1f), new Vector2(0.44f, 0.27f));
 
-		sanctuaryConfirmButton = CreateButton("Sanctuary Confirm Accept", ((Component)dialog).transform, font, "OFFRI IL MIELE");
+		sanctuaryConfirmButton = CreateButton(
+			"Sanctuary Confirm Accept",
+			((Component)sanctuaryConfirmDialogImage).transform,
+			font,
+			GameText.GetOrFallbackSilent(GameTextKeys.Sanctuary.OfferHoney, "OFFRI IL MIELE"));
+		ApplyBattleButtonVariant(
+			sanctuaryConfirmButton,
+			AccardND.Battlefield.MmoUiTheme.ButtonVariant.Gold);
 		sanctuaryConfirmButtonText = ((Component)sanctuaryConfirmButton).GetComponentInChildren<Text>();
 		((UnityEvent)sanctuaryConfirmButton.onClick).AddListener((UnityAction)delegate
 		{
@@ -228,19 +579,109 @@ public sealed partial class BattleBoardController
 		sanctuaryConfirmPopup.SetActive(false);
 	}
 
+	private void CacheSanctuaryConfirmDialogStyle()
+	{
+		if ((Object)(object)sanctuaryConfirmDialogImage == (Object)null)
+		{
+			return;
+		}
+		sanctuaryConfirmDialogDefaultSprite = sanctuaryConfirmDialogImage.sprite;
+		sanctuaryConfirmDialogDefaultColor = sanctuaryConfirmDialogImage.color;
+		sanctuaryConfirmDialogDefaultType = sanctuaryConfirmDialogImage.type;
+	}
+
+	private static void ApplySanctuaryCampaignCta(Button button, string spriteResource)
+	{
+		ApplyMerchantCampaignCta(button, spriteResource);
+		if ((Object)(object)button == (Object)null)
+		{
+			return;
+		}
+		ColorBlock colors = button.colors;
+		colors.normalColor = Color.white;
+		colors.highlightedColor = Color.white;
+		colors.pressedColor = Color.white;
+		colors.selectedColor = Color.white;
+		colors.disabledColor = Color.white;
+		colors.colorMultiplier = 1f;
+		button.colors = colors;
+	}
+
+	private void StyleSanctuaryConfirmTypography()
+	{
+		if ((Object)(object)sanctuaryConfirmTitleText != (Object)null)
+		{
+			Font titleFont = Resources.Load<Font>("Fonts/IMFellEnglishSC")
+				?? AccardND.Battlefield.MmoUiTheme.TitleFont;
+			if ((Object)(object)titleFont != (Object)null)
+			{
+				sanctuaryConfirmTitleText.font = titleFont;
+			}
+			sanctuaryConfirmTitleText.fontSize = 34;
+			sanctuaryConfirmTitleText.fontStyle = FontStyle.Normal;
+			sanctuaryConfirmTitleText.resizeTextMaxSize = 34;
+		}
+		if ((Object)(object)sanctuaryConfirmBodyText != (Object)null)
+		{
+			sanctuaryConfirmBodyText.fontSize = 26;
+			sanctuaryConfirmBodyText.resizeTextMaxSize = 26;
+			sanctuaryConfirmBodyText.resizeTextMinSize = 16;
+		}
+	}
+
+	private void StyleSanctuaryConfirmDialogForActiveAltar()
+	{
+		if ((Object)(object)sanctuaryConfirmDialogImage == (Object)null)
+		{
+			return;
+		}
+		if (sanctuaryActiveAltar == SanctuaryAltar.Relics)
+		{
+			Sprite relicFrame = LoadSpriteResource("UI/Sanctuary/sanctuary_card_frame_v2");
+			if ((Object)(object)relicFrame != (Object)null)
+			{
+				sanctuaryConfirmDialogImage.sprite = relicFrame;
+				sanctuaryConfirmDialogImage.type = Image.Type.Simple;
+				sanctuaryConfirmDialogImage.preserveAspect = false;
+				sanctuaryConfirmDialogImage.color = Color.white;
+				return;
+			}
+		}
+		sanctuaryConfirmDialogImage.sprite = sanctuaryConfirmDialogDefaultSprite;
+		sanctuaryConfirmDialogImage.type = sanctuaryConfirmDialogDefaultType;
+		sanctuaryConfirmDialogImage.preserveAspect = false;
+		sanctuaryConfirmDialogImage.color = sanctuaryConfirmDialogDefaultColor;
+	}
+
+	private static string SanctuaryAltarLabel(SanctuaryAltar altar)
+	{
+		return altar switch
+		{
+			SanctuaryAltar.Classes => GameText.GetOrFallbackSilent(
+				GameTextKeys.Sanctuary.AltarClasses,
+				"CLASSI"),
+			SanctuaryAltar.Techniques => GameText.GetOrFallbackSilent(
+				GameTextKeys.Sanctuary.AltarTechniques,
+				"TECNICHE"),
+			_ => GameText.GetOrFallbackSilent(
+				GameTextKeys.Sanctuary.AltarRelics,
+				"RELIQUIE")
+		};
+	}
+
 	private void CreateSanctuaryAltarButton(Transform parent, Font font, string label, SanctuaryAltar altar)
 	{
 		Button button = CreateButton("Sanctuary Altar " + altar, parent, font, label);
 		Image background = ((Component)button).GetComponent<Image>();
-		background.sprite = LoadSpriteResource("UI/Sanctuary/sanctuary_tab_frame_v2");
+		background.sprite = LoadSpriteResource("UI/MultiplayerRestyle/ranked_cta_frame_v3");
 		background.type = Image.Type.Simple;
 		background.preserveAspect = false;
 		Image icon = CreateImage("Icon", ((Component)button).transform, SanctuaryGold);
 		icon.sprite = LoadSpriteResource(altar switch
 		{
-			SanctuaryAltar.Classes => "UI/deck_icon",
-			SanctuaryAltar.Techniques => "UI/warrior_sword",
-			_ => "UI/paladin_holy_crest"
+			SanctuaryAltar.Classes => "UI/Sanctuary/sanctuary_classes_emblem_aaa",
+			SanctuaryAltar.Techniques => "UI/Sanctuary/sanctuary_techniques_emblem_aaa",
+			_ => "UI/Sanctuary/sanctuary_relics_emblem_aaa"
 		});
 		icon.preserveAspect = true;
 		icon.raycastTarget = false;
@@ -249,7 +690,17 @@ public sealed partial class BattleBoardController
 		Text labelText = ((Component)button).GetComponentInChildren<Text>();
 		if ((Object)(object)labelText != (Object)null)
 		{
-			SetRect(labelText.rectTransform, new Vector2(0.28f, 0.06f), new Vector2(0.96f, 0.94f));
+			Font altarFont = Resources.Load<Font>("Fonts/IMFellEnglishSC");
+			if ((Object)(object)altarFont != (Object)null)
+			{
+				labelText.font = altarFont;
+			}
+			labelText.fontSize = 28;
+			labelText.resizeTextForBestFit = true;
+			labelText.resizeTextMinSize = 14;
+			labelText.resizeTextMaxSize = 28;
+			labelText.alignment = TextAnchor.MiddleCenter;
+			SetRect(labelText.rectTransform, new Vector2(0.34f, 0.08f), new Vector2(0.9f, 0.92f));
 		}
 		((UnityEvent)button.onClick).AddListener((UnityAction)delegate
 		{
@@ -258,6 +709,49 @@ public sealed partial class BattleBoardController
 		});
 		sanctuaryAltarButtons.Add(button);
 		sanctuaryAltarIcons.Add(icon);
+		AttachSanctuaryAltarVfx(button);
+	}
+
+	private static void StyleSanctuaryAltarButton(Button button)
+	{
+		if ((Object)(object)button == (Object)null)
+		{
+			return;
+		}
+		Text label = ((Component)button).GetComponentInChildren<Text>();
+		Font altarFont = Resources.Load<Font>("Fonts/IMFellEnglishSC");
+		if ((Object)(object)label != (Object)null)
+		{
+			if ((Object)(object)altarFont != (Object)null)
+			{
+				label.font = altarFont;
+			}
+			label.fontSize = 28;
+			label.resizeTextForBestFit = true;
+			label.resizeTextMinSize = 14;
+			label.resizeTextMaxSize = 28;
+			label.alignment = TextAnchor.MiddleCenter;
+			SetRect(label.rectTransform, new Vector2(0.34f, 0.08f), new Vector2(0.9f, 0.92f));
+		}
+		Transform icon = FindSanctuaryPrefabTransform(((Component)button).transform, "Icon");
+		if ((Object)(object)icon != (Object)null)
+		{
+			SetRect((RectTransform)icon, new Vector2(0.12f, 0.14f), new Vector2(0.36f, 0.86f));
+		}
+	}
+
+	private static void AttachSanctuaryAltarVfx(Button button)
+	{
+		if ((Object)(object)button == (Object)null ||
+			(Object)(object)FindSanctuaryPrefabTransform(((Component)button).transform, "Sanctuary Altar VFX") != (Object)null)
+		{
+			return;
+		}
+		var effect = AccardND.PvpUi.PvpUiVfx.CreatePulseButton(
+			(RectTransform)((Component)button).transform,
+			new Color(0.62f, 0.18f, 1f));
+		effect.name = "Sanctuary Altar VFX";
+		effect.SetTint(new Color(0.62f, 0.18f, 1f), 0.72f);
 	}
 
 	// --- Navigazione ---
@@ -276,7 +770,7 @@ public sealed partial class BattleBoardController
 		}
 		SetAccountHubHudActive(true);
 		EnsureSanctuarySharedHudSorting();
-		sanctuaryActiveAltar = SanctuaryAltar.Classes;
+		sanctuaryActiveAltar = SanctuaryAltar.Techniques;
 		sanctuaryNotice = null;
 		HideSanctuaryConfirmPopup();
 		sanctuaryPanel.SetActive(true);
@@ -352,7 +846,9 @@ public sealed partial class BattleBoardController
 		}
 
 		sanctuaryLoading = true;
-		SetSanctuaryStatus("Consulto l'alveare...");
+		SetSanctuaryStatus(GameText.GetOrFallbackSilent(
+			GameTextKeys.Sanctuary.Loading,
+			"Consulto l'alveare..."));
 		try
 		{
 			// Il link di progressione nasce all'apertura del menu campagna: chi arriva al
@@ -361,22 +857,37 @@ public sealed partial class BattleBoardController
 			if (await EnsureServerProgressAsync())
 			{
 				sanctuaryData = await serverProgress.GetSanctuaryAsync();
-				AppendLog($"SANTUARIO - catalogo ricevuto: {sanctuaryData?.entries?.Length ?? 0} voci.");
+				AppendLog(GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.CatalogReceivedLog,
+					"SANTUARIO - catalogo ricevuto: {0} voci.",
+					sanctuaryData?.entries?.Length ?? 0));
 			}
 			else
 			{
 				sanctuaryData = null;
 				sanctuaryNotice = AccardND.Network.AccountServerSession.IsReconnecting
-					? "Riconnessione in corso: il Santuario si aggiornerà automaticamente."
-					: "Santuario non disponibile offline: serve la connessione al server.";
-				AppendLog("SANTUARIO - nessuna connessione al server.");
+					? GameText.GetOrFallbackSilent(
+						GameTextKeys.Sanctuary.Reconnecting,
+						"Riconnessione in corso: il Santuario si aggiornerà automaticamente.")
+					: GameText.GetOrFallbackSilent(
+						GameTextKeys.Sanctuary.Offline,
+						"Santuario non disponibile offline: serve la connessione al server.");
+				AppendLog(GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.NoConnectionLog,
+					"SANTUARIO - nessuna connessione al server."));
 			}
 		}
 		catch (Exception exception)
 		{
 			sanctuaryData = null;
-			AppendLog($"SANTUARIO - catalogo non ricevuto: {exception.Message}");
-			sanctuaryNotice = "Il Santuario non risponde: " + exception.Message;
+			AppendLog(GameText.GetOrFallbackSilent(
+				GameTextKeys.Sanctuary.CatalogFailedLog,
+				"SANTUARIO - catalogo non ricevuto: {0}",
+				exception.Message));
+			sanctuaryNotice = GameText.GetOrFallbackSilent(
+				GameTextKeys.Sanctuary.Unavailable,
+				"Il Santuario non risponde: {0}",
+				exception.Message);
 		}
 		finally
 		{
@@ -396,6 +907,7 @@ public sealed partial class BattleBoardController
 		}
 
 		RefreshSanctuaryAltarButtons();
+		RefreshSanctuaryDiscoverySummary();
 		RefreshAccountBannerView();
 		if ((Object)(object)accountHoneyAmountText != (Object)null)
 		{
@@ -427,7 +939,9 @@ public sealed partial class BattleBoardController
 
 		if (shown == 0)
 		{
-			SetSanctuaryStatus("Nessuna voce in questo altare.");
+			SetSanctuaryStatus(GameText.GetOrFallbackSilent(
+				GameTextKeys.Sanctuary.EmptyAltar,
+				"Nessuna voce in questo altare."));
 			return;
 		}
 
@@ -452,14 +966,21 @@ public sealed partial class BattleBoardController
 	{
 		if (sanctuaryActiveAltar == SanctuaryAltar.Classes)
 		{
-			return "Ogni classe chiede una prova guadagnata giocando, oltre al miele.";
+			return GameText.GetOrFallbackSilent(
+				GameTextKeys.Sanctuary.ClassesStatus,
+				"Ogni classe chiede una prova guadagnata giocando, oltre al miele.");
 		}
 		if (sanctuaryActiveAltar == SanctuaryAltar.Techniques)
 		{
-			return "Le tecniche sono in preparazione: visibili, non ancora acquistabili.";
+			return GameText.GetOrFallbackSilent(
+				GameTextKeys.Sanctuary.TechniquesStatus,
+				"Ogni tecnica chiede la classe corrispondente, oltre al miele.");
 		}
 		// Qui si sblocca il diritto di comprare: le copie si prendono al negozio.
-		return $"Sblocca gli oggetti per renderli acquistabili al negozio. Slot bisaccia: {sanctuaryData?.bagSlots ?? 0}.";
+		return GameText.GetOrFallbackSilent(
+			GameTextKeys.Sanctuary.RelicsStatus,
+			"Sblocca gli oggetti per renderli acquistabili al negozio. Slot bisaccia: {0}.",
+			sanctuaryData?.bagSlots ?? 0);
 	}
 
 	private string ConsumeSanctuaryNotice()
@@ -498,10 +1019,7 @@ public sealed partial class BattleBoardController
 
 		Image cover = CreateImage("Cover", card.transform, Color.white);
 		cover.raycastTarget = false;
-		cover.sprite = LoadSpriteResource(
-			entry.type == "secondAbility"
-				? "UI/Sanctuary/sanctuary_tab_frame_v2"
-				: "UI/Sanctuary/sanctuary_card_frame_v2");
+		cover.sprite = LoadSpriteResource("UI/Sanctuary/santuary_items");
 		cover.type = Image.Type.Simple;
 		cover.preserveAspect = false;
 		cover.color = entry.owned || entry.available
@@ -510,28 +1028,11 @@ public sealed partial class BattleBoardController
 		HeroClass heroClass = HeroClass.Mage;
 		bool classIconCard = entry.type == "class" && TryGetSanctuaryHeroClass(entry, out heroClass);
 		bool techniqueCard = entry.type == "secondAbility";
-		Vector2 coverMin = Vector2.zero;
-		Vector2 coverMax = Vector2.one;
-		if (techniqueCard)
-		{
-			coverMin = new Vector2(-0.04f, -0.75f);
-			coverMax = new Vector2(1.04f, 1.75f);
-		}
-		else if (classIconCard)
-		{
-			// La texture della carta include ampi margini trasparenti: espandendo solo
-			// la cover, la cornice visibile riempie la cella senza oltrepassare la griglia.
-			coverMin = new Vector2(-0.28f, -0.15f);
-			coverMax = new Vector2(1.28f, 1.15f);
-		}
-		SetRect(
-			cover.rectTransform,
-			coverMin,
-			coverMax);
+		SetRect(cover.rectTransform, Vector2.zero, Vector2.one);
 
-		Transform contentRoot = techniqueCard || classIconCard
-			? card.transform
-			: ((Component)cover).transform;
+		// Ogni voce usa lo stesso contenitore verticale: nove cornici per altare, in
+		// griglia 3x3. Tutti i contenuti vivono sopra la texture fornita per la carta.
+		Transform contentRoot = cover.transform;
 		Image veil = CreateImage("Veil", contentRoot,
 			entry.owned || entry.available ? new Color(0f, 0f, 0f, 0f) : new Color(0f, 0f, 0f, 0.42f));
 		veil.raycastTarget = false;
@@ -546,11 +1047,11 @@ public sealed partial class BattleBoardController
 
 		if (techniqueCard)
 		{
-			CreateSanctuaryTechniqueRow(entry, contentRoot);
+			CreateSanctuaryTechniqueRow(entry, cover.transform);
 		}
 		else
 		{
-			CreateSanctuaryRelicCard(entry, ((Component)cover).transform);
+			CreateSanctuaryRelicCard(entry, cover.transform);
 		}
 
 		sanctuaryCards.Add(card);
@@ -558,81 +1059,84 @@ public sealed partial class BattleBoardController
 
 	private void CreateSanctuaryTechniqueRow(SanctuaryEntryData entry, Transform parent)
 	{
-		Image iconBack = CreateImage("Icon Back", parent, Color.clear);
-		iconBack.sprite = null;
-		iconBack.type = Image.Type.Simple;
-		SetRect(iconBack.rectTransform, new Vector2(0.018f, 0.1f), new Vector2(0.17f, 0.9f));
-
-		Image icon = CreateImage("Icon", ((Component)iconBack).transform, Color.white);
-		icon.sprite = GetSanctuaryEntrySprite(entry);
-		icon.preserveAspect = true;
-		icon.raycastTarget = false;
-		Stretch(icon.rectTransform, 8f);
-		((Component)icon).gameObject.SetActive((Object)(object)icon.sprite != (Object)null);
-
+		Font sanctuaryNameFont = Resources.Load<Font>("Fonts/IMFellEnglishSC")
+			?? AccardND.Battlefield.MmoUiTheme.TitleBoldFont;
+		Font sanctuaryStatusFont = Resources.Load<Font>("Fonts/Alegreya")
+			?? AccardND.Battlefield.MmoUiTheme.BodyFont;
 		Text nameText = CreateText(
 			"Name",
 			parent,
-			AccardND.Battlefield.MmoUiTheme.TitleBoldFont,
-			20,
+			sanctuaryNameFont,
+			26,
 			FontStyle.Normal,
-			TextAnchor.MiddleLeft);
+			TextAnchor.MiddleCenter);
 		nameText.text = (entry.name ?? entry.id).ToUpperInvariant();
 		nameText.color = SanctuaryGold;
+		nameText.horizontalOverflow = HorizontalWrapMode.Wrap;
+		nameText.verticalOverflow = VerticalWrapMode.Truncate;
+		nameText.resizeTextForBestFit = true;
+		nameText.resizeTextMinSize = 9;
+		nameText.resizeTextMaxSize = 26;
 		AddSanctuaryTextOutline(nameText);
-		SetRect(nameText.rectTransform, new Vector2(0.19f, 0.6f), new Vector2(0.72f, 0.91f));
+		SetRect(nameText.rectTransform, new Vector2(0.06f, 0.79f), new Vector2(0.94f, 0.96f));
+
+		Image icon = CreateImage("Icon", parent, Color.white);
+		icon.sprite = GetSanctuaryEntrySprite(entry);
+		icon.preserveAspect = true;
+		icon.raycastTarget = false;
+		SetRect(icon.rectTransform, new Vector2(0.19f, 0.45f), new Vector2(0.81f, 0.79f));
+		((Component)icon).gameObject.SetActive((Object)(object)icon.sprite != (Object)null);
 
 		Text descriptionText = CreateText(
 			"Description",
 			parent,
 			AccardND.Battlefield.MmoUiTheme.BodyFont,
-			15,
+			30,
 			FontStyle.Normal,
-			TextAnchor.UpperLeft);
+			TextAnchor.UpperCenter);
 		descriptionText.text = entry.description ?? string.Empty;
 		descriptionText.color = new Color(0.86f, 0.83f, 0.77f);
 		descriptionText.horizontalOverflow = HorizontalWrapMode.Wrap;
 		descriptionText.verticalOverflow = VerticalWrapMode.Truncate;
 		descriptionText.resizeTextForBestFit = true;
-		descriptionText.resizeTextMinSize = 11;
-		descriptionText.resizeTextMaxSize = 15;
-		SetRect(descriptionText.rectTransform, new Vector2(0.19f, 0.27f), new Vector2(0.72f, 0.62f));
+		descriptionText.resizeTextMinSize = 12;
+		descriptionText.resizeTextMaxSize = 30;
+		SetRect(descriptionText.rectTransform, new Vector2(0.07f, 0.19f), new Vector2(0.93f, 0.45f));
 
-		Text requirementText = CreateText(
-			"Requirements",
-			parent,
-			AccardND.Battlefield.MmoUiTheme.BodyFont,
-			13,
-			FontStyle.Bold,
-			TextAnchor.LowerLeft);
-		requirementText.text = SanctuaryRequirementSummary(entry);
-		requirementText.color = entry.requirementsMet ? SanctuaryOwned : SanctuaryDim;
-		requirementText.horizontalOverflow = HorizontalWrapMode.Wrap;
-		requirementText.verticalOverflow = VerticalWrapMode.Truncate;
-		SetRect(requirementText.rectTransform, new Vector2(0.19f, 0.08f), new Vector2(0.72f, 0.3f));
-
+		GameObject costPlateObject = new GameObject("Cost Plate", typeof(RectTransform));
+		costPlateObject.transform.SetParent(parent, false);
+		RectTransform costPlate = costPlateObject.GetComponent<RectTransform>();
+		SetRect(costPlate, new Vector2(0.05f, 0.055f), new Vector2(0.95f, 0.27f));
 		Text statusText = CreateText(
 			"Status",
-			parent,
-			AccardND.Battlefield.MmoUiTheme.TitleBoldFont,
-			16,
+			costPlate.transform,
+			sanctuaryStatusFont,
+			20,
 			FontStyle.Normal,
 			TextAnchor.MiddleCenter);
+		statusText.raycastTarget = false;
 		statusText.text = SanctuaryCardStatus(entry);
 		statusText.color = SanctuaryCardStatusColor(entry);
 		statusText.horizontalOverflow = HorizontalWrapMode.Wrap;
 		statusText.verticalOverflow = VerticalWrapMode.Truncate;
+		statusText.resizeTextForBestFit = true;
+		statusText.resizeTextMinSize = 10;
+		statusText.resizeTextMaxSize = 20;
 		AddSanctuaryTextOutline(statusText);
-		SetRect(statusText.rectTransform, new Vector2(0.73f, 0.14f), new Vector2(0.975f, 0.86f));
+		SetRect(statusText.rectTransform, Vector2.zero, Vector2.one);
 	}
 
 	private void CreateSanctuaryRelicCard(SanctuaryEntryData entry, Transform parent)
 	{
+		Font sanctuaryNameFont = Resources.Load<Font>("Fonts/IMFellEnglishSC")
+			?? AccardND.Battlefield.MmoUiTheme.TitleBoldFont;
+		Font sanctuaryStatusFont = Resources.Load<Font>("Fonts/Alegreya")
+			?? AccardND.Battlefield.MmoUiTheme.BodyFont;
 		Text nameText = CreateText(
 			"Name",
 			parent,
-			AccardND.Battlefield.MmoUiTheme.TitleBoldFont,
-			17,
+			sanctuaryNameFont,
+			26,
 			FontStyle.Normal,
 			TextAnchor.MiddleCenter);
 		nameText.text = (entry.name ?? entry.id).ToUpperInvariant();
@@ -653,13 +1157,16 @@ public sealed partial class BattleBoardController
 			"Description",
 			parent,
 			AccardND.Battlefield.MmoUiTheme.BodyFont,
-			14,
+			30,
 			FontStyle.Normal,
 			TextAnchor.UpperCenter);
 		descriptionText.text = entry.description ?? string.Empty;
 		descriptionText.color = new Color(0.86f, 0.82f, 0.72f);
 		descriptionText.horizontalOverflow = HorizontalWrapMode.Wrap;
 		descriptionText.verticalOverflow = VerticalWrapMode.Truncate;
+		descriptionText.resizeTextForBestFit = true;
+		descriptionText.resizeTextMinSize = 12;
+		descriptionText.resizeTextMaxSize = 30;
 		SetRect(descriptionText.rectTransform, new Vector2(0.07f, 0.22f), new Vector2(0.93f, 0.44f));
 
 		Text requirementText = CreateText(
@@ -675,17 +1182,28 @@ public sealed partial class BattleBoardController
 		requirementText.verticalOverflow = VerticalWrapMode.Truncate;
 		SetRect(requirementText.rectTransform, new Vector2(0.07f, 0.1f), new Vector2(0.93f, 0.24f));
 
+		GameObject costPlateObject = new GameObject("Cost Plate", typeof(RectTransform));
+		costPlateObject.transform.SetParent(parent, false);
+		RectTransform costPlate = costPlateObject.GetComponent<RectTransform>();
+		SetRect(costPlate, new Vector2(0.05f, 0.055f), new Vector2(0.95f, 0.27f));
+
 		Text statusText = CreateText(
 			"Status",
-			parent,
-			AccardND.Battlefield.MmoUiTheme.TitleBoldFont,
-			14,
+			costPlate.transform,
+			sanctuaryStatusFont,
+			20,
 			FontStyle.Normal,
 			TextAnchor.MiddleCenter);
+		statusText.raycastTarget = false;
 		statusText.text = SanctuaryCardStatus(entry);
 		statusText.color = SanctuaryCardStatusColor(entry);
+		statusText.horizontalOverflow = HorizontalWrapMode.Wrap;
+		statusText.verticalOverflow = VerticalWrapMode.Truncate;
+		statusText.resizeTextForBestFit = true;
+		statusText.resizeTextMinSize = 10;
+		statusText.resizeTextMaxSize = 20;
 		AddSanctuaryTextOutline(statusText);
-		SetRect(statusText.rectTransform, new Vector2(0.06f, 0.015f), new Vector2(0.94f, 0.12f));
+		SetRect(statusText.rectTransform, Vector2.zero, Vector2.one);
 	}
 
 	private void CreateSanctuaryClassIconCard(SanctuaryEntryData entry, Transform parent, HeroClass heroClass)
@@ -698,7 +1216,7 @@ public sealed partial class BattleBoardController
 
 		Font classNameFont = Resources.Load<Font>("Fonts/IMFellEnglishSC")
 			?? AccardND.Battlefield.MmoUiTheme.TitleBoldFont;
-		Text label = CreateText("Label", parent, classNameFont, 19, FontStyle.Normal, TextAnchor.MiddleCenter);
+		Text label = CreateText("Name", parent, classNameFont, 26, FontStyle.Normal, TextAnchor.MiddleCenter);
 		label.raycastTarget = false;
 		label.text = HeroClassDisplayName(heroClass).ToUpperInvariant();
 		label.color = SanctuaryGold;
@@ -706,11 +1224,13 @@ public sealed partial class BattleBoardController
 		label.verticalOverflow = VerticalWrapMode.Truncate;
 		label.resizeTextForBestFit = true;
 		label.resizeTextMinSize = 8;
-		label.resizeTextMaxSize = 19;
+		label.resizeTextMaxSize = 26;
 		AddSanctuaryTextOutline(label);
 		SetRect(label.rectTransform, new Vector2(0.04f, 0.27f), new Vector2(0.96f, 0.4f));
 
-		Text statusText = CreateText("Status", parent, AccardND.Battlefield.MmoUiTheme.BodyFont, 13, FontStyle.Bold, TextAnchor.MiddleCenter);
+		Font sanctuaryStatusFont = Resources.Load<Font>("Fonts/Alegreya")
+			?? AccardND.Battlefield.MmoUiTheme.BodyFont;
+		Text statusText = CreateText("Status", parent, sanctuaryStatusFont, 20, FontStyle.Normal, TextAnchor.MiddleCenter);
 		statusText.raycastTarget = false;
 		string requirement = SanctuaryRequirementSummary(entry);
 		statusText.text = string.IsNullOrWhiteSpace(requirement)
@@ -720,8 +1240,8 @@ public sealed partial class BattleBoardController
 		statusText.horizontalOverflow = HorizontalWrapMode.Wrap;
 		statusText.verticalOverflow = VerticalWrapMode.Truncate;
 		statusText.resizeTextForBestFit = true;
-		statusText.resizeTextMinSize = 8;
-		statusText.resizeTextMaxSize = 13;
+		statusText.resizeTextMinSize = 10;
+		statusText.resizeTextMaxSize = 20;
 		AddSanctuaryTextOutline(statusText);
 		SetRect(statusText.rectTransform, new Vector2(0.05f, 0.055f), new Vector2(0.95f, 0.27f));
 	}
@@ -776,6 +1296,7 @@ public sealed partial class BattleBoardController
 		sanctuaryPendingEntry = entry;
 		int honey = SanctuaryHoney();
 		bool affordable = honey >= entry.honeyCost;
+		StyleSanctuaryConfirmDialogForActiveAltar();
 
 		if ((Object)(object)sanctuaryConfirmTitleText != (Object)null)
 		{
@@ -785,21 +1306,58 @@ public sealed partial class BattleBoardController
 		{
 			string offer = entry.type switch
 			{
-				"item" => $"Sblocca {entry.name} per {entry.honeyCost} vasetti di miele: da quel momento il negozio potra' vendertelo. Lo sblocco non ti da' una copia.",
-				"slot" => $"Apri uno slot in piu' nella bisaccia per {entry.honeyCost} vasetti di miele.",
-				_ => $"Hai superato le prove. Offri {entry.honeyCost} vasetti di miele all'alveare per ricordare questa classe."
+				"item" => GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.OfferItem,
+					"Sblocca {0} per {1} vasetti di miele: da quel momento il negozio potra' vendertelo. Lo sblocco non ti da' una copia.",
+					entry.name,
+					entry.honeyCost),
+				"slot" => GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.OfferSlot,
+					"Apri uno slot in piu' nella bisaccia per {0} vasetti di miele.",
+					entry.honeyCost),
+				// La tecnica si apprende una volta e resta: vale per ogni carta di quella classe.
+				"secondAbility" => GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.OfferTechnique,
+					"Possiedi la classe. Offri {0} vasetti di miele per apprendere questa tecnica: sara' tua su ogni carta della classe.",
+					entry.honeyCost),
+				_ => GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.OfferClass,
+					"Hai superato le prove. Offri {0} vasetti di miele all'alveare per ricordare questa classe.",
+					entry.honeyCost)
 			};
 			sanctuaryConfirmBodyText.text = affordable
-				? $"{offer}\n\nMiele disponibile: {honey}."
-				: $"Servono {entry.honeyCost} vasetti di miele e ne hai {honey}.\n\nTorna quando ne avrai abbastanza.";
+				? GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.HoneyAvailable,
+					"{0}\n\nMiele disponibile: {1}.",
+					offer,
+					honey)
+				: GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.HoneyInsufficientBody,
+					"Servono {0} vasetti di miele e ne hai {1}.\n\nTorna quando ne avrai abbastanza.",
+					entry.honeyCost,
+					honey);
 		}
 		if ((Object)(object)sanctuaryConfirmButton != (Object)null)
 		{
+			if (affordable)
+			{
+				ApplyBattleButtonVariant(
+					sanctuaryConfirmButton,
+					AccardND.Battlefield.MmoUiTheme.ButtonVariant.Gold);
+			}
+			else
+			{
+				ApplySanctuaryCampaignCta(
+					sanctuaryConfirmButton,
+					"UI/CampaignRestyle/campaign_cta_orange");
+			}
 			sanctuaryConfirmButton.interactable = affordable && !sanctuaryPurchasing;
 		}
 		if ((Object)(object)sanctuaryConfirmButtonText != (Object)null)
 		{
-			sanctuaryConfirmButtonText.text = affordable ? "OFFRI IL MIELE" : "MIELE INSUFFICIENTE";
+			sanctuaryConfirmButtonText.text = affordable
+				? GameText.GetOrFallbackSilent(GameTextKeys.Sanctuary.OfferHoney, "OFFRI IL MIELE")
+				: GameText.GetOrFallbackSilent(GameTextKeys.Sanctuary.HoneyInsufficient, "MIELE INSUFFICIENTE");
 		}
 
 		sanctuaryConfirmPopup.SetActive(true);
@@ -830,7 +1388,9 @@ public sealed partial class BattleBoardController
 
 		if (!ServerProgressReady)
 		{
-			SetSanctuaryStatus("Serve la connessione al server per offrire il miele.");
+			SetSanctuaryStatus(GameText.GetOrFallbackSilent(
+				GameTextKeys.Sanctuary.ConnectionRequired,
+				"Serve la connessione al server per offrire il miele."));
 			HideSanctuaryConfirmPopup();
 			return;
 		}
@@ -845,16 +1405,30 @@ public sealed partial class BattleBoardController
 		{
 			await serverProgress.PurchaseUnlockAsync(SanctuaryUnlockTypeOf(entry), entry.id);
 			sanctuaryNotice = string.Equals(entry.type, "item", StringComparison.Ordinal)
-				? $"{entry.name} sbloccato: ora il negozio puo' vendertelo."
-				: $"{entry.name} ora e' tua.";
+				? GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.ItemUnlocked,
+					"{0} sbloccato: ora il negozio puo' vendertelo.",
+					entry.name)
+				: GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.EntryOwned,
+					"{0} ora e' tua.",
+					entry.name);
 			MirrorServerProgress();
 			RefreshSinglePlayerProgressView();
-			AppendLog($"SANTUARIO - {entry.id} acquistato per {entry.honeyCost} miele.");
+			AppendLog(GameText.GetOrFallbackSilent(
+				GameTextKeys.Sanctuary.PurchasedLog,
+				"SANTUARIO - {0} acquistato per {1} miele.",
+				entry.id,
+				entry.honeyCost));
 			HideSanctuaryConfirmPopup();
 		}
 		catch (Exception exception)
 		{
-			AppendLog($"SANTUARIO - acquisto {entry.id} rifiutato: {exception.Message}");
+			AppendLog(GameText.GetOrFallbackSilent(
+				GameTextKeys.Sanctuary.PurchaseRejectedLog,
+				"SANTUARIO - acquisto {0} rifiutato: {1}",
+				entry.id,
+				exception.Message));
 			sanctuaryNotice = exception.Message;
 			HideSanctuaryConfirmPopup();
 		}
@@ -887,15 +1461,25 @@ public sealed partial class BattleBoardController
 	{
 		if (entry.owned)
 		{
-			return "OTTENUTA";
+			return GameText.GetOrFallbackSilent(GameTextKeys.Sanctuary.CardOwned, "OTTENUTA");
 		}
 		if (!entry.available)
 		{
-			// Le starter hanno costo zero e si prendono col tutorial; le tecniche mostrano
-			// il prezzo perche' il giocatore sappia cosa lo aspetta.
-			return entry.honeyCost > 0 ? $"IN ARRIVO - {entry.honeyCost} MIELE" : "DAL TUTORIAL";
+			// Le starter hanno costo zero e si prendono col tutorial; le tecniche ancora
+			// senza effetto mostrano il prezzo perche' il giocatore sappia cosa lo aspetta.
+			return entry.honeyCost > 0
+				? GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.CardComingSoon,
+					"IN ARRIVO - {0} MIELE",
+					entry.honeyCost)
+				: GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.CardFromTutorial,
+					"DAL TUTORIAL");
 		}
-		return $"{entry.honeyCost} MIELE";
+		return GameText.GetOrFallbackSilent(
+			GameTextKeys.Sanctuary.CardHoneyCost,
+			"{0} MIELE",
+			entry.honeyCost);
 	}
 
 	private static Color SanctuaryCardStatusColor(SanctuaryEntryData entry)
@@ -1041,6 +1625,70 @@ public sealed partial class BattleBoardController
 		}
 	}
 
+	private void RefreshSanctuaryDiscoverySummary()
+	{
+		int discovered = 0;
+		int total = 0;
+		if (sanctuaryData?.entries != null)
+		{
+			foreach (SanctuaryEntryData entry in sanctuaryData.entries)
+			{
+				if (entry == null || !BelongsToActiveAltar(entry))
+				{
+					continue;
+				}
+
+				total++;
+				if (entry.owned)
+				{
+					discovered++;
+				}
+			}
+		}
+
+		float progress = total > 0 ? (float)discovered / total : 0f;
+		if ((Object)(object)sanctuaryDiscoveryTitleText != (Object)null)
+		{
+			sanctuaryDiscoveryTitleText.text = sanctuaryActiveAltar switch
+			{
+				SanctuaryAltar.Classes => GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.DiscoveryClasses,
+					"CLASSI SCOPERTE"),
+				SanctuaryAltar.Techniques => GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.DiscoveryTechniques,
+					"TECNICHE SCOPERTE"),
+				_ => GameText.GetOrFallbackSilent(
+					GameTextKeys.Sanctuary.DiscoveryRelics,
+					"RELIQUIE SCOPERTE")
+			};
+		}
+		if ((Object)(object)sanctuaryDiscoveryCountText != (Object)null)
+		{
+			sanctuaryDiscoveryCountText.text = $"{discovered} / {total}";
+		}
+		if ((Object)(object)sanctuaryDiscoveryPercentText != (Object)null)
+		{
+			sanctuaryDiscoveryPercentText.text = $"{Mathf.RoundToInt(progress * 100f)}%";
+		}
+		if ((Object)(object)sanctuaryDiscoveryProgressFillImage != (Object)null)
+		{
+			RectTransform fillRect = sanctuaryDiscoveryProgressFillImage.rectTransform;
+			fillRect.anchorMin = Vector2.zero;
+			fillRect.anchorMax = new Vector2(Mathf.Max(0.01f, progress), 1f);
+			fillRect.offsetMin = Vector2.zero;
+			fillRect.offsetMax = Vector2.zero;
+		}
+		if ((Object)(object)sanctuaryDiscoveryIconImage != (Object)null)
+		{
+			sanctuaryDiscoveryIconImage.sprite = LoadSpriteResource(sanctuaryActiveAltar switch
+			{
+				SanctuaryAltar.Classes => "UI/Sanctuary/sanctuary_classes_emblem_aaa",
+				SanctuaryAltar.Techniques => "UI/Sanctuary/sanctuary_techniques_emblem_aaa",
+				_ => "UI/Sanctuary/sanctuary_relics_emblem_aaa"
+			});
+		}
+	}
+
 	private void SetSanctuaryStatus(string message)
 	{
 		if ((Object)(object)sanctuaryStatusText != (Object)null)
@@ -1075,26 +1723,49 @@ public sealed partial class BattleBoardController
 		bool compact = IsCompactLayout(width / height, configuration.ResponsiveLayout);
 		bool landscape = width > height;
 		RefreshAccountBannerLayout(landscape);
-		RefreshAccountHoneyPanelLayout(landscape);
+		RefreshAccountHoneyIndicatorLayout(landscape);
 		EnsureSanctuarySharedHudSorting();
 
-		float left = compact ? 0.055f : 0.1f;
-		float right = compact ? 0.945f : 0.9f;
+		// Nel prefab gli anchor e le dimensioni della stanza sono authored nell'Editor:
+		// il codice aggiorna soltanto la griglia in base allo spazio realmente disponibile.
+		if (sanctuaryUsesPrefabLayout)
+		{
+			LayoutSanctuaryAltarButtons(0.06f, 0.94f, 0.012f, 0.685f, 0.775f, -62f);
+			ConfigureSanctuaryGrid(compact);
+			return;
+		}
+
+		float left = compact ? 0.038f : 0.075f;
+		float right = compact ? 0.962f : 0.925f;
 		SetRect(
 			sanctuaryTitlePanel.rectTransform,
-			new Vector2(left + 0.012f, compact ? 0.765f : 0.755f),
-			new Vector2(right - 0.012f, compact ? 0.885f : 0.88f));
+			new Vector2(0.08f, 0.785f),
+			new Vector2(0.92f, 0.9f));
 		SetRect(
 			sanctuaryScreenOuterFrameImage.rectTransform,
 			new Vector2(0.008f, 0.008f),
-			new Vector2(0.992f, compact ? 0.775f : 0.765f));
+			new Vector2(0.992f, compact ? 0.78f : 0.77f));
 
-		sanctuaryHeadingText.fontSize = compact ? 37 : 42;
+		sanctuaryHeadingText.fontSize = 48;
 		sanctuaryHeadingText.resizeTextMaxSize = sanctuaryHeadingText.fontSize;
 
-		float altarTop = compact ? 0.752f : 0.745f;
-		float altarBottom = compact ? 0.682f : 0.675f;
-		float span = (right - left) / 3f;
+		float altarTop = compact ? 0.785f : 0.775f;
+		float altarBottom = compact ? 0.695f : 0.685f;
+		LayoutSanctuaryAltarButtons(left, right, 0.012f, altarBottom, altarTop, 0f);
+
+		SetRect(
+			sanctuaryListViewportImage.rectTransform,
+			new Vector2(left, compact ? 0.02f : 0.025f),
+			new Vector2(right, compact ? 0.685f : 0.675f));
+		ConfigureSanctuaryGrid(compact);
+
+	}
+
+	private void LayoutSanctuaryAltarButtons(
+		float left, float right, float gap, float bottom, float top, float verticalOffset)
+	{
+		int columns = Mathf.Max(1, sanctuaryAltarButtons.Count);
+		float buttonWidth = (right - left - gap * (columns - 1)) / columns;
 		for (int index = 0; index < sanctuaryAltarButtons.Count; index++)
 		{
 			Button button = sanctuaryAltarButtons[index];
@@ -1102,18 +1773,13 @@ public sealed partial class BattleBoardController
 			{
 				continue;
 			}
-			float start = left + span * index;
-			SetRect((RectTransform)((Component)button).transform,
-				new Vector2(start + 0.006f, altarBottom),
-				new Vector2(start + span - 0.006f, altarTop));
+			float start = left + (buttonWidth + gap) * index;
+			RectTransform buttonRect = (RectTransform)((Component)button).transform;
+			buttonRect.anchorMin = new Vector2(start, bottom);
+			buttonRect.anchorMax = new Vector2(start + buttonWidth, top);
+			buttonRect.offsetMin = new Vector2(0f, verticalOffset);
+			buttonRect.offsetMax = new Vector2(0f, verticalOffset);
 		}
-
-		SetRect(
-			sanctuaryListViewportImage.rectTransform,
-			new Vector2(left, compact ? 0.165f : 0.165f),
-			new Vector2(right, compact ? 0.674f : 0.667f));
-		ConfigureSanctuaryGrid(compact);
-
 	}
 
 	private void ConfigureSanctuaryGrid(bool compact)
@@ -1129,20 +1795,18 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		Rect rect = sanctuaryListViewportImage.rectTransform.rect;
-		int columns = sanctuaryActiveAltar == SanctuaryAltar.Techniques ? 1 : 3;
+		int columns = 3;
 		float spacing = compact ? 8f : 12f;
-		int padding = sanctuaryActiveAltar == SanctuaryAltar.Techniques
-			? (compact ? 6 : 10)
-			: (compact ? 10 : 14);
+		int padding = compact ? 8 : 12;
 		float usableWidth = Mathf.Max(
 			1f,
 			rect.width - padding * 2f - spacing * (columns - 1));
 		float cellWidth = usableWidth / columns;
 		float cellHeight = sanctuaryActiveAltar switch
 		{
-			SanctuaryAltar.Classes => cellWidth * 1.04f,
-			SanctuaryAltar.Techniques => compact ? 174f : 190f,
-			_ => cellWidth * 1.22f
+			SanctuaryAltar.Classes => cellWidth * 1.31f,
+			SanctuaryAltar.Techniques => cellWidth * 1.31f,
+			_ => cellWidth * 1.31f
 		};
 		grid.constraintCount = columns;
 		grid.spacing = new Vector2(spacing, spacing);

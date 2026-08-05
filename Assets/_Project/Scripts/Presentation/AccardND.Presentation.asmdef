@@ -2,8 +2,10 @@
   "name": "AccardND.Presentation",
   "rootNamespace": "AccardND.Presentation",
   "references": [
+    "AccardND.Ads",
     "AccardND.GameCore",
     "AccardND.GameData",
+    "AccardND.Localization",
     "AccardND.Battlefield",
     "AccardND.NetProtocol",
     "AccardND.Network",

@@ -10,6 +10,7 @@ namespace AccardND.NetProtocol
         public int accountExperience;
         public int accountTotalExperience;
         public int accountExperienceToNextLevel;
+        public int pendingLevelRewards;
         public bool tutorialCompleted;
         public bool hardcoreUnlocked;
         public string[] unlockedChapters;

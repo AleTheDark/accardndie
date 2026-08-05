@@ -27,6 +27,9 @@ public sealed class ServerConfig
     /// <summary>Broker OAuth Google per i client senza browser integrato (Android nativo).</summary>
     public GoogleOAuthConfig GoogleOAuth { get; set; } = new();
 
+    /// <summary>Versione di client ammessa all'accesso. Vedi ClientVersionConfig.</summary>
+    public ClientVersionConfig ClientVersion { get; set; } = new();
+
     public int LoadoutBudget { get; set; } = 60;
     public int LoadoutCardCount { get; set; } = 9;
     public int[] CardCostByValue { get; set; } = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
@@ -182,6 +185,35 @@ public sealed class GoogleOAuthConfig
     /// <summary>Senza secret il broker resta spento e Android ripiega sull'account locale.</summary>
     public bool IsEnabled =>
         !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ResolveClientSecret());
+}
+
+/// <summary>
+/// Valori di avvio del controllo di versione client. Serve a impedire che una
+/// build vecchia parli con un protocollo o un catalogo carte che non esiste più:
+/// il giocatore resta sul login con l'avviso di aggiornare.
+///
+/// Questi sono solo i valori con cui il server parte la prima volta: da lì in poi
+/// comanda il pannello admin, che li tiene sul DB (vedi ClientVersionGate). Target
+/// vuoto = controllo spento, utile in sviluppo dove le build locali hanno versioni
+/// disallineate.
+/// </summary>
+public sealed class ClientVersionConfig
+{
+    /// <summary>Deve combaciare con il bundleVersion della build Unity (es. "0.9.2").</summary>
+    public string Target { get; set; } = string.Empty;
+
+    /// <summary>Interruttore per staccare il blocco senza svuotare Target.</summary>
+    public bool Enforce { get; set; } = true;
+
+    /// <summary>Dove mandare chi deve aggiornare. Vuoto = solo l'avviso.</summary>
+    public string UpdateUrl { get; set; } = "https://accardndie.com";
+
+    /// <summary>La env var vince sul file: un server nuovo parte già configurato.</summary>
+    public string ResolveTarget()
+    {
+        string fromEnv = Environment.GetEnvironmentVariable("ACCARDND_CLIENT_VERSION");
+        return (string.IsNullOrWhiteSpace(fromEnv) ? Target : fromEnv)?.Trim() ?? string.Empty;
+    }
 }
 
 /// <summary>

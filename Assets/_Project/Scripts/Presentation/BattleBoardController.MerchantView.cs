@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -11,6 +12,14 @@ namespace AccardND.Presentation
 public sealed partial class BattleBoardController
 {
 	private const float MerchantCardSize = 132f;
+
+	private GameObject merchantBranchConfirmPopup;
+
+	private Text merchantBranchConfirmTitleText;
+
+	private Text merchantBranchConfirmBodyText;
+
+	private Action merchantBranchConfirmAction;
 
 	private void CreateMerchantView(Transform canvasTransform, Font font)
 	{
@@ -75,10 +84,9 @@ public sealed partial class BattleBoardController
 		merchantCardsTabText = ((Component)merchantCardsTabButton).GetComponentInChildren<Text>();
 		ApplyMerchantCampaignCta(merchantCardsTabButton, "UI/CampaignRestyle/campaign_cta_blue");
 		merchantCardsTabLockImage = CreateMerchantLockIcon(merchantCardsTabButton, "Merchant Cards Lock");
-		CreateMerchantTabIcon(merchantCardsTabButton, "Merchant Cards Icon", "UI/deck_icon");
 		merchantCardsTabText.fontSize = 30;
 		merchantCardsTabText.resizeTextMaxSize = 30;
-		SetRect(merchantCardsTabText.rectTransform, new Vector2(0.25f, 0.06f), new Vector2(0.86f, 0.94f));
+		SetRect(merchantCardsTabText.rectTransform, new Vector2(0f, 0.06f), new Vector2(1f, 0.94f));
 		merchantCardsTabVfx = AccardND.PvpUi.PvpUiVfx.CreateRankedButton(
 			(RectTransform)((Component)merchantCardsTabButton).transform,
 			new Color(0.48f, 0.68f, 0.16f, 1f));
@@ -92,10 +100,9 @@ public sealed partial class BattleBoardController
 		merchantItemsTabText = ((Component)merchantItemsTabButton).GetComponentInChildren<Text>();
 		ApplyMerchantCampaignCta(merchantItemsTabButton, "UI/CampaignRestyle/campaign_cta_blue");
 		merchantItemsTabLockImage = CreateMerchantLockIcon(merchantItemsTabButton, "Merchant Items Lock");
-		CreateMerchantTabIcon(merchantItemsTabButton, "Merchant Items Icon", "UI/bag_button");
 		merchantItemsTabText.fontSize = 30;
 		merchantItemsTabText.resizeTextMaxSize = 30;
-		SetRect(merchantItemsTabText.rectTransform, new Vector2(0.18f, 0.06f), new Vector2(0.82f, 0.94f));
+		SetRect(merchantItemsTabText.rectTransform, new Vector2(0f, 0.06f), new Vector2(1f, 0.94f));
 		merchantItemsTabVfx = AccardND.PvpUi.PvpUiVfx.CreateRankedButton(
 			(RectTransform)((Component)merchantItemsTabButton).transform,
 			new Color(0.48f, 0.68f, 0.16f, 1f));
@@ -130,17 +137,17 @@ public sealed partial class BattleBoardController
 		merchantSellText.resizeTextForBestFit = true;
 		merchantSellText.resizeTextMinSize = 18;
 		merchantSellText.resizeTextMaxSize = 24;
-		SetRect(merchantSellText.rectTransform, new Vector2(0.085f, 0.33f), new Vector2(0.64f, 0.405f));
+		SetRect(merchantSellText.rectTransform, new Vector2(0.085f, 0.325f), new Vector2(0.49f, 0.4f));
 		merchantSellText.rectTransform.offsetMin = new Vector2(12f, 4f);
 		merchantSellText.rectTransform.offsetMax = new Vector2(-10f, -4f);
 		merchantRecoverButton = CreateButton("Merchant Recover Button", ((Component)image).transform, font, "RECUPERA");
 		((UnityEvent)merchantRecoverButton.onClick).AddListener(new UnityAction(RecoverSelectedMerchantCard));
 		ApplyMerchantCampaignCta(merchantRecoverButton, "UI/CampaignRestyle/campaign_cta_olive");
-		SetRect((RectTransform)((Component)merchantRecoverButton).transform, new Vector2(0.65f, 0.335f), new Vector2(0.925f, 0.4f));
+		SetRect((RectTransform)((Component)merchantRecoverButton).transform, new Vector2(0.5f, 0.325f), new Vector2(0.92f, 0.4f));
 		merchantSellButton = CreateButton("Merchant Sell Button", ((Component)image).transform, font, "VENDI");
 		((UnityEvent)merchantSellButton.onClick).AddListener(new UnityAction(SellSelectedMerchantCard));
 		ApplyMerchantCampaignCta(merchantSellButton, "UI/CampaignRestyle/campaign_cta_blue");
-		SetRect((RectTransform)((Component)merchantSellButton).transform, new Vector2(0.65f, 0.335f), new Vector2(0.925f, 0.4f));
+		SetRect((RectTransform)((Component)merchantSellButton).transform, new Vector2(0.5f, 0.325f), new Vector2(0.92f, 0.4f));
 
 		merchantDeckTabButton = CreateMerchantOwnedCardsTab(
 			((Component)image).transform,
@@ -185,7 +192,96 @@ public sealed partial class BattleBoardController
 			out merchantDeckEmptyText);
 		merchantGraveyardCardsRoot = merchantDeckCardsRoot;
 		merchantGraveyardEmptyText = merchantDeckEmptyText;
+		CreateMerchantBranchConfirmPopup(((Component)image).transform, font);
 		merchantPanel.SetActive(false);
+	}
+
+	private void CreateMerchantBranchConfirmPopup(Transform parent, Font font)
+	{
+		Image overlay = CreateImage("Merchant Branch Confirm Popup", parent, new Color(0f, 0f, 0f, 0.72f));
+		overlay.raycastTarget = true;
+		Stretch(overlay.rectTransform);
+		merchantBranchConfirmPopup = ((Component)overlay).gameObject;
+		Canvas canvas = merchantBranchConfirmPopup.AddComponent<Canvas>();
+		canvas.overrideSorting = true;
+		canvas.sortingOrder = 922;
+		merchantBranchConfirmPopup.AddComponent<GraphicRaycaster>();
+
+		Image dialog = CreateImage(
+			"Merchant Branch Confirm Dialog",
+			((Component)overlay).transform,
+			new Color(0.012f, 0.018f, 0.032f, 0.98f));
+		dialog.raycastTarget = true;
+		StylePanel(dialog);
+		AccardND.Battlefield.MmoUiTheme.AddPanelGem(
+			dialog.rectTransform,
+			"Merchant Branch Confirm Crest",
+			new Vector2(0.5f, 1f),
+			new Vector2(42f, 42f),
+			Color.white);
+		SetRect(dialog.rectTransform, new Vector2(0.12f, 0.29f), new Vector2(0.88f, 0.71f));
+
+		merchantBranchConfirmTitleText = CreateText(
+			"Merchant Branch Confirm Title",
+			((Component)dialog).transform,
+			font,
+			30,
+			FontStyle.Bold,
+			TextAnchor.MiddleCenter);
+		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(merchantBranchConfirmTitleText);
+		Font merchantConfirmTitleFont = Resources.Load<Font>("Fonts/IMFellEnglishSC");
+		if ((Object)(object)merchantConfirmTitleFont != (Object)null)
+		{
+			merchantBranchConfirmTitleText.font = merchantConfirmTitleFont;
+		}
+		merchantBranchConfirmTitleText.fontStyle = FontStyle.Normal;
+		merchantBranchConfirmTitleText.color = new Color(0.95f, 0.79f, 0.34f);
+		SetRect(merchantBranchConfirmTitleText.rectTransform, new Vector2(0.08f, 0.73f), new Vector2(0.92f, 0.91f));
+
+		merchantBranchConfirmBodyText = CreateText(
+			"Merchant Branch Confirm Body",
+			((Component)dialog).transform,
+			font,
+			30,
+			FontStyle.Normal,
+			TextAnchor.MiddleCenter);
+		merchantBranchConfirmBodyText.color = new Color(0.88f, 0.92f, 0.96f);
+		merchantBranchConfirmBodyText.horizontalOverflow = HorizontalWrapMode.Wrap;
+		merchantBranchConfirmBodyText.verticalOverflow = VerticalWrapMode.Truncate;
+		merchantBranchConfirmBodyText.resizeTextForBestFit = true;
+		merchantBranchConfirmBodyText.resizeTextMinSize = 20;
+		merchantBranchConfirmBodyText.resizeTextMaxSize = 30;
+		SetRect(merchantBranchConfirmBodyText.rectTransform, new Vector2(0.08f, 0.32f), new Vector2(0.92f, 0.71f));
+
+		Button cancelButton = CreateButton(
+			"Merchant Branch Confirm Cancel",
+			((Component)dialog).transform,
+			font,
+			GameText.GetOrFallbackSilent(GameTextKeys.Common.Cancel, "ANNULLA"));
+		ApplyMerchantCampaignCta(cancelButton, "UI/CampaignRestyle/campaign_cta_back_red");
+		((UnityEvent)cancelButton.onClick).AddListener((UnityAction)delegate
+		{
+			PlayGenericButtonClickSfx();
+			HideMerchantBranchConfirmPopup();
+		});
+		SetRect((RectTransform)((Component)cancelButton).transform, new Vector2(0.08f, 0.09f), new Vector2(0.44f, 0.26f));
+
+		Button proceedButton = CreateButton(
+			"Merchant Branch Confirm Proceed",
+			((Component)dialog).transform,
+			font,
+			GameText.GetOrFallbackSilent(GameTextKeys.Common.Proceed, "PROCEDI"));
+		ApplyMerchantCampaignCta(proceedButton, "UI/CampaignRestyle/campaign_cta_orange");
+		((UnityEvent)proceedButton.onClick).AddListener((UnityAction)delegate
+		{
+			PlayGenericButtonClickSfx();
+			Action action = merchantBranchConfirmAction;
+			HideMerchantBranchConfirmPopup();
+			action?.Invoke();
+		});
+		SetRect((RectTransform)((Component)proceedButton).transform, new Vector2(0.56f, 0.09f), new Vector2(0.92f, 0.26f));
+
+		merchantBranchConfirmPopup.SetActive(false);
 	}
 
 	private static Button CreateMerchantOwnedCardsTab(
@@ -259,24 +355,6 @@ public sealed partial class BattleBoardController
 		return lockImage;
 	}
 
-	private static Image CreateMerchantTabIcon(
-		Button button,
-		string name,
-		string spriteResource)
-	{
-		Image icon = CreateImage(name, ((Component)button).transform, Color.white);
-		icon.sprite = LoadSpriteResource(spriteResource);
-		icon.preserveAspect = true;
-		icon.raycastTarget = false;
-		SetRect(icon.rectTransform, new Vector2(0.09f, 0.17f), new Vector2(0.23f, 0.83f));
-		Text label = ((Component)button).GetComponentInChildren<Text>();
-		if ((Object)(object)label != (Object)null)
-		{
-			SetRect(label.rectTransform, new Vector2(0.28f, 0.06f), new Vector2(0.9f, 0.94f));
-		}
-		return icon;
-	}
-
 	private static void SetMerchantOwnedCardsTabActive(
 		Button tab,
 		AccardND.PvpUi.PvpUiVfx vfx,
@@ -316,14 +394,14 @@ public sealed partial class BattleBoardController
 		Image slot = CreateImage(name, (Transform)(object)merchantShelfRoot, Color.clear);
 		slot.raycastTarget = false;
 
-		// La cornice è volutamente più larga della cella del layout: in questo modo
-		// tutta l'offerta (titolo, pedina, prezzo e CTA) rimane dentro il pannello.
-		Image frame = CreateImage("Offer Rock Frame", ((Component)slot).transform, Color.white);
-		frame.sprite = LoadSpriteResource("UI/Common/merchant_offer_rock_panel_aaa");
-		frame.type = Image.Type.Sliced;
-		frame.pixelsPerUnitMultiplier = 1f;
+		// Carte e oggetti condividono la cornice degli item del Santuario. La cornice
+		// resta appena più larga della cella, ma è più bassa per alleggerire la vetrina.
+		Image frame = CreateImage("Offer Frame", ((Component)slot).transform, Color.white);
+		frame.sprite = LoadSpriteResource("UI/Sanctuary/santuary_items");
+		frame.type = Image.Type.Simple;
+		frame.preserveAspect = false;
 		frame.raycastTarget = false;
-		SetRect(frame.rectTransform, new Vector2(-0.015f, -0.135f), new Vector2(1.015f, 1.135f));
+		SetRect(frame.rectTransform, new Vector2(-0.015f, -0.06f), new Vector2(1.015f, 1.06f));
 		((Transform)frame.rectTransform).SetAsFirstSibling();
 
 		merchantShelfViews.Add(((Component)slot).gameObject);
@@ -334,7 +412,8 @@ public sealed partial class BattleBoardController
 	{
 		bool locked = IsMerchantBranchLocked(MerchantBranch.Cards);
 		bool available = !offer.Sold && !locked && !IsMerchantDeckFull();
-		Image slot = CreateMerchantShelfSlot(offer.Mystery ? "Merchant Offer Mystery" : "Merchant Offer Card");
+		Image slot = CreateMerchantShelfSlot(
+			offer.Mystery ? "Merchant Offer Mystery" : "Merchant Offer Card");
 		Font font = AccardND.Battlefield.MmoUiTheme.BodyFont;
 		if (offer.Mystery)
 		{

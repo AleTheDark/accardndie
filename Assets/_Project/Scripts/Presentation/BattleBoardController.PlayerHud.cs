@@ -50,6 +50,9 @@ public sealed partial class BattleBoardController
 		ConfigureCombatantHudTooltips(playerHud, isPlayer: true);
 		ConfigureCombatantHudTooltips(cpuHud, isPlayer: false);
 		CreateHudTooltip(font);
+		CreateManaHudView(font);
+		CreateEnemyManaHudView(font);
+		CreateCombatHudRefactor(font);
 	}
 
 	private CombatantHud CreateCombatantHud(string name, Font font, string displayName)
@@ -151,26 +154,23 @@ public sealed partial class BattleBoardController
 		return hud;
 	}
 
-	private static void ConfigurePlayerHudStandardPresentation(CombatantHud hud)
+	/// <summary>
+	/// HUD del giocatore in arena. È quello della campagna — mazzo, cooldown e
+	/// cimitero non esistono nel PvP e le loro icone erano solo rumore — con più
+	/// spazio a sinistra, perché al posto del livello c'è il nome della lega.
+	/// </summary>
+	private static void ConfigurePvpPlayerHudPresentation(CombatantHud hud)
 	{
 		if (hud == null)
 		{
 			return;
 		}
-		SetRect(hud.DiceImage.rectTransform, new Vector2(0.675f, 0.52f), new Vector2(0.753f, 0.88f));
-		SetRect(hud.DiceText.rectTransform, new Vector2(0.759f, 0.6f), new Vector2(0.825f, 0.8f));
-		SetRect(hud.LevelText.rectTransform, new Vector2(0.16f, 0.43f), new Vector2(0.36f, 0.64f));
-		SetRect(hud.ExperienceText.rectTransform, new Vector2(0.36f, 0.43f), new Vector2(0.61f, 0.64f));
-		SetRect(hud.ExperienceTrack.rectTransform, new Vector2(0.16f, 0.22f), new Vector2(0.61f, 0.37f));
-		hud.LevelText.alignment = TextAnchor.MiddleLeft;
-		hud.ExperienceText.alignment = TextAnchor.MiddleRight;
-		hud.DiceText.alignment = TextAnchor.MiddleCenter;
-		SetHudStatVisible(hud.DeckImage, hud.DeckText, true);
-		SetHudStatVisible(hud.CooldownImage, hud.CooldownText, true);
-		SetHudStatVisible(hud.GraveyardImage, hud.GraveyardText, true);
-		SetHudButtonVisible(hud.DeckTooltipButton, true);
-		SetHudButtonVisible(hud.CooldownTooltipButton, true);
-		SetHudButtonVisible(hud.GraveyardTooltipButton, true);
+		ConfigurePlayerCampaignHudPresentation(hud);
+		SetRect(hud.LevelText.rectTransform, new Vector2(0.16f, 0.43f), new Vector2(0.44f, 0.64f));
+		hud.LevelText.resizeTextForBestFit = true;
+		hud.LevelText.resizeTextMinSize = 10;
+		hud.LevelText.resizeTextMaxSize = 16;
+		SetRect(hud.ExperienceText.rectTransform, new Vector2(0.44f, 0.43f), new Vector2(0.61f, 0.64f));
 	}
 
 	private static void ConfigurePlayerCampaignHudPresentation(CombatantHud hud)
@@ -180,6 +180,7 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		SetRect(hud.DiceImage.rectTransform, new Vector2(0.635f, 0.18f), new Vector2(0.865f, 0.9f));
+		MatchBattleResourceIconSize(hud.DiceImage.rectTransform);
 		SetRect(hud.DiceText.rectTransform, new Vector2(0.87f, 0.36f), new Vector2(0.985f, 0.76f));
 		SetRect(hud.LevelText.rectTransform, new Vector2(0.16f, 0.43f), new Vector2(0.36f, 0.64f));
 		SetRect(hud.ExperienceText.rectTransform, new Vector2(0.36f, 0.43f), new Vector2(0.61f, 0.64f));
@@ -218,7 +219,24 @@ public sealed partial class BattleBoardController
 		SetRect(hud.LevelText.rectTransform, new Vector2(0.16f, 0.36f), new Vector2(0.62f, 0.58f));
 		SetRect(hud.ExperienceText.rectTransform, new Vector2(0.16f, 0.1f), new Vector2(0.72f, 0.32f));
 		SetRect(hud.DiceImage.rectTransform, new Vector2(0.62f, 0.18f), new Vector2(0.85f, 0.9f));
+		MatchBattleResourceIconSize(hud.DiceImage.rectTransform);
+		hud.DiceImage.rectTransform.localScale = new Vector3(1.5f, 1.5f, 1f);
 		SetRect(hud.DiceText.rectTransform, new Vector2(0.855f, 0.36f), new Vector2(0.97f, 0.76f));
+	}
+
+	private static void MatchBattleResourceIconSize(RectTransform rect)
+	{
+		if ((Object)(object)rect == (Object)null)
+		{
+			return;
+		}
+
+		Vector2 center = (rect.anchorMin + rect.anchorMax) * 0.5f;
+		rect.anchorMin = center;
+		rect.anchorMax = center;
+		rect.anchoredPosition = Vector2.zero;
+		rect.sizeDelta = BattleResourceIconSize;
+		rect.localScale = Vector3.one * BattleResourceIconScale;
 	}
 
 	private void ConfigureCombatantHudTooltips(CombatantHud hud, bool isPlayer)
@@ -318,19 +336,23 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
+		// Il mana ha il suo contatore in basso a sinistra: qui sarebbe un doppione.
+		string progressLabel = $"{runProgress.CurrentExperience}/{runProgress.ExperiencePerLevel} EXP";
+		RefreshManaHud();
 
 		RefreshCombatantHud(
 			playerHud,
 			isPlayer: true,
 			ResolvePlayerHudDisplayName(),
 			$"LV {runProgress.PlayerLevel}",
-			$"{runProgress.CurrentExperience}/{runProgress.ExperiencePerLevel} EXP",
+			progressLabel,
 			runProgress.ExperiencePerLevel <= 0 ?0f : (float)runProgress.CurrentExperience / runProgress.ExperiencePerLevel,
 			EffectivePlayerHudVigorDieSides(),
 			campaignDeck?.AvailableCount ?? playerReserve.Count,
 			campaignDeck?.CooldownCount ?? 0,
 			campaignDeck?.GraveyardCount ?? 0);
 		ConfigurePlayerCampaignHudPresentation(playerHud);
+		RefreshCombatHudRefactor();
 	}
 
 	private static void AddHudPanelGems(RectTransform rect, bool cpu)
@@ -374,6 +396,7 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
+		RefreshEnemyManaHud();
 
 		string encounterLabel = CurrentEncounterHudLabel();
 		string campaignScenarioLabel = CurrentCampaignScenarioHudLabel();
@@ -383,7 +406,6 @@ public sealed partial class BattleBoardController
 			:(string.IsNullOrWhiteSpace(scenarioLabel) || SameHudLabel(scenarioLabel, encounterLabel)
 				?"AREA: GROTTA"
 				:$"AREA: {scenarioLabel}");
-
 		RefreshCombatantHud(
 			cpuHud,
 			isPlayer: false,
@@ -442,7 +464,12 @@ public sealed partial class BattleBoardController
 			RoomType.Merchant => "MERCANTE",
 			RoomType.Loot => "TESORO",
 			RoomType.UnexpectedOpportunity => "IMPREVISTO",
-			_ => $"MOSTRO {currentMonsterTier}"
+			_ => pendingRoomDifficulty switch
+			{
+				RoomDifficulty.Easy => "ACCESSIBILE",
+				RoomDifficulty.Hard => "APOCALITTICA",
+				_ => "NORMALE"
+			}
 		};
 	}
 

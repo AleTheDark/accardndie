@@ -1,3 +1,4 @@
+using AccardND.Localization;
 using UnityEngine;
 
 namespace AccardND.GameData
@@ -14,7 +15,9 @@ namespace AccardND.GameData
         [SerializeField] private string bossId;
 
         public string Id => id;
-        public string DisplayName => displayName;
+        public string DisplayName => GameText.GetOrFallback(
+            GameTextKeys.Data.ScenarioName(id),
+            displayName);
         public Sprite Background => background;
         public Sprite BackgroundLandscape => backgroundLandscape;
         public RoomType RoomType => roomType;

@@ -18,10 +18,10 @@
 --
 -- Come si usa, sul VPS:
 --
---   sudo systemctl stop accardnd-server
+--   sudo systemctl stop accardnd
 --   cp /percorso/accardnd.db /percorso/accardnd.db.bak-$(date +%F)
 --   sqlite3 /percorso/accardnd.db < merge-accounts.sql
---   sudo systemctl start accardnd-server
+--   sudo systemctl start accardnd
 --
 -- Fermare il servizio non e' pignoleria: il DB gira in WAL, e copiarlo mentre il
 -- server scrive produce un backup incoerente.

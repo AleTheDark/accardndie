@@ -12,14 +12,16 @@ EditorBuildSettings:
     path: Assets/Scenes/MainScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
   - enabled: 0
-    path: Assets/Scenes/MinibossGolemDebug.unity
+    path: Assets/Scenes/Debug/MinibossGolemDebug.unity
     guid: 3dbaa4ce33a24fce943f913a9ec159c1
   - enabled: 0
-    path: Assets/Scenes/BragusBossDebug.unity
+    path: Assets/Scenes/Debug/BragusBossDebug.unity
     guid: 3aa169b9161f40929fe2c5e7c0de956c
   - enabled: 0
-    path: Assets/Scenes/MerchantDebug.unity
+    path: Assets/Scenes/Debug/MerchantDebug.unity
     guid: 1fb1e87e9db24e8faad1973110883da7
   m_configObjects:
+    com.unity.addressableassets: {fileID: 11400000, guid: f26505fff9a85e04eb53a90417158a5b, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+    com.unity.localization.settings: {fileID: 11400000, guid: c124371ab35853645a9183ad35edec0f, type: 2}
   m_UseUCBPForAssetBundles: 0

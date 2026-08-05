@@ -131,6 +131,16 @@ namespace AccardND.GameCore
             return CompleteRoom(roomClearExperience, defeatedExperience, experienceMultiplier);
         }
 
+        public RoomReward CompleteMonsterRoom(IEnumerable<int> defeatedMonsterStrengths, int baseExperience, int experienceMultiplier)
+        {
+            if (defeatedMonsterStrengths == null) throw new ArgumentNullException(nameof(defeatedMonsterStrengths));
+            if (baseExperience < 0) throw new ArgumentOutOfRangeException(nameof(baseExperience));
+            int defeatedExperience = 0;
+            foreach (int strength in defeatedMonsterStrengths)
+                defeatedExperience += Math.Max(0, strength);
+            return CompleteRoom(baseExperience, defeatedExperience, experienceMultiplier);
+        }
+
         // Il miniboss premia una cifra fissa: niente esperienza stanza, forza dei mostri o bonus.
         public RoomReward CompleteMinibossRoom(int experienceReward)
         {

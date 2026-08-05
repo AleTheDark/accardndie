@@ -51,6 +51,18 @@ public sealed class SessionTokenRegistry
         return entry.Identity;
     }
 
+    /// <summary>
+    /// Butta via un token: serve quando una sessione viene chiusa perché l'account
+    /// è entrato altrove. Senza, il client sloggato potrebbe rientrare da solo con
+    /// la riconnessione automatica e sbattere fuori a sua volta il dispositivo
+    /// nuovo, in un rimpallo senza fine.
+    /// </summary>
+    public void Revoke(string token)
+    {
+        if (!string.IsNullOrEmpty(token))
+            entries.TryRemove(token, out _);
+    }
+
     private void Prune()
     {
         DateTime now = DateTime.UtcNow;

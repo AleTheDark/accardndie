@@ -1,0 +1,7 @@
+{
+  "name": "AccardND.Ads",
+  "rootNamespace": "AccardND.Ads",
+  "references": [
+    "Unity.ugui"
+  ]
+}

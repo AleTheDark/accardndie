@@ -248,6 +248,19 @@ namespace AccardND.Battlefield
         public static bool IsLightButtonLabel(string label) =>
             (label ?? string.Empty).Trim().ToUpperInvariant() == "AGGIORNA";
 
+        public static bool IsBackButton(string semanticName, string label)
+        {
+            string name = (semanticName ?? string.Empty).ToUpperInvariant();
+            return name.Contains("BACK") || name.Contains("RETURN") || name.Contains("CANCEL") ||
+                   name.Contains("CLOSE") || name.Contains("LEAVE") || IsBackButtonLabel(label);
+        }
+
+        public static bool IsLightButton(string semanticName, string label)
+        {
+            string name = (semanticName ?? string.Empty).ToUpperInvariant();
+            return name.Contains("UPDATE") || IsLightButtonLabel(label);
+        }
+
         /// <summary>
         /// Applica il frame rosso condiviso a ogni azione di ritorno, mantenendo
         /// un solo asset e gli stessi stati hover/pressione in tutte le schermate.

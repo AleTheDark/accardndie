@@ -270,16 +270,55 @@ namespace AccardND.GameCore.Tests
             loadout0[2] = Card(HeroClass.Warrior, 5, "p0-war");
             var engine = BattleReadyEngine(loadout0, UniformLoadout("p1", HeroClass.Warrior, 5), out _);
 
-            // Turno del primo Priest (iniziativa 20): benedice il Warrior (slot 2) e passa.
+            // Turno del primo Priest (iniziativa 20): benedice il Warrior (slot 2),
+            // non puo passare e deve concludere con un attacco.
+            PvpCardState actingPriest = engine.ActiveCard;
             var bless = engine.UseAbility(0, 0, 2).OfType<AbilityUsedEvent>().Single();
             Assert.That(bless.Magnitude, Is.EqualTo(2));
-            engine.Pass(0);
+            Assert.That(actingPriest.AbilityUsedThisTurn, Is.True);
+            Assert.Throws<PvpActionException>(() => engine.Pass(0));
+            engine.Attack(0, 1);
+            Assert.That(actingPriest.AbilityUsedThisTurn, Is.False);
             engine.Pass(0); // secondo Priest
 
             // Warrior benedetto attacca: matchup neutro, un dado a testa (3 e 3 dalla riserva).
             var attack = engine.Attack(0, 0).OfType<AttackResolvedEvent>().First(e => !e.IsCounter);
             Assert.That(attack.AttackerTotal, Is.EqualTo(5 + 3 + 2), "forza + dado + benedizione");
             Assert.That(attack.DefenderTotal, Is.EqualTo(5 + 3));
+        }
+
+        [Test]
+        public void WarriorAura_ConsidersPriestBlessingInEffectiveStrength()
+        {
+            var engine = BattleReadyEngine(
+                UniformLoadout("p0", HeroClass.Warrior, 5),
+                UniformLoadout("p1", HeroClass.Warrior, 5),
+                out _);
+            PvpCardState attacker = engine.ActiveCard;
+            attacker.PendingAttackBonus = 2;
+            attacker.PendingBonusKind = PvpPendingBonusKind.Blessing;
+
+            var attack = engine.Attack(0, 0).OfType<AttackResolvedEvent>().First(e => !e.IsCounter);
+
+            Assert.That(attack.AttackerTotal, Is.EqualTo(5 + 3 + 2));
+            Assert.That(attack.DefenderTotal, Is.EqualTo(5 + 3 + 2),
+                "l'aura deve vedere il +2 della Benedizione che rende l'attaccante piu forte");
+        }
+
+        [Test]
+        public void WarriorAura_DoesNotTriggerWhenEquipmentAlreadyMakesWarriorStronger()
+        {
+            var engine = BattleReadyEngine(
+                UniformLoadout("p0", HeroClass.Warrior, 5),
+                UniformLoadout("p1", HeroClass.Warrior, 6),
+                out _);
+            engine.ActiveCard.PermanentCombatBonus = 3;
+
+            var attack = engine.Attack(0, 0).OfType<AttackResolvedEvent>().First(e => !e.IsCounter);
+
+            Assert.That(attack.AttackerTotal, Is.EqualTo(5 + 3 + 3),
+                "il Guerriero e' gia' piu forte grazie all'equipaggiamento e non deve ottenere l'aura");
+            Assert.That(attack.DefenderTotal, Is.EqualTo(6 + 3));
         }
 
         [Test]
@@ -294,7 +333,8 @@ namespace AccardND.GameCore.Tests
             Assert.That(engine.BoardOf(1)[0].InhibitedTurns, Is.EqualTo(1));
             Assert.That(engine.BoardOf(1)[0].WasInhibited, Is.True);
 
-            engine.Pass(0);
+            Assert.Throws<PvpActionException>(() => engine.Pass(0));
+            engine.Attack(0, 1);
             engine.Pass(0);
             var events = engine.Pass(0); // chiude il giro dei P0: tocca al nemico slot 0, che salta.
             var skipped = events.OfType<TurnSkippedEvent>().Single();
@@ -365,7 +405,8 @@ namespace AccardND.GameCore.Tests
 
             engine.UseAbility(0, 1, 0); // -1 step al nemico slot 0
             Assert.That(engine.BoardOf(1)[0].PendingVigorStepPenalty, Is.EqualTo(1));
-            engine.Pass(0);
+            Assert.Throws<PvpActionException>(() => engine.Pass(0));
+            engine.Attack(0, 1);
             engine.Pass(0);
 
             // Il Warrior P0 (slot 2) attacca il bersaglio indebolito: D4 -> D3 in difesa.
@@ -425,6 +466,63 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void Pass_AfterAbilityEndsTurnNormally()
+        {
+            var random = QueueFor(
+                IdentityShuffles(),
+                DeploymentAndInitiatives(new[] { 20, 19, 18 }, new[] { 6, 5, 4 }),
+                Enumerable.Repeat(3, 100));
+            var engine = new PvpMatchEngine(
+                UniformLoadout("p0", HeroClass.Warrior, 5),
+                UniformLoadout("p1", HeroClass.Warrior, 5),
+                PvpMatchRules.CreateDefault(),
+                random);
+            engine.Start();
+            DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 });
+
+            PvpCardState actor = engine.ActiveCard;
+            int manaAfterAbility;
+            engine.UseAbility(actor.Owner, actor.Owner, actor.Slot);
+			manaAfterAbility = engine.ManaOf(actor.Owner);
+
+            Assert.That(actor.AbilityUsedThisTurn, Is.True);
+            Assert.DoesNotThrow(() => engine.Pass(actor.Owner));
+            Assert.That(engine.ActiveCard, Is.Not.SameAs(actor));
+            Assert.That(actor.AbilityUsedThisTurn, Is.False);
+			Assert.That(engine.ManaOf(actor.Owner), Is.EqualTo(manaAfterAbility),
+				"Saltare dopo avere usato un'abilita' conclude il turno senza generare mana.");
+        }
+
+		[Test]
+		public void PrimaryAbility_IsReusableOnNextActivationWhenManaIsAvailable()
+		{
+			var random = QueueFor(
+				IdentityShuffles(),
+				DeploymentAndInitiatives(new[] { 20, 19, 18 }, new[] { 6, 5, 4 }),
+				Enumerable.Repeat(3, 100));
+			var engine = new PvpMatchEngine(
+				UniformLoadout("p0", HeroClass.Hunter, 5),
+				UniformLoadout("p1", HeroClass.Warrior, 5),
+				PvpMatchRules.CreateDefault(),
+				random);
+			IReadOnlyList<PvpEvent> startEvents = engine.Start();
+
+			Assert.That(startEvents.OfType<ManaChangedEvent>().Select(e => e.Current),
+				Is.EquivalentTo(new[] { 3, 3 }), "Il mana iniziale deve essere sincronizzato anche con delta zero.");
+			DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 });
+
+			PvpCardState hunter = engine.ActiveCard;
+			engine.UseAbility(hunter.Owner, 1 - hunter.Owner, 0);
+			engine.Pass(hunter.Owner);
+			for (int turn = 0; turn < 5; turn++)
+				engine.Pass(engine.ActivePlayer);
+
+			Assert.That(engine.ActiveCard, Is.SameAs(hunter));
+			Assert.That(hunter.AbilityUsed, Is.False);
+			Assert.DoesNotThrow(() => engine.UseAbility(hunter.Owner, 1 - hunter.Owner, 1));
+		}
+
+        [Test]
         public void WarriorAbility_SumsTwoVigorDiceOnNextAttack()
         {
             var loadout0 = UniformLoadout("p0", HeroClass.Warrior, 5);
@@ -439,8 +537,12 @@ namespace AccardND.GameCore.Tests
             engine.Start();
             DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 });
 
+            PvpCardState actingWarrior = engine.ActiveCard;
             engine.UseAbility(0, 0, 0); // arma la somma dadi
+            Assert.That(actingWarrior.AbilityUsedThisTurn, Is.True);
+            Assert.Throws<PvpActionException>(() => engine.Pass(0));
             var attack = engine.Attack(0, 0).OfType<AttackResolvedEvent>().Single();
+            Assert.That(actingWarrior.AbilityUsedThisTurn, Is.False);
             Assert.That(attack.AttackerRoll.SelectionMode, Is.EqualTo(VigorSelectionMode.Sum));
             Assert.That(attack.AttackerTotal, Is.EqualTo(5 + 2 + 3));
             Assert.That(engine.BoardOf(0)[0].AbilityUsed, Is.True, "abilità consumata dall'attacco");
@@ -462,9 +564,10 @@ namespace AccardND.GameCore.Tests
             engine.Start();
             DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 });
 
-            // Turno del Paladin (iniziativa 20): protegge l'alleato slot 1 e passa.
+            // Turno del Paladin (iniziativa 20): protegge l'alleato slot 1 e poi attacca.
             engine.UseAbility(1, 1, 1);
-            engine.Pass(1);
+            Assert.Throws<PvpActionException>(() => engine.Pass(1));
+            engine.Attack(1, 0);
             engine.Pass(1); // gli altri due P1 passano
             engine.Pass(1);
 

@@ -138,6 +138,7 @@ namespace AccardND.GameCore.Tests
 
             PvpClientCard card = client.Boards[0].Single();
             Assert.That(card.AbilityUsed, Is.True);
+            Assert.That(card.AbilityUsedThisTurn, Is.True);
             Assert.That(card.AbilityArmed, Is.False);
             Assert.That(card.PendingBonus, Is.EqualTo(2));
             Assert.That(card.PendingBonusKind, Is.EqualTo(PvpPendingBonusKind.Blessing));
@@ -151,6 +152,16 @@ namespace AccardND.GameCore.Tests
             Assert.That(presentedCard.AbilityUsed, Is.True);
             Assert.That(BattlePresentationViewStateMapper.CardStatuses(presentedCard)
                 .Any(status => status.Label == "BENEDIZIONE +2"), Is.True);
+
+            client.Apply(new MatchEventDto
+            {
+                type = "TurnStarted",
+                player = 0,
+                slot = 0,
+                cycle = 2
+            });
+            Assert.That(card.AbilityUsedThisTurn, Is.False);
+            Assert.That(card.AbilityUsed, Is.True);
         }
 
         [Test]

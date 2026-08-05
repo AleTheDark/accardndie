@@ -161,6 +161,101 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void ResolveAttack_RogueConditionalRerollTriggersOnlyWhenNeededToWin()
+        {
+            var random = new FixedRandomSource(2, 4, 6);
+            var resolver = new CombatResolver(random);
+            var attacker = new CombatCard("rogue", "Ladro", HeroClass.Rogue, 5);
+            var defender = new CombatCard("assassin", "Assassino", HeroClass.Assassin, 5);
+
+            CombatResult result = resolver.ResolveAttack(
+                attacker,
+                defender,
+                6,
+                new CombatModifiers(false, false, attackerConditionalRerollMax: 2));
+
+            Assert.That(result.AttackerRoll.FirstRollBeforeReroll, Is.EqualTo(2));
+            Assert.That(result.AttackerRoll.FirstRoll, Is.EqualTo(6));
+            Assert.That(result.DefenderIsDefeated, Is.True);
+        }
+
+        [Test]
+        public void ResolveAttack_RogueConditionalRerollKeepsAnAlreadyWinningRoll()
+        {
+            var random = new FixedRandomSource(3, 2);
+            var resolver = new CombatResolver(random);
+            var attacker = new CombatCard("rogue", "Ladro", HeroClass.Rogue, 5);
+            var defender = new CombatCard("assassin", "Assassino", HeroClass.Assassin, 5);
+
+            CombatResult result = resolver.ResolveAttack(
+                attacker,
+                defender,
+                8,
+                new CombatModifiers(false, false, attackerConditionalRerollMax: 3));
+
+            Assert.That(result.AttackerRoll.FirstRoll, Is.EqualTo(3));
+            Assert.That(result.AttackerRoll.FirstRollBeforeReroll, Is.Zero);
+            Assert.That(result.DefenderIsDefeated, Is.True);
+        }
+
+        [Test]
+        public void ResolveAttack_RogueConditionalRerollRespectsTheLevelThreshold()
+        {
+            var random = new FixedRandomSource(4, 8);
+            var resolver = new CombatResolver(random);
+            var attacker = new CombatCard("rogue", "Ladro", HeroClass.Rogue, 5);
+            var defender = new CombatCard("assassin", "Assassino", HeroClass.Assassin, 8);
+
+            CombatResult result = resolver.ResolveAttack(
+                attacker,
+                defender,
+                8,
+                new CombatModifiers(false, false, attackerConditionalRerollMax: 3));
+
+            Assert.That(result.AttackerRoll.FirstRoll, Is.EqualTo(4));
+            Assert.That(result.AttackerRoll.FirstRollBeforeReroll, Is.Zero);
+            Assert.That(result.DefenderIsDefeated, Is.False);
+        }
+
+        [Test]
+        public void ResolveAttack_RogueAuraRerollsDefenseOnlyWhenNeededToResist()
+        {
+            var random = new FixedRandomSource(5, 2, 6);
+            var resolver = new CombatResolver(random);
+            var attacker = new CombatCard("assassin", "Assassino", HeroClass.Assassin, 5);
+            var defender = new CombatCard("rogue", "Ladro", HeroClass.Rogue, 5);
+
+            CombatResult result = resolver.ResolveAttack(
+                attacker,
+                defender,
+                6,
+                new CombatModifiers(false, false, defenderConditionalRerollMax: 2));
+
+            Assert.That(result.DefenderRoll.FirstRollBeforeReroll, Is.EqualTo(2));
+            Assert.That(result.DefenderRoll.FirstRoll, Is.EqualTo(6));
+            Assert.That(result.DefenderIsDefeated, Is.False);
+        }
+
+        [Test]
+        public void ResolveAttack_RogueAuraKeepsAnAlreadySuccessfulDefense()
+        {
+            var random = new FixedRandomSource(2, 2);
+            var resolver = new CombatResolver(random);
+            var attacker = new CombatCard("assassin", "Assassino", HeroClass.Assassin, 5);
+            var defender = new CombatCard("rogue", "Ladro", HeroClass.Rogue, 5);
+
+            CombatResult result = resolver.ResolveAttack(
+                attacker,
+                defender,
+                6,
+                new CombatModifiers(false, false, defenderConditionalRerollMax: 2));
+
+            Assert.That(result.DefenderRoll.FirstRoll, Is.EqualTo(2));
+            Assert.That(result.DefenderRoll.FirstRollBeforeReroll, Is.Zero);
+            Assert.That(result.DefenderIsDefeated, Is.False);
+        }
+
+        [Test]
         public void ResolveAttack_RogueRerollsOneOncePerAttackerDieWithAdvantage()
         {
             var random = new FixedRandomSource(1, 4, 1, 5, 2);

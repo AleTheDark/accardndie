@@ -34,6 +34,7 @@ namespace AccardND.NetProtocol
     {
         public const string Deploy = "deploy";
         public const string Ability = "ability";
+        public const string Supreme = "supreme";
         public const string Attack = "attack";
         public const string Attach = "attach";
         public const string Pass = "pass";
@@ -79,6 +80,16 @@ namespace AccardND.NetProtocol
         public int auraPlayer0;
         public int auraPlayer1;
         public int ability;
+
+        /// <summary>Suprema usata, come <c>SupremeAbilityType</c>.</summary>
+        public int supreme;
+
+        /// <summary>Riserva di mana del giocatore dopo la variazione.</summary>
+        public int mana;
+
+        /// <summary>Variazione di mana; negativa quando e' una spesa.</summary>
+        public int manaDelta;
+
         public int magnitude;
         public bool redirected;
         public string certainty;
@@ -152,6 +163,19 @@ namespace AccardND.NetProtocol
         public int yourPlayerIndex;
         public MatchEventDto[] events;
         public MatchHand hand;
+
+        /// <summary>
+        /// Loadout con cui si sta giocando, come lo conosce il server. Dopo un riavvio
+        /// dell'app il client non ce l'ha più in memoria, e quello salvato in locale può
+        /// nel frattempo essere stato cambiato nel builder: l'unica copia buona è questa.
+        /// </summary>
+        public PvpLoadoutDto yourLoadout;
+
+        /// <summary>
+        /// Secondi di riconnessione che restano per il resto della partita. È un budget
+        /// unico: non riparte pieno a ogni caduta.
+        /// </summary>
+        public int reconnectSecondsRemaining;
     }
 
     [Serializable]

@@ -57,11 +57,70 @@ namespace AccardND.GameCore
                 ? RollTwoAndTakeHighest(defenderVigorDieSides, defenderReroll)
                 : RollVigor(defenderVigorDieSides, MatchupResult.Neutral, defenderReroll);
 
+            int defenderTotal = defender.Strength + defenderRoll.SelectedRoll + modifiers.DefenderFlatBonus;
+            int initialAttackerTotal = attacker.Strength + attackerRoll.SelectedRoll + modifiers.AttackerFlatBonus;
+            if (modifiers.AttackerConditionalRerollMax > 0 && initialAttackerTotal <= defenderTotal)
+                attackerRoll = RerollEligibleAttackerDice(attackerRoll, modifiers.AttackerConditionalRerollMax);
+
+            int attackerTotal = attacker.Strength + attackerRoll.SelectedRoll + modifiers.AttackerFlatBonus;
+            if (modifiers.DefenderConditionalRerollMax > 0 && attackerTotal > defenderTotal)
+            {
+                defenderRoll = RerollEligibleDice(defenderRoll, modifiers.DefenderConditionalRerollMax);
+                defenderTotal = defender.Strength + defenderRoll.SelectedRoll + modifiers.DefenderFlatBonus;
+            }
+
             return new CombatResult(
                 attackerRoll,
                 defenderRoll,
-                attacker.Strength + attackerRoll.SelectedRoll + modifiers.AttackerFlatBonus,
-                defender.Strength + defenderRoll.SelectedRoll + modifiers.DefenderFlatBonus);
+                attackerTotal,
+                defenderTotal);
+        }
+
+        private VigorRollResult RerollEligibleAttackerDice(VigorRollResult roll, int maximumResult)
+        {
+            return RerollEligibleDice(roll, maximumResult);
+        }
+
+        private VigorRollResult RerollEligibleDice(VigorRollResult roll, int maximumResult)
+        {
+            int first = roll.FirstRoll;
+            int second = roll.SecondRoll;
+            int firstBeforeReroll = roll.FirstRollBeforeReroll;
+            int secondBeforeReroll = roll.SecondRollBeforeReroll;
+
+            if (first <= maximumResult)
+            {
+                firstBeforeReroll = first;
+                first = random.NextInclusive(1, roll.DieSides);
+            }
+
+            if (roll.HasSecondRoll && second <= maximumResult)
+            {
+                secondBeforeReroll = second;
+                int secondDieSides = roll.SelectionMode == VigorSelectionMode.Sum
+                    ? PvpVigorScale.Lower(roll.DieSides)
+                    : roll.DieSides;
+                second = random.NextInclusive(1, secondDieSides);
+            }
+
+            int selected = roll.SelectionMode switch
+            {
+                VigorSelectionMode.Highest => Math.Max(first, second),
+                VigorSelectionMode.Lowest => Math.Min(first, second),
+                VigorSelectionMode.Sum => first + second,
+                _ => first
+            };
+
+            return new VigorRollResult(
+                roll.DieSides,
+                first,
+                second,
+                roll.HasSecondRoll,
+                selected,
+                roll.Matchup,
+                roll.SelectionMode,
+                firstBeforeReroll,
+                secondBeforeReroll);
         }
 
         private VigorRollResult RollVigor(int dieSides, MatchupResult matchup, RerollRule reroll)

@@ -4,6 +4,7 @@
   "references": [
     "AccardND.GameCore",
     "AccardND.GameData",
+    "AccardND.Localization",
     "AccardND.NetProtocol"
   ]
 }

@@ -39,6 +39,11 @@ namespace AccardND.NetProtocol
         public bool placement;
         public int placementRemaining;
 
+		// EXP account ranked: 5 per round vinto. Il claim permette di portarla a x3 con ADV.
+		public string accountExperienceRewardClaimId;
+		public int accountExperienceEarned;
+		public bool accountExperienceCanTriple;
+
         // Achievement sbloccati con questa partita (nomi), indipendenti dal ranked.
         public string[] unlockedAchievements;
     }

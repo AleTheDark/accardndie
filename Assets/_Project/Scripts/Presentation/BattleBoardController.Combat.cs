@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -21,6 +22,7 @@ public sealed partial class BattleBoardController
 	{
 		SetCombatChromeVisible(visible: true);
 		ShowCombatHint();
+		BeginCampaignRoomMana();
 		inputLocked = true;
 		abilityTargetMode = AbilityTargetMode.None;
 		attackTargetingActive = false;
@@ -72,7 +74,7 @@ public sealed partial class BattleBoardController
 				return (num == 0) ?right.TieBreaker.CompareTo(left.TieBreaker) : num;
 			});
 			deploymentInitiativesReady = false;
-			SetMessage("Schieramento completato: in combattimento agiscono prima le iniziative piu alte." + AuraStartMessage());
+			SetMessage(GameText.Get(GameTextKeys.Combat.DeploymentComplete) + AuraStartMessage());
 			RefreshInitiativeDisplay();
 			if (adventureScriptedTutorialActive && adventureScriptedTutorialStep == 4 && !adventureScriptedTutorialInspectionOpened)
 			{
@@ -83,8 +85,8 @@ public sealed partial class BattleBoardController
 		}
 		else
 		{
-			SetTurnBanner(playerTurn: true, "INIZIATIVE  -  TUTTI I D20 IN LANCIO");
-			SetMessage("Tiro di iniziativa: ogni carta lancia un D20." + AuraStartMessage());
+			SetTurnBanner(playerTurn: true, GameText.Get(GameTextKeys.Combat.InitiativeBanner));
+			SetMessage(GameText.Get(GameTextKeys.Combat.InitiativeStarted) + AuraStartMessage());
 			UpdateInteractions();
 			((MonoBehaviour)this).StartCoroutine(RollInitiatives());
 		}
@@ -116,9 +118,9 @@ public sealed partial class BattleBoardController
 				item.Initiative = RollUniqueInitiative(initiativeDieSides, usedInitiatives);
 			}
 			item.TieBreaker = random.NextInclusive(1, 10000);
-			string text = (item.BelongsToPlayer ?"TU" : "CPU");
-			AppendLog($"INIZIATIVA {text} - {item.Card.Name}: D{initiativeDieSides} = {item.Initiative}");
-			item.View.PlayDiceRoll(diceCatalog, initiativeDieSides, TrackDiceRoll(item.Initiative), "INIZIATIVA " + text, configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+			string text = GameText.Get(item.BelongsToPlayer ? GameTextKeys.Common.You : GameTextKeys.Common.Cpu);
+			AppendLog(GameText.Format(GameTextKeys.Combat.InitiativeLog, text, item.Card.Name, initiativeDieSides, item.Initiative));
+			item.View.PlayDiceRoll(diceCatalog, initiativeDieSides, TrackDiceRoll(item.Initiative), GameText.Format(GameTextKeys.Combat.InitiativeCallout, text), configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		}
 		yield return WaitForCardInspectionPause(configuration.Animation.DiceRollDuration + configuration.Animation.DiceResultHold);
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
@@ -201,11 +203,12 @@ public sealed partial class BattleBoardController
 			AdvanceTurnIndex();
 		}
 		BattleCardState battleCardState = turnOrder[currentTurnIndex];
+		battleCardState.AbilityUsedThisTurn = false;
 		if (battleCardState.InhibitedTurns > 0)
 		{
 			battleCardState.InhibitedTurns--;
 			RefreshPersistentStatus(battleCardState);
-			SetMessage(battleCardState.Card.Name + " e inibito e salta il turno.");
+			SetMessage(GameText.Format(GameTextKeys.Combat.InhibitedSkipsTurn, battleCardState.Card.Name));
 			FinishTurn();
 			return;
 		}
@@ -215,6 +218,7 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		SetActiveTurnAura(battleCardState);
+		RefreshCombatPawnCarousel(animate: true);
 		RefreshInitiativeDisplay();
 		if (battleCardState.BelongsToPlayer)
 		{
@@ -223,12 +227,12 @@ public sealed partial class BattleBoardController
 			activeAttachmentSource = null;
 			((Component)confirmActionButton).gameObject.SetActive(false);
 			((Component)cancelActionButton).gameObject.SetActive(false);
-			SetTurnBanner(playerTurn: true, "IL TUO TURNO");
+			SetTurnBanner(playerTurn: true, GameText.Get(GameTextKeys.Combat.PlayerTurnBanner));
 			inputLocked = false;
 			selectedPlayerIndex = playerCards.IndexOf(battleCardState);
 			battleCardState.View.SetSelected(selected: true);
 			ClearTargetHints();
-			SetMessage("Scegli un'azione sopra la pedina o ispeziona una carta.");
+			SetMessage(GameText.Get(GameTextKeys.Combat.ChooseAction));
 			RefreshAbilityButton(battleCardState);
 			RefreshAttachmentButton(battleCardState);
 			UpdateInteractions();
@@ -236,7 +240,7 @@ public sealed partial class BattleBoardController
 		}
 		else
 		{
-			SetTurnBanner(playerTurn: false, "TURNO CPU  -  " + battleCardState.Card.Name.ToUpperInvariant());
+			SetTurnBanner(playerTurn: false, GameText.Format(GameTextKeys.Combat.CpuTurnBanner, battleCardState.Card.Name.ToUpperInvariant()));
 			inputLocked = true;
 			selectedPlayerIndex = -1;
 			attackTargetingActive = false;
@@ -245,7 +249,7 @@ public sealed partial class BattleBoardController
 			((Component)confirmActionButton).gameObject.SetActive(false);
 			((Component)cancelActionButton).gameObject.SetActive(false);
 			ClearTargetHints();
-			SetMessage("Turno CPU: " + battleCardState.Card.Name + " sta scegliendo un bersaglio...");
+			SetMessage(GameText.Format(GameTextKeys.Combat.CpuChoosingTarget, battleCardState.Card.Name));
 			UpdateInteractions();
 			((MonoBehaviour)this).StartCoroutine(ExecuteCpuTurn(battleCardState));
 		}
@@ -281,6 +285,25 @@ public sealed partial class BattleBoardController
 		UpdateInteractions();
 		BattleCardState attacker = turnOrder[currentTurnIndex];
 		BattleCardState defender = cpuCards[cpuTargetIndex];
+		// L'attacco potenziato del Guerriero costa soltanto il mana dell'abilita':
+		// il costo dell'attacco base non si somma. Il pagamento avviene qui, dopo
+		// che il giocatore ha scelto un bersaglio valido.
+		bool warriorAbilityAttack = attacker.Card.HeroClass == HeroClass.Warrior && attacker.AbilityArmed;
+		bool manaPaid = warriorAbilityAttack
+			? TrySpendCampaignPrimaryMana(attacker)
+			: TrySpendCampaignAttackMana(attacker);
+		if (!manaPaid)
+		{
+			ShowNoManaCallout(attacker);
+			if (warriorAbilityAttack)
+			{
+				attacker.AbilityArmed = false;
+			}
+			attackTargetingActive = false;
+			inputLocked = false;
+			UpdateInteractions();
+			yield break;
+		}
 		if (IsComposableGolemProxy(defender))
 		{
 			yield return ExecutePlayerTurnAgainstComposableGolem(attacker, defender);
@@ -310,22 +333,14 @@ public sealed partial class BattleBoardController
 		BattleCardState selfProtectingPaladin = ((defender.Card.HeroClass == HeroClass.Paladin && defender.AbilityArmed && (defender.ProtectedAlly == null || defender.ProtectedAlly == defender)) ?defender : null);
 		if (protectingPaladin != null)
 		{
-			SetMessage("PALADINO CPU: " + protectingPaladin.Card.Name + " devia su di se l'attacco diretto a " + defender.Card.Name + ".");
+			SetMessage(GameText.Format(GameTextKeys.Combat.CpuPaladinRedirect, protectingPaladin.Card.Name, defender.Card.Name));
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 			defender = protectingPaladin;
-			protectingPaladin.AbilityArmed = false;
-			MarkAbilityUsed(protectingPaladin);
-			protectingPaladin.ProtectedAlly = null;
-			RefreshPersistentStatus(protectingPaladin);
 		}
 		else if (selfProtectingPaladin != null)
 		{
-			SetMessage("PALADINO CPU: " + selfProtectingPaladin.Card.Name + " si difende con vantaggio.");
+			SetMessage(GameText.Format(GameTextKeys.Combat.CpuPaladinSelfDefense, selfProtectingPaladin.Card.Name));
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
-			selfProtectingPaladin.AbilityArmed = false;
-			MarkAbilityUsed(selfProtectingPaladin);
-			selfProtectingPaladin.ProtectedAlly = null;
-			RefreshPersistentStatus(selfProtectingPaladin);
 		}
 		int attackerDieSides = EffectivePlayerAttackVigorDieSides(attacker, runProgress.PlayerVigorDieSides);
 		int defenderDieSides = EffectiveDefenseVigorDieSides(defender, runProgress.MasterVigorDieSides);
@@ -340,13 +355,20 @@ public sealed partial class BattleBoardController
 			ConsumeVigorPenalties(attacker, defender);
 			UpdatePostAttackClassState(attacker, defeatedTarget: false);
 			yield return ShowAutomaticOutcome(guaranteedKill: false);
-			AppendLog(FormatImpossibleAttackDetailed(attacker, defender, attackerDieSides, defenderDieSides, modifiers) + " Turno saltato.");
-			SetBattlefieldMessage("Attacco impossibile: turno saltato.");
+			AppendLog(FormatImpossibleAttackDetailed(attacker, defender, attackerDieSides, defenderDieSides, modifiers) + GameText.Get(GameTextKeys.Combat.PlayerTurnSkippedSuffix));
+			SetBattlefieldMessage(GameText.Get(GameTextKeys.Combat.ImpossiblePlayerAttack));
 			selectedPlayerIndex = -1;
 			attacker.View.SetSelected(selected: false);
 			yield return WaitForCardInspectionPause(configuration.Animation.TurnResultPause);
 			FinishTurn();
 			yield break;
+		}
+		if (battleCardState != null)
+		{
+			battleCardState.AbilityArmed = false;
+			MarkAbilityUsed(battleCardState);
+			battleCardState.ProtectedAlly = null;
+			RefreshPersistentStatus(battleCardState);
 		}
 		if (!UsesStationaryClassAttack(attacker))
 			yield return MoveDuelToCenter(attacker, defender);
@@ -361,6 +383,7 @@ public sealed partial class BattleBoardController
 			if (hunterMarkUsed)
 				ConsumeHunterMarks(defender);
 			defender.Eliminated = true;
+			RegisterCampaignEliminationMana(attacker, defender);
 			ApplyMageAuraDeathPenalty(defender, attacker);
 			ApplyMightAuraDeathBonuses(defender);
 			ConsumeVigorPenalties(attacker, defender);
@@ -368,7 +391,7 @@ public sealed partial class BattleBoardController
 			PlayDeathCardSfx();
 			yield return PlayTimelineAwareDefeatAnimation(defender, attacker.Card.HeroClass);
 			yield return ReturnDuelSurvivors(attacker, defender);
-			SetMessage("100%: " + attacker.Card.Name + " elimina direttamente " + defender.Card.Name + ". Nessun dado necessario.");
+			SetMessage(GameText.Format(GameTextKeys.Combat.GuaranteedKill, attacker.Card.Name, defender.Card.Name));
 			selectedPlayerIndex = -1;
 			attacker.View.SetSelected(selected: false);
 			yield return WaitForCardInspectionPause(configuration.Animation.TurnResultPause);
@@ -376,6 +399,7 @@ public sealed partial class BattleBoardController
 			yield break;
 		}
 		CombatResult result = combatResolver.ResolveAttack(attacker.Card, defender.Card, attackerDieSides, defenderDieSides, modifiers);
+		result = ScriptAdventureTutorialCombatResult(attacker, defender, result);
 		ConsumeArmedAttackAbility(attacker, modifiers);
 		((Component)abilityButton).gameObject.SetActive(false);
 		((Component)attachmentButton).gameObject.SetActive(false);
@@ -403,6 +427,7 @@ public sealed partial class BattleBoardController
 		{
 			yield return PlayHunterRangedAttackIfNeeded(attacker, defender, result.AttackerTotal - result.DefenderTotal, result.AttackerRoll.SelectionMode == VigorSelectionMode.Sum);
 			defender.Eliminated = true;
+			RegisterCampaignEliminationMana(attacker, defender);
 			ApplyMageAuraDeathPenalty(defender, attacker);
 			ApplyMightAuraDeathBonuses(defender);
 			PlayDeathCardSfx();
@@ -413,7 +438,7 @@ public sealed partial class BattleBoardController
 			yield return PlayHunterMissIfNeeded(attacker, defender);
 		}
 		yield return ReturnDuelSurvivors(attacker, defender);
-		string combatLog = FormatResultDetailed("TU", attacker, defender, result, modifiers);
+		string combatLog = FormatResultDetailed(GameText.Get(GameTextKeys.Common.You), attacker, defender, result, modifiers);
 		ConsumeVigorPenalties(attacker, defender);
 		UpdatePostAttackClassState(attacker, result.DefenderIsDefeated);
 		UpdatePostDefenseClassState(defender, result.DefenderIsDefeated);
@@ -462,36 +487,38 @@ public sealed partial class BattleBoardController
 		}
 		if (CanCpuUseAdvancedActions(attacker) && TryUseCpuClassAbility(attacker, out var message))
 		{
+			attacker.View?.PlayAbilityActionCallout();
 			SetMessage(message);
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
+		}
+		// L'attacco CPU segue la stessa economia di quello del giocatore: costa 1 mana.
+		// Le abilita' CPU vengono scelte solo se lasciano disponibile anche questo costo;
+		// il controllo resta qui come garanzia per attivazioni partite senza mana.
+		if (!TrySpendCampaignAttackMana(attacker))
+		{
+			AppendLog($"MANA - CPU senza mana per l'attacco di {attacker.Card.Name}: salta il turno.");
+			SetBattlefieldMessage($"{attacker.Card.Name} non ha mana per attaccare e salta il turno.");
+			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
+			FinishTurn(skipped: true);
+			yield break;
 		}
 		string decisionReason;
 		int index = ChooseCpuTarget(attacker, out decisionReason);
 		BattleCardState defender = playerCards[index];
-		AppendLog("CPU: " + attacker.Card.Name + " sceglie " + defender.Card.Name + " - " + decisionReason + ".");
+		AppendLog(GameText.Format(GameTextKeys.Combat.CpuTargetChoiceLog, attacker.Card.Name, defender.Card.Name, decisionReason));
 		yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 		BattleCardState protectingPaladin = playerCards.FirstOrDefault((BattleCardState card) => !card.Eliminated && card.Card.HeroClass == HeroClass.Paladin && card.AbilityArmed && (card.ProtectedAlly == null || card.ProtectedAlly == defender) && card != defender);
 		BattleCardState selfProtectingPaladin = ((defender.Card.HeroClass == HeroClass.Paladin && defender.AbilityArmed && (defender.ProtectedAlly == null || defender.ProtectedAlly == defender)) ?defender : null);
 		if (protectingPaladin != null)
 		{
-			SetMessage("PALADINO: " + protectingPaladin.Card.Name + " devia su di se l'attacco diretto a " + defender.Card.Name + ".");
+			SetMessage(GameText.Format(GameTextKeys.Combat.PaladinRedirect, protectingPaladin.Card.Name, defender.Card.Name));
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 			defender = protectingPaladin;
-			protectingPaladin.AbilityArmed = false;
-			MarkAbilityUsed(protectingPaladin);
-			protectingPaladin.ProtectedAlly = null;
-			TriggerMagicAuraAfterAbility();
-			RefreshPersistentStatus(protectingPaladin);
 		}
 		else if (selfProtectingPaladin != null)
 		{
-			SetMessage("PALADINO: " + selfProtectingPaladin.Card.Name + " si difende con vantaggio.");
+			SetMessage(GameText.Format(GameTextKeys.Combat.PaladinSelfDefense, selfProtectingPaladin.Card.Name));
 			yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
-			selfProtectingPaladin.AbilityArmed = false;
-			MarkAbilityUsed(selfProtectingPaladin);
-			selfProtectingPaladin.ProtectedAlly = null;
-			TriggerMagicAuraAfterAbility();
-			RefreshPersistentStatus(selfProtectingPaladin);
 		}
 		BattleCardState paladinProtectionUser = protectingPaladin ?? selfProtectingPaladin;
 		int attackerDieSides = EffectiveVigorDieSides(attacker, runProgress.MasterVigorDieSides);
@@ -499,18 +526,32 @@ public sealed partial class BattleBoardController
 		CombatModifiers modifiers = BuildAttackModifiers(attacker, defender, paladinProtectionUser != null, paladinProtectionUser != null);
 		bool hunterMarkUsed = HunterMarkAttackBonus(attacker, defender) > 0;
 		CombatCertainty certainty = CombatCertaintyCalculator.Evaluate(attacker.Card, defender.Card, attackerDieSides, defenderDieSides, modifiers);
-		if (certainty != CombatCertainty.Impossible && (Object)(object)battleAnimationPlayer != (Object)null)
-			yield return battleAnimationPlayer.PlayTargetLine(attacker.View, defender.View, AttackTargetLineColor);
+		if (certainty != CombatCertainty.Impossible)
+		{
+			attacker.View?.PlayAttackActionCallout();
+			if ((Object)(object)battleAnimationPlayer != (Object)null)
+				yield return battleAnimationPlayer.PlayTargetLine(attacker.View, defender.View, AttackTargetLineColor);
+		}
 		if (certainty == CombatCertainty.Impossible)
 		{
 			ConsumeVigorPenalties(attacker, defender);
 			UpdatePostAttackClassState(attacker, defeatedTarget: false);
 			yield return ShowAutomaticOutcome(guaranteedKill: false);
-			AppendLog(FormatImpossibleAttackDetailed(attacker, defender, attackerDieSides, defenderDieSides, modifiers) + " La CPU salta il turno.");
-			SetBattlefieldMessage("Attacco CPU impossibile: turno saltato.");
+			AppendLog(FormatImpossibleAttackDetailed(attacker, defender, attackerDieSides, defenderDieSides, modifiers) + GameText.Get(GameTextKeys.Combat.CpuTurnSkippedSuffix));
+			SetBattlefieldMessage(GameText.Get(GameTextKeys.Combat.ImpossibleCpuAttack));
 			yield return WaitForCardInspectionPause(configuration.Animation.TurnResultPause);
 			FinishTurn();
 			yield break;
+		}
+		// La protezione viene consumata solo quando l'attacco viene davvero risolto.
+		// Un attacco impossibile non produce alcuna difesa e lascia quindi attivo il buff.
+		if (paladinProtectionUser != null)
+		{
+			paladinProtectionUser.AbilityArmed = false;
+			MarkAbilityUsed(paladinProtectionUser);
+			paladinProtectionUser.ProtectedAlly = null;
+			TriggerMagicAuraAfterAbility();
+			RefreshPersistentStatus(paladinProtectionUser);
 		}
 		if (!UsesStationaryClassAttack(attacker))
 			yield return MoveDuelToCenter(attacker, defender);
@@ -523,6 +564,7 @@ public sealed partial class BattleBoardController
 			if (hunterMarkUsed)
 				ConsumeHunterMarks(defender);
 			defender.Eliminated = true;
+			RegisterCampaignEliminationMana(attacker, defender);
 			ConsumeVigorPenalties(attacker, defender);
 			UpdatePostAttackClassState(attacker, defeatedTarget: true);
 			if (!TryCreateNecromancerSpirit(defender))
@@ -533,12 +575,13 @@ public sealed partial class BattleBoardController
 				yield return PlayTimelineAwareDefeatAnimation(defender, attacker.Card.HeroClass);
 			}
 			yield return ReturnDuelSurvivors(attacker, defender);
-			SetMessage("100%: " + attacker.Card.Name + " elimina direttamente " + defender.Card.Name + ". Nessun dado necessario.");
+			SetMessage(GameText.Format(GameTextKeys.Combat.GuaranteedKill, attacker.Card.Name, defender.Card.Name));
 			yield return WaitForCardInspectionPause(configuration.Animation.TurnResultPause);
 			FinishTurn();
 			yield break;
 		}
 		CombatResult result = combatResolver.ResolveAttack(attacker.Card, defender.Card, attackerDieSides, defenderDieSides, modifiers);
+		result = ScriptAdventureTutorialCombatResult(attacker, defender, result);
 		ConsumeArmedAttackAbility(attacker, modifiers);
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
@@ -554,6 +597,7 @@ public sealed partial class BattleBoardController
 		{
 			yield return PlayHunterRangedAttackIfNeeded(attacker, defender, result.AttackerTotal - result.DefenderTotal, result.AttackerRoll.SelectionMode == VigorSelectionMode.Sum);
 			defender.Eliminated = true;
+			RegisterCampaignEliminationMana(attacker, defender);
 			if (!TryCreateNecromancerSpirit(defender))
 			{
 				ApplyMageAuraDeathPenalty(defender, attacker);
@@ -567,7 +611,7 @@ public sealed partial class BattleBoardController
 			yield return PlayHunterMissIfNeeded(attacker, defender);
 		}
 		yield return ReturnDuelSurvivors(attacker, defender);
-		string combatLog = FormatResultDetailed("CPU", attacker, defender, result, modifiers);
+		string combatLog = FormatResultDetailed(GameText.Get(GameTextKeys.Common.Cpu), attacker, defender, result, modifiers);
 		ConsumeVigorPenalties(attacker, defender);
 		UpdatePostAttackClassState(attacker, result.DefenderIsDefeated);
 		UpdatePostDefenseClassState(defender, result.DefenderIsDefeated);
@@ -589,8 +633,12 @@ public sealed partial class BattleBoardController
 			yield return MoveDuelToCenter(attacker, golemProxy);
 		VigorRollResult attackerRoll = RollGolemAttackerVigor(attackerDieSides, modifiers);
 		int attackerTotal = attacker.Card.Strength + attackerRoll.SelectedRoll + modifiers.AttackerFlatBonus;
-		ComposableGolemDefenseResult golemResult = activeComposableGolem.DefendAgainst(attackerTotal);
-		VigorRollResult golemRoll = SingleRoll(golemResult.Form.VigorDieSides, golemResult.VigorRoll);
+		int golemVigorDieSides = EffectiveVigorDieSides(golemProxy, activeComposableGolem.ActiveForm.VigorDieSides);
+		ComposableGolemDefenseResult golemResult = activeComposableGolem.DefendAgainst(
+			attackerTotal,
+			golemVigorDieSides,
+			modifiers.DefenderFlatBonus);
+		VigorRollResult golemRoll = SingleRoll(golemResult.VigorDieSides, golemResult.VigorRoll);
 		CombatResult result = new CombatResult(attackerRoll, golemRoll, attackerTotal, golemResult.DefenseTotal);
 		ConsumeArmedAttackAbility(attacker, modifiers);
 		((Component)abilityButton).gameObject.SetActive(false);
@@ -598,11 +646,19 @@ public sealed partial class BattleBoardController
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
 		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, TrackDiceRoll(attackerRoll), "ATTACCO", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		golemProxy.View.PlayVigorRoll(diceCatalog, golemResult.Form.VigorDieSides, TrackDiceRoll(golemRoll), "DIFESA " + GolemFormName(golemResult.Form.Form), configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		golemProxy.View.PlayVigorRoll(
+			diceCatalog,
+			golemResult.VigorDieSides,
+			TrackDiceRoll(golemRoll),
+			GameText.GetOrFallbackSilent(
+				GameTextKeys.Combat.RollDefenseNamed,
+				"DIFESA {0}",
+				GolemFormName(golemResult.Form.Form)),
+			configuration.Animation.DiceRollDuration,
+			configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(attackerRoll, golemRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		yield return ShowCombatResult(result, attacker, golemProxy);
-		yield return golemProxy.View.PlayComposableGolemDefenseEffect(golemResult.Form.Form, golemResult.Damage <= 0);
 		if (hunterMarkUsed)
 			ConsumeHunterMarks(golemProxy);
 		PlayResolvedAttackSfx(attacker, golemResult.Damage > 0, modifiers.SumAttackerVigor);
@@ -618,11 +674,13 @@ public sealed partial class BattleBoardController
 		else
 		{
 			yield return PlayHunterMissIfNeeded(attacker, golemProxy);
+			yield return golemProxy.View.PlayComposableGolemDefenseEffect(golemResult.Form.Form, resisted: true);
 		}
 		UpdateComposableGolemHealthBar(golemProxy);
 		if (activeComposableGolem.IsDefeated)
 		{
 			golemProxy.Eliminated = true;
+			RegisterCampaignEliminationMana(attacker, golemProxy);
 			ApplyMageAuraDeathPenalty(golemProxy, attacker);
 			ApplyMightAuraDeathBonuses(golemProxy);
 			PlayDeathCardSfx();
@@ -695,6 +753,7 @@ public sealed partial class BattleBoardController
 		if (activeMedusaBoss.IsDefeated)
 		{
 			medusaProxy.Eliminated = true;
+			RegisterCampaignEliminationMana(attacker, medusaProxy);
 			ApplyMageAuraDeathPenalty(medusaProxy, attacker);
 			ApplyMightAuraDeathBonuses(medusaProxy);
 			PlayMedusaDeathSfx();
@@ -768,6 +827,7 @@ public sealed partial class BattleBoardController
 		if (activeTrentorBoss.IsDefeated)
 		{
 			trentorProxy.Eliminated = true;
+			RegisterCampaignEliminationMana(attacker, trentorProxy);
 			ApplyMageAuraDeathPenalty(trentorProxy, attacker);
 			ApplyMightAuraDeathBonuses(trentorProxy);
 			PlayDeathCardSfx();
@@ -850,6 +910,7 @@ public sealed partial class BattleBoardController
 		if (activeBragusBoss.IsDefeated)
 		{
 			bragusProxy.Eliminated = true;
+			RegisterCampaignEliminationMana(attacker, bragusProxy);
 			ApplyMageAuraDeathPenalty(bragusProxy, attacker);
 			ApplyMightAuraDeathBonuses(bragusProxy);
 			PlayBragusDeathSfx();
@@ -875,6 +936,7 @@ public sealed partial class BattleBoardController
 			int attackerDefenseRollValue = Math.Max(1, bragusResult.TargetDefenseTotal - DisplayStrength(attacker));
 			VigorRollResult attackerDefenseRoll = SingleRoll(attackerDefenseDieSides, attackerDefenseRollValue);
 			CombatResult counterResult = new CombatResult(counterRoll, attackerDefenseRoll, bragusResult.CounterTotal, bragusResult.TargetDefenseTotal);
+			bragusProxy.View?.PlayAttackActionCallout();
 			PlayBragusAttackSfx();
 			messagePanelWasHidden = HideMessagePanelForDiceRoll();
 			PlayRollingDiceSfx();
@@ -884,11 +946,13 @@ public sealed partial class BattleBoardController
 			RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 			yield return ShowCombatResult(counterResult, bragusProxy, attacker);
 			if ((Object)(object)battleAnimationPlayer != (Object)null)
-				yield return battleAnimationPlayer.PlayBragusCleaverCounterattack(bragusProxy.View, attacker.View, bragusResult.CounterDefeatsAttacker);
+				yield return battleAnimationPlayer.PlayBragusCleaverCounterattack(bragusProxy.View, attacker.View, bragusResult.CounterDefeatsAttacker, PlayBragusAttackHitSfx);
+			else if (bragusResult.CounterDefeatsAttacker)
+				PlayBragusAttackHitSfx();
 			if (bragusResult.CounterDefeatsAttacker)
 			{
-				PlayBragusAttackHitSfx();
 				attacker.Eliminated = true;
+				RegisterCampaignEliminationMana(bragusProxy, attacker);
 				if (!TryCreateNecromancerSpirit(attacker))
 				{
 					ApplyMageAuraDeathPenalty(attacker, bragusProxy);
@@ -971,6 +1035,7 @@ public sealed partial class BattleBoardController
 		if (activePalatirBoss.IsDefeated)
 		{
 			palatirProxy.Eliminated = true;
+			RegisterCampaignEliminationMana(attacker, palatirProxy);
 			ApplyMageAuraDeathPenalty(palatirProxy, attacker);
 			ApplyMightAuraDeathBonuses(palatirProxy);
 			PlayDeathCardSfx();
@@ -1029,15 +1094,30 @@ public sealed partial class BattleBoardController
 			RefreshPersistentStatus(selfProtectingPaladin);
 		}
 		int defenderDieSides = EffectiveDefenseVigorDieSides(defender, runProgress.PlayerVigorDieSides);
-		ComposableGolemAttackResult golemResult = activeComposableGolem.Attack(defender.Card, defenderDieSides);
-		VigorRollResult golemRoll = SingleRoll(golemResult.Form.VigorDieSides, golemResult.VigorRoll);
+		int golemVigorDieSides = EffectiveVigorDieSides(golemProxy, activeComposableGolem.ActiveForm.VigorDieSides);
+		ComposableGolemAttackResult golemResult = activeComposableGolem.Attack(
+			defender.Card,
+			defenderDieSides,
+			golemVigorDieSides,
+			TotalPermanentCombatBonus(golemProxy));
+		VigorRollResult golemRoll = SingleRoll(golemResult.VigorDieSides, golemResult.VigorRoll);
 		VigorRollResult defenderRoll = SingleRoll(defenderDieSides, golemResult.TargetVigorRoll);
 		CombatResult result = new CombatResult(golemRoll, defenderRoll, golemResult.AttackTotal, golemResult.TargetDefenseTotal);
+		golemProxy.View?.PlayAttackActionCallout();
 		if ((Object)(object)battleAnimationPlayer != (Object)null)
 			yield return battleAnimationPlayer.PlayTargetLine(golemProxy.View, defender.View, AttackTargetLineColor);
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		PlayRollingDiceSfx();
-		golemProxy.View.PlayVigorRoll(diceCatalog, golemResult.Form.VigorDieSides, TrackDiceRoll(golemRoll), "ATTACCO " + GolemFormName(golemResult.Form.Form), configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		golemProxy.View.PlayVigorRoll(
+			diceCatalog,
+			golemResult.VigorDieSides,
+			TrackDiceRoll(golemRoll),
+			GameText.GetOrFallbackSilent(
+				GameTextKeys.Combat.RollAttackNamed,
+				"ATTACCO {0}",
+				GolemFormName(golemResult.Form.Form)),
+			configuration.Animation.DiceRollDuration,
+			configuration.Animation.DiceResultHold);
 		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(defenderRoll), "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
@@ -1047,6 +1127,7 @@ public sealed partial class BattleBoardController
 		if (golemResult.TargetIsDefeated)
 		{
 			defender.Eliminated = true;
+			RegisterCampaignEliminationMana(golemProxy, defender);
 			if (!TryCreateNecromancerSpirit(defender))
 			{
 				ApplyMageAuraDeathPenalty(defender, golemProxy);
@@ -1055,6 +1136,7 @@ public sealed partial class BattleBoardController
 				yield return PlayTimelineAwareDefeatAnimation(defender, golemProxy.Card.HeroClass);
 			}
 		}
+		ConsumeVigorPenalties(golemProxy, defender);
 		string protectionText = defender != originalTarget ?$" {defender.Card.Name} ha protetto {originalTarget.Card.Name}." : string.Empty;
 		SetMessage(golemResult.TargetIsDefeated
 			?$"GOLEM {GolemFormName(golemResult.Form.Form)}: {defender.Card.Name} viene travolto." + protectionText
@@ -1078,6 +1160,7 @@ public sealed partial class BattleBoardController
 			yield break;
 		}
 
+		medusaProxy.View?.PlayAbilityActionCallout();
 		SetMessage("MEDUSA: Sguardo Pietrificante contro tutto il gruppo.");
 		yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 
@@ -1150,6 +1233,7 @@ public sealed partial class BattleBoardController
 				.FirstOrDefault()
 				?? availableTargets.OrderByDescending(DisplayStrength).First();
 			trentorProxy.MarkedTarget = markedTarget;
+			trentorProxy.View?.PlayAbilityActionCallout();
 			SetMessage($"TRENTOR: Marchio dei Rami su {markedTarget.Card.Name}.");
 			PlayClassAbilitySfx(HeroClass.Hunter);
 			if ((Object)(object)battleAnimationPlayer != (Object)null)
@@ -1192,6 +1276,7 @@ public sealed partial class BattleBoardController
 		VigorRollResult trentorRoll = SingleRoll(TrentorBoss.DefaultVigorDieSides, trentorResult.VigorRoll);
 		VigorRollResult defenderRoll = SingleRoll(defenderDieSides, trentorResult.TargetVigorRoll);
 		CombatResult result = new CombatResult(trentorRoll, defenderRoll, trentorResult.AttackTotal, trentorResult.TargetDefenseTotal);
+		trentorProxy.View?.PlayAttackActionCallout();
 		if ((Object)(object)battleAnimationPlayer != (Object)null)
 			yield return battleAnimationPlayer.PlayTargetLine(trentorProxy.View, defender.View, new Color(0.22f, 0.92f, 0.24f, 1f));
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
@@ -1213,6 +1298,7 @@ public sealed partial class BattleBoardController
 		if (trentorResult.TargetIsDefeated)
 		{
 			defender.Eliminated = true;
+			RegisterCampaignEliminationMana(trentorProxy, defender);
 			if (!TryCreateNecromancerSpirit(defender))
 			{
 				ApplyMageAuraDeathPenalty(defender, trentorProxy);
@@ -1291,6 +1377,7 @@ public sealed partial class BattleBoardController
 		VigorRollResult palatirRoll = SingleRoll(PalatirBoss.DefaultVigorDieSides, palatirResult.VigorRoll);
 		VigorRollResult defenderRoll = SingleRoll(defenderDieSides, palatirResult.TargetVigorRoll);
 		CombatResult result = new CombatResult(palatirRoll, defenderRoll, palatirResult.AttackTotal, palatirResult.TargetDefenseTotal);
+		palatirProxy.View?.PlayAttackActionCallout();
 		if ((Object)(object)battleAnimationPlayer != (Object)null)
 			yield return battleAnimationPlayer.PlayTargetLine(palatirProxy.View, defender.View, new Color(0.58f, 0.2f, 1f, 1f));
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
@@ -1306,6 +1393,7 @@ public sealed partial class BattleBoardController
 		if (palatirResult.TargetIsDefeated)
 		{
 			defender.Eliminated = true;
+			RegisterCampaignEliminationMana(palatirProxy, defender);
 			if (!TryCreateNecromancerSpirit(defender))
 			{
 				ApplyMageAuraDeathPenalty(defender, palatirProxy);
@@ -1353,6 +1441,7 @@ public sealed partial class BattleBoardController
 
 		card.Petrified = false;
 		card.Eliminated = true;
+		RegisterCampaignEliminationMana(null, card);
 		ApplyMightAuraDeathBonuses(card);
 		RefreshPersistentStatus(card);
 		AppendLog($"PIETRA - {card.Card.Name} tira {result.Roll} su D{dieSides}: non supera {result.RequiredRoll}, fallisce e muore.");
@@ -1743,7 +1832,14 @@ public sealed partial class BattleBoardController
 		messagePanelHiddenForDuel = hidden;
 		if ((Object)(object)messagePanelRect != (Object)null)
 		{
-			((Component)messagePanelRect).gameObject.SetActive(!messagePanelHiddenForDuel && !adventureScriptedTutorialActive);
+			if (adventureScriptedTutorialActive)
+			{
+				((Component)messagePanelRect).gameObject.SetActive(false);
+			}
+			else
+			{
+				RefreshMessagePanelVisibility();
+			}
 		}
 	}
 
@@ -1782,19 +1878,7 @@ public sealed partial class BattleBoardController
 		ClassBalanceConfiguration classBalance = configuration.ClassBalance;
 		int num = attacker.PendingAttackBonus + TotalPermanentCombatBonus(attacker);
 		int defenderFlatBonus = TotalPermanentCombatBonus(defender) + PendingDefenseBonus(defender);
-		if (AuraFor(defender) == BattleAuraType.Warrior
-			&& defender.Card.HeroClass == HeroClass.Warrior
-			&& defender.Card.Strength < attacker.Card.Strength)
-		{
-			defenderFlatBonus += 2;
-		}
 		bool flag = ClassAbilitiesEnabled(attacker);
-		if (AuraFor(attacker) == BattleAuraType.Warrior
-			&& attacker.Card.HeroClass == HeroClass.Warrior
-			&& attacker.Card.Strength < defender.Card.Strength)
-		{
-			num += 2;
-		}
 		int num2 = HunterMarkAttackBonus(attacker, defender);
 		if (num2 > 0)
 		{
@@ -1802,7 +1886,30 @@ public sealed partial class BattleBoardController
 		}
 		else if (attacker.Card.HeroClass == HeroClass.Rogue && classBalance.RogueRerollsOnes && flag && updateVisuals)
 		{
-			attacker.View.SetStatus("REROLL 1", new Color(0.75f, 0.9f, 1f));
+			int rogueRerollMaximum = RogueConditionalRerollMaximum(
+				attacker.BelongsToPlayer ? runProgress.PlayerVigorDieSides : runProgress.MasterVigorDieSides);
+			attacker.View.SetStatus(
+				GameText.GetOrFallbackSilent(
+					GameTextKeys.Combat.RogueRerollStatus,
+					"REROLL 1-{0} SE SERVE",
+					rogueRerollMaximum),
+				new Color(0.75f, 0.9f, 1f));
+		}
+		// Confronta la Potenza effettiva prima dell'aura: benedizioni applicabili,
+		// equipaggiamenti, malus e gli altri bonus attivi fanno parte dello scontro.
+		int attackerEffectiveStrength = attacker.Card.Strength + num;
+		int defenderEffectiveStrength = defender.Card.Strength + defenderFlatBonus;
+		if (AuraFor(defender) == BattleAuraType.Warrior
+			&& defender.Card.HeroClass == HeroClass.Warrior
+			&& defenderEffectiveStrength < attackerEffectiveStrength)
+		{
+			defenderFlatBonus += 2;
+		}
+		if (AuraFor(attacker) == BattleAuraType.Warrior
+			&& attacker.Card.HeroClass == HeroClass.Warrior
+			&& attackerEffectiveStrength < defenderEffectiveStrength)
+		{
+			num += 2;
 		}
 		bool forceAttackerAdvantage = false;
 		if (AuraFor(attacker) == BattleAuraType.Cunning && HeroClassFamily.Of(attacker.Card.HeroClass) == ClassFamily.Cunning && HasBonusOrMalusForCunning(defender))
@@ -1813,26 +1920,48 @@ public sealed partial class BattleBoardController
 				attacker.View.SetStatus("AURA ASTUZIA", new Color(0.75f, 0.65f, 1f));
 			}
 		}
-		if (attacker.BelongsToPlayer && playerAura == BattleAuraType.Formation && !formationAuraUsed && ClassMatchup.Compare(attacker.Card.HeroClass, defender.Card.HeroClass) == MatchupResult.Disadvantage)
+		if (attacker.BelongsToPlayer && playerAura == BattleAuraType.Formation && ClassMatchup.Compare(attacker.Card.HeroClass, defender.Card.HeroClass) == MatchupResult.Disadvantage)
 		{
 			neutralizeAttackerMatchup = true;
 			if (updateVisuals)
 			{
-				formationAuraUsed = true;
 				attacker.View.SetStatus("AURA FORMAZIONE", new Color(0.55f, 1f, 0.85f));
 			}
 		}
 		return new CombatModifiers(
 			flag && attacker.AbilityArmed && attacker.Card.HeroClass == HeroClass.Warrior,
 			defenderAdvantage,
-			flag && classBalance.RogueRerollsOnes && attacker.Card.HeroClass == HeroClass.Rogue,
-			AuraFor(attacker) == BattleAuraType.Rogue && attacker.Card.HeroClass == HeroClass.Rogue,
+			false,
+			false,
 			num,
 			defenderFlatBonus,
 			neutralizeAttackerMatchup,
 			forceAttackerAdvantage,
-			ClassAbilitiesEnabled(defender) && classBalance.RogueRerollsOnes && defender.Card.HeroClass == HeroClass.Rogue,
-			AuraFor(defender) == BattleAuraType.Rogue && defender.Card.HeroClass == HeroClass.Rogue);
+			false,
+			false,
+			(flag && classBalance.RogueRerollsOnes || AuraFor(attacker) == BattleAuraType.Rogue)
+				&& attacker.Card.HeroClass == HeroClass.Rogue
+				? RogueConditionalRerollMaximum(
+					attacker.BelongsToPlayer ? runProgress.PlayerVigorDieSides : runProgress.MasterVigorDieSides)
+				: 0,
+			AuraFor(defender) == BattleAuraType.Rogue && defender.Card.HeroClass == HeroClass.Rogue
+				? RogueConditionalRerollMaximum(
+					defender.BelongsToPlayer ? runProgress.PlayerVigorDieSides : runProgress.MasterVigorDieSides)
+				: 0);
+	}
+
+	private static int RogueConditionalRerollMaximum(int dieSides)
+	{
+		return dieSides switch
+		{
+			4 => 1,
+			6 => 2,
+			8 => 3,
+			10 => 4,
+			12 => 5,
+			20 => 6,
+			_ => 0
+		};
 	}
 
 	private BattleAuraType AuraFor(BattleCardState card)
@@ -1981,6 +2110,7 @@ public sealed partial class BattleBoardController
 		defeated.Eliminated = false;
 		defeated.IsSpirit = true;
 		defeated.AbilityUsed = false;
+		ResetCampaignPrimaryManaPayment(defeated);
 		defeated.AbilityArmed = false;
 		defeated.View.ResetState();
 		defeated.View.SetInitiative(defeated.Initiative);
@@ -2008,6 +2138,7 @@ public sealed partial class BattleBoardController
 		if (result.DefenderIsDefeated)
 		{
 			target.Eliminated = true;
+			RegisterCampaignEliminationMana(paladin, target);
 			ApplyMageAuraDeathPenalty(target, paladin);
 			ApplyMightAuraDeathBonuses(target);
 			PlayDeathCardSfx();
@@ -2126,6 +2257,11 @@ public sealed partial class BattleBoardController
 		card.View.SetStrengthValue(DisplayStrength(card));
 		RefreshPersistentStatus(card);
 		PlayBarbarianFurySfx();
+		if ((Object)(object)card.View != (Object)null
+			&& (Object)(object)battleAnimationPlayer != (Object)null)
+		{
+			((MonoBehaviour)this).StartCoroutine(battleAnimationPlayer.PlayBarbarianFury(card.View));
+		}
 	}
 
 	private void ApplyMightAuraDeathBonuses(BattleCardState defeated)
@@ -2188,7 +2324,7 @@ public sealed partial class BattleBoardController
 	{
 		if (IsComposableGolemProxy(card) && activeComposableGolem != null)
 		{
-			return activeComposableGolem.ActiveForm.Power;
+			return activeComposableGolem.ActiveForm.Power + TotalPermanentCombatBonus(card);
 		}
 		if (IsMedusaBossProxy(card) && activeMedusaBoss != null)
 		{
@@ -2232,7 +2368,9 @@ public sealed partial class BattleBoardController
 		if (IsComposableGolemProxy(card) && activeComposableGolem != null)
 		{
 			ComposableGolemForm activeGolemForm = activeComposableGolem.ActiveForm.Form;
-			card.View.SetComposableGolemForm(activeGolemForm);
+			card.View.SetComposableGolemForm(
+				activeGolemForm,
+				actionColor: GolemFormColor(activeGolemForm));
 		}
 		if (IsTrentorBossProxy(card) && activeTrentorBoss != null)
 		{
@@ -2314,6 +2452,13 @@ public sealed partial class BattleBoardController
 			BattleCardState battleCardState = playerCards[selectedPlayerIndex];
 			if (battleCardState != null && !battleCardState.Eliminated)
 			{
+				// Il bottone resta cliccabile anche a secco: la pedina dice perche'
+				// non parte l'attacco invece di lasciare un tasto che non fa nulla.
+				if (!IsCampaignAttackAffordable(battleCardState))
+				{
+					ShowNoManaCallout(battleCardState);
+					return;
+				}
 				attackTargetingActive = true;
 				abilityTargetMode = AbilityTargetMode.None;
 				activeAbilityUser = null;
@@ -2322,7 +2467,7 @@ public sealed partial class BattleBoardController
 				((Component)abilityButton).gameObject.SetActive(false);
 				((Component)attachmentButton).gameObject.SetActive(false);
 				ShowTargetHints(battleCardState);
-				SetMessage("ATTACCO: scegli una pedina avversaria da colpire con " + battleCardState.Card.Name + ".");
+				SetMessage(GameText.Format(GameTextKeys.Combat.AttackTargetPrompt, battleCardState.Card.Name));
 				UpdateInteractions();
 				NotifyAdventureTutorial(AdventureTutorialAction.AttackPressed);
 			}
@@ -2334,7 +2479,12 @@ public sealed partial class BattleBoardController
 		if (!inputLocked && selectedPlayerIndex >= 0 && selectedPlayerIndex < playerCards.Count)
 		{
 			BattleCardState battleCardState = playerCards[selectedPlayerIndex];
-			if (!battleCardState.AbilityUsed && !battleCardState.AbilityArmed)
+			if (IsClassAbilityActionAvailable(battleCardState) && !IsCampaignPrimaryAffordable(battleCardState))
+			{
+				ShowNoManaCallout(battleCardState);
+				return;
+			}
+			if (IsClassAbilityActionAvailable(battleCardState))
 			{
 				attackTargetingActive = false;
 				pendingAbilityUser = battleCardState;
@@ -2351,6 +2501,21 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
+		// Guard nell'imbuto: qui ci si arriva sia dal bottone abilita' sia dai bottoni
+		// conferma/annulla. Senza mana non si entra in selezione bersaglio, altrimenti
+		// la pedina resta in mira con un'azione che non potra' mai pagare e il turno
+		// finisce per saltare.
+		if (!IsCampaignPrimaryAffordable(battleCardState))
+		{
+			ShowNoManaCallout(battleCardState);
+			// Ripristina bottoni e AbilityUsedThisTurn: la pedina resta giocabile.
+			CancelPendingAction();
+			SetMessage(GameText.GetOrFallbackSilent(
+				GameTextKeys.Combat.ManaInsufficientAbility,
+				"Mana insufficiente per l'abilita di {0}.",
+				battleCardState.Card.Name));
+			return;
+		}
 		pendingAbilityUser = null;
 		((Component)confirmActionButton).gameObject.SetActive(false);
 		((Component)cancelActionButton).gameObject.SetActive(false);
@@ -2365,33 +2530,35 @@ public sealed partial class BattleBoardController
 			battleCardState.AbilityArmed = true;
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.AssassinEnemy;
-			SetMessage("ABILITA ASSASSINO: scegli un nemico da inibire.");
+			SetMessage(GameText.Get(GameTextKeys.Combat.AssassinTargetPrompt));
 			UpdateInteractions();
 			break;
 		case HeroClass.Warrior:
+			// Si arma senza addebito: il mana viene scalato solo quando un bersaglio
+			// valido fa partire davvero l'attacco. Annullare la mira non costa nulla.
 			battleCardState.AbilityArmed = true;
 			attackTargetingActive = true;
 			ShowTargetHints(battleCardState);
-			SetMessage("ABILITA GUERRIERO: " + battleCardState.Card.Name + " sommerà il dado Vigore e un dado di uno step inferiore nel prossimo attacco.");
+			SetMessage(GameText.Format(GameTextKeys.Combat.WarriorAbilityReady, battleCardState.Card.Name));
 			break;
 		case HeroClass.Mage:
 			battleCardState.AbilityArmed = true;
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.MageEnemy;
-			SetMessage("ABILITA MAGO: scegli un nemico a cui abbassare il dado Vigore.");
+			SetMessage(GameText.Get(GameTextKeys.Combat.MageTargetPrompt));
 			UpdateInteractions();
 			break;
 		case HeroClass.Paladin:
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.PaladinAlly;
-			SetMessage("ABILITA PALADINO: scegli una pedina alleata o " + battleCardState.Card.Name + " stesso da proteggere.");
+			SetMessage(GameText.Format(GameTextKeys.Combat.PaladinTargetPrompt, battleCardState.Card.Name));
 			break;
 		case HeroClass.Hunter:
 			battleCardState.AbilityArmed = true;
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.HunterEnemy;
 			ShowTargetHints(battleCardState);
-			SetMessage("ABILITA CACCIATORE: scegli un nemico da marcare.");
+			SetMessage(GameText.Get(GameTextKeys.Combat.HunterTargetPrompt));
 			UpdateInteractions();
 			break;
 		case HeroClass.Necromancer:
@@ -2401,18 +2568,19 @@ public sealed partial class BattleBoardController
 			}
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.NecromancerAlly;
-			SetMessage("ABILITA NECROMANTE: scegli una carta alleata eliminata da rialzare.");
+			SetMessage(GameText.Get(GameTextKeys.Combat.NecromancerTargetPrompt));
 			UpdateInteractions();
 			break;
 		case HeroClass.Priest:
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.PriestAlly;
-			SetMessage("ABILITA SACERDOTE: scegli una carta alleata da benedire.");
+			SetMessage(GameText.Get(GameTextKeys.Combat.PriestTargetPrompt));
 			UpdateInteractions();
 			break;
 		case HeroClass.Barbarian:
 			return;
 		}
+		battleCardState.AbilityUsedThisTurn = true;
 		RefreshAbilityButton(battleCardState);
 		UpdateInteractions();
 	}
@@ -2447,10 +2615,48 @@ public sealed partial class BattleBoardController
 				((Component)abilityButton).gameObject.SetActive(false);
 				ClearTargetHints();
 				SetActiveTurnAura(null);
-				SetMessage($"Puoi equipaggiare questa carta sacrificandola, aumentando di +{AttachmentBonus(battleCardState)} la forza di una carta alleata.");
+				SetMessage(GameText.Format(GameTextKeys.Combat.AttachmentTargetPrompt, AttachmentBonus(battleCardState)));
 				UpdateInteractions();
 			}
 		}
+	}
+
+	private void ActivateCurrentSkip()
+	{
+		if (inputLocked || gameFinished || turnOrder.Count == 0 || currentTurnIndex < 0 || currentTurnIndex >= turnOrder.Count)
+		{
+			return;
+		}
+
+		BattleCardState activeCard = turnOrder[currentTurnIndex];
+		// Niente controllo su AbilityUsedThisTurn: saltare dopo un'abilita' e' permesso
+		// apposta, altrimenti a 0 mana la pedina resterebbe senza nessuna azione legale.
+		if (activeCard == null || activeCard.Eliminated || !activeCard.BelongsToPlayer)
+		{
+			return;
+		}
+
+		inputLocked = true;
+		attackTargetingActive = false;
+		abilityTargetMode = AbilityTargetMode.None;
+		activeAbilityUser = null;
+		activeAttachmentSource = null;
+		pendingAbilityUser = null;
+		activeCard.View.SetSelected(selected: false);
+		SetActiveTurnAura(null);
+		ClearTargetHints();
+		SetMessage(GameText.GetLocalizedFallback(
+			GameTextKeys.Combat.SkipTurnMessage,
+			"{0} salta il turno.",
+			"{0} skips the turn.",
+			activeCard.Card.Name));
+		AppendLog(GameText.GetLocalizedFallback(
+			GameTextKeys.Combat.SkipTurnLog,
+			"SALTA - {0} passa senza agire.",
+			"SKIP - {0} passes without acting.",
+			activeCard.Card.Name));
+		UpdateInteractions();
+		FinishTurn(skipped: true);
 	}
 
 	private bool CanUseAttachment(BattleCardState card)
@@ -2480,7 +2686,7 @@ public sealed partial class BattleBoardController
 	{
 		if (card != null && !card.Eliminated && !card.BelongsToPlayer && currentRoomType == RoomType.Monster)
 		{
-			return currentMonsterTier >= 3;
+			return RoomDifficultyRules.For(pendingRoomDifficulty).CpuUsesAbilities;
 		}
 		return false;
 	}
@@ -2488,7 +2694,7 @@ public sealed partial class BattleBoardController
 	private bool TryChooseCpuAttachment(BattleCardState source, out BattleCardState target)
 	{
 		target = null;
-		if (!CanCpuUseAdvancedActions(source) || source.Card.Strength < 2 || source.Card.Strength >= 5 || cpuCards.Count((BattleCardState card) => card != null && !card.Eliminated) <= 1)
+		if (!RoomDifficultyRules.For(pendingRoomDifficulty).CpuUsesAttachments || !CanCpuUseAdvancedActions(source) || source.Card.Strength < 2 || source.Card.Strength >= 5 || cpuCards.Count((BattleCardState card) => card != null && !card.Eliminated) <= 1)
 		{
 			return false;
 		}
@@ -2539,8 +2745,8 @@ public sealed partial class BattleBoardController
 		((Component)confirmActionButton).gameObject.SetActive(false);
 		((Component)cancelActionButton).gameObject.SetActive(false);
 
-		AppendLog("AUTO-VITTORIA - la CPU non ha attacchi possibili, abilita disponibili o equip utili: la stanza viene risolta automaticamente.");
-		SetBattlefieldMessage("AUTO-VITTORIA: la CPU non puo piu colpirti ne usare azioni utili.");
+		AppendLog(GameText.Get(GameTextKeys.Combat.AutoVictoryLog));
+		SetBattlefieldMessage(GameText.Get(GameTextKeys.Combat.AutoVictoryMessage));
 		yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 
 		HeroClass killerHeroClass = AutoWinDefeatKillerClass();
@@ -2638,7 +2844,7 @@ public sealed partial class BattleBoardController
 
 	private bool CpuCanUseAttachment(BattleCardState source)
 	{
-		if (!CanCpuUseAdvancedActions(source) || source.Card.Strength < 2 || source.Card.Strength >= 5 || cpuCards.Count((BattleCardState card) => card != null && !card.Eliminated) <= 1)
+		if (!RoomDifficultyRules.For(pendingRoomDifficulty).CpuUsesAttachments || !CanCpuUseAdvancedActions(source) || source.Card.Strength < 2 || source.Card.Strength >= 5 || cpuCards.Count((BattleCardState card) => card != null && !card.Eliminated) <= 1)
 		{
 			return false;
 		}
@@ -2652,7 +2858,7 @@ public sealed partial class BattleBoardController
 
 	private bool CpuHasAvailableClassAbility(BattleCardState card)
 	{
-		if (!CanCpuUseAdvancedActions(card) || card.AbilityUsed || card.AbilityArmed || !ClassAbilitiesEnabled(card))
+		if (!CanCpuUseAdvancedActions(card) || card.AbilityUsed || card.AbilityArmed || !ClassAbilitiesEnabled(card) || !IsCampaignPrimaryAndAttackAffordable(card))
 		{
 			return false;
 		}
@@ -2676,13 +2882,15 @@ public sealed partial class BattleBoardController
 	private bool TryUseCpuClassAbility(BattleCardState card, out string message)
 	{
 		message = null;
-		if (!CanCpuUseAdvancedActions(card) || card.AbilityUsed || card.AbilityArmed || !ClassAbilitiesEnabled(card))
+		if (!CanCpuUseAdvancedActions(card) || card.AbilityUsed || card.AbilityArmed || !ClassAbilitiesEnabled(card) || !IsCampaignPrimaryAndAttackAffordable(card))
 		{
 			return false;
 		}
 		switch (card.Card.HeroClass)
 		{
 		case HeroClass.Warrior:
+			if (!TrySpendCampaignPrimaryMana(card))
+				return false;
 			card.AbilityArmed = true;
 			RefreshPersistentStatus(card);
 			message = "CPU ABILITA: " + card.Card.Name + " prepara un colpo pesante: tirera il dado Vigore e un dado di uno step inferiore.";
@@ -2767,6 +2975,11 @@ public sealed partial class BattleBoardController
 	{
 		BattleCardState battleCardState = cpuCards.Where((BattleCardState ally) => ally != null && !ally.Eliminated).OrderByDescending(DisplayStrength).FirstOrDefault();
 		if (battleCardState == null)
+		{
+			message = null;
+			return false;
+		}
+		if (!TrySpendCampaignPrimaryMana(card))
 		{
 			message = null;
 			return false;
@@ -2911,8 +3124,8 @@ public sealed partial class BattleBoardController
 		source.IsAttachment = true;
 		source.AttachedTo = target;
 		source.View.SetSelected(selected: false);
-		SetMessage($"POTENZIA: {source.Card.Name} viene sacrificata e potenzia {target.Card.Name} di +{num} per tutta la battaglia.");
-		AppendLog($"POTENZIA - {source.Card.Name} sacrificata: {target.Card.Name} ottiene +{num} permanente.");
+		SetMessage(GameText.Format(GameTextKeys.Combat.AttachmentApplied, source.Card.Name, target.Card.Name, num));
+		AppendLog(GameText.Format(GameTextKeys.Combat.AttachmentAppliedLog, source.Card.Name, target.Card.Name, num));
 		PlayAttachmentSfx();
 		yield return PlayTimelineAwareDefeatAnimation(source, source.Card.HeroClass);
 		yield return WaitForCardInspectionPause(configuration.Animation.TurnResultPause);
@@ -2922,6 +3135,7 @@ public sealed partial class BattleBoardController
 
 	private IEnumerator ExecuteCpuAttachment(BattleCardState source, BattleCardState target)
 	{
+		source.View?.PlayEquipActionCallout();
 		if ((Object)(object)battleAnimationPlayer != (Object)null)
 			yield return battleAnimationPlayer.PlayTargetLine(source.View, target.View, AttachmentTargetLineColor);
 		int num = AttachmentBonus(source);
@@ -2932,8 +3146,8 @@ public sealed partial class BattleBoardController
 		source.IsAttachment = true;
 		source.AttachedTo = target;
 		source.View.SetSelected(selected: false);
-		SetMessage($"CPU POTENZIA: {source.Card.Name} viene sacrificata e potenzia {target.Card.Name} di +{num} per tutta la battaglia.");
-		AppendLog($"CPU POTENZIA - {source.Card.Name} sacrificata: {target.Card.Name} ottiene +{num} permanente.");
+		SetMessage(GameText.Format(GameTextKeys.Combat.CpuAttachmentApplied, source.Card.Name, target.Card.Name, num));
+		AppendLog(GameText.Format(GameTextKeys.Combat.CpuAttachmentAppliedLog, source.Card.Name, target.Card.Name, num));
 		PlayAttachmentSfx();
 		yield return PlayTimelineAwareDefeatAnimation(source, source.Card.HeroClass);
 		yield return WaitForCardInspectionPause(configuration.Animation.TurnResultPause);
@@ -3009,7 +3223,27 @@ public sealed partial class BattleBoardController
 				battleCardState2.View.ShowAbilityAction(GetAbilityButtonSprite(), new UnityAction(ActivateCurrentAbility));
 				return;
 			}
-			if (flag && flag2)
+			// Lo skip resta sempre disponibile: e' l'uscita di sicurezza da uno stallo in cui
+		// hai usato un'abilita', sei a 0 mana e non puoi nemmeno attaccare. Il prezzo di
+		// quell'uscita e' il recupero azzerato, gestito in FinishCampaignManaActivation.
+		bool skipAvailable = true;
+			bool tutorialRestrictsActions = adventureScriptedTutorialActive && adventureScriptedTutorialStep == 5;
+			if (skipAvailable && !tutorialRestrictsActions)
+			{
+				bool supremeAvailable = IsSupremeActionAvailable(battleCardState2);
+				battleCardState2.View.ShowTurnActions(
+					GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack),
+					flag ? GetAbilityButtonSprite() : null, flag ? new UnityAction(ActivateCurrentAbility) : null,
+					flag2 ? GetAttachmentButtonSprite() : null, flag2 ? new UnityAction(ActivateCurrentAttachment) : null,
+					GetSkipButtonSprite(), new UnityAction(ActivateCurrentSkip),
+					supremeAvailable ? GetSupremeButtonSprite() : null,
+					supremeAvailable ? new UnityAction(ActivateCurrentSupreme) : null,
+					AttackManaBadge(battleCardState2),
+					flag ? PrimaryManaBadge(battleCardState2) : null,
+					SkipManaBadge(battleCardState2),
+					supremeAvailable ? SupremeManaBadge(battleCardState2) : null);
+			}
+			else if (flag && flag2)
 			{
 				if (adventureScriptedTutorialActive && adventureScriptedTutorialStep == 5)
 				{
@@ -3040,7 +3274,12 @@ public sealed partial class BattleBoardController
 
 	private bool IsClassAbilityActionAvailable(BattleCardState card)
 	{
-		if (card == null || card.Eliminated || card.AbilityUsed || card.AbilityArmed)
+		// Il mana non entra qui: il bottone resta visibile e cliccabile anche senza
+		// riserva, e il rifiuto arriva come callout sulla pedina quando lo premi.
+		// Non c'e' nemmeno un limite d'uso: l'abilita' si puo' ripetere, anche nello
+		// stesso turno, finche' la riserva regge. AbilityArmed resta perche' un'abilita'
+		// gia' innescata va prima consumata, altrimenti se ne perderebbe una pagata.
+		if (card == null || card.Eliminated || card.AbilityArmed)
 		{
 			return false;
 		}
@@ -3075,6 +3314,11 @@ public sealed partial class BattleBoardController
 		return LoadSpriteResource("UI/attachment_button");
 	}
 
+	private Sprite GetSkipButtonSprite()
+	{
+		return LoadSpriteResource("UI/skip_button");
+	}
+
 	private static Sprite LoadSpriteResource(string resourcePath)
 	{
 		if (string.IsNullOrWhiteSpace(resourcePath))
@@ -3103,11 +3347,20 @@ public sealed partial class BattleBoardController
 		return null;
 	}
 
-	private void FinishTurn()
+	private static Sprite LoadHoneyPotCurrencySprite()
+	{
+		HoneyPotCurrencyReference reference = Resources.Load<HoneyPotCurrencyReference>("UI/HoneyPotCurrencyReference");
+		return reference != null && reference.Sprite != null
+			? reference.Sprite
+			: LoadSpriteResource("UI/honey_pot_currency");
+	}
+
+	private void FinishTurn(bool skipped = false)
 	{
 		if (turnOrder.Count > 0 && currentTurnIndex >= 0 && currentTurnIndex < turnOrder.Count)
 		{
 			BattleCardState battleCardState = turnOrder[currentTurnIndex];
+			FinishCampaignManaActivation(battleCardState, skipped);
 			if (battleCardState.IsSpirit)
 			{
 				battleCardState.IsSpirit = false;
@@ -3116,7 +3369,7 @@ public sealed partial class BattleBoardController
 				battleCardState.View.SetSelected(selected: false);
 				ApplyMightAuraDeathBonuses(battleCardState);
 				RefreshPersistentStatus(battleCardState);
-				AppendLog("ULTIMO TURNO - " + battleCardState.Card.Name + " svanisce dopo aver agito.");
+				AppendLog(GameText.Format(GameTextKeys.Combat.SpiritLastTurnEndedLog, battleCardState.Card.Name));
 			}
 		}
 		if (!CheckEndGame())
@@ -3138,7 +3391,7 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		AppendLog("GOLEM - nuova forma attiva: " + GolemFormName(activeComposableGolem.ActiveForm.Form) + ".");
+		AppendLog(GameText.Format(GameTextKeys.Combat.GolemNewFormLog, GolemFormName(activeComposableGolem.ActiveForm.Form)));
 		BattleCardState golemProxy = cpuCards.FirstOrDefault((BattleCardState card) => IsComposableGolemProxy(card));
 		RefreshComposableGolemPawn(golemProxy);
 		RefreshInitiativeDisplay();
@@ -3195,6 +3448,10 @@ public sealed partial class BattleBoardController
 
 		yield return WaitForCardInspectionPause(Mathf.Max(0.35f, configuration.Animation.CombatResultHold * 0.42f) + 0.2f);
 		combatResultRoot.SetActive(false);
+		if (!result.DefenderIsDefeated)
+		{
+			RegisterCampaignParryMana(defender);
+		}
 	}
 
 	private IEnumerator ShowAutomaticOutcome(bool guaranteedKill)
@@ -3214,6 +3471,7 @@ public sealed partial class BattleBoardController
 		{
 			currentTurnIndex = 0;
 			roundNumber++;
+			BeginCampaignManaRound();
 		}
 	}
 
@@ -3271,7 +3529,7 @@ public sealed partial class BattleBoardController
 		}
 		if (flag && appendLog)
 		{
-			AppendLog("AURA ATTIVA - " + AuraDisplayName(playerAura));
+			AppendLog(GameText.Format(GameTextKeys.Combat.AuraActiveLog, AuraDisplayName(playerAura)));
 			ShowFirstAuraHint(playerAura);
 		}
 	}
@@ -3286,7 +3544,7 @@ public sealed partial class BattleBoardController
 		}
 		if (flag && appendLog)
 		{
-			AppendLog("AURA CPU ATTIVA - " + AuraDisplayName(cpuAura));
+			AppendLog(GameText.Format(GameTextKeys.Combat.CpuAuraActiveLog, AuraDisplayName(cpuAura)));
 		}
 	}
 
@@ -3862,6 +4120,27 @@ public sealed partial class BattleBoardController
 
 	private int ChooseCpuTarget(BattleCardState attacker, out string decisionReason)
 	{
+		if (adventureScriptedTutorialActive)
+		{
+			string requiredTargetId = IsTutorialCard(attacker.Card.Id, "6-chimera-rogue")
+				? "7-whitealien-rogue"
+				: IsTutorialCard(attacker.Card.Id, "7-whitealien-mage")
+					? "10-champion-warrior"
+					: null;
+			if (requiredTargetId != null)
+			{
+				int scriptedIndex = playerCards.FindIndex(card =>
+					card != null
+					&& !card.Eliminated
+					&& IsTutorialCard(card.Card.Id, requiredTargetId));
+				if (scriptedIndex >= 0)
+				{
+					decisionReason = "bersaglio previsto dal tutorial";
+					return scriptedIndex;
+				}
+			}
+		}
+
 		GameplayConfiguration gameplay = configuration.Gameplay;
 		List<CombatCard> list = new List<CombatCard>(playerCards.Count);
 		List<bool> list2 = new List<bool>(playerCards.Count);

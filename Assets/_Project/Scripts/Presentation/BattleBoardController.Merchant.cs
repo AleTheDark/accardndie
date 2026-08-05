@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -54,6 +55,7 @@ public sealed partial class BattleBoardController
 
 	private void CloseMerchantPanel()
 	{
+		HideMerchantBranchConfirmPopup();
 		if ((Object)(object)merchantPanel != (Object)null)
 		{
 			merchantPanel.SetActive(false);
@@ -78,6 +80,7 @@ public sealed partial class BattleBoardController
 	// Azzera la vetrina e il vincolo di banco: chiamato all'ingresso di ogni stanza mercato.
 	private void ResetMerchantStock()
 	{
+		HideMerchantBranchConfirmPopup();
 		merchantCardOffers.Clear();
 		merchantItemOffers.Clear();
 		merchantLockedBranch = MerchantBranch.None;
@@ -303,6 +306,11 @@ public sealed partial class BattleBoardController
 
 	private void BuyMerchantCardOffer(MerchantCardOffer offer)
 	{
+		BuyMerchantCardOffer(offer, branchLockConfirmed: false);
+	}
+
+	private void BuyMerchantCardOffer(MerchantCardOffer offer, bool branchLockConfirmed)
+	{
 		if (offer == null || (Object)(object)merchantPanel == (Object)null || !merchantPanel.activeSelf)
 		{
 			return;
@@ -329,27 +337,69 @@ public sealed partial class BattleBoardController
 			List<CardDefinition> pool = GetMerchantCardPool();
 			if (pool.Count == 0)
 			{
-				SetMessage("MERCATO: il mercante non ha altre carte da offrirti.");
+				SetMessage(GameText.GetOrFallbackSilent(
+					GameTextKeys.Merchant.NoMoreCards,
+					"MERCATO: il mercante non ha altre carte da offrirti."));
 				RefreshMerchantPanel();
 				return;
 			}
-			definition = pool[random.NextInclusive(0, pool.Count - 1)];
 		}
-		if ((Object)(object)definition == (Object)null)
+		else if ((Object)(object)definition == (Object)null)
 		{
 			SetMessage("MERCATO: questa offerta non e' piu' disponibile.");
 			RefreshMerchantPanel();
 			return;
 		}
+		if (runProgress.AvailableExperience < offer.Cost)
+		{
+			SetMessage(GameText.GetOrFallbackSilent(
+				GameTextKeys.Merchant.InsufficientExperience,
+				"MERCATO: servono {0} EXP, disponibili {1}.",
+				offer.Cost,
+				runProgress.AvailableExperience));
+			RefreshMerchantPanel();
+			return;
+		}
+		if (merchantLockedBranch == MerchantBranch.None && !branchLockConfirmed)
+		{
+			string purchaseName = offer.Mystery
+				? GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UnknownCard, "una carta ignota")
+				: CardDisplayNames.MarketName(definition);
+			ShowMerchantBranchConfirmPopup(
+				MerchantBranch.Cards,
+				purchaseName,
+				offer.Cost,
+				() => BuyMerchantCardOffer(offer, branchLockConfirmed: true));
+			return;
+		}
+		if (offer.Mystery)
+		{
+			// La carta ignota viene estratta solo dopo la conferma, cosi' Annulla non consuma
+			// neppure una scelta casuale del mercato.
+			List<CardDefinition> pool = GetMerchantCardPool();
+			if (pool.Count == 0)
+			{
+				SetMessage(GameText.GetOrFallbackSilent(
+					GameTextKeys.Merchant.NoMoreCards,
+					"MERCATO: il mercante non ha altre carte da offrirti."));
+				RefreshMerchantPanel();
+				return;
+			}
+			definition = pool[random.NextInclusive(0, pool.Count - 1)];
+		}
 		if (!runProgress.TrySpendExperience(offer.Cost))
 		{
-			SetMessage($"MERCATO: servono {offer.Cost} EXP, disponibili {runProgress.AvailableExperience}.");
+			SetMessage(GameText.GetOrFallbackSilent(
+				GameTextKeys.Merchant.InsufficientExperience,
+				"MERCATO: servono {0} EXP, disponibili {1}.",
+				offer.Cost,
+				runProgress.AvailableExperience));
 			RefreshMerchantPanel();
 			return;
 		}
 		if (!TryAddCardToPlayerCollection(definition))
 		{
-			runProgress.AddExperience(offer.Cost);
+			runProgress.AddSpendableExperience(offer.Cost);
 			SetMessage("MERCATO: questa carta e' gia' nel mazzo.");
 			RefreshMerchantPanel();
 			return;
@@ -367,6 +417,11 @@ public sealed partial class BattleBoardController
 	}
 
 	private void BuyMerchantItemOffer(MerchantItemOffer offer)
+	{
+		BuyMerchantItemOffer(offer, branchLockConfirmed: false);
+	}
+
+	private void BuyMerchantItemOffer(MerchantItemOffer offer, bool branchLockConfirmed)
 	{
 		if (offer == null || (Object)(object)merchantPanel == (Object)null || !merchantPanel.activeSelf)
 		{
@@ -386,9 +441,32 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
+		if (runProgress.AvailableExperience < offer.Cost)
+		{
+			SetMessage(GameText.GetOrFallbackSilent(
+				GameTextKeys.Merchant.InsufficientExperience,
+				"MERCATO: servono {0} EXP, disponibili {1}.",
+				offer.Cost,
+				runProgress.AvailableExperience));
+			RefreshMerchantPanel();
+			return;
+		}
+		if (merchantLockedBranch == MerchantBranch.None && !branchLockConfirmed)
+		{
+			ShowMerchantBranchConfirmPopup(
+				MerchantBranch.Items,
+				CampaignConsumableName(offer.ItemType),
+				offer.Cost,
+				() => BuyMerchantItemOffer(offer, branchLockConfirmed: true));
+			return;
+		}
 		if (!runProgress.TrySpendExperience(offer.Cost))
 		{
-			SetMessage($"MERCATO: servono {offer.Cost} EXP, disponibili {runProgress.AvailableExperience}.");
+			SetMessage(GameText.GetOrFallbackSilent(
+				GameTextKeys.Merchant.InsufficientExperience,
+				"MERCATO: servono {0} EXP, disponibili {1}.",
+				offer.Cost,
+				runProgress.AvailableExperience));
 			RefreshMerchantPanel();
 			return;
 		}
@@ -400,6 +478,45 @@ public sealed partial class BattleBoardController
 		PlayBuyCardSfx();
 		SetMessage($"ACQUISTO: {itemName} entra nella borsa per {offer.Cost} EXP. EXP disponibile: {runProgress.AvailableExperience}.");
 		RefreshMerchantPanel();
+	}
+
+	private void ShowMerchantBranchConfirmPopup(
+		MerchantBranch chosenBranch,
+		string purchaseName,
+		int cost,
+		Action confirmAction)
+	{
+		if ((Object)(object)merchantBranchConfirmPopup == (Object)null)
+		{
+			confirmAction?.Invoke();
+			return;
+		}
+		string cardsBranch = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchCards, "CARTE");
+		string itemsBranch = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchItems, "OGGETTI");
+		string chosenName = chosenBranch == MerchantBranch.Cards ? cardsBranch : itemsBranch;
+		string closedName = chosenBranch == MerchantBranch.Cards ? itemsBranch : cardsBranch;
+		merchantBranchConfirmTitleText.text = GameText.GetOrFallbackSilent(
+			GameTextKeys.Merchant.BranchConfirmTitle,
+			"SCEGLI IL BANCO {0}",
+			chosenName);
+		merchantBranchConfirmBodyText.text = GameText.GetOrFallbackSilent(
+			GameTextKeys.Merchant.BranchConfirmBody,
+			"Stai per acquistare {0} per {1} EXP. Questo primo acquisto chiuderà il banco {2} fino alla prossima stanza Mercato.\n\nVuoi procedere?",
+			purchaseName,
+			cost,
+			closedName);
+		merchantBranchConfirmAction = confirmAction;
+		merchantBranchConfirmPopup.SetActive(true);
+		merchantBranchConfirmPopup.transform.SetAsLastSibling();
+	}
+
+	private void HideMerchantBranchConfirmPopup()
+	{
+		if ((Object)(object)merchantBranchConfirmPopup != (Object)null)
+		{
+			merchantBranchConfirmPopup.SetActive(false);
+		}
+		merchantBranchConfirmAction = null;
 	}
 
 	// --- Vendita e recupero (sempre disponibili, in entrambi i banchi) ---
@@ -686,7 +803,12 @@ public sealed partial class BattleBoardController
 		string displayName = CardDisplayNames.MarketName(definition);
 		if (!runProgress.TrySpendExperience(num))
 		{
-			SetMessage($"MERCATO: servono {num} EXP per recuperare {displayName}, disponibili {runProgress.AvailableExperience}.");
+			SetMessage(GameText.GetOrFallbackSilent(
+				GameTextKeys.Merchant.RecoverInsufficientExperience,
+				"MERCATO: servono {0} EXP per recuperare {1}, disponibili {2}.",
+				num,
+				displayName,
+				runProgress.AvailableExperience));
 			RefreshMerchantPanel();
 		}
 		else if (!campaignDeck.RecoverFromGraveyard(selectedMerchantSaleCard))

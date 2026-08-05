@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using AccardND.Battlefield;
+using AccardND.Localization;
 using AccardND.Network;
 using AccardND.NetProtocol;
 using AccardND.PvpUi;
@@ -31,6 +32,10 @@ namespace AccardND.UI
         private InputField nicknameInput;
         private Button loginButton;
         private Button nicknameConfirmButton;
+        private GameObject updateOverlay;
+        private Text updateMessageText;
+        private Button updateActionButton;
+        private string updateUrl;
         private bool busy;
         private PvpServerClient serverClient;
         private TaskCompletionSource<string> pendingNickname;
@@ -50,7 +55,7 @@ namespace AccardND.UI
                 await TryResumeSessionAsync();
             else
             {
-                SetStatus("Accedi con Google per continuare.");
+                SetStatus(GameText.Get(GameTextKeys.Login.GoogleRequired));
                 SetButtonsInteractable(true);
             }
         }
@@ -68,11 +73,11 @@ namespace AccardND.UI
             SetButtonsInteractable(false);
             try
             {
-                SetStatus("Ripristino sessione...");
+                SetStatus(GameText.Get(GameTextKeys.Login.RestoringSession));
                 (string accessToken, string provider) = await PvpUgsAuth.TryResumeSessionAsync();
                 if (string.IsNullOrEmpty(accessToken))
                 {
-                    SetStatus("Accedi con Google per continuare.");
+                    SetStatus(GameText.Get(GameTextKeys.Login.GoogleRequired));
                     SetButtonsInteractable(true);
                     busy = false;
                     return;
@@ -83,7 +88,7 @@ namespace AccardND.UI
                     PvpUgsAuth.ForgetSession();
                     PlayerPrefs.DeleteKey(LoginProviderPrefsKey);
                     PlayerPrefs.Save();
-                    SetStatus("Accedi con Google per continuare.");
+                    SetStatus(GameText.Get(GameTextKeys.Login.GoogleRequired));
                     SetButtonsInteractable(true);
                     busy = false;
                     return;
@@ -91,7 +96,7 @@ namespace AccardND.UI
 
                 signedInAccessToken = accessToken;
                 SetGuestMode(false);
-                SetStatus($"Bentornato ({provider}).");
+                SetStatus(GameText.Format(GameTextKeys.Login.WelcomeBack, provider));
                 if (await ConnectAccountServerAsync(false))
                     OpenMainScene();
             }
@@ -99,7 +104,7 @@ namespace AccardND.UI
             {
                 // Sessione scaduta o server non raggiungibile: si ricade sui bottoni.
                 Debug.LogWarning($"[Login] Ripristino sessione fallito: {exception.Message}");
-                SetStatus("Accedi con Google per continuare.");
+                SetStatus(GameText.Get(GameTextKeys.Login.GoogleRequired));
                 SetButtonsInteractable(true);
                 busy = false;
             }
@@ -132,13 +137,13 @@ namespace AccardND.UI
             Stretch(shade.rectTransform);
 
             RectTransform panel = CreatePanel(canvas.transform);
-            CreateTitle(panel, "ACCEDI", new Vector2(0f, 225f), 46);
-            CreateSubtitle(panel, "ENTRA NEL REGNO", new Vector2(0f, 177f), 18);
+            CreateTitle(panel, GameText.Get(GameTextKeys.Login.Title), new Vector2(0f, 225f), 46);
+            CreateSubtitle(panel, GameText.Get(GameTextKeys.Login.Subtitle), new Vector2(0f, 177f), 18);
 
             statusText = CreateText(
                 panel,
                 "Status",
-                "Controllo aggiornamenti e accesso al tuo account di gioco.",
+                GameText.Get(GameTextKeys.Login.InitialStatus),
                 24,
                 TextAnchor.MiddleCenter,
                 new Color(0.88f, 0.92f, 0.96f));
@@ -146,17 +151,98 @@ namespace AccardND.UI
             statusText.horizontalOverflow = HorizontalWrapMode.Wrap;
             SetRect(statusText.rectTransform, new Vector2(0f, 52f), new Vector2(540f, 120f));
 
-            nicknameInput = CreateInput(panel, "Nickname", "NICKNAME", new Vector2(0f, -45f), false);
+            nicknameInput = CreateInput(panel, "Nickname", GameText.Get(GameTextKeys.Login.NicknamePlaceholder), new Vector2(0f, -45f), false);
             nicknameInput.characterLimit = NicknameMaxLength;
             nicknameInput.gameObject.SetActive(false);
             nicknameInput.onEndEdit.AddListener(_ => SubmitNickname());
 
-            loginButton = CreateButton(panel, "Login", "ACCEDI GOOGLE", new Vector2(0f, -105f), 27);
-            nicknameConfirmButton = CreateButton(panel, "Confirm Nickname", "CONFERMA", new Vector2(0f, -195f), 28);
+            loginButton = CreateButton(panel, "Login", GameText.Get(GameTextKeys.Login.GoogleButton), new Vector2(0f, -105f), 27);
+            nicknameConfirmButton = CreateButton(panel, "Confirm Nickname", GameText.Get(GameTextKeys.Common.Confirm), new Vector2(0f, -195f), 28);
             nicknameConfirmButton.gameObject.SetActive(false);
 
             loginButton.onClick.AddListener(StartGoogleFlow);
             nicknameConfirmButton.onClick.AddListener(SubmitNickname);
+
+            BuildUpdateOverlay(canvas.transform);
+        }
+
+        /// <summary>
+        /// Avviso di aggiornamento: nasce spento e copre tutta la schermata quando il
+        /// server rifiuta la versione. Da qui non si prosegue, quindi non ha un tasto
+        /// per chiuderlo: l'unica azione è andare a prendere la build nuova.
+        /// </summary>
+        private void BuildUpdateOverlay(Transform canvasParent)
+        {
+            Image scrim = CreateObject<Image>("Update Overlay", canvasParent);
+            scrim.color = new Color(0.02f, 0.01f, 0.05f, 0.86f);
+            scrim.raycastTarget = true;
+            Stretch(scrim.rectTransform);
+            updateOverlay = scrim.gameObject;
+
+            Image panel = CreateObject<Image>("Update Panel", scrim.transform);
+            panel.sprite = MmoUiTheme.GetPanelSprite();
+            panel.type = Image.Type.Sliced;
+            panel.color = new Color(0.16f, 0.09f, 0.24f, 0.98f);
+            SetRect(panel.rectTransform, Vector2.zero, new Vector2(660f, 540f));
+
+            CreateTitle(panel.transform, GameText.Get(GameTextKeys.Login.UpdateTitle), new Vector2(0f, 185f), 42);
+
+            updateMessageText = CreateText(
+                panel.transform,
+                "Update Message",
+                string.Empty,
+                26,
+                TextAnchor.UpperCenter,
+                new Color(0.9f, 0.93f, 0.97f));
+            updateMessageText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            SetRect(updateMessageText.rectTransform, new Vector2(0f, 45f), new Vector2(570f, 200f));
+
+            updateActionButton = CreateButton(panel.transform, "Update", GameText.Get(GameTextKeys.Login.UpdateNow), new Vector2(0f, -150f), 30);
+            updateActionButton.onClick.AddListener(OpenUpdateUrl);
+
+            updateOverlay.SetActive(false);
+        }
+
+        /// <summary>
+        /// Il server ha rifiutato l'accesso perché la build è vecchia. Si resta sulla
+        /// schermata di login: niente bottone Google (riprovare darebbe lo stesso
+        /// rifiuto), solo l'avviso di aggiornare.
+        /// </summary>
+        private void ShowUpdateRequired(AuthResponse auth)
+        {
+            serverClient?.Dispose();
+            serverClient = null;
+            signedInAccessToken = null;
+
+            updateUrl = auth?.updateUrl;
+            string required = string.IsNullOrWhiteSpace(auth?.requiredVersion)
+                ? GameText.Get(GameTextKeys.Login.UpdateRequiredGeneric)
+                : GameText.Format(GameTextKeys.Login.UpdateRequiredVersion, auth.requiredVersion);
+            if (updateMessageText != null)
+            {
+                updateMessageText.text = GameText.Format(
+                    GameTextKeys.Login.UpdateMessage,
+                    GameVersion.Current,
+                    required);
+            }
+
+            if (updateActionButton != null)
+                updateActionButton.gameObject.SetActive(!string.IsNullOrWhiteSpace(updateUrl));
+
+            SetNicknameUiVisible(false);
+            if (loginButton != null)
+                loginButton.gameObject.SetActive(false);
+            SetStatus(GameText.Get(GameTextKeys.Login.VersionOutdated));
+            if (updateOverlay != null)
+                updateOverlay.SetActive(true);
+
+            // busy resta true: da questa schermata non si entra in nessun caso.
+        }
+
+        private void OpenUpdateUrl()
+        {
+            if (!string.IsNullOrWhiteSpace(updateUrl))
+                Application.OpenURL(updateUrl);
         }
 
         private async void StartGoogleFlow()
@@ -183,7 +269,7 @@ namespace AccardND.UI
             }
             catch (System.Exception exception)
             {
-                SetStatus($"Accesso non riuscito: {exception.Message}\nPuoi riprovare con Google.");
+                SetStatus(GameText.Format(GameTextKeys.Login.AccessFailed, exception.Message));
                 SetButtonsInteractable(true);
                 busy = false;
             }
@@ -191,31 +277,31 @@ namespace AccardND.UI
 
         private async Task CheckForUpdatesAsync()
         {
-            SetStatus("Controllo aggiornamenti...");
+            SetStatus(GameText.Get(GameTextKeys.Login.CheckingUpdates));
             await PvpAsync.NextFrameAsync();
 
             // Punto di estensione per Play Asset Delivery / Addressables.
             // Google Play aggiorna gia' l'APK/AAB; qui in futuro scaricheremo asset bundle extra.
             await WaitSecondsAsync(0.35f);
-            SetStatus("Gioco aggiornato.");
+            SetStatus(GameText.Get(GameTextKeys.Login.Updated));
         }
 
         private async Task AuthenticateWithGoogleAsync()
         {
-            SetStatus($"Accesso con {GoogleLoginLabel()}...");
+            SetStatus(GameText.Format(GameTextKeys.Login.AccessingProvider, GoogleLoginLabel()));
             if (!PvpUgsAuth.IsAvailable)
             {
-                throw new System.InvalidOperationException("Unity Authentication non disponibile.");
+                throw new System.InvalidOperationException(GameText.Get(GameTextKeys.Login.AuthenticationUnavailable));
             }
 
             (string accessToken, string provider) = await PvpUgsAuth.SignInWithGoogleAsync();
             if (string.IsNullOrEmpty(accessToken))
-                throw new System.InvalidOperationException(provider ?? "token mancante");
+                throw new System.InvalidOperationException(provider ?? GameText.Get(GameTextKeys.Login.MissingToken));
 
             signedInAccessToken = accessToken;
             PlayerPrefs.SetString(LoginProviderPrefsKey, GoogleLoginProvider);
             PlayerPrefs.Save();
-            SetStatus($"Accesso completato ({provider}).");
+            SetStatus(GameText.Format(GameTextKeys.Login.AccessComplete, provider));
             await WaitSecondsAsync(0.25f);
         }
 
@@ -230,25 +316,32 @@ namespace AccardND.UI
 
         private async Task<bool> ConnectAccountServerAsync(bool allowNicknameSelection)
         {
-            SetStatus("Controllo account di gioco...");
+            SetStatus(GameText.Get(GameTextKeys.Login.CheckingAccount));
             serverClient?.Dispose();
             serverClient = new PvpServerClient();
             await serverClient.ConnectAsync(ServerUrl);
 
             if (string.IsNullOrEmpty(signedInAccessToken))
-                throw new System.InvalidOperationException("token account non disponibile");
+                throw new System.InvalidOperationException(GameText.Get(GameTextKeys.Login.MissingAccountToken));
 
             await serverClient.SendAsync(MessageTypes.AuthUgs, new UgsLoginRequest
             {
                 accessToken = signedInAccessToken,
                 displayName = string.Empty,
                 authMethod = PvpUgsAuth.CurrentAuthMethod(),
-                googleIdToken = PvpUgsAuth.LastGoogleIdToken
+                googleIdToken = PvpUgsAuth.LastGoogleIdToken,
+                clientVersion = GameVersion.Current
             });
 
             AuthResponse auth = await WaitForMessageAsync<AuthResponse>(MessageTypes.AuthResponse, 12f);
+            if (auth is { requiresUpdate: true })
+            {
+                ShowUpdateRequired(auth);
+                return false;
+            }
+
             if (auth == null || !auth.ok)
-                throw new System.InvalidOperationException(auth?.error ?? "server account non disponibile");
+                throw new System.InvalidOperationException(auth?.error ?? GameText.Get(GameTextKeys.Login.AccountServerUnavailable));
 
             if (auth.requiresNickname)
             {
@@ -260,7 +353,7 @@ namespace AccardND.UI
                     PvpUgsAuth.ForgetSession();
                     PlayerPrefs.DeleteKey(LoginProviderPrefsKey);
                     PlayerPrefs.Save();
-                    SetStatus("Accedi con Google per scegliere o recuperare il tuo account.");
+                    SetStatus(GameText.Get(GameTextKeys.Login.GoogleAccountRequired));
                     SetButtonsInteractable(true);
                     busy = false;
                     return false;
@@ -293,13 +386,14 @@ namespace AccardND.UI
                     accessToken = accessToken,
                     displayName = string.Empty,
                     authMethod = PvpUgsAuth.CurrentAuthMethod(),
-                    googleIdToken = PvpUgsAuth.LastGoogleIdToken
+                    googleIdToken = PvpUgsAuth.LastGoogleIdToken,
+                    clientVersion = GameVersion.Current
                 };
         }
 
         private async Task<string> RequireNicknameAsync()
         {
-            SetStatus("Scegli un nickname unico per continuare.");
+            SetStatus(GameText.Get(GameTextKeys.Login.ChooseNickname));
             SetNicknameUiVisible(true);
 
             while (true)
@@ -309,11 +403,11 @@ namespace AccardND.UI
                 nickname = SanitizeNickname(nickname);
                 if (nickname.Length < 3)
                 {
-                    SetStatus("Il nickname deve avere almeno 3 caratteri.");
+                    SetStatus(GameText.Get(GameTextKeys.Login.NicknameTooShort));
                     continue;
                 }
 
-                SetStatus("Controllo nickname...");
+                SetStatus(GameText.Get(GameTextKeys.Login.CheckingNickname));
                 await serverClient.SendAsync(MessageTypes.NicknameSet, new SetNicknameRequest
                 {
                     nickname = nickname
@@ -323,13 +417,13 @@ namespace AccardND.UI
                 if (response is { ok: true })
                 {
                     SaveNickname(response.nickname);
-                    SetStatus($"Benvenuto, {response.nickname}.");
+                    SetStatus(GameText.Format(GameTextKeys.Login.Welcome, response.nickname));
                     SetNicknameUiVisible(false);
                     await WaitSecondsAsync(0.35f);
                     return response.nickname;
                 }
 
-                SetStatus(response?.error ?? "Nickname non disponibile. Scegline un altro.");
+                SetStatus(response?.error ?? GameText.Get(GameTextKeys.Login.NicknameUnavailable));
             }
         }
 
@@ -343,7 +437,17 @@ namespace AccardND.UI
                     if (envelope.type == MessageTypes.Error)
                     {
                         ErrorMessage error = PvpServerClient.ParsePayload<ErrorMessage>(envelope);
-                        throw new System.InvalidOperationException(error?.message ?? "errore server");
+                        throw new System.InvalidOperationException(error?.message ?? GameText.Get(GameTextKeys.Login.ServerError));
+                    }
+
+                    // Il server offre subito la partita rimasta in piedi, anche mentre qui
+                    // si sta ancora aspettando la risposta di login: buttarla via
+                    // significherebbe far rientrare il giocatore in lobby a partita viva.
+                    if (envelope.type == MessageTypes.MatchResume)
+                    {
+                        AccountServerSession.StashMatchResume(
+                            PvpServerClient.ParsePayload<MatchResumeState>(envelope));
+                        continue;
                     }
 
                     if (envelope.type == messageType)
@@ -353,7 +457,7 @@ namespace AccardND.UI
                 await PvpAsync.NextFrameAsync();
             }
 
-            throw new System.TimeoutException("timeout risposta server");
+            throw new System.TimeoutException(GameText.Get(GameTextKeys.Login.ServerTimeout));
         }
 
         private void SubmitNickname()
@@ -380,7 +484,7 @@ namespace AccardND.UI
 
         private void OpenMainScene()
         {
-            SetStatus("Apro il menu...");
+            SetStatus(GameText.Get(GameTextKeys.Login.OpeningMenu));
             SceneManager.LoadScene(MainSceneName);
         }
 
@@ -486,7 +590,7 @@ namespace AccardND.UI
         private static Button CreateButton(Transform parent, string name, string label, Vector2 position, int fontSize = 34)
         {
             Image image = CreateObject<Image>(name, parent);
-            MmoUiTheme.ButtonVariant variant = label.Contains("CONFERMA")
+            MmoUiTheme.ButtonVariant variant = name == "Confirm Nickname"
                 ? MmoUiTheme.ButtonVariant.Emerald
                 : name == "Login"
                     ? MmoUiTheme.ButtonVariant.Gold

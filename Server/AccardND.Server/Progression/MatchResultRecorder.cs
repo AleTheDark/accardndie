@@ -11,11 +11,14 @@ namespace AccardND.Server.Progression;
 /// <summary>Esito della registrazione, per comporre i messaggi match.result.</summary>
 public sealed record MatchRecordResult(
     bool Ranked, PlayerRankedDelta A, PlayerRankedDelta B,
-    IReadOnlyList<string> AchievementsA, IReadOnlyList<string> AchievementsB)
+    IReadOnlyList<string> AchievementsA, IReadOnlyList<string> AchievementsB,
+	AccountExperienceReward ExperienceA = null, AccountExperienceReward ExperienceB = null)
 {
     private static readonly string[] None = Array.Empty<string>();
     public static readonly MatchRecordResult Unranked = new(false, null, null, None, None);
 }
+
+public sealed record AccountExperienceReward(string ClaimId, int Experience, int LevelsGained);
 
 public sealed class MatchResultRecorder
 {
@@ -126,6 +129,13 @@ public sealed class MatchResultRecorder
                 unlocks.GrantTierIcons(connection, transaction, outcome.PlayerB.PlayerId, applied.B.After.TierIndex);
         }
 
+		AccountExperienceReward experienceA = isRanked
+			? GrantRankedRoundExperience(connection, transaction, outcome.PlayerA.PlayerId, outcome.RoomCode, outcome.ScoreA)
+			: null;
+		AccountExperienceReward experienceB = isRanked
+			? GrantRankedRoundExperience(connection, transaction, outcome.PlayerB.PlayerId, outcome.RoomCode, outcome.ScoreB)
+			: null;
+
         // Gli achievement si valutano sempre (anche nelle amichevoli): usano gli aggregati appena scritti.
         IReadOnlyList<string> achievementsA =
             achievements.EvaluateAfterMatch(connection, transaction, outcome.PlayerA.PlayerId, seasonId);
@@ -133,8 +143,84 @@ public sealed class MatchResultRecorder
             achievements.EvaluateAfterMatch(connection, transaction, outcome.PlayerB.PlayerId, seasonId);
 
         transaction.Commit();
-        return new MatchRecordResult(isRanked, deltaA, deltaB, achievementsA, achievementsB);
+        return new MatchRecordResult(isRanked, deltaA, deltaB, achievementsA, achievementsB, experienceA, experienceB);
     }
+
+	private static AccountExperienceReward GrantRankedRoundExperience(
+		SqliteConnection connection, SqliteTransaction transaction,
+		string playerId, string roomCode, int roundsWon)
+	{
+		int experience = Math.Max(0, roundsWon) * 5;
+		if (experience <= 0)
+			return null;
+
+		using (SqliteCommand ensure = connection.CreateCommand())
+		{
+			ensure.Transaction = transaction;
+			ensure.CommandText = @"
+				INSERT OR IGNORE INTO single_player_progress
+					(player_id, account_level, account_experience, account_total_experience,
+					 account_experience_to_next_level, updated_at)
+				VALUES ($id, 1, 0, 0, 100, $now)";
+			ensure.Parameters.AddWithValue("$id", playerId);
+			ensure.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
+			ensure.ExecuteNonQuery();
+		}
+
+		string claimId = $"pvp-ranked-{roomCode}-{playerId}-{Guid.NewGuid():N}";
+		using (SqliteCommand claim = connection.CreateCommand())
+		{
+			claim.Transaction = transaction;
+			claim.CommandText = @"
+				INSERT INTO single_player_reward_claims
+					(claim_id, player_id, reward_type, base_honey, base_account_experience, multiplier, source_ref, created_at)
+				VALUES ($claim, $id, 'pvp_ranked', 0, $xp, 1, $source, $now)";
+			claim.Parameters.AddWithValue("$claim", claimId);
+			claim.Parameters.AddWithValue("$id", playerId);
+			claim.Parameters.AddWithValue("$xp", experience);
+			claim.Parameters.AddWithValue("$source", (object)roomCode ?? DBNull.Value);
+			claim.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
+			claim.ExecuteNonQuery();
+		}
+
+		int level;
+		int current;
+		using (SqliteCommand read = connection.CreateCommand())
+		{
+			read.Transaction = transaction;
+			read.CommandText = "SELECT account_level, account_experience FROM single_player_progress WHERE player_id=$id";
+			read.Parameters.AddWithValue("$id", playerId);
+			using SqliteDataReader reader = read.ExecuteReader();
+			reader.Read();
+			level = reader.GetInt32(0);
+			current = reader.GetInt32(1) + experience;
+		}
+		int levelsGained = 0;
+		while (current >= 100)
+		{
+			current -= 100;
+			level++;
+			levelsGained++;
+		}
+		using (SqliteCommand update = connection.CreateCommand())
+		{
+			update.Transaction = transaction;
+			update.CommandText = @"
+				UPDATE single_player_progress SET
+					account_level=$level, account_experience=$current,
+					account_total_experience=account_total_experience+$xp,
+					pending_level_rewards=pending_level_rewards+$levels,
+					updated_at=$now WHERE player_id=$id";
+			update.Parameters.AddWithValue("$level", level);
+			update.Parameters.AddWithValue("$current", current);
+			update.Parameters.AddWithValue("$xp", experience);
+			update.Parameters.AddWithValue("$levels", levelsGained);
+			update.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
+			update.Parameters.AddWithValue("$id", playerId);
+			update.ExecuteNonQuery();
+		}
+		return new AccountExperienceReward(claimId, experience, levelsGained);
+	}
 
     private static void UpdateScope(
         SqliteConnection connection, SqliteTransaction transaction,

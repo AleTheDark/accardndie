@@ -20,8 +20,11 @@ namespace AccardND.Battlefield
 
         private RawImage image;
         private RectTransform viewRect;
-        private Image[] frictionSparkImages;
-        private RectTransform[] frictionSparkRects;
+        private Outline arcaneShadowOutline;
+        private Outline arcaneClassOutline;
+        private ArcaneDiceTrailGraphic arcaneTrail;
+        private RectTransform arcaneTrailArea;
+        private Color arcaneGlowColor = new Color(0.2f, 0.5f, 1f);
         private RenderTexture renderTexture;
         private GameObject renderRoot;
         private Transform diePivot;
@@ -70,7 +73,7 @@ namespace AccardND.Battlefield
             view.viewRect = (RectTransform)go.transform;
             view.image.raycastTarget = false;
             view.image.color = Color.white;
-            view.CreateFrictionSparks();
+            view.CreateArcaneDieAura();
 
             // Riempi l'area del genitore restando quadrato: il render è 1:1
             // e uno stiramento deformerebbe il dado.
@@ -144,7 +147,7 @@ namespace AccardND.Battlefield
             EnsureDie(ResolveSides(sides), heroClass);
             if (die != null)
                 die.SetActive(true);
-            HideFrictionSparks();
+            ConfigureArcaneMagic(heroClass);
             if (rollCoroutine != null)
                 StopCoroutine(rollCoroutine);
             rollCoroutine = StartCoroutine(SpiralRollRoutine(result, duration));
@@ -163,6 +166,14 @@ namespace AccardND.Battlefield
                 return;
             foreach (Renderer renderer in die.GetComponentsInChildren<Renderer>(true))
                 renderer.sharedMaterial = material;
+
+            // Anche aura e trail devono rispettare gli override contestuali,
+            // ad esempio blu giocatore e rosso nemico durante l'iniziativa.
+            arcaneGlowColor = glow;
+            if (arcaneClassOutline != null)
+                arcaneClassOutline.effectColor = new Color(glow.r, glow.g, glow.b, 0.9f);
+            if (arcaneTrail != null)
+                arcaneTrail.Configure(glow, viewRect);
         }
 
         /// <summary>
@@ -173,6 +184,7 @@ namespace AccardND.Battlefield
         {
             bounceArea = area;
             bouncePartner = partner;
+            EnsureArcaneTrail();
         }
 
         public void Hide()
@@ -187,11 +199,108 @@ namespace AccardND.Battlefield
                 viewRect.anchoredPosition = homeAnchoredPosition;
             if (die != null)
                 die.SetActive(true);
-            HideFrictionSparks();
+            if (arcaneTrail != null)
+                arcaneTrail.ClearTrail();
+            else
+                arcaneTrail = null;
             renderCamera.enabled = false;
             if (renderTexture != null)
                 ClearRenderTexture(renderTexture);
             gameObject.SetActive(false);
+        }
+
+        private void CreateArcaneDieAura()
+        {
+            // Gli outline usano l'alpha della RenderTexture: l'aura segue quindi
+            // la vera silhouette del dado 3D, non crea dischi o decal sul campo.
+            arcaneShadowOutline = gameObject.AddComponent<Outline>();
+            arcaneShadowOutline.effectColor = new Color(0f, 0f, 0f, 0.92f);
+            arcaneShadowOutline.effectDistance = new Vector2(10f, -10f);
+            arcaneShadowOutline.useGraphicAlpha = true;
+
+            arcaneClassOutline = gameObject.AddComponent<Outline>();
+            arcaneClassOutline.effectColor = new Color(0.2f, 0.5f, 1f, 0.86f);
+            arcaneClassOutline.effectDistance = new Vector2(-5f, 5f);
+            arcaneClassOutline.useGraphicAlpha = true;
+        }
+
+        private void ConfigureArcaneMagic(HeroClass heroClass)
+        {
+            Color glow = ArcaneClassColor(heroClass);
+            arcaneGlowColor = glow;
+            arcaneClassOutline.effectColor = new Color(glow.r, glow.g, glow.b, 0.9f);
+            arcaneShadowOutline.effectColor = new Color(0f, 0f, 0f, 0.94f);
+            if (arcaneTrail != null)
+                arcaneTrail.Configure(glow, viewRect);
+        }
+
+        private void LateUpdate()
+        {
+            if (arcaneShadowOutline == null || !gameObject.activeInHierarchy)
+                return;
+
+            float time = Time.unscaledTime;
+            float distortionA = Mathf.Sin(time * 8.7f + GetInstanceID() * 0.013f);
+            float distortionB = Mathf.Sin(time * 13.1f + 1.9f);
+            arcaneShadowOutline.effectDistance = new Vector2(
+                9.5f + distortionA * 2.8f,
+                -9.5f + distortionB * 2.4f);
+            arcaneClassOutline.effectDistance = new Vector2(
+                -4.8f + distortionB * 1.9f,
+                4.8f + distortionA * 1.7f);
+            arcaneShadowOutline.effectColor = new Color(0.005f, 0.008f, 0.018f, 0.86f + distortionB * 0.07f);
+            float shimmer = 0.78f + (distortionA + 1f) * 0.08f;
+            arcaneClassOutline.effectColor = new Color(
+                Mathf.Lerp(arcaneGlowColor.r, 1f, 0.08f + Mathf.Max(0f, distortionB) * 0.1f),
+                Mathf.Lerp(arcaneGlowColor.g, 1f, 0.08f + Mathf.Max(0f, distortionB) * 0.1f),
+                Mathf.Lerp(arcaneGlowColor.b, 1f, 0.08f + Mathf.Max(0f, distortionB) * 0.1f),
+                shimmer);
+        }
+
+        private void EnsureArcaneTrail()
+        {
+            if (bounceArea == null)
+                return;
+            if (arcaneTrail != null && arcaneTrailArea == bounceArea)
+                return;
+            if (arcaneTrail != null)
+                Destroy(arcaneTrail.gameObject);
+            arcaneTrail = null;
+            arcaneTrailArea = null;
+
+            GameObject trailObject = new GameObject(
+                "3D Die Arcane Motion Trail",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(ArcaneDiceTrailGraphic));
+            RectTransform trailRect = (RectTransform)trailObject.transform;
+            trailRect.SetParent(bounceArea, false);
+            trailRect.anchorMin = Vector2.zero;
+            trailRect.anchorMax = Vector2.one;
+            trailRect.offsetMin = Vector2.zero;
+            trailRect.offsetMax = Vector2.zero;
+            trailRect.SetAsFirstSibling();
+            arcaneTrail = trailObject.GetComponent<ArcaneDiceTrailGraphic>();
+            arcaneTrailArea = bounceArea;
+            arcaneTrail.raycastTarget = false;
+            arcaneTrail.Configure(ArcaneClassColor(dieClass), viewRect);
+        }
+
+        private static Color ArcaneClassColor(HeroClass heroClass)
+        {
+            return heroClass switch
+            {
+                HeroClass.Hunter => new Color(1f, 0.32f, 0.01f),
+                HeroClass.Assassin => new Color(0.78f, 0.08f, 0.035f),
+                HeroClass.Warrior => new Color(0.52f, 0.55f, 0.6f),
+                HeroClass.Mage => new Color(0.56f, 0.16f, 0.86f),
+                HeroClass.Paladin => new Color(1f, 0.72f, 0.07f),
+                HeroClass.Rogue => new Color(0.025f, 0.025f, 0.035f),
+                HeroClass.Barbarian => new Color(0.48f, 0.22f, 0.07f),
+                HeroClass.Necromancer => new Color(0.34f, 0.94f, 0.07f),
+                HeroClass.Priest => new Color(0.82f, 0.88f, 1f),
+                _ => new Color(0.38f, 0.28f, 1f)
+            };
         }
 
         private static void ClearRenderTexture(RenderTexture target)
@@ -200,221 +309,6 @@ namespace AccardND.Battlefield
             RenderTexture.active = target;
             GL.Clear(true, true, Color.clear);
             RenderTexture.active = previous;
-        }
-
-        private void CreateFrictionSparks()
-        {
-            const int sparkCount = 24;
-            frictionSparkImages = new Image[sparkCount];
-            frictionSparkRects = new RectTransform[sparkCount];
-
-            Sprite streakSprite = CreateFrictionStreakSprite();
-            Sprite glowSprite = CreateSoftGlowSprite();
-            Sprite moteSprite = CreateSparkMoteSprite();
-            for (int index = 0; index < sparkCount; index++)
-            {
-                var sparkObject = new GameObject(
-                    $"Arcane Friction Spark {index + 1}",
-                    typeof(RectTransform),
-                    typeof(CanvasRenderer),
-                    typeof(Image));
-                sparkObject.transform.SetParent(transform, false);
-
-                Image spark = sparkObject.GetComponent<Image>();
-                spark.sprite = index < 10 ? streakSprite : index < 16 ? glowSprite : moteSprite;
-                spark.color = Color.clear;
-                spark.raycastTarget = false;
-
-                RectTransform rect = spark.rectTransform;
-                rect.anchorMin = new Vector2(0.5f, 0.5f);
-                rect.anchorMax = new Vector2(0.5f, 0.5f);
-                rect.pivot = new Vector2(0.5f, 0.5f);
-                rect.sizeDelta = index < 10
-                    ? new Vector2(78f, 12f)
-                    : index < 16
-                        ? new Vector2(38f, 38f)
-                        : new Vector2(10f, 10f);
-
-                frictionSparkImages[index] = spark;
-                frictionSparkRects[index] = rect;
-            }
-        }
-
-        private void UpdateFrictionSparks(Vector2 movementDelta, float progress, float spinAmount)
-        {
-            if (frictionSparkImages == null || movementDelta.sqrMagnitude < 0.0001f)
-            {
-                HideFrictionSparks();
-                return;
-            }
-
-            Vector2 direction = movementDelta.normalized;
-            Vector2 normal = new Vector2(-direction.y, direction.x);
-            float intensity = Mathf.Clamp01(movementDelta.magnitude / 16f + spinAmount / 220f);
-            float fadeOut = 1f - SmoothStep3(Mathf.InverseLerp(0.72f, 1f, progress));
-            float baseAlpha = Mathf.Clamp01(intensity * fadeOut * 1.18f);
-            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-
-            for (int index = 0; index < frictionSparkImages.Length; index++)
-            {
-                float normalizedIndex = frictionSparkImages.Length <= 1
-                    ? 0f
-                    : (float)index / (frictionSparkImages.Length - 1);
-                float layerOffset = index < 10 ? 0f : index < 16 ? 0.18f : 0.34f;
-                float seed = normalizedIndex * 2.17f + layerOffset;
-                float age = Mathf.Repeat(progress * 7.5f + seed, 1f);
-                float side = index % 2 == 0 ? -1f : 1f;
-                float flutter = SmoothNoise(seed, progress);
-                float edgeNoise = SmoothNoise(seed + 2.4f, progress * 0.7f);
-                float edgeDistance = Mathf.Lerp(index < 10 ? 16f : 22f, index < 16 ? 46f : 62f, age);
-                edgeDistance += edgeNoise * (index < 10 ? 5f : 9f);
-                float trailDistance = Mathf.Lerp(index < 10 ? -14f : -4f, index < 10 ? 118f : 76f, age);
-                Vector2 position = normal * (side * edgeDistance) - direction * trailDistance;
-                position += direction * Mathf.Sin((progress * 4f + seed) * Mathf.PI) * 5f;
-                position += normal * flutter * (index < 10 ? 5f : 10f);
-
-                RectTransform rect = frictionSparkRects[index];
-                rect.anchoredPosition = position;
-                float pulse = Mathf.Sin(age * Mathf.PI);
-                float naturalFade = Mathf.Pow(pulse, 0.72f) * Mathf.Lerp(1f, 0.68f, age);
-                Color color;
-
-                if (index < 10)
-                {
-                    rect.localRotation = Quaternion.Euler(0f, 0f, angle + flutter * 7f);
-                    rect.sizeDelta = new Vector2(Mathf.Lerp(78f, 154f, age), Mathf.Lerp(18f, 5f, age));
-                    float alpha = naturalFade * baseAlpha * 0.62f;
-                    Color core = new Color(1f, 0.9f, 0.48f, alpha);
-                    Color arcane = new Color(0.5f, 0.86f, 1f, alpha * 0.56f);
-                    Color ember = new Color(1f, 0.38f, 0.12f, alpha * 0.72f);
-                    color = age < 0.45f
-                        ? Color.Lerp(core, arcane, age / 0.45f)
-                        : Color.Lerp(arcane, ember, (age - 0.45f) / 0.55f);
-                }
-                else if (index < 16)
-                {
-                    rect.localRotation = Quaternion.identity;
-                    position = normal * (side * Mathf.Lerp(18f, 34f, age)) - direction * Mathf.Lerp(-8f, 42f, age);
-                    position += normal * flutter * 6f;
-                    rect.anchoredPosition = position;
-
-                    float size = Mathf.Lerp(28f, 58f, pulse) * Mathf.Lerp(0.8f, 1.12f, intensity);
-                    rect.sizeDelta = new Vector2(size, size);
-                    float alpha = naturalFade * baseAlpha * 0.22f;
-                    color = new Color(0.35f, 0.78f, 1f, alpha);
-                }
-                else
-                {
-                    rect.localRotation = Quaternion.Euler(0f, 0f, angle + 90f + flutter * 34f);
-                    float size = Mathf.Lerp(4f, 12f, pulse) * Mathf.Lerp(0.75f, 1.18f, intensity);
-                    rect.sizeDelta = new Vector2(size, size);
-                    float alpha = naturalFade * baseAlpha * 0.72f;
-                    Color hot = new Color(1f, 0.92f, 0.45f, alpha);
-                    Color magic = new Color(0.62f, 0.92f, 1f, alpha * 0.62f);
-                    color = Color.Lerp(hot, magic, Mathf.SmoothStep(0f, 1f, normalizedIndex));
-                }
-
-                frictionSparkImages[index].color = color;
-            }
-        }
-
-        private void HideFrictionSparks()
-        {
-            if (frictionSparkImages == null)
-                return;
-
-            for (int index = 0; index < frictionSparkImages.Length; index++)
-                frictionSparkImages[index].color = Color.clear;
-        }
-
-        private static float SmoothNoise(float seed, float time)
-        {
-            return Mathf.PerlinNoise(seed * 1.31f + time * 0.9f, seed * 0.73f + time * 0.42f) * 2f - 1f;
-        }
-
-        private static Sprite CreateFrictionStreakSprite()
-        {
-            const int width = 128;
-            const int height = 24;
-            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
-            {
-                name = "Generated Dice Arcane Streak",
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Clamp
-            };
-
-            Color transparent = new Color(0f, 0f, 0f, 0f);
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    float horizontal = Mathf.Clamp01(1f - (float)x / (width - 1));
-                    float vertical = 1f - Mathf.Abs((y + 0.5f) / height * 2f - 1f);
-                    float core = Mathf.Pow(Mathf.SmoothStep(0f, 1f, vertical), 2.2f);
-                    float tail = Mathf.Pow(Mathf.SmoothStep(0f, 1f, horizontal), 1.6f);
-                    float alpha = core * tail;
-                    texture.SetPixel(x, y, alpha > 0.02f ? new Color(1f, 1f, 1f, alpha) : transparent);
-                }
-            }
-
-            texture.Apply(false, true);
-            return Sprite.Create(texture, new Rect(0f, 0f, width, height), new Vector2(0.08f, 0.5f), height);
-        }
-
-        private static Sprite CreateSoftGlowSprite()
-        {
-            const int size = 64;
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
-            {
-                name = "Generated Dice Arcane Glow",
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Clamp
-            };
-
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float u = (x + 0.5f) / size * 2f - 1f;
-                    float v = (y + 0.5f) / size * 2f - 1f;
-                    float distance = Mathf.Sqrt(u * u + v * v);
-                    float alpha = Mathf.Pow(Mathf.Clamp01(1f - distance), 2.4f);
-                    texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
-                }
-            }
-
-            texture.Apply(false, true);
-            return Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), size);
-        }
-
-        private static Sprite CreateSparkMoteSprite()
-        {
-            const int size = 32;
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
-            {
-                name = "Generated Dice Spark Mote",
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Clamp
-            };
-
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float u = (x + 0.5f) / size * 2f - 1f;
-                    float v = (y + 0.5f) / size * 2f - 1f;
-                    float distance = Mathf.Sqrt(u * u + v * v);
-                    float sparkle = Mathf.Pow(Mathf.Clamp01(1f - distance), 5f);
-                    float cross = Mathf.Max(
-                        Mathf.Pow(Mathf.Clamp01(1f - Mathf.Abs(u) * 7f), 2f),
-                        Mathf.Pow(Mathf.Clamp01(1f - Mathf.Abs(v) * 7f), 2f)) * 0.45f;
-                    float alpha = Mathf.Clamp01(sparkle + cross) * Mathf.Clamp01(1f - distance);
-                    texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
-                }
-            }
-
-            texture.Apply(false, true);
-            return Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), size);
         }
 
         private void EnsureDie(int sides, HeroClass heroClass)
@@ -482,6 +376,10 @@ namespace AccardND.Battlefield
                 0f);
             bounceOffset = previousOffset;
             viewRect.anchoredPosition = homeAnchoredPosition + bounceOffset;
+            // Inizia a campionare soltanto dopo il salto al punto iniziale:
+            // evita il segmento dritto dalla posizione di riposo alla spirale.
+            if (arcaneTrail != null)
+                arcaneTrail.Begin();
             bouncing = true;
 
             float spiralDuration = Mathf.Max(0.2f, duration);
@@ -505,11 +403,6 @@ namespace AccardND.Battlefield
                     float spinDegrees = delta.magnitude * 6.8f + Mathf.Lerp(540f, 95f, eased) * Time.unscaledDeltaTime;
                     dieTransform.localRotation =
                         Quaternion.AngleAxis(spinDegrees, rollAxis) * dieTransform.localRotation;
-                    UpdateFrictionSparks(delta, progress, spinDegrees);
-                }
-                else
-                {
-                    HideFrictionSparks();
                 }
 
                 if (progress > 0.72f)
@@ -524,7 +417,6 @@ namespace AccardND.Battlefield
                 yield return null;
             }
 
-            HideFrictionSparks();
             Quaternion settleStart = dieTransform.localRotation;
             float settleDuration = Mathf.Max(0.16f, duration * 0.16f);
             elapsed = 0f;
@@ -541,7 +433,8 @@ namespace AccardND.Battlefield
             dieTransform.localRotation = targetRotation;
             viewRect.anchoredPosition = homeAnchoredPosition;
             bouncing = false;
-            HideFrictionSparks();
+            if (arcaneTrail != null)
+                arcaneTrail.StopEmission();
             rollCoroutine = null;
         }
 
@@ -584,6 +477,8 @@ namespace AccardND.Battlefield
             homeAnchoredPosition = viewRect.anchoredPosition;
             homeCaptured = true;
             viewRect.anchoredPosition = homeAnchoredPosition;
+            if (arcaneTrail != null)
+                arcaneTrail.Begin();
 
             // Si ruota il pivot (centrato sulla mesh), non la root del modello:
             // se la mesh è fuori asse rispetto alla root, ruotarla la farebbe orbitare.
@@ -623,14 +518,11 @@ namespace AccardND.Battlefield
                 axis = Vector3.Slerp(axis, Random.onUnitSphere, Time.unscaledDeltaTime * 1.35f).normalized;
                 dieTransform.localRotation =
                     Quaternion.AngleAxis(speed * Time.unscaledDeltaTime, axis) * dieTransform.localRotation;
-                Vector2 beforeBounce = bounceOffset;
                 UpdateBounce(Time.unscaledDeltaTime, friction, 0f);
-                UpdateFrictionSparks(bounceOffset - beforeBounce, progress, speed * Time.unscaledDeltaTime);
                 elapsed += Time.unscaledDeltaTime;
                 yield return null;
             }
 
-            HideFrictionSparks();
             // Fase 2: assestamento morbido sulla faccia del risultato.
             Quaternion settleStart = dieTransform.localRotation;
             Vector2 settleStartOffset = bounceOffset;
@@ -650,7 +542,6 @@ namespace AccardND.Battlefield
             dieTransform.localRotation = targetRotation;
             viewRect.anchoredPosition = homeAnchoredPosition;
             bouncing = false;
-            HideFrictionSparks();
             rollCoroutine = null;
         }
 
@@ -916,6 +807,394 @@ namespace AccardND.Battlefield
             }
             if (renderRoot != null)
                 Destroy(renderRoot);
+            if (arcaneTrail != null)
+                Destroy(arcaneTrail.gameObject);
+        }
+    }
+
+    /// <summary>
+    /// Ribbon UI che segue esclusivamente il percorso del dado 3D. La doppia
+    /// fascia nera/colorata produce la scia infusa mostrata nel mockup.
+    /// </summary>
+    internal sealed class ArcaneDiceTrailGraphic : MaskableGraphic
+    {
+        private const int MaxSamples = 96;
+        private const float Lifetime = 0.48f;
+        private readonly List<TrailSample> samples = new List<TrailSample>(MaxSamples);
+        private readonly Vector3[] targetCorners = new Vector3[4];
+        private RectTransform target;
+        private Color glowColor = new Color(0.2f, 0.5f, 1f);
+        private bool emitting;
+        private Vector2 lastPosition;
+
+        public void Configure(Color glow, RectTransform trackedTarget)
+        {
+            glowColor = glow;
+            target = trackedTarget;
+            SetVerticesDirty();
+        }
+
+        public void Begin()
+        {
+            samples.Clear();
+            emitting = true;
+            if (TryGetTargetPosition(out Vector2 position))
+            {
+                lastPosition = position;
+                samples.Add(new TrailSample(position, Time.unscaledTime));
+            }
+            gameObject.SetActive(true);
+            SetVerticesDirty();
+        }
+
+        public void StopEmission()
+        {
+            emitting = false;
+        }
+
+        public void ClearTrail()
+        {
+            emitting = false;
+            samples.Clear();
+            SetVerticesDirty();
+            gameObject.SetActive(false);
+        }
+
+        private void LateUpdate()
+        {
+            float now = Time.unscaledTime;
+            if (emitting && TryGetTargetPosition(out Vector2 position))
+            {
+                if ((position - lastPosition).sqrMagnitude >= 1f)
+                {
+                    samples.Add(new TrailSample(position, now));
+                    lastPosition = position;
+                    if (samples.Count > MaxSamples)
+                        samples.RemoveAt(0);
+                }
+            }
+
+            while (samples.Count > 0 && now - samples[0].Time > Lifetime)
+                samples.RemoveAt(0);
+
+            if (!emitting && samples.Count == 0)
+            {
+                gameObject.SetActive(false);
+                return;
+            }
+            SetVerticesDirty();
+        }
+
+        protected override void OnPopulateMesh(VertexHelper vh)
+        {
+            vh.Clear();
+            if (samples.Count < 2)
+                return;
+
+            float now = Time.unscaledTime;
+            // Il nero vive soltanto sui margini: il centro rimane trasparente,
+            // mentre il colore è massimo vicino al bordo e svanisce al centro.
+            AddOutlineEdges(vh, now, 58f, 11f);
+            AddEdgeGlowGradient(vh, now, 58f, 11f);
+        }
+
+        private void AddOutlineEdges(VertexHelper vh, float now, float maximumWidth, float baseThickness)
+        {
+            for (int index = 1; index < samples.Count; index++)
+            {
+                TrailSample previous = samples[index - 1];
+                TrailSample current = samples[index];
+                Vector2 direction = current.Position - previous.Position;
+                if (direction.sqrMagnitude < 0.01f)
+                    continue;
+
+                float previousLife = Mathf.Clamp01(1f - (now - previous.Time) / Lifetime);
+                float currentLife = Mathf.Clamp01(1f - (now - current.Time) / Lifetime);
+                Vector2 previousNormal = JoinNormal(index - 1);
+                Vector2 currentNormal = JoinNormal(index);
+                ComputeEdgeShape(index - 1, previous.Time, previousLife, maximumWidth, baseThickness, 0.17f,
+                    out float previousOuterLeft, out float previousInnerLeft);
+                ComputeEdgeShape(index, current.Time, currentLife, maximumWidth, baseThickness, 0.17f,
+                    out float currentOuterLeft, out float currentInnerLeft);
+                ComputeEdgeShape(index - 1, previous.Time, previousLife, maximumWidth, baseThickness, 2.83f,
+                    out float previousOuterRight, out float previousInnerRight);
+                ComputeEdgeShape(index, current.Time, currentLife, maximumWidth, baseThickness, 2.83f,
+                    out float currentOuterRight, out float currentInnerRight);
+                Color previousColor = new Color(0.002f, 0.004f, 0.012f, 0.94f * previousLife);
+                Color currentColor = new Color(0.002f, 0.004f, 0.012f, 0.94f * currentLife);
+
+                AddEdgeQuad(
+                    vh,
+                    previous.Position + previousNormal * previousOuterLeft,
+                    previous.Position + previousNormal * previousInnerLeft,
+                    current.Position + currentNormal * currentInnerLeft,
+                    current.Position + currentNormal * currentOuterLeft,
+                    previousColor,
+                    currentColor);
+                AddEdgeQuad(
+                    vh,
+                    previous.Position - previousNormal * previousOuterRight,
+                    previous.Position - previousNormal * previousInnerRight,
+                    current.Position - currentNormal * currentInnerRight,
+                    current.Position - currentNormal * currentOuterRight,
+                    previousColor,
+                    currentColor);
+            }
+        }
+
+        private static void ComputeEdgeShape(
+            int index,
+            float time,
+            float life,
+            float maximumWidth,
+            float baseThickness,
+            float phase,
+            out float outer,
+            out float inner)
+        {
+            // Solo frequenze morbide: una curva continua, mai dentellata.
+            float broad = Mathf.Sin(index * 0.48f + time * 4.1f + phase) * 0.68f;
+            float medium = Mathf.Sin(index * 0.93f - time * 5.3f + phase * 1.7f) * 0.32f;
+            float wave = Mathf.Clamp(broad + medium, -1f, 1f);
+            outer = maximumWidth * life * life * (1f + wave * 0.24f);
+            float thickness = baseThickness * life * (0.72f + (wave + 1f) * 0.24f);
+            inner = Mathf.Max(0f, outer - thickness);
+        }
+
+        private void AddEdgeGlowGradient(VertexHelper vh, float now, float maximumWidth, float outlineThickness)
+        {
+            for (int index = 1; index < samples.Count; index++)
+            {
+                TrailSample previous = samples[index - 1];
+                TrailSample current = samples[index];
+                Vector2 direction = current.Position - previous.Position;
+                if (direction.sqrMagnitude < 0.01f)
+                    continue;
+
+                float previousLife = Mathf.Clamp01(1f - (now - previous.Time) / Lifetime);
+                float currentLife = Mathf.Clamp01(1f - (now - current.Time) / Lifetime);
+                Vector2 previousNormal = JoinNormal(index - 1);
+                Vector2 currentNormal = JoinNormal(index);
+                ComputeEdgeShape(index - 1, previous.Time, previousLife, maximumWidth, outlineThickness, 0.17f,
+                    out _, out float previousWidthLeft);
+                ComputeEdgeShape(index, current.Time, currentLife, maximumWidth, outlineThickness, 0.17f,
+                    out _, out float currentWidthLeft);
+                ComputeEdgeShape(index - 1, previous.Time, previousLife, maximumWidth, outlineThickness, 2.83f,
+                    out _, out float previousWidthRight);
+                ComputeEdgeShape(index, current.Time, currentLife, maximumWidth, outlineThickness, 2.83f,
+                    out _, out float currentWidthRight);
+                float shimmerPrevious = 0.78f + Mathf.Max(0f, Mathf.Sin(previous.Time * 24f + index * 1.37f)) * 0.22f;
+                float shimmerCurrent = 0.78f + Mathf.Max(0f, Mathf.Sin(current.Time * 24f + index * 1.37f)) * 0.22f;
+
+                // Quattro stop per lato: brillante all'esterno e molto tenue,
+                // ma ancora visibile, arrivando al centro.
+                AddGradientSide(vh, previous.Position, current.Position, previousNormal, currentNormal, previousWidthLeft, currentWidthLeft,
+                    1f, 0.7f, previousLife, currentLife, 0.78f, 0.52f, shimmerPrevious, shimmerCurrent);
+                AddGradientSide(vh, previous.Position, current.Position, previousNormal, currentNormal, previousWidthLeft, currentWidthLeft,
+                    0.7f, 0.4f, previousLife, currentLife, 0.52f, 0.25f, shimmerPrevious, shimmerCurrent);
+                AddGradientSide(vh, previous.Position, current.Position, previousNormal, currentNormal, previousWidthLeft, currentWidthLeft,
+                    0.4f, 0f, previousLife, currentLife, 0.25f, 0.065f, shimmerPrevious, shimmerCurrent);
+
+                AddGradientSide(vh, previous.Position, current.Position, -previousNormal, -currentNormal, previousWidthRight, currentWidthRight,
+                    1f, 0.7f, previousLife, currentLife, 0.78f, 0.52f, shimmerPrevious, shimmerCurrent);
+                AddGradientSide(vh, previous.Position, current.Position, -previousNormal, -currentNormal, previousWidthRight, currentWidthRight,
+                    0.7f, 0.4f, previousLife, currentLife, 0.52f, 0.25f, shimmerPrevious, shimmerCurrent);
+                AddGradientSide(vh, previous.Position, current.Position, -previousNormal, -currentNormal, previousWidthRight, currentWidthRight,
+                    0.4f, 0f, previousLife, currentLife, 0.25f, 0.065f, shimmerPrevious, shimmerCurrent);
+            }
+        }
+
+        private void AddGradientSide(
+            VertexHelper vh,
+            Vector2 previousCenter,
+            Vector2 currentCenter,
+            Vector2 previousNormal,
+            Vector2 currentNormal,
+            float previousWidth,
+            float currentWidth,
+            float outerStop,
+            float innerStop,
+            float previousLife,
+            float currentLife,
+            float outerAlpha,
+            float innerAlpha,
+            float previousShimmer,
+            float currentShimmer)
+        {
+            Color previousOuter = GradientColor(outerAlpha * previousLife, previousShimmer);
+            Color previousInner = GradientColor(innerAlpha * previousLife, previousShimmer * 0.72f);
+            Color currentOuter = GradientColor(outerAlpha * currentLife, currentShimmer);
+            Color currentInner = GradientColor(innerAlpha * currentLife, currentShimmer * 0.72f);
+            int vertex = vh.currentVertCount;
+            vh.AddVert(previousCenter + previousNormal * previousWidth * outerStop, previousOuter, Vector2.zero);
+            vh.AddVert(previousCenter + previousNormal * previousWidth * innerStop, previousInner, Vector2.one);
+            vh.AddVert(currentCenter + currentNormal * currentWidth * innerStop, currentInner, Vector2.one);
+            vh.AddVert(currentCenter + currentNormal * currentWidth * outerStop, currentOuter, Vector2.zero);
+            vh.AddTriangle(vertex, vertex + 1, vertex + 2);
+            vh.AddTriangle(vertex, vertex + 2, vertex + 3);
+        }
+
+        private Vector2 JoinNormal(int index)
+        {
+            if (samples.Count < 2)
+                return Vector2.up;
+
+            Vector2 tangent;
+            if (index <= 0)
+                tangent = samples[1].Position - samples[0].Position;
+            else if (index >= samples.Count - 1)
+                tangent = samples[samples.Count - 1].Position - samples[samples.Count - 2].Position;
+            else
+                tangent = samples[index + 1].Position - samples[index - 1].Position;
+
+            if (tangent.sqrMagnitude < 0.0001f)
+                return Vector2.up;
+            tangent.Normalize();
+            return new Vector2(-tangent.y, tangent.x);
+        }
+
+        private Color GradientColor(float alpha, float shimmer)
+        {
+            return new Color(
+                Mathf.Lerp(glowColor.r, 1f, shimmer * 0.22f),
+                Mathf.Lerp(glowColor.g, 1f, shimmer * 0.22f),
+                Mathf.Lerp(glowColor.b, 1f, shimmer * 0.22f),
+                alpha);
+        }
+
+        private static void AddEdgeQuad(
+            VertexHelper vh,
+            Vector2 outerPrevious,
+            Vector2 innerPrevious,
+            Vector2 innerCurrent,
+            Vector2 outerCurrent,
+            Color previousColor,
+            Color currentColor)
+        {
+            int vertex = vh.currentVertCount;
+            vh.AddVert(outerPrevious, previousColor, Vector2.zero);
+            vh.AddVert(innerPrevious, previousColor, Vector2.one);
+            vh.AddVert(innerCurrent, currentColor, Vector2.one);
+            vh.AddVert(outerCurrent, currentColor, Vector2.zero);
+            vh.AddTriangle(vertex, vertex + 1, vertex + 2);
+            vh.AddTriangle(vertex, vertex + 2, vertex + 3);
+        }
+
+        private void AddRibbon(
+            VertexHelper vh,
+            float now,
+            float maximumWidth,
+            Color baseColor,
+            float distortion,
+            float shimmer)
+        {
+            for (int index = 1; index < samples.Count; index++)
+            {
+                TrailSample previous = samples[index - 1];
+                TrailSample current = samples[index];
+                Vector2 direction = current.Position - previous.Position;
+                if (direction.sqrMagnitude < 0.01f)
+                    continue;
+
+                float previousLife = Mathf.Clamp01(1f - (now - previous.Time) / Lifetime);
+                float currentLife = Mathf.Clamp01(1f - (now - current.Time) / Lifetime);
+                Vector2 normal = new Vector2(-direction.y, direction.x).normalized;
+                float previousNoise = 1f + Mathf.Sin((index - 1) * 2.41f + previous.Time * 15.7f) * distortion;
+                float currentNoise = 1f + Mathf.Sin(index * 2.41f + current.Time * 15.7f) * distortion;
+                float previousWidth = maximumWidth * previousLife * previousLife * previousNoise;
+                float currentWidth = maximumWidth * currentLife * currentLife * currentNoise;
+                float previousShimmer = shimmer * Mathf.Max(0f, Mathf.Sin(previous.Time * 22f + index * 1.7f));
+                float currentShimmer = shimmer * Mathf.Max(0f, Mathf.Sin(current.Time * 22f + index * 1.7f));
+                Color previousColor = new Color(
+                    Mathf.Lerp(baseColor.r, 1f, previousShimmer),
+                    Mathf.Lerp(baseColor.g, 1f, previousShimmer),
+                    Mathf.Lerp(baseColor.b, 1f, previousShimmer),
+                    baseColor.a * previousLife);
+                Color currentColor = new Color(
+                    Mathf.Lerp(baseColor.r, 1f, currentShimmer),
+                    Mathf.Lerp(baseColor.g, 1f, currentShimmer),
+                    Mathf.Lerp(baseColor.b, 1f, currentShimmer),
+                    baseColor.a * currentLife);
+
+                int vertex = vh.currentVertCount;
+                vh.AddVert(previous.Position - normal * previousWidth, previousColor, Vector2.zero);
+                vh.AddVert(previous.Position + normal * previousWidth, previousColor, Vector2.one);
+                vh.AddVert(current.Position + normal * currentWidth, currentColor, Vector2.one);
+                vh.AddVert(current.Position - normal * currentWidth, currentColor, Vector2.zero);
+                vh.AddTriangle(vertex, vertex + 1, vertex + 2);
+                vh.AddTriangle(vertex, vertex + 2, vertex + 3);
+            }
+        }
+
+        private void AddFragments(VertexHelper vh, float now)
+        {
+            for (int index = 2; index < samples.Count; index += 3)
+            {
+                TrailSample previous = samples[index - 1];
+                TrailSample current = samples[index];
+                Vector2 direction = current.Position - previous.Position;
+                if (direction.sqrMagnitude < 0.01f)
+                    continue;
+
+                float life = Mathf.Clamp01(1f - (now - current.Time) / Lifetime);
+                if (life <= 0.04f)
+                    continue;
+
+                Vector2 tangent = direction.normalized;
+                Vector2 normal = new Vector2(-tangent.y, tangent.x);
+                float side = (index & 1) == 0 ? -1f : 1f;
+                float seed = Mathf.Abs(Mathf.Sin(index * 12.9898f + current.Time * 4.7f));
+                Vector2 center = current.Position
+                    + normal * side * (44f + seed * 34f) * life
+                    - tangent * (8f + seed * 22f);
+                float size = (4f + seed * 8f) * life;
+                Color dark = new Color(0.002f, 0.006f, 0.018f, 0.78f * life);
+                Color glow = new Color(glowColor.r, glowColor.g, glowColor.b, 0.9f * life);
+                AddFragmentQuad(vh, center, tangent, normal, size * 1.65f, dark);
+                AddFragmentQuad(vh, center, tangent, normal, size, glow);
+            }
+        }
+
+        private static void AddFragmentQuad(
+            VertexHelper vh,
+            Vector2 center,
+            Vector2 tangent,
+            Vector2 normal,
+            float size,
+            Color color)
+        {
+            Vector2 longAxis = tangent * size;
+            Vector2 shortAxis = normal * size * 0.42f;
+            int vertex = vh.currentVertCount;
+            vh.AddVert(center - longAxis, new Color(color.r, color.g, color.b, 0f), Vector2.zero);
+            vh.AddVert(center + shortAxis, color, Vector2.one);
+            vh.AddVert(center + longAxis, new Color(color.r, color.g, color.b, 0f), Vector2.one);
+            vh.AddVert(center - shortAxis, color, Vector2.zero);
+            vh.AddTriangle(vertex, vertex + 1, vertex + 2);
+            vh.AddTriangle(vertex, vertex + 2, vertex + 3);
+        }
+
+        private bool TryGetTargetPosition(out Vector2 position)
+        {
+            position = default;
+            if (target == null || !target.gameObject.activeInHierarchy)
+                return false;
+            target.GetWorldCorners(targetCorners);
+            Vector3 worldCenter = (targetCorners[0] + targetCorners[2]) * 0.5f;
+            position = rectTransform.InverseTransformPoint(worldCenter);
+            return true;
+        }
+
+        private readonly struct TrailSample
+        {
+            public TrailSample(Vector2 position, float time)
+            {
+                Position = position;
+                Time = time;
+            }
+
+            public Vector2 Position { get; }
+            public float Time { get; }
         }
     }
 }

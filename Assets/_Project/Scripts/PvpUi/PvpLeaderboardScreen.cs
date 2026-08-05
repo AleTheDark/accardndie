@@ -1,4 +1,5 @@
 using System;
+using AccardND.Battlefield;
 using AccardND.NetProtocol;
 using UnityEngine;
 using UnityEngine.UI;
@@ -35,7 +36,7 @@ namespace AccardND.PvpUi
         private const string BronzePodiumFrameResource =
             "UI/HallOfFame/Frames/leaderboard_podium_frame_bronze";
 
-        private static readonly Color Gold = new(0.94f, 0.74f, 0.36f, 1f);
+        private static readonly Color Gold = new Color32(0xF2, 0xC9, 0x57, 0xFF);
         private static readonly Color PaleGold = new(0.94f, 0.86f, 0.68f, 1f);
         private static readonly Color Silver = new(0.68f, 0.76f, 0.84f, 1f);
         private static readonly Color Bronze = new(0.72f, 0.38f, 0.19f, 1f);
@@ -75,8 +76,14 @@ namespace AccardND.PvpUi
             this.iconArtwork = iconArtwork;
             this.myPlayerId = myPlayerId ?? string.Empty;
 
+            // Come la Lobby, il fondale della Classifica deve essere full-bleed:
+            // il layout mantiene margini interni propri, senza ritagliare lo sfondo.
+            Transform screenParent = parent;
+            if (parent != null && parent.GetComponent<SafeAreaRect>() != null && parent.parent != null)
+                screenParent = parent.parent;
+
             var rootObject = new GameObject("Classifica", typeof(RectTransform), typeof(Image));
-            rootObject.transform.SetParent(parent, false);
+            rootObject.transform.SetParent(screenParent, false);
             root = (RectTransform)rootObject.transform;
             PvpUiFactory.Stretch(root);
 
@@ -86,7 +93,8 @@ namespace AccardND.PvpUi
             backgroundImage.raycastTarget = true;
             ApplyBackgroundForOrientation(force: true);
 
-            PvpUiFactory.CreateScreenOuterFrame(root, 0.8f);
+            // La cornice termina sotto la targa, come nelle altre schermate principali.
+            PvpUiFactory.CreateScreenOuterFrame(root, 0.795f);
 
             // Il banner account resta quello unico dell'Hub, sopra questo canvas.
             // Qui c'è solo la targa della schermata.
@@ -94,41 +102,37 @@ namespace AccardND.PvpUi
                 root,
                 "Classifica Title",
                 "CLASSIFICA",
-                "Dimostra il tuo valore e lascia il segno",
-                39);
+                null,
+                42);
+            Text screenTitle = titlePanel.Find("Title")?.GetComponent<Text>();
+            if (screenTitle != null)
+                screenTitle.color = Gold;
             PvpUiFactory.SetAnchors(
-                titlePanel, new Vector2(0.14f, 0.79f), new Vector2(0.86f, 0.872f));
-
-            Button close = PvpUiFactory.CreateButton(
-                root, "Close Classifica", "X", new Color(0.46f, 0.1f, 0.1f, 0.98f),
-                () => callbacks.OnClose?.Invoke(), 25);
-            PvpUiFactory.SetAnchors(
-                (RectTransform)close.transform,
-                new Vector2(0.89f, 0.8f), new Vector2(0.965f, 0.862f));
+                titlePanel, new Vector2(0.08f, 0.79f), new Vector2(0.92f, 0.9f));
 
             rankedTab = PvpUiFactory.CreateTabButton(
                 root, "Tab Ranked", "STAGIONE IN CORSO", () => SwitchTab(TabRanked), 23);
             PvpUiFactory.SetAnchors(
                 (RectTransform)rankedTab.transform,
-                new Vector2(0.24f, 0.715f), new Vector2(0.5f, 0.775f));
+                new Vector2(0.18f, 0.715f), new Vector2(0.5f, 0.775f));
 
             hallOfFameTab = PvpUiFactory.CreateTabButton(
                 root, "Tab Hall Of Fame", "HALL OF FAME", () => SwitchTab(TabHallOfFame), 23);
             PvpUiFactory.SetAnchors(
                 (RectTransform)hallOfFameTab.transform,
-                new Vector2(0.5f, 0.715f), new Vector2(0.76f, 0.775f));
+                new Vector2(0.5f, 0.715f), new Vector2(0.82f, 0.775f));
 
             var viewObject = new GameObject("Classifica Content", typeof(RectTransform));
             viewObject.transform.SetParent(root, false);
             viewRoot = (RectTransform)viewObject.transform;
-            PvpUiFactory.SetAnchors(viewRoot, new Vector2(0.018f, 0.047f), new Vector2(0.982f, 0.7f));
+            PvpUiFactory.SetAnchors(viewRoot, new Vector2(0.055f, 0.065f), new Vector2(0.945f, 0.695f));
 
             statusText = PvpUiFactory.CreateLabel(
                 root, "Connection Status", "Connessione al server...", 16, TextAnchor.MiddleCenter);
             statusText.color = new Color(0.83f, 0.78f, 0.68f, 1f);
             PvpUiFactory.SetAnchors(
                 (RectTransform)statusText.transform,
-                new Vector2(0.03f, 0.006f), new Vector2(0.97f, 0.04f));
+                new Vector2(0.055f, 0.018f), new Vector2(0.945f, 0.052f));
 
             PvpUiFactory.SetTabActive(rankedTab, true);
             PvpUiFactory.SetTabActive(hallOfFameTab, false);
@@ -268,20 +272,20 @@ namespace AccardND.PvpUi
         private void RenderRanked()
         {
             RectTransform ladderPanel = CreateFramedPanel(
-                viewRoot, "Ladder", new Vector2(0f, 0f), new Vector2(0.755f, 1f));
+                viewRoot, "Ladder", new Vector2(0f, 0f), new Vector2(0.72f, 1f));
             RectTransform personalPanel = CreateFramedPanel(
-                viewRoot, "Your Season", new Vector2(0.77f, 0f), new Vector2(1f, 1f));
+                viewRoot, "Your Season", new Vector2(0.735f, 0f), new Vector2(1f, 1f));
 
             string seasonName = leaderboard?.seasonName ?? profile?.seasonName ?? "Stagione in corso";
             Text title = PvpUiFactory.CreateTitleText(
-                ladderPanel, "Season Title", seasonName.ToUpperInvariant(), 28, TextAnchor.MiddleLeft);
+                ladderPanel, "Season Title", seasonName.ToUpperInvariant(), 25, TextAnchor.MiddleLeft);
             title.color = Gold;
             PvpUiFactory.SetAnchors(
                 (RectTransform)title.transform,
                 new Vector2(0.025f, 0.925f), new Vector2(0.56f, 0.99f));
 
             countdownText = PvpUiFactory.CreateLabel(
-                ladderPanel, "Season Countdown", "Fine stagione in aggiornamento", 18, TextAnchor.MiddleRight);
+                ladderPanel, "Season Countdown", "Fine stagione in aggiornamento", 16, TextAnchor.MiddleRight);
             countdownText.color = PaleGold;
             PvpUiFactory.SetAnchors(
                 (RectTransform)countdownText.transform,
@@ -325,13 +329,13 @@ namespace AccardND.PvpUi
         private void RenderHallOfFame()
         {
             RectTransform hallPanel = CreateFramedPanel(
-                viewRoot, "Hall Of Fame Ladder", new Vector2(0f, 0f), new Vector2(0.755f, 1f));
+                viewRoot, "Hall Of Fame Ladder", new Vector2(0f, 0f), new Vector2(0.72f, 1f));
             RectTransform archivePanel = CreateFramedPanel(
-                viewRoot, "Season Archive", new Vector2(0.77f, 0f), new Vector2(1f, 1f));
+                viewRoot, "Season Archive", new Vector2(0.735f, 0f), new Vector2(1f, 1f));
 
             string seasonName = hallOfFame?.seasonName ?? "Hall of Fame";
             Text title = PvpUiFactory.CreateTitleText(
-                hallPanel, "Hall Title", seasonName.ToUpperInvariant(), 28, TextAnchor.MiddleLeft);
+                hallPanel, "Hall Title", seasonName.ToUpperInvariant(), 25, TextAnchor.MiddleLeft);
             title.color = Gold;
             PvpUiFactory.SetAnchors(
                 (RectTransform)title.transform,
@@ -339,7 +343,7 @@ namespace AccardND.PvpUi
 
             HallOfFameSeasonDto selectedSeason = FindSeason(hallOfFame?.seasonId ?? 0);
             Text summary = PvpUiFactory.CreateLabel(
-                hallPanel, "Hall Summary", SeasonSummary(selectedSeason), 17, TextAnchor.MiddleRight);
+                hallPanel, "Hall Summary", SeasonSummary(selectedSeason), 15, TextAnchor.MiddleRight);
             summary.color = PaleGold;
             PvpUiFactory.SetAnchors(
                 (RectTransform)summary.transform,
@@ -386,7 +390,7 @@ namespace AccardND.PvpUi
         private void RenderRankedPersonalPanel(RectTransform panel)
         {
             Text heading = PvpUiFactory.CreateTitleText(
-                panel, "Personal Heading", "LA TUA STAGIONE", 24, TextAnchor.MiddleCenter);
+                panel, "Personal Heading", "LA TUA STAGIONE", 21, TextAnchor.MiddleCenter);
             heading.color = Gold;
             PvpUiFactory.SetAnchors(
                 (RectTransform)heading.transform,
@@ -447,7 +451,7 @@ namespace AccardND.PvpUi
         private void RenderArchivePanel(RectTransform panel, HallOfFameSeasonDto selectedSeason)
         {
             Text heading = PvpUiFactory.CreateTitleText(
-                panel, "Archive Heading", "STAGIONI CONCLUSE", 22, TextAnchor.MiddleCenter);
+                panel, "Archive Heading", "STAGIONI CONCLUSE", 20, TextAnchor.MiddleCenter);
             heading.color = Gold;
             PvpUiFactory.SetAnchors(
                 (RectTransform)heading.transform,
@@ -754,7 +758,6 @@ namespace AccardND.PvpUi
             RectTransform row = PvpUiFactory.CreateSoftPanel(
                 parent, "Your Placement", new Color(0.19f, 0.075f, 0.27f, 0.96f));
             PvpUiFactory.SetAnchors(row, minimum, maximum);
-            AddOrnateFrame(row, new Color(0.72f, 0.35f, 0.9f, 0.75f));
 
             string rank = profile == null || profile.globalRank <= 0 ? "—" : $"#{profile.globalRank:N0}";
             string name = profile?.username ?? "Il tuo profilo";
@@ -773,7 +776,6 @@ namespace AccardND.PvpUi
             RectTransform row = PvpUiFactory.CreateSoftPanel(
                 parent, "Your Historic Placement", new Color(0.19f, 0.075f, 0.27f, 0.96f));
             PvpUiFactory.SetAnchors(row, minimum, maximum);
-            AddOrnateFrame(row, new Color(0.72f, 0.35f, 0.9f, 0.75f));
 
             HallOfFameEntry personal = hallOfFame?.you;
             if (personal == null && hallOfFame?.entries != null)
@@ -921,7 +923,7 @@ namespace AccardND.PvpUi
         {
             RectTransform panel = PvpUiFactory.CreateContainer(parent, name);
             PvpUiFactory.SetAnchors(panel, minimum, maximum);
-            AddOrnateFrame(panel, new Color(accent.r, accent.g, accent.b, 0.72f));
+            AddOrnateFrame(panel, new Color(accent.r, accent.g, accent.b, 0.46f));
             return panel;
         }
 

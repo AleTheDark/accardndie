@@ -48,6 +48,12 @@ App                       Server (.NET)                  Google
   spendibile sul nostro callback.
 - Le richieste in attesa scadono dopo `RequestTtlMinutes` (default 10) e il token
   si ritira **una volta sola**.
+- Il **callback può arrivare due volte** con lo stesso `code`: il browser di
+  Android ricarica il target del redirect di Google. Il secondo scambio
+  fallirebbe con `invalid_grant`, quindi `CompleteAsync` esce subito se l'ID
+  token c'è già, e `Redeem` fa vincere il token sull'errore. Senza queste due
+  guardie un accesso riuscito veniva mostrato come fallito
+  (visto in produzione il 2026-08-02).
 
 Codice: [`GoogleOAuthBroker.cs`](../Server/AccardND.Server/Accounts/GoogleOAuthBroker.cs),
 [`GoogleAuthEndpoints.cs`](../Server/AccardND.Server/Accounts/GoogleAuthEndpoints.cs),
@@ -74,11 +80,11 @@ Il broker resta **spento** finché non trova il secret, e in quel caso Android
 ripiega sull'account locale. Aggiungere al service unit del server .NET:
 
 ```ini
-# /etc/systemd/system/accardnd-server.service  (dentro [Service])
+# /etc/systemd/system/accardnd.service  (dentro [Service])
 Environment=ACCARDND_GOOGLE_CLIENT_SECRET=il-secret-del-web-client
 ```
 
-Poi `sudo systemctl daemon-reload && sudo systemctl restart accardnd-server`.
+Poi `sudo systemctl daemon-reload && sudo systemctl restart accardnd`.
 
 > Il secret **non va committato**. `serverconfig.json` è versionato: il campo
 > `GoogleOAuth.ClientSecret` esiste solo come ripiego per lo sviluppo locale.

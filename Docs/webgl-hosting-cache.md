@@ -74,16 +74,35 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-## Deploy della build (aggiornato: include sw.js e manifest)
+## Deploy della build
 
 Da `cmd`, dalla root del progetto, dopo il build Unity in `output-web/`:
 
 ```bat
 del /f /q output-web.zip 2>nul
-tar -a -cf output-web.zip -C output-web Build StreamingAssets TemplateData index.html sw.js manifest.webmanifest
+tar -a -cf output-web.zip -C output-web Build StreamingAssets TemplateData index.html sw.js manifest.webmanifest ads.txt oauth2redirect -C ../Docs/web privacy.html
 scp output-web.zip root@217.160.212.85:/tmp/
 ssh root@217.160.212.85 "rm -rf /var/www/html/* && unzip /tmp/output-web.zip -d /var/www/html && rm /tmp/output-web.zip"
 ```
+
+Cosa c'e' dentro e perche', visto che la riga e' lunga e ogni pezzo che manca rompe
+qualcosa di diverso:
+
+| voce | da dove | se manca |
+|---|---|---|
+| `Build`, `StreamingAssets`, `TemplateData` | build Unity | non parte niente |
+| `index.html`, `sw.js`, `manifest.webmanifest` | template WebGL | niente PWA, niente cache |
+| `ads.txt` | template WebGL | AdSense non serve annunci sul dominio |
+| `oauth2redirect` | template WebGL | si rompe il login Google |
+| `privacy.html` | `Docs/web/`, **fuori** da `output-web` | manca l'informativa richiesta da Play e da AdSense |
+
+Il secondo `-C ../Docs/web` e' relativo alla cartella dove `tar` si trova in quel
+momento, cioe' `output-web/`: si risale di uno e si scende in `Docs/web`. La pagina
+privacy sta li' e non nel template perche' non e' roba di Unity, e passare dal
+template significherebbe rigenerarla a ogni build.
+
+> Il deploy fa `rm -rf /var/www/html/*`: tutto quello che non e' in questa riga
+> sparisce dal sito. Aggiungendo un file al template, aggiungilo anche qui.
 
 Verifica:
 
@@ -91,6 +110,7 @@ Verifica:
 curl.exe -I https://accardndie.com/                       # Last-Modified = data deploy
 curl.exe -I https://accardndie.com/sw.js                  # Cache-Control: no-cache
 curl.exe -I https://accardndie.com/Build/output-web.wasm  # Cache-Control: ...immutable
+curl.exe -s https://accardndie.com/ads.txt                # la riga google.com, pub-...
 ```
 
 Poi nel browser: prima visita scarica tutto (normale), dalla **seconda** in poi i

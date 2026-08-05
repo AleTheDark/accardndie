@@ -123,7 +123,7 @@ public sealed partial class BattleBoardController
 			TextAnchor.MiddleCenter);
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(title);
 		title.text = "BIBLIOTECA";
-		title.color = LibraryGold;
+		title.color = new Color32(0xF2, 0xC9, 0x57, 0xFF);
 		AddLibraryTextShadow(title, 2f);
 		SetRect(title.rectTransform, new Vector2(0.08f, 0.18f), new Vector2(0.92f, 0.72f));
 		title.rectTransform.offsetMin = new Vector2(0f, -23f);
@@ -988,9 +988,9 @@ public sealed partial class BattleBoardController
 	{
 		return difficulty switch
 		{
-			RoomDifficulty.Easy => "Facile",
+			RoomDifficulty.Easy => "Accessibile",
 			RoomDifficulty.Normal => "Normale",
-			RoomDifficulty.Hard => "Difficile",
+			RoomDifficulty.Hard => "Diabolica",
 			_ => "Qualsiasi"
 		};
 	}

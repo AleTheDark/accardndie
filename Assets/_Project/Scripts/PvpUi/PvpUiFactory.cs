@@ -94,17 +94,17 @@ namespace AccardND.PvpUi
 
         private static int ResolveFontSize(Transform parent, int requestedSize)
         {
-            bool insideLobby = false;
+            bool insideLargeScreen = false;
             for (Transform current = parent; current != null; current = current.parent)
             {
-                if (current.name == "Lobby")
+                if (current.name == "Lobby" || current.name == "Classifica")
                 {
-                    insideLobby = true;
+                    insideLargeScreen = true;
                     break;
                 }
             }
 
-            if (!insideLobby)
+            if (!insideLargeScreen)
                 return requestedSize;
 
             float multiplier = requestedSize <= 18
@@ -158,15 +158,28 @@ namespace AccardND.PvpUi
             Text text = CreateTitleText(holder.transform, "Label", label, fontSize);
             text.color = Color.Lerp(new Color(0.94f, 0.9f, 0.82f, 1f), MmoUiTheme.AccentOf(variant), 0.1f);
             Stretch((RectTransform)text.transform, 10f, 2f);
-            if (MmoUiTheme.IsBackButtonLabel(label))
+            if (MmoUiTheme.IsBackButton(name, label))
                 MmoUiTheme.ApplyBackButtonStyle(button, text);
-            else if (MmoUiTheme.IsLightButtonLabel(label))
+            else if (MmoUiTheme.IsLightButton(name, label))
                 MmoUiTheme.ApplyLightButtonStyle(button, text);
             return button;
         }
 
         private static MmoUiTheme.ButtonVariant ResolveButtonVariant(string name, string label, Color color)
         {
+            string semanticName = (name ?? string.Empty).ToUpperInvariant();
+            if (semanticName.Contains("CANCEL") || semanticName.Contains("CLOSE") || semanticName.Contains("BACK") ||
+                semanticName.Contains("RETURN") || semanticName.Contains("REMOVE") || semanticName.Contains("DECLINE"))
+                return MmoUiTheme.ButtonVariant.Crimson;
+            if (semanticName.Contains("CONFIRM") || semanticName.Contains("SAVE") || semanticName.Contains("CONTINUE") ||
+                semanticName.Contains("ACCEPT") || semanticName.Contains("JOIN"))
+                return MmoUiTheme.ButtonVariant.Emerald;
+            if (semanticName.Contains("PROFILE") || semanticName.Contains("CHALLENGE") || semanticName.Contains("SEARCH") ||
+                semanticName.Contains("QUEUE"))
+                return MmoUiTheme.ButtonVariant.Violet;
+            if (semanticName.Contains("LOADOUT") || semanticName.Contains("CREATE") || semanticName.Contains("ADD"))
+                return MmoUiTheme.ButtonVariant.Gold;
+
             string value = ((name ?? string.Empty) + " " + (label ?? string.Empty)).ToUpperInvariant();
             if (value.Contains("ANNULLA") || value.Contains("RIFIUTA") || value.Contains("RIMUOVI") || value.Contains("CHIUDI") || value.Contains("INDIETRO") || value.Contains("CANCEL") || value.Contains("CLOSE"))
                 return MmoUiTheme.ButtonVariant.Crimson;

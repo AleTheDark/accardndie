@@ -31,6 +31,7 @@ namespace AccardND.GameCore.Pvp
         public int TieBreaker { get; internal set; }
 
         public bool AbilityUsed { get; internal set; }
+        public bool AbilityUsedThisTurn { get; internal set; }
         public bool AbilityArmed { get; internal set; }
         public int PendingAttackBonus { get; internal set; }
         public PvpPendingBonusKind PendingBonusKind { get; internal set; }
@@ -42,6 +43,13 @@ namespace AccardND.GameCore.Pvp
         public bool IsAttachment { get; internal set; }
         public PvpCardState MarkedTarget { get; internal set; }
         public PvpCardState ProtectedAlly { get; internal set; }
+
+        /// <summary>
+        /// Invisibilita' dell'Assassino: non puo' essere scelta come bersaglio. Non decade,
+        /// ma smette di proteggere quando resta l'unica pedina attiva del suo schieramento
+        /// (in quel caso difende con vantaggio). E' un buff, quindi il Dispel la rimuove.
+        /// </summary>
+        public bool IsUntargetable { get; internal set; }
 
         public bool IsActive => !Eliminated;
 

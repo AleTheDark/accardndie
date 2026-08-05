@@ -28,6 +28,7 @@ public sealed class MessageRouter
     private readonly PvpCardCatalog cardCatalog;
     private readonly SessionTokenRegistry sessionTokens;
     private readonly RequestDedupStore requestDedup;
+    private readonly ClientVersionGate clientVersions;
     private readonly ILogger<MessageRouter> logger;
 
     /// <summary>
@@ -80,6 +81,7 @@ public sealed class MessageRouter
         PvpCardCatalog cardCatalog,
         SessionTokenRegistry sessionTokens,
         RequestDedupStore requestDedup,
+        ClientVersionGate clientVersions,
         ILogger<MessageRouter> logger)
     {
         this.config = config;
@@ -100,6 +102,7 @@ public sealed class MessageRouter
         this.cardCatalog = cardCatalog;
         this.sessionTokens = sessionTokens;
         this.requestDedup = requestDedup;
+        this.clientVersions = clientVersions;
         this.logger = logger;
         loadoutRules = config.ToLoadoutRules();
     }
@@ -173,6 +176,17 @@ public sealed class MessageRouter
 
     private async Task RouteAsync(ClientConnection connection, Envelope envelope, CancellationToken cancellation)
     {
+        switch (envelope.type)
+        {
+            case MessageTypes.AuthRegister:
+            case MessageTypes.AuthLogin:
+            case MessageTypes.AuthUgs:
+            case MessageTypes.AuthSession:
+                if (await RejectOutdatedClientAsync(connection, envelope, cancellation))
+                    return;
+                break;
+        }
+
         switch (envelope.type)
         {
             case MessageTypes.AuthRegister:
@@ -379,6 +393,12 @@ public sealed class MessageRouter
                     connection, singlePlayerProgress.ClaimAdMultiplier(connection.Identity, request), cancellation);
                 break;
             }
+            case MessageTypes.SinglePlayerClaimLevelRewards:
+            {
+                await SendRewardResultAsync(
+                    connection, singlePlayerProgress.ClaimLevelRewards(connection.Identity), cancellation);
+                break;
+            }
             case MessageTypes.MatchAction:
             {
                 MatchSession session = connection.CurrentRoom?.Session;
@@ -390,6 +410,23 @@ public sealed class MessageRouter
                 }
                 var action = ClientConnection.ParsePayload<MatchActionDto>(envelope);
                 await session.HandleActionAsync(connection, action, cancellation);
+                break;
+            }
+            case MessageTypes.MatchForfeit:
+            {
+                MatchSession session = connection.CurrentRoom?.Session;
+                if (session == null)
+                {
+                    await connection.SendErrorAsync(
+                        ErrorCodes.NotInMatch, "Nessun match in corso.", cancellation);
+                    break;
+                }
+                if (await session.ForfeitAsync(connection, cancellation))
+                {
+                    logger.LogInformation(
+                        "'{User}' si è arreso nella stanza {Code}.",
+                        connection.Identity.Username, connection.CurrentRoom.Code);
+                }
                 break;
             }
             default:
@@ -455,6 +492,37 @@ public sealed class MessageRouter
         await connection.SendAsync(MessageTypes.SinglePlayerRewardResult, outcome.Result, cancellation);
     }
 
+    /// <summary>
+    /// Cancello di versione: una build vecchia non entra, qualunque sia il modo in
+    /// cui prova ad autenticarsi. La connessione resta aperta ma senza identità, e
+    /// il client riceve un AuthResponse che dice esplicitamente "aggiorna" invece di
+    /// un errore generico da riprovare all'infinito.
+    /// </summary>
+    private async Task<bool> RejectOutdatedClientAsync(
+        ClientConnection connection, Envelope envelope, CancellationToken cancellation)
+    {
+        string clientVersion = ClientConnection.ParsePayload<ClientVersionInfo>(envelope)?.clientVersion;
+        if (clientVersions.IsAccepted(clientVersion))
+            return false;
+
+        string target = clientVersions.Target;
+        logger.LogInformation(
+            "Accesso rifiutato su {ConnectionId}: client '{Client}' invece di '{Target}'.",
+            connection.ConnectionId,
+            string.IsNullOrWhiteSpace(clientVersion) ? "(non dichiarata)" : clientVersion,
+            target);
+
+        await connection.SendAsync(MessageTypes.AuthResponse, new AuthResponse
+        {
+            ok = false,
+            error = $"Versione del gioco non aggiornata: serve la {target}. Aggiorna per continuare.",
+            requiresUpdate = true,
+            requiredVersion = target,
+            updateUrl = clientVersions.UpdateUrl
+        }, cancellation);
+        return true;
+    }
+
     private async Task HandleUgsAuthAsync(
         ClientConnection connection, Envelope envelope, CancellationToken cancellation)
     {
@@ -469,9 +537,14 @@ public sealed class MessageRouter
         AccountIdentity identity = resolved.Identity;
         error = resolved.Error ?? error;
 
+        // Il token va emesso prima dell'aggancio: serve a distinguere questa sessione
+        // da quella già collegata, che altrimenti verrebbe sloggata anche quando è
+        // solo il rientro dello stesso client.
+        string sessionToken = sessionTokens.Issue(identity);
         if (identity != null)
         {
             connection.Identity = identity;
+            connection.SessionToken = sessionToken;
             logger.LogInformation(
                 "Autenticato via {Provider}/{Method} '{Username}' ({PlayerId}) su {ConnectionId}",
                 externalIdentity.Provider, externalIdentity.AuthMethod,
@@ -489,7 +562,7 @@ public sealed class MessageRouter
             isNewAccount = resolved.IsNewAccount,
             authProvider = externalIdentity?.Provider,
             requiresNickname = resolved.RequiresNickname,
-            sessionToken = sessionTokens.Issue(identity)
+            sessionToken = sessionToken
         }, cancellation);
 
         if (identity != null)
@@ -512,6 +585,9 @@ public sealed class MessageRouter
         if (identity != null)
         {
             connection.Identity = identity;
+            // Stesso token della connessione caduta: è lo stesso client che rientra,
+            // non un secondo dispositivo.
+            connection.SessionToken = request.sessionToken;
             logger.LogInformation(
                 "Sessione ripresa da '{Username}' ({PlayerId}) su {ConnectionId}",
                 identity.Username, identity.PlayerId, connection.ConnectionId);
@@ -577,9 +653,11 @@ public sealed class MessageRouter
             ? accounts.Register(username, password)
             : accounts.Login(username, password);
 
+        string sessionToken = sessionTokens.Issue(identity);
         if (identity != null)
         {
             connection.Identity = identity;
+            connection.SessionToken = sessionToken;
             logger.LogInformation("Autenticato '{Username}' su {ConnectionId}", identity.Username, connection.ConnectionId);
             await OnAuthenticatedAsync(connection);
         }
@@ -591,7 +669,7 @@ public sealed class MessageRouter
             token = token,
             playerId = identity?.PlayerId,
             username = identity?.Username,
-            sessionToken = sessionTokens.Issue(identity)
+            sessionToken = sessionToken
         }, cancellation);
 
         if (identity != null)
@@ -753,8 +831,54 @@ public sealed class MessageRouter
 
     private async Task OnAuthenticatedAsync(ClientConnection connection)
     {
+        await CloseOtherSessionAsync(connection);
         presence.Register(connection);
         await NotifyFriendsPresenceAsync(connection.Identity.PlayerId, PresenceRegistry.Online);
+    }
+
+    /// <summary>
+    /// Un account, una sessione. Se il giocatore era già collegato, la connessione
+    /// vecchia viene chiusa qui — prima di registrare la nuova, altrimenti la
+    /// cercheremmo nel registro e troveremmo se stessi.
+    ///
+    /// Due casi diversi: stesso token di sessione significa che è lo stesso client
+    /// che rientra dopo una caduta di rete e il socket vecchio è solo uno zombie da
+    /// chiudere in silenzio; token diverso significa un altro dispositivo, e allora
+    /// chi era dentro va avvisato prima di essere sloggato.
+    /// </summary>
+    private async Task CloseOtherSessionAsync(ClientConnection connection)
+    {
+        ClientConnection previous = presence.GetConnection(connection.Identity.PlayerId);
+        if (previous == null || ReferenceEquals(previous, connection))
+            return;
+
+        bool sameSession = !string.IsNullOrEmpty(previous.SessionToken)
+            && string.Equals(previous.SessionToken, connection.SessionToken, StringComparison.Ordinal);
+
+        try
+        {
+            if (!sameSession)
+            {
+                logger.LogInformation(
+                    "'{Username}' è entrato da un'altra parte: chiudo la sessione {Old}.",
+                    connection.Identity.Username, previous.ConnectionId);
+                await previous.SendAsync(MessageTypes.SessionKicked, new SessionKickedMessage
+                {
+                    message = "Il tuo account è stato usato su un altro dispositivo."
+                });
+                // Senza revoca il client sloggato rientrerebbe da solo con la
+                // riconnessione automatica, sbattendo fuori a sua volta il nuovo.
+                sessionTokens.Revoke(previous.SessionToken);
+            }
+
+            await previous.CloseAsync();
+        }
+        catch (Exception exception)
+        {
+            // Il socket vecchio può essere già morto: non deve far fallire il login
+            // di chi sta entrando adesso.
+            logger.LogDebug("Chiusura della sessione precedente non riuscita: {Message}", exception.Message);
+        }
     }
 
     private async Task NotifyFriendsPresenceAsync(string playerId, string presenceStatus)
@@ -1028,18 +1152,24 @@ public sealed class MessageRouter
     /// <summary>
     /// Mette la partita in pausa e apre la finestra di rientro, invece di trasformare
     /// la caduta del socket in una sconfitta immediata. false quando non c'è niente da
-    /// salvare: partita già finita, nessun avversario in attesa o grazia disattivata.
+    /// salvare: partita già finita, nessun avversario in attesa, grazia disattivata o
+    /// budget di riconnessione esaurito.
     /// </summary>
     private async Task<bool> TryBeginReconnectWaitAsync(Room room, ClientConnection connection)
     {
-        int seconds = config.DisconnectTimeoutSeconds;
         string playerId = connection.Identity?.PlayerId;
-        if (seconds <= 0 || playerId == null)
+        if (playerId == null)
             return false;
         if (room.Session == null || room.Session.IsFinished)
             return false;
         // Se anche l'altro è già fuori non c'è nessuno per cui tenere in piedi il tavolo.
         if (room.IsAwaitingReconnect || room.OpponentOf(connection) is not { IsOpen: true })
+            return false;
+
+        // Quello che resta del budget di partita, non una finestra nuova di zecca:
+        // il tempo delle cadute precedenti è già stato speso.
+        int seconds = room.RemainingReconnectSeconds(playerId, config.DisconnectTimeoutSeconds);
+        if (seconds <= 0)
             return false;
 
         var timer = new CancellationTokenSource();
@@ -1051,7 +1181,7 @@ public sealed class MessageRouter
         }
 
         logger.LogInformation(
-            "Disconnessione di '{User}' nella stanza {Code}: {Seconds}s per rientrare.",
+            "Disconnessione di '{User}' nella stanza {Code}: {Seconds}s di grazia residua per rientrare.",
             connection.Identity.Username, room.Code, seconds);
         _ = ExpireReconnectWaitAsync(room, playerId, seconds, timer);
         return true;
@@ -1074,7 +1204,9 @@ public sealed class MessageRouter
         }
 
         // Il rientro può arrivare nello stesso istante: vince chi prende il timer.
-        if (room.EndReconnectWait() == null)
+        // E se nel frattempo è già cominciata un'altra attesa, questa scadenza è
+        // vecchia e non ha più voce in capitolo.
+        if (!room.TryEndReconnectWait(timer))
             return;
 
         try
@@ -1106,33 +1238,44 @@ public sealed class MessageRouter
     }
 
     /// <summary>
-    /// Dopo l'autenticazione: se il giocatore era atteso in una partita in pausa, la
-    /// riprende da dove l'aveva lasciata invece di ritrovarsi in lobby.
+    /// Dopo l'autenticazione: se il giocatore ha una partita ancora viva, la riprende
+    /// da dove l'aveva lasciata invece di ritrovarsi in lobby. Vale sia per il rientro
+    /// atteso (finestra di grazia aperta) sia per quello che arriva prima che il server
+    /// si accorga della caduta: chi riapre l'app torna comunque al suo tavolo.
     /// </summary>
     private async Task TryResumeMatchAsync(ClientConnection connection, CancellationToken cancellation)
     {
         string playerId = connection.Identity?.PlayerId;
+        bool awaited = true;
         Room room = rooms.FindAwaitingReconnect(playerId);
+        if (room == null)
+        {
+            awaited = false;
+            room = rooms.FindLiveMatchOf(playerId);
+        }
         if (room?.Session == null || room.Session.IsFinished)
             return;
 
-        // Ferma il countdown: se era già scaduto qui torna null e la stanza è persa.
+        // Ferma il countdown e addebita il tempo passato offline: se era già scaduto
+        // qui torna null e la stanza è persa.
         CancellationTokenSource timer = room.EndReconnectWait();
-        if (timer == null)
+        if (awaited && timer == null)
             return;
-        timer.Cancel();
+        timer?.Cancel();
 
         if (!room.TryReplaceConnection(connection, out ClientConnection stale))
             return;
-        if (stale != null)
+        if (stale != null && !ReferenceEquals(stale, connection))
             stale.CurrentRoom = null;
         connection.CurrentRoom = room;
 
-        if (!await room.Session.ResumeAsync(connection, cancellation))
+        int graceLeft = room.RemainingReconnectSeconds(playerId, config.DisconnectTimeoutSeconds);
+        if (!await room.Session.ResumeAsync(connection, graceLeft, cancellation))
             return;
 
         await NotifyFriendsPresenceAsync(playerId, PresenceRegistry.InMatch);
         logger.LogInformation(
-            "'{User}' è rientrato nella stanza {Code}.", connection.Identity.Username, room.Code);
+            "'{User}' è rientrato nella stanza {Code}: {Seconds}s di grazia ancora disponibili.",
+            connection.Identity.Username, room.Code, graceLeft);
     }
 }

@@ -1,0 +1,31 @@
+{
+    "asset": "77be6c73990a0d84ca95d46c06b20ac6",
+    "fileName": "019fcccd-7b0f-7742-a98b-72d5f68ff2a0.png",
+    "prompt": "Vorrei un mmo ui panel in base allo stile del mio gioco\n",
+    "negativePrompt": "",
+    "model": "card-frames",
+    "modelName": "Card Frames",
+    "customSeed": -1,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "refinementMode": "Generation",
+    "pixelateTargetSize": 0,
+    "pixelateKeepImageSize": false,
+    "pixelatePixelBlockSize": 0,
+    "pixelatePixelGridSize": 0,
+    "pixelateMode": 0,
+    "pixelateOutlineThickness": 0,
+    "doodles": {
+        "m_Items": []
+    },
+    "upscaleFactor": 0,
+    "dimensions": {
+        "width": 1024,
+        "height": 1024
+    },
+    "spriteSheet": false,
+    "duration": 0.0,
+    "dynamicParams": {
+        "serializedData": []
+    }
+}

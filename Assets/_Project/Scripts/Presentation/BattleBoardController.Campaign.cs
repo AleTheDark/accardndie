@@ -59,6 +59,12 @@ public sealed partial class BattleBoardController
 
 	private void RefreshScenarioBackground()
 	{
+		if (pvpPresentationActive && pvpState != null)
+		{
+			RefreshPvpArenaBackground(pvpState.MatchRound);
+			return;
+		}
+
 		Sprite sprite = CurrentScenarioBackgroundSprite();
 		if ((Object)(object)sprite == (Object)null)
 		{
@@ -177,29 +183,11 @@ public sealed partial class BattleBoardController
 	private void PrepareCampaignDoors()
 	{
 		campaignDoors.Clear();
-		List<CampaignDoorDifficulty> list = new List<CampaignDoorDifficulty>
-		{
-			CampaignDoorDifficulty.Easy,
-			CampaignDoorDifficulty.Normal,
-			CampaignDoorDifficulty.Hard
-		};
-		for (int num = list.Count - 1; num > 0; num--)
-		{
-			int num2 = random.NextInclusive(0, num);
-			List<CampaignDoorDifficulty> list2 = list;
-			int index = num;
-			List<CampaignDoorDifficulty> list3 = list;
-			int index2 = num2;
-			CampaignDoorDifficulty campaignDoorDifficulty = list[num2];
-			CampaignDoorDifficulty campaignDoorDifficulty2 = list[num];
-			CampaignDoorDifficulty campaignDoorDifficulty3 = (list2[index] = campaignDoorDifficulty);
-			campaignDoorDifficulty3 = (list3[index2] = campaignDoorDifficulty2);
-		}
-		foreach (CampaignDoorDifficulty item in list)
+		for (int index = 0; index < 3; index++)
 		{
 			campaignDoors.Add(nextDoorChoiceRevealed
-				? new CampaignDoor(item, RollCampaignRoomPreview(item))
-				: new CampaignDoor(item));
+				? new CampaignDoor(RollCampaignRoomPreview())
+				: new CampaignDoor());
 		}
 		nextDoorChoiceRevealed = false;
 		RefreshRoomChoiceRevealLabels();
@@ -235,7 +223,7 @@ public sealed partial class BattleBoardController
 			CampaignDoor door = campaignDoors[i];
 			if (!door.RevealedRoom.HasValue)
 			{
-				campaignDoors[i] = new CampaignDoor(door.Difficulty, RollCampaignRoomPreview(door.Difficulty));
+				campaignDoors[i] = new CampaignDoor(RollCampaignRoomPreview());
 			}
 		}
 		RefreshRoomChoiceRevealLabels();
@@ -290,7 +278,7 @@ public sealed partial class BattleBoardController
 		if (index >= 0 && index < campaignDoors.Count && !((Object)(object)roomTransition == (Object)null) && !roomTransition.IsPlaying)
 		{
 			CampaignDoor campaignDoor = campaignDoors[index];
-			CampaignRoomRoll roomRoll = campaignDoor.RevealedRoom ?? RollCampaignRoom(campaignDoor.Difficulty);
+			CampaignRoomRoll roomRoll = campaignDoor.RevealedRoom ?? RollCampaignRoom();
 			if (campaignDoor.RevealedRoom.HasValue)
 			{
 				RegisterCampaignRoomRoll(roomRoll);
@@ -298,19 +286,21 @@ public sealed partial class BattleBoardController
 			currentRoomType = roomRoll.RoomType;
 			currentMonsterTier = ((roomRoll.RoomType == RoomType.Monster) ?Mathf.Clamp(roomRoll.MonsterTier + ConsumeNextMonsterTierBonus(), 1, 4) : roomRoll.MonsterTier);
 			pendingScenarioId = roomRoll.ScenarioId;
-			pendingRoomDifficulty = ((currentRoomType == RoomType.Monster) ?DifficultyForMonsterTier(currentMonsterTier) : roomRoll.Difficulty);
+			pendingRoomDifficulty = currentRoomType == RoomType.Monster
+				? RollMonsterRoomDifficulty(runProgress.RoomsCleared + 1)
+				: roomRoll.Difficulty;
 			if (currentRoomType == RoomType.Monster)
 			{
 				pendingScenarioId = ActiveCampaignScenarioId();
 			}
-			AppendLog($"PORTA SCELTA - slot {index + 1}, difficolta nascosta {campaignDoor.Difficulty}, stanza {DescribeRoomRoll(roomRoll)}");
+			AppendLog($"PORTA SCELTA - slot {index + 1}, stanza nascosta {DescribeRoomRoll(roomRoll)}");
 			AnimationConfiguration animation = configuration.Animation;
 			PlayFootstepSfx();
 			roomTransition.Play(EnterChosenCampaignRoom, animation.RoomFadeOutDuration, animation.RoomBlackHoldDuration, animation.RoomFadeInDuration);
 		}
 	}
 
-	private CampaignRoomRoll RollCampaignRoom(CampaignDoorDifficulty difficulty)
+	private CampaignRoomRoll RollCampaignRoom()
 	{
 		int num = runProgress.RoomsCleared + 1;
 		ProgressionConfiguration progression = configuration.Progression;
@@ -347,46 +337,20 @@ public sealed partial class BattleBoardController
 			}
 			return new CampaignRoomRoll(RoomType.Boss, 4, bossScenarioId, RoomDifficulty.Hard);
 		}
-		return difficulty switch
-		{
-			CampaignDoorDifficulty.Easy => RollEasyDoorRoom(), 
-			CampaignDoorDifficulty.Normal => RollNormalDoorRoom(), 
-			CampaignDoorDifficulty.Hard => RollHardDoorRoom(), 
-			_ => RollNormalDoorRoom(), 
-		};
+		return RollHiddenDoorRoom();
 	}
 
-	private CampaignRoomRoll RollEasyDoorRoom()
+	private CampaignRoomRoll RollHiddenDoorRoom()
 	{
-		return RollAllowedDoorRoom(8, (int roll) => roll switch
+		// Denominatore 72: conserva la distribuzione complessiva precedente delle tre
+		// vecchie porte, ma ora ogni porta nascosta usa la stessa estrazione di stanza.
+		return RollAllowedDoorRoom(72, (int roll) => roll switch
 		{
-			1 => MonsterRoomRoll(1), 
-			2 => MonsterRoomRoll(2), 
-			3 => MonsterRoomRoll(3), 
-			4 => MonsterRoomRoll(4), 
-			5 => new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard),
-			6 => new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard),
-			7 => new CampaignRoomRoll(RoomType.UnexpectedOpportunity, 0, "unexpected_opportunity", RoomDifficulty.Any),
-			_ => new CampaignRoomRoll(RoomType.Loot, 0, "loot", RoomDifficulty.Any), 
+			<= 52 => MonsterRoomRoll(random.NextInclusive(1, 4)),
+			<= 66 => new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard),
+			<= 69 => new CampaignRoomRoll(RoomType.Loot, 0, "loot", RoomDifficulty.Any),
+			_ => new CampaignRoomRoll(RoomType.UnexpectedOpportunity, 0, "unexpected_opportunity", RoomDifficulty.Any),
 		});
-	}
-
-	private CampaignRoomRoll RollNormalDoorRoom()
-	{
-		return RollAllowedDoorRoom(6, (int roll) => roll switch
-		{
-			1 => MonsterRoomRoll(1), 
-			2 => MonsterRoomRoll(2), 
-			3 => MonsterRoomRoll(3), 
-			4 => MonsterRoomRoll(4), 
-			5 => new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard),
-			_ => new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard),
-		});
-	}
-
-	private CampaignRoomRoll RollHardDoorRoom()
-	{
-		return RegisterCampaignRoomRoll(MonsterRoomRoll(random.NextInclusive(1, 4)));
 	}
 
 	private CampaignRoomRoll RollAllowedDoorRoom(int rollSides, Func<int, CampaignRoomRoll> rollFactory)
@@ -460,18 +424,48 @@ public sealed partial class BattleBoardController
 		return num;
 	}
 
-	private static RoomDifficulty DifficultyForMonsterTier(int tier)
+	private RoomDifficulty RollMonsterRoomDifficulty(int roomNumber)
 	{
-		int num = Mathf.Clamp(tier, 1, 4);
-		if (num > 2)
+		int scenarioNumber = ActiveCampaignScenarioNumber();
+		ScenarioMonsterDifficultyWeights weights = ScenarioMonsterDifficultyWeights.For(scenarioNumber, roomNumber);
+		int roll = random.NextInclusive(1, Mathf.Max(1, weights.Total));
+		RoomDifficulty result = roll <= weights.Accessible
+			? RoomDifficulty.Easy
+			: roll <= weights.Accessible + weights.Normal
+				? RoomDifficulty.Normal
+				: RoomDifficulty.Hard;
+		AppendLog($"DIFFICOLTA MOSTRO - scenario {scenarioNumber}, stanza {roomNumber}, " +
+			$"pesi {weights.Accessible}/{weights.Normal}/{weights.Diabolic}, estratta {RoomDifficultyRules.For(result).DisplayName}.");
+		return result;
+	}
+
+	private int ActiveCampaignScenarioNumber()
+	{
+		if (!string.IsNullOrWhiteSpace(activeAdventureChapterId))
 		{
-			if (num == 3)
-			{
-				return RoomDifficulty.Normal;
-			}
-			return RoomDifficulty.Hard;
+			const string prefix = "chapter-";
+			if (activeAdventureChapterId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+				&& int.TryParse(activeAdventureChapterId.Substring(prefix.Length), out int chapterNumber))
+				return Mathf.Clamp(chapterNumber, 1, 9);
 		}
-		return RoomDifficulty.Easy;
+
+		string id = campaignScenarioId ?? string.Empty;
+		switch (id.ToLowerInvariant())
+		{
+			case "fog": return 1;
+			case "climbing": return 2;
+			case "mirror": return 3;
+			case "cosmic": return 4;
+		}
+
+		for (int scenario = 1; scenario <= 9; scenario++)
+		{
+			if (string.Equals(id, $"scenario-{scenario}", StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(id, $"scenario_{scenario}", StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(id, scenario.ToString(), StringComparison.OrdinalIgnoreCase))
+				return scenario;
+		}
+		return 1;
 	}
 
 	private static string DescribeRoomRoll(CampaignRoomRoll roomRoll)
@@ -480,13 +474,14 @@ public sealed partial class BattleBoardController
 		{
 			return roomRoll.RoomType.ToString();
 		}
-		return $"Mostro {roomRoll.MonsterTier}";
+		return "Mostro";
 	}
 
 	private void EnterChosenCampaignRoom()
 	{
 		ClearLootRewardReveal();
 		retryComposableGolemForms = null;
+		retryComposableGolemHitPoints = null;
 		if ((Object)(object)roomChoicePanel != (Object)null)
 		{
 			roomChoicePanel.SetActive(false);
@@ -517,14 +512,14 @@ public sealed partial class BattleBoardController
 		ResetBattle();
 	}
 
-	private CampaignRoomRoll RollCampaignRoomPreview(CampaignDoorDifficulty difficulty)
+	private CampaignRoomRoll RollCampaignRoomPreview()
 	{
 		bool merchantBlocked = merchantRoomsBlockedUntilMonster;
 		bool rewardBlocked = rewardRoomsBlockedUntilMonster;
-		CampaignRoomRoll roomRoll = RollCampaignRoom(difficulty);
+		CampaignRoomRoll roomRoll = RollCampaignRoom();
 		merchantRoomsBlockedUntilMonster = merchantBlocked;
 		rewardRoomsBlockedUntilMonster = rewardBlocked;
-		AppendLog($"DETECTOR - porta {difficulty}: {DescribeRoomRoll(roomRoll)}");
+		AppendLog($"DETECTOR - stanza rivelata: {DescribeRoomRoll(roomRoll)}");
 		return roomRoll;
 	}
 
@@ -562,6 +557,7 @@ public sealed partial class BattleBoardController
 		return new ComposableGolem(
 			random,
 			ComposableGolem.DefaultHitPoints,
+			retryComposableGolemHitPoints ?? ComposableGolem.DefaultHitPoints,
 			ComposableGolem.DefaultRoundsPerForm,
 			retryComposableGolemForms);
 	}

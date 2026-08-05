@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -155,6 +156,8 @@ namespace AccardND.Battlefield
         [SerializeField] private string key;
         [SerializeField] private string defaultText;
         [SerializeField] private bool captureLateText = true;
+        [SerializeField] private bool localizeDefaultText;
+        [SerializeField] private string localizationKey;
 
         private Text text;
         private bool applied;
@@ -177,11 +180,40 @@ namespace AccardND.Battlefield
                 : explicitKey.Trim();
 
             if (!string.IsNullOrEmpty(fallbackDefaultText))
+            {
                 binding.defaultText = fallbackDefaultText;
+                binding.localizeDefaultText = true;
+            }
             else if (!string.IsNullOrEmpty(target.text))
+            {
                 binding.defaultText = target.text;
+                binding.localizeDefaultText = true;
+            }
+
+            binding.localizationKey = GameTextKeys.RuntimeUi(binding.key);
 
             binding.ApplyOverrides();
+            binding.RefreshLocalizedText();
+            return binding;
+        }
+
+        /// <summary>
+        /// Rebinds a runtime text to a semantic localization key. Use this for controls whose
+        /// label changes with state, so the initial fallback cannot overwrite the current label.
+        /// </summary>
+        public static EditableRuntimeText BindLocalized(
+            Text target,
+            string semanticLocalizationKey,
+            string fallbackDefaultText)
+        {
+            EditableRuntimeText binding = Bind(target, fallbackDefaultText: fallbackDefaultText);
+            if (binding == null)
+                return null;
+
+            binding.localizationKey = semanticLocalizationKey?.Trim() ?? string.Empty;
+            binding.defaultText = fallbackDefaultText ?? string.Empty;
+            binding.localizeDefaultText = !string.IsNullOrWhiteSpace(binding.localizationKey);
+            binding.RefreshLocalizedText();
             return binding;
         }
 
@@ -190,8 +222,18 @@ namespace AccardND.Battlefield
             text = GetComponent<Text>();
             if (string.IsNullOrWhiteSpace(key))
                 key = BuildKey(transform);
+            if (string.IsNullOrWhiteSpace(localizationKey))
+                localizationKey = GameTextKeys.RuntimeUi(key);
 
             ApplyOverrides();
+            GameText.LocaleChanged -= RefreshLocalizedText;
+            GameText.LocaleChanged += RefreshLocalizedText;
+            RefreshLocalizedText();
+        }
+
+        private void OnDisable()
+        {
+            GameText.LocaleChanged -= RefreshLocalizedText;
         }
 
         private void LateUpdate()
@@ -227,6 +269,16 @@ namespace AccardND.Battlefield
             }
 
             applied = true;
+        }
+
+        private void RefreshLocalizedText()
+        {
+            if (!Application.isPlaying || !localizeDefaultText || string.IsNullOrWhiteSpace(localizationKey))
+                return;
+
+            text ??= GetComponent<Text>();
+            if (text != null)
+                text.text = GameText.GetOrFallbackSilent(localizationKey, defaultText);
         }
 
         private static EditableTextOverrideDatabase LoadDatabase()

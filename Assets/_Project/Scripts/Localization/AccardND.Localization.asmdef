@@ -1,0 +1,9 @@
+{
+  "name": "AccardND.Localization",
+  "rootNamespace": "AccardND.Localization",
+  "references": [
+    "Unity.Localization",
+    "Unity.ResourceManager",
+    "Unity.ugui"
+  ]
+}

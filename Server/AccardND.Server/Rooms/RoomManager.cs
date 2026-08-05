@@ -69,6 +69,21 @@ public sealed class RoomManager
             : roomsByCode.Values.FirstOrDefault(
                 room => room.IsAwaitingReconnect && room.DisconnectedPlayerId == playerId);
 
+    /// <summary>
+    /// Partita viva in cui il giocatore è seduto, anche se il server non si è ancora
+    /// accorto che il suo socket è morto. Su mobile capita di continuo: la rete sparisce
+    /// senza chiudere niente, il client rientra da un socket nuovo e il vecchio resta
+    /// zombie per minuti. Senza questa ricerca il rientro non troverebbe nessuna
+    /// stanza da riprendere e la partita finirebbe per abbandono a giocatore presente.
+    /// </summary>
+    public Room FindLiveMatchOf(string playerId) =>
+        string.IsNullOrEmpty(playerId)
+            ? null
+            : roomsByCode.Values.FirstOrDefault(
+                room => room.Session is { IsFinished: false }
+                    && (room.Host?.Identity?.PlayerId == playerId
+                        || room.Guest?.Identity?.PlayerId == playerId));
+
     public void Remove(Room room)
     {
         if (room == null)

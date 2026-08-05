@@ -96,6 +96,46 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void DrawCombatHand_ReleasesCooldownWhenNeededForMinimumFormation()
+        {
+            List<CardDefinition> definitions = CreateCards(3);
+            var state = new CampaignDeckState(definitions);
+            List<CampaignCardInstance> firstHand = state.DrawCombatHand(new MinimumRandomSource(), 3);
+            foreach (CampaignCardInstance card in firstHand)
+                state.Deploy(card);
+            state.CompleteCombat(new CampaignCardInstance[0]);
+
+            List<CampaignCardInstance> fallbackHand = state.DrawCombatHand(
+                new MinimumRandomSource(),
+                handSize: 3,
+                minimumFormationSize: 3);
+
+            Assert.That(fallbackHand, Has.Count.EqualTo(3));
+            Assert.That(state.CooldownCount, Is.Zero);
+            DestroyCards(definitions);
+        }
+
+        [Test]
+        public void DrawCombatHand_KeepsCooldownWhenAlternativesCanFillFormation()
+        {
+            List<CardDefinition> definitions = CreateCards(6);
+            var state = new CampaignDeckState(definitions);
+            List<CampaignCardInstance> firstHand = state.DrawCombatHand(new MinimumRandomSource(), 3);
+            foreach (CampaignCardInstance card in firstHand)
+                state.Deploy(card);
+            state.CompleteCombat(new CampaignCardInstance[0]);
+
+            List<CampaignCardInstance> nextHand = state.DrawCombatHand(
+                new MinimumRandomSource(),
+                handSize: 3,
+                minimumFormationSize: 3);
+
+            Assert.That(nextHand, Has.Count.EqualTo(3));
+            Assert.That(state.CooldownCount, Is.EqualTo(3));
+            DestroyCards(definitions);
+        }
+
+        [Test]
         public void RemoveCard_RemovesAvailableCardFromDeck()
         {
             List<CardDefinition> definitions = CreateCards(4);

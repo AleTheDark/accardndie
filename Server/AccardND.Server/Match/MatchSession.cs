@@ -117,7 +117,12 @@ public sealed class MatchSession
             }
             catch (PvpActionException exception)
             {
-                await sender.SendErrorAsync(ErrorCodes.InvalidAction, exception.Message, cancellation);
+                await sender.SendErrorAsync(
+                    string.IsNullOrWhiteSpace(exception.ErrorCode)
+                        ? ErrorCodes.InvalidAction
+                        : exception.ErrorCode,
+                    exception.Message,
+                    cancellation);
                 return;
             }
             consecutiveTimeouts[player] = 0;
@@ -129,6 +134,42 @@ public sealed class MatchSession
                 cancellation);
             await DispatchAsync(events, cancellation);
             ScheduleTurnTimer();
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Resa volontaria: chi la chiede perde, l'avversario vince. Funziona anche a
+    /// partita in pausa — chi vuole mollare mentre l'altro è offline non deve restare
+    /// inchiodato al tavolo — e vale una volta sola.
+    /// </summary>
+    public async Task<bool> ForfeitAsync(ClientConnection sender, CancellationToken cancellation)
+    {
+        await gate.WaitAsync(cancellation);
+        try
+        {
+            int player = PlayerIndexOf(sender);
+            if (player < 0)
+                player = IndexOfPlayerId(sender?.Identity?.PlayerId);
+            if (player < 0
+                || resultRecorded
+                || engine.Phase is PvpMatchPhase.NotStarted or PvpMatchPhase.Finished)
+                return false;
+
+            turnTimer?.Cancel();
+            await BroadcastAsync(new MatchEventDto
+            {
+                type = "MatchForfeited",
+                player = player,
+                winner = 1 - player,
+                reason = "surrender"
+            }, cancellation);
+            endedReason = "surrender";
+            await DispatchAsync(engine.Forfeit(player), cancellation);
+            return true;
         }
         finally
         {
@@ -202,7 +243,8 @@ public sealed class MatchSession
     /// Riaggancia il giocatore rientrato: gli spedisce lo stato completo, avvisa
     /// l'avversario e fa ripartire il timer di mossa.
     /// </summary>
-    public async Task<bool> ResumeAsync(ClientConnection replacement, CancellationToken cancellation)
+    public async Task<bool> ResumeAsync(
+        ClientConnection replacement, int reconnectSecondsRemaining, CancellationToken cancellation)
     {
         await gate.WaitAsync(cancellation);
         try
@@ -219,7 +261,9 @@ public sealed class MatchSession
                 opponentName = identities[1 - player].Username,
                 yourPlayerIndex = player,
                 events = eventLog.ToArray(),
-                hand = BuildHand(player)
+                hand = BuildHand(player),
+                yourLoadout = PvpLoadoutDto.FromLoadout(loadouts[player]),
+                reconnectSecondsRemaining = reconnectSecondsRemaining
             }, cancellation);
 
             ClientConnection opponent = connections[1 - player];
@@ -375,6 +419,7 @@ public sealed class MatchSession
         {
             MatchActionDto.Deploy => engine.Deploy(player, action.handIndex),
             MatchActionDto.Ability => engine.UseAbility(player, targetPlayer, action.targetSlot),
+            MatchActionDto.Supreme => engine.UseSupreme(player, targetPlayer, action.targetSlot),
             MatchActionDto.Attack => engine.Attack(player, action.targetSlot),
             MatchActionDto.Attach => engine.Attach(player, action.targetSlot),
             MatchActionDto.Pass => engine.Pass(player),
@@ -435,6 +480,7 @@ public sealed class MatchSession
     private MatchResultData BuildResultData(int player, int winner, string reason, MatchRecordResult result)
     {
         PlayerRankedDelta delta = player == 0 ? result.A : result.B;
+		AccountExperienceReward experience = player == 0 ? result.ExperienceA : result.ExperienceB;
         IReadOnlyList<string> unlocked = player == 0 ? result.AchievementsA : result.AchievementsB;
         var data = new MatchResultData
         {
@@ -445,6 +491,12 @@ public sealed class MatchSession
             scoreOpponent = engine.WinsOf(1 - player),
             unlockedAchievements = unlocked?.ToArray() ?? Array.Empty<string>()
         };
+		if (experience != null)
+		{
+			data.accountExperienceRewardClaimId = experience.ClaimId;
+			data.accountExperienceEarned = experience.Experience;
+			data.accountExperienceCanTriple = true;
+		}
         if (data.ranked)
         {
             data.tier = delta.After.TierName;

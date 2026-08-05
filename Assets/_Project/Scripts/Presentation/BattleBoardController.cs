@@ -25,10 +25,12 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private const string BragusBossCardId = "boss-bragus";
 	private const string PalatirBossCardId = "boss-palatir";
 	private const string MinibossGolemDebugSceneName = "MinibossGolemDebug";
+	private const int MinibossGolemDebugPlayerLevel = 4;
 	private const string MedusaBossDebugSceneName = "MedusaBossDebug";
 	private const string TrentorBossDebugSceneName = "TrentorBossDebug";
 	private const string BragusBossDebugSceneName = "BragusBossDebug";
 	private const string PalatirBossDebugSceneName = "PalatirBossDebug";
+	private const string PromotionalTrailerSceneName = "PromotionalTrailer";
 	private const string MerchantDebugSceneName = "MerchantDebug";
 	private const string LootRoomDebugSceneName = "LootRoomDebug";
 
@@ -101,13 +103,6 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		Priest
 	}
 
-	private enum CampaignDoorDifficulty
-	{
-		Easy,
-		Normal,
-		Hard
-	}
-
 	private enum CampaignConsumableType
 	{
 		Detector,
@@ -136,19 +131,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private readonly struct CampaignDoor
 	{
-		public CampaignDoorDifficulty Difficulty { get; }
-
 		public CampaignRoomRoll? RevealedRoom { get; }
 
-		public CampaignDoor(CampaignDoorDifficulty difficulty)
+		public CampaignDoor(CampaignRoomRoll? revealedRoom = null)
 		{
-			Difficulty = difficulty;
-			RevealedRoom = null;
-		}
-
-		public CampaignDoor(CampaignDoorDifficulty difficulty, CampaignRoomRoll revealedRoom)
-		{
-			Difficulty = difficulty;
 			RevealedRoom = revealedRoom;
 		}
 	}
@@ -225,6 +211,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 		public bool AbilityUsed { get; set; }
 
+		public bool AbilityUsedThisTurn { get; set; }
+
 		public int PendingAttackBonus { get; set; }
 
 		public PendingAttackBonusKind PendingAttackBonusKind { get; set; }
@@ -244,6 +232,13 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		public int RevivedRound { get; set; }
 
 		public bool IsAttachment { get; set; }
+
+		/// <summary>
+		/// Invisibilita' dell'Assassino: non selezionabile come bersaglio finche' non
+		/// resta l'unica pedina attiva del suo schieramento. E' un buff, quindi la
+		/// Purificazione del Sacerdote la rimuove.
+		/// </summary>
+		public bool IsUntargetable { get; set; }
 
 		public bool Petrified { get; set; }
 
@@ -840,11 +835,31 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private GameObject optionsPanel;
 
+	/// <summary>Apre il modulo delle opzioni privacy di UMP. Visibile solo dove il consenso e' stato raccolto.</summary>
+	private Button optionsPrivacyButton;
+
 	private GameObject optionsBackdropPanel;
 
 	private Button optionsMainMenuButton;
 
+	/// <summary>
+	/// Etichetta del bottone in basso a sinistra delle opzioni: "MENU" in campagna,
+	/// "ARRENDITI" durante una partita PvP, dove abbandonare significa perdere.
+	/// </summary>
+	private Text optionsMainMenuButtonText;
+
 	private GameObject returnToMenuConfirmPanel;
+
+	private Text returnToMenuTitleText;
+
+	private Text returnToMenuBodyText;
+
+	private Text returnToMenuConfirmButtonText;
+
+	/// <summary>true quando la conferma aperta è quella della resa, non del ritorno al menu.</summary>
+	private bool returnToMenuConfirmIsSurrender;
+
+	private GameObject logoutConfirmPanel;
 
 	private Text sfxVolumeText;
 
@@ -933,6 +948,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private CampaignConsumableType inspectedCampaignConsumableType;
 
 	private bool rubySealTargetSelectionActive;
+	private GameObject rubySealTargetPanel;
+	private RectTransform rubySealTargetCardsRoot;
+	private readonly List<PrototypeCardView> rubySealTargetCardViews = new List<PrototypeCardView>();
 
 	private readonly List<GameObject> cardInspectionStatusRows = new List<GameObject>();
 
@@ -1072,6 +1090,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private ComposableGolem activeComposableGolem;
 
 	private ComposableGolemFormStats[] retryComposableGolemForms;
+	private int? retryComposableGolemHitPoints;
 
 	private MedusaBoss activeMedusaBoss;
 
@@ -1125,6 +1144,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			|| string.Equals(
 			scene.name,
 			LoginScreenPrototypeSceneName,
+			StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(
+			scene.name,
+			PromotionalTrailerSceneName,
 			StringComparison.OrdinalIgnoreCase))
 		{
 			return;
@@ -1180,6 +1203,16 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		runProgress = CreateRunProgress();
 		diceCatalog = Resources.Load<DiceSpriteCatalog>("DiceSpriteCatalog");
 		battleAnimationPlayer = gameObject.AddComponent<BattlePresentationAnimationPlayer>();
+		// La pubblicita' scrive nel diario di partita come tutto il resto: quando un
+		// interstitial non parte serve poter distinguere una regola di frequenza da un
+		// guasto della rete, e la console di Unity su un telefono non si legge.
+		AccardND.Ads.AdService.Log = AppendLog;
+		// Si prepara l'SDK subito, ma senza chiedere nessun annuncio: le richieste partono dai
+		// posti che ne hanno bisogno (la taverna che si apre, la run che comincia, la partita
+		// d'arena che parte). Caricarli tutti qui costava cinque richieste a sessione anche a
+		// chi apriva il gioco e lo chiudeva, e un annuncio caricato all'avvio e' comunque
+		// scaduto quando servirebbe.
+		_ = AccardND.Ads.AdService.PrepareAsync();
 		InitializeAudio();
 		BuildInterface();
 		AppendLog($"SESSIONE AVVIATA - seed {num}");
@@ -1189,6 +1222,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private void Update()
 	{
+		ResumePendingPvpMatchIfAny();
+
 		if (IsEscapePressedThisFrame() && CloseTopmostOverlay())
 		{
 			return;
@@ -1228,6 +1263,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			HideReturnToMenuConfirmation();
 			return true;
 		}
+		else if (IsActive(logoutConfirmPanel))
+		{
+			HideLogoutConfirmation();
+			return true;
+		}
 		else if (IsActive(cardInspectionPanel))
 		{
 			CloseCardInspection();
@@ -1236,6 +1276,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		else if (IsActive(implementationArchivePanel))
 		{
 			CloseImplementationArchive();
+			return true;
+		}
+		else if (IsActive(merchantBranchConfirmPopup))
+		{
+			HideMerchantBranchConfirmPopup();
 			return true;
 		}
 		else if (IsActive(merchantPanel))
@@ -1271,6 +1316,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		{
 			ApplyHandFan();
 		}
+		UpdateTurnCoinAnimation();
 		UpdateMessageTextLayout();
 	}
 
@@ -1281,7 +1327,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		confirmActionSprite = LoadSpriteResource("UI/confirm_button");
 		cancelActionSprite = LoadSpriteResource("UI/cancel_button");
 		infoActionSprite = LoadSpriteResource("UI/info_button");
-		settingsButtonSprite = LoadSpriteResource("UI/settings_button");
+		settingsButtonSprite = LoadSpriteResource("UI/SharedHeader/settings_gear");
 		hubButtonSprite = LoadSpriteResource("UI/SharedHeader/hub_house");
 		accountHeaderSettingsSprite = LoadSpriteResource("UI/SharedHeader/settings_gear");
 		Canvas val = CreateCanvas();
@@ -1326,17 +1372,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		((Component)topInfoBarRect).gameObject.SetActive(false);
 		logButton = CreateImageButton("Options Button", (Transform)(object)safeAreaRoot, builtinResource, settingsButtonSprite, string.Empty);
 		((UnityEvent)logButton.onClick).AddListener(new UnityAction(ToggleOptionsPanel));
+		Canvas optionsButtonCanvas = ((Component)logButton).gameObject.AddComponent<Canvas>();
+		optionsButtonCanvas.overrideSorting = true;
+		optionsButtonCanvas.sortingOrder = 400;
+		((Component)logButton).gameObject.AddComponent<GraphicRaycaster>();
 		SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.84f, 0.902f), new Vector2(0.995f, 0.992f));
-		settingsButtonLabel = CreateText("Options Button Label", (Transform)(object)safeAreaRoot, builtinResource, 20, (FontStyle)1, (TextAnchor)4);
-		settingsButtonLabel.text = "settings";
-		settingsButtonLabel.color = new Color(0.95f, 0.79f, 0.34f);
-		settingsButtonLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
-		settingsButtonLabel.verticalOverflow = VerticalWrapMode.Truncate;
-		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(settingsButtonLabel);
-		Outline settingsButtonLabelOutline = ((Component)settingsButtonLabel).gameObject.AddComponent<Outline>();
-		settingsButtonLabelOutline.effectColor = new Color(0.04f, 0.02f, 0.01f, 0.95f);
-		settingsButtonLabelOutline.effectDistance = new Vector2(2f, -2f);
-		SetRect(settingsButtonLabel.rectTransform, new Vector2(0.825f, 0.882f), new Vector2(1f, 0.924f));
 		Image image4 = CreateImage("Game Log Panel", (Transform)(object)safeAreaRoot, new Color(0.008f, 0.014f, 0.022f, 0.97f));
 		StylePanel(image4);
 		logPanel = ((Component)image4).gameObject;
@@ -1419,16 +1459,23 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		((UnityEvent)musicMuteButton.onClick).AddListener(new UnityAction(ToggleMusicMute));
 		musicMuteButtonText = ((Component)musicMuteButton).GetComponentInChildren<Text>();
 		SetRect((RectTransform)((Component)musicMuteButton).transform, new Vector2(0.79f, 0.2f), new Vector2(0.94f, 0.3f));
+		// Tre bottoni in fondo: uscire al menu, uscire dall'account, chiudere.
 		Button closeOptionsButton = CreateButton("Close Options", optionsPanel.transform, builtinResource, "CHIUDI");
 		((UnityEvent)closeOptionsButton.onClick).AddListener(new UnityAction(ToggleOptionsPanel));
 		ApplyBattleButtonVariant(closeOptionsButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Crimson);
-		SetRect((RectTransform)((Component)closeOptionsButton).transform, new Vector2(0.53f, 0.04f), new Vector2(0.94f, 0.14f));
+		SetRect((RectTransform)((Component)closeOptionsButton).transform, new Vector2(0.66f, 0.04f), new Vector2(0.94f, 0.14f));
 		optionsMainMenuButton = CreateButton("Options Main Menu", optionsPanel.transform, builtinResource, "MENU");
+		optionsMainMenuButtonText = ((Component)optionsMainMenuButton).GetComponentInChildren<Text>();
 		((UnityEvent)optionsMainMenuButton.onClick).AddListener(new UnityAction(ReturnToMainMenuFromOptions));
 		ApplyBattleButtonVariant(optionsMainMenuButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Violet);
-		SetRect((RectTransform)((Component)optionsMainMenuButton).transform, new Vector2(0.06f, 0.04f), new Vector2(0.47f, 0.14f));
+		SetRect((RectTransform)((Component)optionsMainMenuButton).transform, new Vector2(0.06f, 0.04f), new Vector2(0.34f, 0.14f));
+		Button optionsLogoutButton = CreateButton("Options Logout", optionsPanel.transform, builtinResource, "LOGOUT");
+		((UnityEvent)optionsLogoutButton.onClick).AddListener(new UnityAction(LogoutFromOptions));
+		ApplyBattleButtonVariant(optionsLogoutButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Gold);
+		SetRect((RectTransform)((Component)optionsLogoutButton).transform, new Vector2(0.36f, 0.04f), new Vector2(0.64f, 0.14f));
 		SetOptionsPanelVisible(false);
 		CreateReturnToMenuConfirmation((Transform)(object)safeAreaRoot, builtinResource);
+		CreateLogoutConfirmation((Transform)(object)safeAreaRoot, builtinResource);
 		RefreshSfxOptionsUi();
 		RefreshMusicOptionsUi();
 		Text text2 = (cpuTitleText = CreateText("CPU Title", (Transform)(object)safeAreaRoot, builtinResource, 25, (FontStyle)1, (TextAnchor)3));
@@ -1473,9 +1520,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		turnBannerText = CreateText("Current Turn", ((Component)turnBannerImage).transform, builtinResource, 24, (FontStyle)1, (TextAnchor)4);
 		turnBannerText.text = "PREPARAZIONE";
 		Stretch(turnBannerText.rectTransform, 4f);
-		restartButton = CreateButton("Restart", ((Component)image7).transform, builtinResource, "RICOMINCIA");
+		restartButton = CreateButton("Primary Action", ((Component)image7).transform, builtinResource, "CONTINUA");
 		((UnityEvent)restartButton.onClick).AddListener(new UnityAction(HandlePrimaryAction));
 		restartButtonText = ((Component)restartButton).GetComponentInChildren<Text>();
+		SetPrimaryActionLabel(restartButtonText, PrimaryActionLabel.Continue);
 		((Component)restartButton).gameObject.SetActive(false);
 		RectTransform val2 = (RectTransform)((Component)restartButton).transform;
 		val2.anchorMin = new Vector2(0.69f, 0.14f);
@@ -1549,6 +1597,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		CreateCampaignModeSelectionView(builtinResource);
 		CreateSanctuaryView(builtinResource);
 		CreateShopView(builtinResource);
+		CreateProfileView(builtinResource);
 		CreateHintOverlay((Transform)(object)safeAreaRoot, builtinResource);
 		CreateAuraCodexView(((Component)val).transform, builtinResource);
 		CreateCampaignDefeatRewardPopup((Transform)(object)safeAreaRoot, builtinResource);
@@ -1628,6 +1677,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private (string description, int bonusExperience) GrantRandomRewardCard(string source)
 	{
+		pendingMasterGiftReward = null;
 		List<CardDefinition> campaignRewardPool = GetCampaignRewardPool();
 		if (campaignRewardPool.Count == 0)
 		{
@@ -1639,6 +1689,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			return (description: " " + source + ": nessuna carta nuova disponibile.", bonusExperience: 0);
 		}
 		string displayName = CardDisplayNames.MarketName(cardDefinition);
+		if (string.Equals(source, "DONO DEL MASTER", StringComparison.Ordinal))
+		{
+			pendingMasterGiftReward = cardDefinition;
+		}
 		AppendLog(source + " - " + displayName);
 		return (description: " " + source + ": ottieni " + displayName + ".", bonusExperience: 0);
 	}

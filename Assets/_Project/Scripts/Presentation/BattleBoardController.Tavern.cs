@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
+using AccardND.Ads;
 using AccardND.NetProtocol;
 using AccardND.Network;
 
@@ -18,6 +19,8 @@ namespace AccardND.Presentation
 		private Text tavernCompletionText;
 		private Image tavernCompletionFill;
 		private Button tavernBonusButton;
+		private GameObject tavernNotificationBadge;
+		private Text tavernNotificationBadgeText;
 		private Font tavernTitleFont;
 		private Coroutine tavernNoticeClearRoutine;
 		private readonly List<GameObject> tavernQuestRows = new List<GameObject>();
@@ -26,6 +29,81 @@ namespace AccardND.Presentation
 		private TavernData tavernData;
 		private bool tavernLoading;
 		private bool tavernClaiming;
+		private bool tavernBadgeLoading;
+
+		private void CreateTavernNotificationBadge(Button tavernButton, Font font)
+		{
+			Image badge = CreateImage("Tavern Quest Notification", tavernButton.transform, new Color(0.78f, 0.08f, 0.045f, 1f));
+			badge.sprite = AccardND.Battlefield.MmoUiTheme.GetRadialGlowSprite();
+			badge.type = Image.Type.Simple;
+			badge.raycastTarget = false;
+
+			RectTransform badgeRect = badge.rectTransform;
+			badgeRect.anchorMin = Vector2.one;
+			badgeRect.anchorMax = Vector2.one;
+			badgeRect.pivot = new Vector2(0.5f, 0.5f);
+			badgeRect.sizeDelta = new Vector2(58f, 58f);
+			badgeRect.anchoredPosition = new Vector2(-5f, -5f);
+
+			Outline outline = badge.gameObject.AddComponent<Outline>();
+			outline.effectColor = new Color(1f, 0.72f, 0.2f, 0.95f);
+			outline.effectDistance = new Vector2(3f, -3f);
+
+			tavernNotificationBadgeText = CreateText(
+				"Tavern Quest Notification Count", badge.transform, font, 28, FontStyle.Bold, TextAnchor.MiddleCenter);
+			tavernNotificationBadgeText.color = Color.white;
+			tavernNotificationBadgeText.raycastTarget = false;
+			Stretch(tavernNotificationBadgeText.rectTransform);
+			tavernNotificationBadge = badge.gameObject;
+			tavernNotificationBadge.SetActive(false);
+		}
+
+		private void UpdateTavernNotificationBadge(TavernData data)
+		{
+			if (tavernNotificationBadge == null || tavernNotificationBadgeText == null)
+				return;
+
+			int claimable = 0;
+			TavernQuestData[] quests = data?.quests ?? Array.Empty<TavernQuestData>();
+			for (int i = 0; i < quests.Length; i++)
+			{
+				if (quests[i] != null && quests[i].completed && !quests[i].claimed)
+					claimable++;
+			}
+
+			tavernNotificationBadgeText.text = claimable > 9 ? "9+" : claimable.ToString();
+			tavernNotificationBadge.SetActive(claimable > 0);
+			tavernNotificationBadge.transform.SetAsLastSibling();
+		}
+
+		private async System.Threading.Tasks.Task RefreshTavernNotificationBadgeAsync()
+		{
+			if (tavernBadgeLoading || tavernClaiming)
+				return;
+
+			tavernBadgeLoading = true;
+			try
+			{
+				if (await EnsureServerProgressAsync())
+				{
+					tavernData = await serverProgress.GetTavernAsync();
+					UpdateTavernNotificationBadge(tavernData);
+				}
+				else
+				{
+					UpdateTavernNotificationBadge(null);
+				}
+			}
+			catch (Exception exception)
+			{
+				UpdateTavernNotificationBadge(null);
+				AppendLog($"TAVERNA - badge non aggiornato: {exception.Message}");
+			}
+			finally
+			{
+				tavernBadgeLoading = false;
+			}
+		}
 
 		private void CreateTavernView(Transform canvasTransform, Font fallbackFont)
 		{
@@ -138,6 +216,7 @@ namespace AccardND.Presentation
 			tavernCompletionText.color = new Color(0.92f, 0.75f, 0.38f, 1f);
 			SetRect(tavernCompletionText.rectTransform, new Vector2(0.62f, 0.63f), new Vector2(0.72f, 0.68f));
 			tavernBonusButton = CreateButton("Tavern Daily Bonus", root.transform, tavernTitleFont, "PREMIO 5/5");
+			SetTavernButtonInteractable(tavernBonusButton, false);
 			SetRect((RectTransform)tavernBonusButton.transform, new Vector2(0.73f, 0.625f), new Vector2(0.93f, 0.685f));
 			tavernBonusButton.onClick.AddListener((UnityAction)ClaimTavernBonus);
 
@@ -176,12 +255,20 @@ namespace AccardND.Presentation
 			modeSelectionPanel.SetActive(false);
 			SetAccountHubHudActive(true);
 			tavernPanel.SetActive(true);
+			// Gli annunci della taverna si chiedono qui e non all'avvio del gioco: chi apre la
+			// taverna riscuote quasi sempre qualcosa, chi non la apre non deve costare una
+			// richiesta. I secondi che passano fra l'apertura e il primo tocco su RISCUOTI
+			// sono anche il tempo che serve alla rete per rispondere.
+			AdService.Warm(AdPlacement.TavernQuestClaim);
+			AdService.Warm(AdPlacement.TavernBonusClaim);
 			await RefreshTavernFromServerAsync();
 		}
 
 		private void ReturnFromTavern()
 		{
 			tavernPanel.SetActive(false);
+			AdService.Cool(AdPlacement.TavernQuestClaim);
+			AdService.Cool(AdPlacement.TavernBonusClaim);
 			ShowHubFromSinglePlayer();
 		}
 
@@ -259,6 +346,7 @@ namespace AccardND.Presentation
 		private void ApplyTavernData(TavernData data)
 		{
 			tavernData = data;
+			UpdateTavernNotificationBadge(data);
 
 			for (int i = 0; i < tavernQuestRows.Count; i++)
 				Destroy(tavernQuestRows[i]);
@@ -282,7 +370,7 @@ namespace AccardND.Presentation
 			tavernCompletionFill.fillAmount = Mathf.Clamp01((float)completed / required);
 
 			bool bonusClaimable = data != null && data.bonusAvailable && !data.bonusClaimed;
-			tavernBonusButton.interactable = bonusClaimable && !tavernClaiming;
+			SetTavernButtonInteractable(tavernBonusButton, bonusClaimable && !tavernClaiming);
 			Text bonusLabel = tavernBonusButton.GetComponentInChildren<Text>();
 			if (bonusLabel != null)
 			{
@@ -327,9 +415,28 @@ namespace AccardND.Presentation
 				actionLabel.resizeTextMinSize = 30;
 				actionLabel.resizeTextMaxSize = 30;
 			}
-			action.interactable = quest.completed && !quest.claimed && !tavernClaiming;
+			SetTavernButtonInteractable(action, quest.completed && !quest.claimed && !tavernClaiming);
 			string questId = quest.questId;
 			action.onClick.AddListener((UnityAction)(() => ClaimTavernQuest(questId)));
+		}
+
+		/// <summary>
+		/// I Button usano una transizione colore di 0,11 secondi. Quando una riga nasce gia'
+		/// disabilitata, Unity sfumerebbe comunque dal colore acceso a quello disabilitato,
+		/// producendo un flash visibile. La seconda transizione a durata zero ferma quel tween.
+		/// </summary>
+		private static void SetTavernButtonInteractable(Button button, bool interactable)
+		{
+			button.interactable = interactable;
+			if (interactable || button.targetGraphic == null)
+				return;
+
+			ColorBlock colors = button.colors;
+			button.targetGraphic.CrossFadeColor(
+				colors.disabledColor * colors.colorMultiplier,
+				0f,
+				true,
+				true);
 		}
 
 		/// <summary>
@@ -374,22 +481,94 @@ namespace AccardND.Presentation
 			}
 		}
 
-		private void ClaimTavernQuest(string questId) =>
-			ClaimTavern(() => serverProgress.ClaimTavernQuestAsync(questId), "quest " + questId);
-
-		private void ClaimTavernBonus() =>
-			ClaimTavern(() => serverProgress.ClaimTavernBonusAsync(), "premio di giornata");
-
 		/// <summary>
-		/// Riscossione: il server risponde con la bacheca aggiornata, poi si riallinea la
-		/// cache di progressione perche' il miele e' cambiato e il resto della UI (banner
-		/// account, Santuario) legge da li'.
+		/// La pubblicita' viene prima della riscossione ed e' obbligatoria: niente annuncio
+		/// andato a buon fine, niente miele. Prima era il contrario - si accreditava e poi
+		/// partiva un interstitial di cui non si guardava nemmeno l'esito - e voleva dire
+		/// pagare la ricompensa anche quando la pubblicita' non era mai partita.
+		///
+		/// La quest non viene consumata: se l'annuncio non arriva o viene chiuso a meta', il
+		/// server non viene nemmeno chiamato e il bottone RISCUOTI resta li' per dopo.
 		/// </summary>
-		private async void ClaimTavern(Func<System.Threading.Tasks.Task<TavernData>> claim, string description)
+		private async void ClaimTavernQuest(string questId)
 		{
 			if (tavernClaiming || !ServerProgressReady)
 				return;
 
+			if (!await ShowTavernAdGateAsync(AdPlacement.TavernQuestClaim))
+				return;
+
+			await ClaimTavernAsync(() => serverProgress.ClaimTavernQuestAsync(questId), "quest " + questId);
+		}
+
+		/// <summary>
+		/// Il premio di giornata passa dallo stesso cancello, e nemmeno lui si apre a vuoto:
+		/// i 50 vasetti sono gia' stati guadagnati completando le quest, ma restano da
+		/// riscuotere finche' una pubblicita' non e' andata fino in fondo.
+		/// </summary>
+		private async void ClaimTavernBonus()
+		{
+			if (tavernClaiming || !ServerProgressReady)
+				return;
+
+			if (!await ShowTavernAdGateAsync(AdPlacement.TavernBonusClaim))
+				return;
+
+			await ClaimTavernAsync(() => serverProgress.ClaimTavernBonusAsync(), "premio di giornata");
+		}
+
+		/// <summary>
+		/// Il cancello pubblicitario delle riscossioni. Tiene fermo il pannello mentre
+		/// l'annuncio arriva - il caricamento puo' prendere qualche secondo, e senza una riga
+		/// che lo dica un bottone premuto che non fa niente sembra rotto - e spiega il no,
+		/// distinguendo "la rete non ha annunci" da "l'hai chiuso a meta'": il primo e' un
+		/// riprova piu' tardi, il secondo una scelta del giocatore.
+		/// </summary>
+		private async System.Threading.Tasks.Task<bool> ShowTavernAdGateAsync(AdPlacement placement)
+		{
+			SetTavernNotice("Un attimo: sto caricando la pubblicità...");
+			// Le righe si spengono durante l'attesa: senza, un secondo tocco su un'altra quest
+			// mentre l'annuncio sta partendo si prenderebbe uno scarto per "annuncio gia' a
+			// schermo" e il giocatore si vedrebbe rifiutare una riscossione buona.
+			tavernClaiming = true;
+			ApplyTavernData(tavernData);
+			AdResult ad;
+			try
+			{
+				ad = await AdService.ShowAsync(placement, asGate: true);
+			}
+			finally
+			{
+				tavernClaiming = false;
+			}
+
+			if (ad.Watched)
+			{
+				SetTavernNotice(string.Empty);
+				return true;
+			}
+
+			SetTavernNotice(ad.Unavailable
+				? "Nessuna pubblicità disponibile in questo momento: la ricompensa resta qui, riprova più tardi."
+				: "La pubblicità va guardata per intero per riscuotere.");
+			AppendLog($"TAVERNA - riscossione non sbloccata: annuncio {ad.Outcome}.");
+			ApplyTavernData(tavernData);
+			return false;
+		}
+
+		/// <summary>
+		/// Riscossione: il server risponde con la bacheca aggiornata, poi si riallinea la
+		/// cache di progressione perche' il miele e' cambiato e il resto della UI (banner
+		/// account, Santuario) legge da li'. Restituisce se la riscossione e' andata a buon
+		/// fine, perche' la pubblicita' che segue non deve partire dopo un errore.
+		/// </summary>
+		private async System.Threading.Tasks.Task<bool> ClaimTavernAsync(
+			Func<System.Threading.Tasks.Task<TavernData>> claim, string description)
+		{
+			if (tavernClaiming || !ServerProgressReady)
+				return false;
+
+			bool claimed = false;
 			tavernClaiming = true;
 			try
 			{
@@ -403,6 +582,7 @@ namespace AccardND.Presentation
 				int gained = Mathf.Max(0, (tavernData?.honey ?? 0) - honeyBefore);
 				SetTavernNotice($"Riscosso: +{gained} vasetti di miele.");
 				AppendLog($"TAVERNA - riscossa {description}: +{gained} miele.");
+				claimed = true;
 			}
 			catch (Exception exception)
 			{
@@ -416,6 +596,7 @@ namespace AccardND.Presentation
 			// Le righe sono state create con lo stato "in riscossione": vanno ridisegnate
 			// perche' tornino cliccabili.
 			ApplyTavernData(tavernData);
+			return claimed;
 		}
 	}
 }

@@ -33,6 +33,7 @@ namespace AccardND.GameData
     public sealed class CampaignRunSave
     {
         public const int CurrentVersion = 1;
+		public const int DefaultPlayerMana = 3;
 
         public int version = CurrentVersion;
 
@@ -46,6 +47,10 @@ namespace AccardND.GameData
         public int minibossesDefeated;
         public int diceRolled;
         public int abilitiesUsed;
+
+		// Riserva globale del giocatore. Il valore iniziale mantiene compatibili i save v1
+		// creati prima dell'introduzione del mana in campagna.
+		public int playerMana = DefaultPlayerMana;
 
         // Boss e miniboss sconfitti nella run, per i contatori di progressione permanente.
         public List<string> defeatedBossIds = new List<string>();

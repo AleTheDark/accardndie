@@ -1,0 +1,2128 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
+  m_Name: Game Shared Data
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
+  m_TableCollectionName: Game
+  m_TableCollectionNameGuidString: cc0c3680b4c6ad84784751f99846ddcd
+  m_Entries:
+  - m_Id: 161312837632
+    m_Key: common.back
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161350586368
+    m_Key: common.cancel
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780672
+    m_Key: common.close
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780673
+    m_Key: common.confirm
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780674
+    m_Key: common.continue
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780675
+    m_Key: common.card
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780676
+    m_Key: common.you
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780677
+    m_Key: login.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780678
+    m_Key: login.subtitle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780679
+    m_Key: login.status.initial
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780680
+    m_Key: login.status.google_required
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780681
+    m_Key: login.status.restoring_session
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780682
+    m_Key: login.status.welcome_back
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780683
+    m_Key: login.button.google
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169280
+    m_Key: login.nickname.placeholder
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169281
+    m_Key: login.update.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169282
+    m_Key: login.update.button
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169283
+    m_Key: login.update.required_generic
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169284
+    m_Key: login.update.required_version
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169285
+    m_Key: login.update.message
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169286
+    m_Key: login.status.version_outdated
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169287
+    m_Key: login.status.access_failed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169288
+    m_Key: login.status.checking_updates
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169289
+    m_Key: login.status.updated
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169290
+    m_Key: login.status.accessing_provider
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169291
+    m_Key: login.status.access_complete
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169292
+    m_Key: login.status.checking_account
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169293
+    m_Key: login.status.google_account_required
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169294
+    m_Key: login.status.choose_nickname
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169295
+    m_Key: login.status.nickname_too_short
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169296
+    m_Key: login.status.checking_nickname
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169297
+    m_Key: login.status.welcome
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169298
+    m_Key: login.status.nickname_unavailable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169299
+    m_Key: login.status.opening_menu
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169300
+    m_Key: login.error.authentication_unavailable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169301
+    m_Key: login.error.missing_token
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169302
+    m_Key: login.error.missing_account_token
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169303
+    m_Key: login.error.account_server_unavailable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169304
+    m_Key: login.error.server
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169305
+    m_Key: login.error.server_timeout
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169306
+    m_Key: pvp.loadout.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169307
+    m_Key: pvp.loadout.subtitle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169308
+    m_Key: pvp.loadout.save
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169309
+    m_Key: pvp.loadout.catalog
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169310
+    m_Key: pvp.loadout.choose_remaining
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169311
+    m_Key: pvp.loadout.valid
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169312
+    m_Key: pvp.loadout.summary
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169313
+    m_Key: pvp.loadout.missing_database
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169314
+    m_Key: pvp.loadout.selected_suffix
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169315
+    m_Key: pvp.loadout.inspection_body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169316
+    m_Key: pvp.loadout.add
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169317
+    m_Key: pvp.loadout.already_added
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169318
+    m_Key: pvp.loadout.full
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169319
+    m_Key: pvp.loadout.your_loadout
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169320
+    m_Key: pvp.loadout.remove_hint
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169321
+    m_Key: pvp.loadout.card_power
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169322
+    m_Key: pvp.result.victory
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169323
+    m_Key: pvp.result.defeat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169324
+    m_Key: pvp.result.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169325
+    m_Key: pvp.result.victory_subtitle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169326
+    m_Key: pvp.result.defeat_subtitle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169327
+    m_Key: pvp.result.continue
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169328
+    m_Key: pvp.result.timeout
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169329
+    m_Key: pvp.result.opponent_forfeit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169330
+    m_Key: pvp.result.placement
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169331
+    m_Key: pvp.result.league
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169332
+    m_Key: pvp.result.promoted
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169333
+    m_Key: pvp.result.demoted
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169334
+    m_Key: pvp.result.friendly
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169335
+    m_Key: pvp.result.achievements
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169336
+    m_Key: pvp.result.achievement_item
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169337
+    m_Key: pvp.log.match_against
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169338
+    m_Key: pvp.log.round_started
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169339
+    m_Key: pvp.log.decisive_selection
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169340
+    m_Key: pvp.log.deployment_started
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169341
+    m_Key: pvp.log.card_deployed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169342
+    m_Key: pvp.log.auras
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169343
+    m_Key: pvp.log.turn_skipped
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169344
+    m_Key: pvp.log.card_revived
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169345
+    m_Key: pvp.log.protection_redirect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169346
+    m_Key: pvp.log.protection_advantage
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169347
+    m_Key: pvp.log.attachment
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169348
+    m_Key: pvp.log.fury
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169349
+    m_Key: pvp.log.might_aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169350
+    m_Key: pvp.log.mage_aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169351
+    m_Key: pvp.log.spirit_expired
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169352
+    m_Key: pvp.log.timeout
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169353
+    m_Key: pvp.log.forfeit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169354
+    m_Key: pvp.log.round_ended
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169355
+    m_Key: pvp.log.replay_mismatch
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169356
+    m_Key: pvp.log.won_by_forfeit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169357
+    m_Key: pvp.log.lost_by_forfeit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169358
+    m_Key: pvp.log.won_match
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169359
+    m_Key: pvp.log.lost_match
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169360
+    m_Key: pvp.log.ability.assassin
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169361
+    m_Key: pvp.log.ability.mage
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169362
+    m_Key: pvp.log.ability.hunter
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169363
+    m_Key: pvp.log.ability.paladin_self
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169364
+    m_Key: pvp.log.ability.paladin_other
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169365
+    m_Key: pvp.log.ability.priest
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169366
+    m_Key: pvp.log.ability.warrior
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169367
+    m_Key: pvp.log.ability.necromancer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169368
+    m_Key: pvp.log.attack.counterattack_prefix
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169369
+    m_Key: pvp.log.attack.impossible
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169370
+    m_Key: pvp.log.attack.roll_outcome
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169371
+    m_Key: pvp.log.attack.resists
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169372
+    m_Key: pvp.log.attack.becomes_spirit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169373
+    m_Key: pvp.log.attack.eliminated
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169374
+    m_Key: pvp.log.attack.loses_life
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169375
+    m_Key: pvp.log.attack.summary
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169376
+    m_Key: pvp.log.roll.single
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169377
+    m_Key: pvp.log.roll.double
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169378
+    m_Key: pvp.log.roll.highest
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169379
+    m_Key: pvp.log.roll.lowest
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169380
+    m_Key: pvp.log.roll.sum
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169381
+    m_Key: pvp.log.roll.result
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169382
+    m_Key: pvp.log.unknown_player
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894294392832
+    m_Key: pvp.log.attack.overkill_tag
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587136
+    m_Key: rules.class.assassin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587137
+    m_Key: rules.class.warrior.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587138
+    m_Key: rules.class.mage.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587139
+    m_Key: rules.class.paladin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587140
+    m_Key: rules.class.rogue.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587141
+    m_Key: rules.class.hunter.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587142
+    m_Key: rules.class.barbarian.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587143
+    m_Key: rules.class.necromancer.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587144
+    m_Key: rules.class.priest.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587145
+    m_Key: rules.family.might.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587146
+    m_Key: rules.family.cunning.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587147
+    m_Key: rules.family.magic.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587148
+    m_Key: rules.class.rogue.ability_short
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587149
+    m_Key: rules.class.hunter.ability_short
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587150
+    m_Key: rules.class.barbarian.ability_short
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587151
+    m_Key: rules.class.necromancer.ability_short
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587152
+    m_Key: rules.class.priest.ability_short
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587153
+    m_Key: rules.class.assassin.ability_short
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587154
+    m_Key: rules.class.warrior.ability_short
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587155
+    m_Key: rules.class.mage.ability_short
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587156
+    m_Key: rules.class.paladin.ability_short
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587157
+    m_Key: rules.class.warrior.ability
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587158
+    m_Key: rules.class.barbarian.ability
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587159
+    m_Key: rules.class.paladin.ability
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587160
+    m_Key: rules.class.rogue.ability
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587161
+    m_Key: rules.class.assassin.ability
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587162
+    m_Key: rules.class.hunter.ability
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587163
+    m_Key: rules.class.mage.ability
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587164
+    m_Key: rules.class.necromancer.ability
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587165
+    m_Key: rules.class.priest.ability
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587166
+    m_Key: rules.ability.none
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587167
+    m_Key: rules.ability_title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587168
+    m_Key: rules.family.might.aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587169
+    m_Key: rules.family.cunning.aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587170
+    m_Key: rules.family.magic.aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587171
+    m_Key: rules.aura.none
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587172
+    m_Key: rules.class.warrior.aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587173
+    m_Key: rules.class.barbarian.aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587174
+    m_Key: rules.class.paladin.aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587175
+    m_Key: rules.class.rogue.aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587176
+    m_Key: rules.class.assassin.aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587177
+    m_Key: rules.class.hunter.aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587178
+    m_Key: rules.class.mage.aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587179
+    m_Key: rules.class.necromancer.aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587180
+    m_Key: rules.class.priest.aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587181
+    m_Key: rules.aura.formation
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890304
+    m_Key: card.boss-1.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890305
+    m_Key: card.boss-2.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890306
+    m_Key: card.boss-3.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890307
+    m_Key: card.boss-4.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890308
+    m_Key: card.boss-5.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890309
+    m_Key: card.boss-6.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890310
+    m_Key: card.boss-7.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890311
+    m_Key: card.boss-8.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894378278912
+    m_Key: card.boss-9.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894378278913
+    m_Key: card.boss-10.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894378278914
+    m_Key: card.boss-11.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894378278915
+    m_Key: card.boss-12.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894382473216
+    m_Key: card.boss-13.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894386667520
+    m_Key: card.boss-bragus.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894386667521
+    m_Key: card.boss-bragus.rules
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894386667522
+    m_Key: card.boss-drakktharr.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894386667523
+    m_Key: card.boss-kraken.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894390861824
+    m_Key: card.boss-medusa-card.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894390861825
+    m_Key: card.boss-medusa.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894390861826
+    m_Key: card.boss-medusa.rules
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894390861827
+    m_Key: card.boss-palatir.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894390861828
+    m_Key: card.boss-palatir.rules
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894395056128
+    m_Key: card.miniboss-composable-golem.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894395056129
+    m_Key: card.miniboss-composable-golem.rules
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894395056130
+    m_Key: card.porcodio.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894395056131
+    m_Key: card.trentor.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894395056132
+    m_Key: card.trentor.rules
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894395056133
+    m_Key: card.backcard.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894399250432
+    m_Key: card.a-object.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894399250433
+    m_Key: card.j-object.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894403444736
+    m_Key: card.jolly-2.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894403444737
+    m_Key: card.k-object.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894403444738
+    m_Key: card.q-object.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894411833344
+    m_Key: card.2-goblin-assassin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894411833345
+    m_Key: card.2-goblin-barbarian.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894411833346
+    m_Key: card.2-goblin-hunter.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894411833347
+    m_Key: card.2-goblin-mage.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894420221952
+    m_Key: card.2-goblin-necromancer.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894420221953
+    m_Key: card.2-goblin-paladin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894420221954
+    m_Key: card.2-goblin-priest.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894428610560
+    m_Key: card.2-goblin-rogue.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894428610561
+    m_Key: card.2-goblin-warrior.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894432804864
+    m_Key: card.3-skeleton-assassin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894432804865
+    m_Key: card.3-skeleton-barbarian.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894436999168
+    m_Key: card.3-skeleton-hunter.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894436999169
+    m_Key: card.3-skeleton-mage.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894436999170
+    m_Key: card.3-skeleton-necromancer.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894441193472
+    m_Key: card.3-skeleton-paladin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894441193473
+    m_Key: card.3-skeleton-priest.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894445387776
+    m_Key: card.3-skeleton-rogue.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894445387777
+    m_Key: card.3-skeleton-warrior.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894449582080
+    m_Key: card.4-animal-assassin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894453776384
+    m_Key: card.4-animal-barbarian.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894457970688
+    m_Key: card.4-animal-hunter.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894457970689
+    m_Key: card.4-animal-mage.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894462164992
+    m_Key: card.4-animal-necromancer.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894462164993
+    m_Key: card.4-animal-paladin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894466359296
+    m_Key: card.4-animal-priest.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894466359297
+    m_Key: card.4-animal-rogue.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894470553600
+    m_Key: card.4-animal-warrior.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894470553601
+    m_Key: card.5-darkelf-assassin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894474747904
+    m_Key: card.5-darkelf-barbarian.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894478942208
+    m_Key: card.5-darkelf-hunter.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894483136512
+    m_Key: card.5-darkelf-mage.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894483136513
+    m_Key: card.5-darkelf-necromancer.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894487330816
+    m_Key: card.5-darkelf-paladin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894487330817
+    m_Key: card.5-darkelf-priest.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894491525120
+    m_Key: card.5-darkelf-rogue.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894491525121
+    m_Key: card.5-darkelf-warrior.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894495719424
+    m_Key: card.6-chimera-assassin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894495719425
+    m_Key: card.6-chimera-barbarian.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894499913728
+    m_Key: card.6-chimera-hunter.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894499913729
+    m_Key: card.6-chimera-mage.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894504108032
+    m_Key: card.6-chimera-necromancer.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894504108033
+    m_Key: card.6-chimera-paladin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894508302336
+    m_Key: card.6-chimera-priest.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894512496640
+    m_Key: card.6-chimera-rogue.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894512496641
+    m_Key: card.6-chimera-warrior.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894512496642
+    m_Key: card.7-alien-necromancer.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894512496643
+    m_Key: card.7-whitealien-assassin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894516690944
+    m_Key: card.7-whitealien-barbarian.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894516690945
+    m_Key: card.7-whitealien-hunter.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894520885248
+    m_Key: card.7-whitealien-mage.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894520885249
+    m_Key: card.7-whitealien-paladin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894525079552
+    m_Key: card.7-whitealien-priest.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894529273856
+    m_Key: card.7-whitealien-rogue.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894529273857
+    m_Key: card.7-whitealien-warrior.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894533468160
+    m_Key: card.8-spirit-assassin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894533468161
+    m_Key: card.8-spirit-barbarian.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894537662464
+    m_Key: card.8-spirit-hunter.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894537662465
+    m_Key: card.8-spirit-mage.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894541856768
+    m_Key: card.8-spirit-necromancer.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894541856769
+    m_Key: card.8-spirit-paladin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894546051072
+    m_Key: card.8-spirit-priest.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894550245376
+    m_Key: card.8-spirit-rogue.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894550245377
+    m_Key: card.8-spirit-warrior.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894554439680
+    m_Key: card.9-faceless-assassin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894554439681
+    m_Key: card.9-faceless-barbarian.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894558633984
+    m_Key: card.9-faceless-hunter.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894558633985
+    m_Key: card.9-faceless-mage.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894562828288
+    m_Key: card.9-faceless-necromancer.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894562828289
+    m_Key: card.9-faceless-paladin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894567022592
+    m_Key: card.9-faceless-priest.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894567022593
+    m_Key: card.9-faceless-rogue.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894567022594
+    m_Key: card.9-faceless-warrior.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894571216896
+    m_Key: card.10-champion-assassin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894571216897
+    m_Key: card.10-champion-barbarian.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894575411200
+    m_Key: card.10-champion-hunter.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894575411201
+    m_Key: card.10-champion-mage.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894579605504
+    m_Key: card.10-champion-necromancer.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894579605505
+    m_Key: card.10-champion-paladin.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894579605506
+    m_Key: card.10-champion-priest.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894583799808
+    m_Key: card.10-champion-rogue.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894583799809
+    m_Key: card.10-champion-warrior.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894680268800
+    m_Key: scenario.climbing.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894684463104
+    m_Key: scenario.climbing_landscape.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894684463105
+    m_Key: scenario.cosmic.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894684463106
+    m_Key: scenario.default.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894688657408
+    m_Key: scenario.default_landscape.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894692851712
+    m_Key: scenario.fog.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894692851713
+    m_Key: scenario.fog_landscape.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894697046016
+    m_Key: scenario.ghost.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894697046017
+    m_Key: scenario.ghost_landscape.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894705434624
+    m_Key: scenario.god_merchant.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894705434625
+    m_Key: scenario.god_merchant_landscape.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894705434626
+    m_Key: scenario.infested.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894705434627
+    m_Key: scenario.infested_landscape.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894709628928
+    m_Key: scenario.loot.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894709628929
+    m_Key: scenario.loot_landscape.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894713823232
+    m_Key: scenario.low_merchant.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894713823233
+    m_Key: scenario.low_merchant_landscape.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894713823234
+    m_Key: scenario.lux.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894722211840
+    m_Key: scenario.mirror.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894722211841
+    m_Key: scenario.mirror_landscape.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894726406144
+    m_Key: scenario.rainbow.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894726406145
+    m_Key: scenario.rainbow_landscape.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894730600448
+    m_Key: scenario.toxic.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894730600449
+    m_Key: scenario.toxic_landscape.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894734794752
+    m_Key: scenario.unexpected_opportunity.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894734794753
+    m_Key: scenario.unexpected_opportunity_landscape.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4568091889664
+    m_Key: ui.runtime.prefab.sanctuaryroom.sanctuary.title.panel.3.sanctuary.heading.0
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4568100278272
+    m_Key: ui.runtime.prefab.sanctuaryroom.sanctuary.altar.classes.4.label.0
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4568100278273
+    m_Key: ui.runtime.prefab.sanctuaryroom.sanctuary.altar.techniques.5.label.0
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4568100278274
+    m_Key: ui.runtime.prefab.sanctuaryroom.sanctuary.altar.relics.6.label.0
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4568100278275
+    m_Key: ui.runtime.prefab.sanctuaryroom.sanctuary.confirm.popup.9.sanctuary.confirm.dialog.0.sanctuary.confirm.cancel.3.label.0
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4568100278276
+    m_Key: ui.runtime.prefab.sanctuaryroom.sanctuary.confirm.popup.9.sanctuary.confirm.dialog.0.sanctuary.confirm.accept.4.label.0
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648643272704
+    m_Key: common.activate
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648697798656
+    m_Key: common.mute
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648697798657
+    m_Key: common.muted
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648697798658
+    m_Key: common.use
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992960
+    m_Key: audio.volume.percent
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992961
+    m_Key: consumable.detector.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992962
+    m_Key: consumable.second_chance.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992963
+    m_Key: consumable.defrost.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992964
+    m_Key: consumable.empower.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992965
+    m_Key: consumable.ruby_seal.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992966
+    m_Key: consumable.double_experience.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992967
+    m_Key: consumable.generic.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992968
+    m_Key: consumable.detector.description
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992969
+    m_Key: consumable.second_chance.description
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992970
+    m_Key: consumable.defrost.description
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992971
+    m_Key: consumable.empower.description
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992972
+    m_Key: consumable.ruby_seal.description
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992973
+    m_Key: consumable.double_experience.description
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992974
+    m_Key: consumable.generic.description
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992975
+    m_Key: consumable.message.cannot_use_in_battle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992976
+    m_Key: consumable.log.blocked_by_battle
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992977
+    m_Key: consumable.message.empower_boss_blocked
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992978
+    m_Key: consumable.log.empower_boss_blocked
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992979
+    m_Key: consumable.message.detector_revealed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992980
+    m_Key: consumable.message.detector_next_choice
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992981
+    m_Key: consumable.log.detector_activated
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992982
+    m_Key: consumable.message.second_chance_used
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992983
+    m_Key: consumable.log.second_chance_used
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992984
+    m_Key: consumable.message.defrost_used
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992985
+    m_Key: consumable.log.defrost_used
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992986
+    m_Key: consumable.message.empower_used
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992987
+    m_Key: consumable.log.empower_used
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992988
+    m_Key: consumable.message.double_experience_ready
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992989
+    m_Key: consumable.log.double_experience_ready
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992990
+    m_Key: consumable.message.ruby_seal_no_target
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992991
+    m_Key: consumable.log.ruby_seal_no_target
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992992
+    m_Key: consumable.message.ruby_seal_select_target
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992993
+    m_Key: consumable.log.ruby_seal_select_target
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992994
+    m_Key: consumable.message.ruby_seal_invalid_target
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992995
+    m_Key: consumable.message.ruby_seal_already_applied
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992996
+    m_Key: consumable.message.ruby_seal_applied
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992997
+    m_Key: consumable.log.ruby_seal_applied
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992998
+    m_Key: consumable.log.granted
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992999
+    m_Key: consumable.reward.granted
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648706187264
+    m_Key: consumable.log.bag_empty
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648706187265
+    m_Key: consumable.log.bag_loaded
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648706187266
+    m_Key: consumable.log.double_experience_consumed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648706187267
+    m_Key: consumable.inspection.summary
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761299849216
+    m_Key: common.exit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432128
+    m_Key: combat.outcome.eliminated
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432129
+    m_Key: combat.outcome.resists
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432130
+    m_Key: combat.result.detailed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432131
+    m_Key: combat.result.eliminates
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432132
+    m_Key: combat.result.resists
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432133
+    m_Key: combat.attack.impossible_detailed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432134
+    m_Key: combat.bonus.aura_warrior
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432135
+    m_Key: combat.bonus.hunter_prey
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432136
+    m_Key: combat.bonus.fury
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432137
+    m_Key: combat.bonus.equipment_malus
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432138
+    m_Key: combat.bonus.might_aura
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432139
+    m_Key: combat.bonus.other
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432140
+    m_Key: combat.bonus_source.fury
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432141
+    m_Key: combat.bonus_source.blessing
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432142
+    m_Key: combat.bonus_source.generic
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432143
+    m_Key: options.return_to_menu.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432144
+    m_Key: options.return_to_menu.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432145
+    m_Key: game_log.entry_context
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983037689856
+    m_Key: common.cpu
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661376
+    m_Key: common.opponent
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661377
+    m_Key: combat.message.deployment_complete
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661378
+    m_Key: combat.banner.initiative
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661379
+    m_Key: combat.message.initiative_started
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661380
+    m_Key: combat.log.initiative
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661381
+    m_Key: combat.callout.initiative
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661382
+    m_Key: combat.message.inhibited_skips_turn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661383
+    m_Key: combat.banner.player_turn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661384
+    m_Key: combat.message.choose_action
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661385
+    m_Key: combat.banner.cpu_turn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661386
+    m_Key: combat.message.cpu_choosing_target
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661387
+    m_Key: combat.message.cpu_paladin_redirect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661388
+    m_Key: combat.message.cpu_paladin_self_defense
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661389
+    m_Key: combat.log.player_turn_skipped_suffix
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661390
+    m_Key: combat.message.impossible_player_attack
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661391
+    m_Key: combat.message.guaranteed_kill
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661392
+    m_Key: combat.log.cpu_target_choice
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661393
+    m_Key: combat.message.paladin_redirect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661394
+    m_Key: combat.message.paladin_self_defense
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661395
+    m_Key: combat.log.cpu_turn_skipped_suffix
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661396
+    m_Key: combat.message.impossible_cpu_attack
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661397
+    m_Key: combat.message.attack_target_prompt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661398
+    m_Key: combat.message.assassin_target_prompt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661399
+    m_Key: combat.message.warrior_ability_ready
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661400
+    m_Key: combat.message.mage_target_prompt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661401
+    m_Key: combat.message.paladin_target_prompt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661402
+    m_Key: combat.message.hunter_target_prompt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661403
+    m_Key: combat.message.necromancer_target_prompt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661404
+    m_Key: combat.message.priest_target_prompt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661405
+    m_Key: combat.message.attachment_target_prompt
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661406
+    m_Key: combat.log.auto_victory
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661407
+    m_Key: combat.message.auto_victory
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661408
+    m_Key: combat.message.attachment_applied
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661409
+    m_Key: combat.log.attachment_applied
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661410
+    m_Key: combat.message.cpu_attachment_applied
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661411
+    m_Key: combat.log.cpu_attachment_applied
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661412
+    m_Key: combat.log.spirit_last_turn_ended
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661413
+    m_Key: combat.log.golem_new_form
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661414
+    m_Key: combat.log.aura_active
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661415
+    m_Key: combat.log.cpu_aura_active
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773020274688
+    m_Key: pvp.error.ability_requires_action
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246208
+    m_Key: combat.action.attack
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246209
+    m_Key: combat.action.ability
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246210
+    m_Key: combat.action.equip
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246211
+    m_Key: combat.action.skip
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246212
+    m_Key: combat.action.change_form
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246213
+    m_Key: combat.message.skip_turn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246214
+    m_Key: combat.log.skip_turn
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469467004928
+    m_Key: pvp.result.surrendered
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469483782144
+    m_Key: pvp.result.opponent_surrendered
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976448
+    m_Key: combat.action.supreme
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976449
+    m_Key: options.main_menu
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976450
+    m_Key: options.surrender
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976451
+    m_Key: options.surrender.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976452
+    m_Key: options.surrender.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976453
+    m_Key: campaign.action.advance
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976454
+    m_Key: campaign.action.retry_room
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644039897088
+    m_Key: common.proceed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062912
+    m_Key: account.session.used_elsewhere
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062913
+    m_Key: account.session.closed_body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062914
+    m_Key: account.session.close_game
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062915
+    m_Key: account.session.return_to_login
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062916
+    m_Key: pvp.result.triple_experience_offer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062917
+    m_Key: pvp.result.triple_experience_applied
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062918
+    m_Key: pvp.result.triple_experience_unavailable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062919
+    m_Key: pvp.result.surrender_lobby_status
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062920
+    m_Key: pvp.status.reconnect_remaining
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062921
+    m_Key: pvp.status.reconnect_expired
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062922
+    m_Key: pvp.status.surrender_not_sent
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062923
+    m_Key: pvp.status.move_rejected
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062924
+    m_Key: pvp.status.action_not_confirmed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062925
+    m_Key: pvp.status.action_not_sent
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062926
+    m_Key: pvp.log.surrender_sent
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062927
+    m_Key: pvp.error.mana_insufficient
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062928
+    m_Key: pvp.error.mana_insufficient_generic
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062929
+    m_Key: pvp.error.supreme_not_available
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062930
+    m_Key: pvp.message.turn_ended_waiting
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062931
+    m_Key: pvp.message.surrendered
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062932
+    m_Key: combat.message.mana_insufficient_ability
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062933
+    m_Key: combat.roll.defense_named
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062934
+    m_Key: combat.roll.attack_named
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062935
+    m_Key: combat.status.rogue_reroll
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062936
+    m_Key: campaign.log.golem_retry_state_preserved
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062937
+    m_Key: campaign.log.reward_queued
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062938
+    m_Key: campaign.log.reward_not_recorded
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062939
+    m_Key: campaign.message.offline_summary_saved
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062940
+    m_Key: campaign.message.reward_connection_required
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062941
+    m_Key: campaign.message.ad_multiplier_connection_required
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062942
+    m_Key: campaign.message.ad_unavailable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062943
+    m_Key: campaign.message.ad_watch_incomplete
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062944
+    m_Key: campaign.log.ad_multiplier_not_applied
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062945
+    m_Key: campaign.banner.deck_exhausted
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062946
+    m_Key: campaign.message.not_enough_cards
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062947
+    m_Key: campaign.chapter.completed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062948
+    m_Key: campaign.chapter.unlock_first
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062949
+    m_Key: campaign.chapter.unlocked
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062950
+    m_Key: campaign.chapter.honey_cost
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062951
+    m_Key: campaign.banner.defeat_formation
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062952
+    m_Key: campaign.banner.defeat_retreat
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062953
+    m_Key: merchant.message.no_more_cards
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062954
+    m_Key: merchant.message.insufficient_experience
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062955
+    m_Key: merchant.card.unknown
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062956
+    m_Key: merchant.branch.cards
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062957
+    m_Key: merchant.branch.items
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062958
+    m_Key: merchant.branch_confirm.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062959
+    m_Key: merchant.branch_confirm.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062960
+    m_Key: merchant.message.recover_insufficient_experience
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062961
+    m_Key: sanctuary.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062962
+    m_Key: sanctuary.altar.classes
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062963
+    m_Key: sanctuary.altar.techniques
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062964
+    m_Key: sanctuary.altar.relics
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062965
+    m_Key: sanctuary.message.loading
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062966
+    m_Key: sanctuary.message.reconnecting
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062967
+    m_Key: sanctuary.message.offline
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062968
+    m_Key: sanctuary.message.unavailable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062969
+    m_Key: sanctuary.message.empty_altar
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062970
+    m_Key: sanctuary.status.classes
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062971
+    m_Key: sanctuary.status.techniques
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062972
+    m_Key: sanctuary.status.relics
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062973
+    m_Key: sanctuary.offer.item
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062974
+    m_Key: sanctuary.offer.slot
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062975
+    m_Key: sanctuary.offer.technique
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062976
+    m_Key: sanctuary.offer.class
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062977
+    m_Key: sanctuary.offer.honey_available
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062978
+    m_Key: sanctuary.offer.honey_insufficient_body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062979
+    m_Key: sanctuary.action.offer_honey
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062980
+    m_Key: sanctuary.action.honey_insufficient
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062981
+    m_Key: sanctuary.message.connection_required
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062982
+    m_Key: sanctuary.message.item_unlocked
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062983
+    m_Key: sanctuary.message.entry_owned
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062984
+    m_Key: sanctuary.card.owned
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062985
+    m_Key: sanctuary.card.coming_soon
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062986
+    m_Key: sanctuary.card.from_tutorial
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062987
+    m_Key: sanctuary.card.honey_cost
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062988
+    m_Key: sanctuary.discovery.classes
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062989
+    m_Key: sanctuary.discovery.techniques
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062990
+    m_Key: sanctuary.discovery.relics
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062991
+    m_Key: sanctuary.log.catalog_received
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062992
+    m_Key: sanctuary.log.no_connection
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062993
+    m_Key: sanctuary.log.catalog_failed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062994
+    m_Key: sanctuary.log.purchased
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062995
+    m_Key: sanctuary.log.purchase_rejected
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644073451520
+    m_Key: consumable.ruby_seal.target_title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 380459435331584
+    m_Key: rules.supreme_title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 380459435331585
+    m_Key: rules.supreme.locked
+    m_Metadata:
+      m_Items: []
+  - m_Id: 380459435331586
+    m_Key: rules.mana_cost
+    m_Metadata:
+      m_Items: []
+  - m_Id: 380459435331587
+    m_Key: rules.mana_cost.free
+    m_Metadata:
+      m_Items: []
+  m_Metadata:
+    m_Items: []
+  m_KeyGenerator:
+    rid: 7214883181289013769
+  references:
+    version: 2
+    RefIds:
+    - rid: 7214883181289013769
+      type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables, asm: Unity.Localization}
+      data:
+        m_CustomEpoch: 1785590191409

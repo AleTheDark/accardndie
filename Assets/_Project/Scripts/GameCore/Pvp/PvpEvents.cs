@@ -1,3 +1,5 @@
+using AccardND.GameCore.Mana;
+
 namespace AccardND.GameCore.Pvp
 {
     /// <summary>Eventi emessi dal motore: il server li inoltra ai client,
@@ -162,6 +164,40 @@ namespace AccardND.GameCore.Pvp
         public string Reason { get; }
     }
 
+    /// <summary>Motivi per cui la riserva di mana di un giocatore cambia.</summary>
+    public static class ManaChangeReasons
+    {
+        public const string Activation = "activation";
+        public const string Skip = "skip";
+        public const string Parry = "parry";
+        public const string Kill = "kill";
+        public const string Loss = "loss";
+        public const string Spend = "spend";
+        public const string Reserve = "reserve";
+        public const string RoundFloor = "round_floor";
+    }
+
+    /// <summary>
+    /// Variazione della riserva di mana. Delta puo' essere negativo (spesa).
+    /// Current e' il valore dopo la variazione: il client si allinea su quello
+    /// invece di ricalcolare, cosi' non puo' divergere dal server.
+    /// </summary>
+    public sealed class ManaChangedEvent : PvpEvent
+    {
+        public ManaChangedEvent(int player, int current, int delta, string reason)
+        {
+            Player = player;
+            Current = current;
+            Delta = delta;
+            Reason = reason;
+        }
+
+        public int Player { get; }
+        public int Current { get; }
+        public int Delta { get; }
+        public string Reason { get; }
+    }
+
     public sealed class AbilityUsedEvent : PvpEvent
     {
         public AbilityUsedEvent(int player, int slot, HeroClass ability, int targetPlayer, int targetSlot, int magnitude)
@@ -177,6 +213,39 @@ namespace AccardND.GameCore.Pvp
         public int Player { get; }
         public int Slot { get; }
         public HeroClass Ability { get; }
+        public int TargetPlayer { get; }
+        public int TargetSlot { get; }
+        public int Magnitude { get; }
+    }
+
+    /// <summary>
+    /// Abilita' suprema attivata. Magnitude porta il numero significativo dell'effetto
+    /// (bonus applicato, buff rubati, mana ripristinato); 0 quando non ne ha uno.
+    /// </summary>
+    public sealed class SupremeUsedEvent : PvpEvent
+    {
+        public SupremeUsedEvent(
+            int player,
+            int slot,
+            HeroClass heroClass,
+            SupremeAbilityType supreme,
+            int targetPlayer,
+            int targetSlot,
+            int magnitude)
+        {
+            Player = player;
+            Slot = slot;
+            HeroClass = heroClass;
+            Supreme = supreme;
+            TargetPlayer = targetPlayer;
+            TargetSlot = targetSlot;
+            Magnitude = magnitude;
+        }
+
+        public int Player { get; }
+        public int Slot { get; }
+        public HeroClass HeroClass { get; }
+        public SupremeAbilityType Supreme { get; }
         public int TargetPlayer { get; }
         public int TargetSlot { get; }
         public int Magnitude { get; }

@@ -2,6 +2,7 @@ using System.Collections;
 using AccardND.Battlefield;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -23,6 +24,9 @@ public sealed partial class BattleBoardController
 
 	private bool musicMuted;
 
+	/// <summary>Rifiuto per mana insufficiente, accompagna il callout NO MANA.</summary>
+	private AudioClip noManaSfx;
+
 	private AudioClip openCardInspectionSfx;
 
 	private AudioClip closeCardInspectionSfx;
@@ -30,6 +34,8 @@ public sealed partial class BattleBoardController
 	private AudioClip buyCardSfx;
 
 	private AudioClip arrowChangeSfx;
+
+	private AudioClip coinFlipSfx;
 
 	private AudioClip transitionSfx;
 
@@ -39,13 +45,11 @@ public sealed partial class BattleBoardController
 
 	private AudioClip lootRoomEnterSfx;
 
-	private AudioClip monster1RoomEnterSfx;
+	private AudioClip accessibleMonsterRoomEnterSfx;
 
-	private AudioClip monster2RoomEnterSfx;
+	private AudioClip normalMonsterRoomEnterSfx;
 
-	private AudioClip monster3RoomEnterSfx;
-
-	private AudioClip monster4RoomEnterSfx;
+	private AudioClip apocalypticMonsterRoomEnterSfx;
 
 	private AudioClip bossBragusSoundtrack;
 
@@ -86,16 +90,17 @@ public sealed partial class BattleBoardController
 
 		openCardInspectionSfx = LoadSfx("open_card_inspection");
 		closeCardInspectionSfx = LoadSfx("close_card_inspection");
+		noManaSfx = LoadSfx("no_mana");
 		buyCardSfx = LoadSfx("buy_card");
 		arrowChangeSfx = LoadSfx("arrow_change");
+		coinFlipSfx = LoadSfx("coin_flip");
 		transitionSfx = LoadSfx("transition");
 		openBagSfx = LoadSfx("open_bag");
 		closedBagSfx = LoadSfx("closed_bag");
 		lootRoomEnterSfx = LoadSfx("loot_room_enter");
-		monster1RoomEnterSfx = LoadSfx("monster_1_room");
-		monster2RoomEnterSfx = LoadSfx("monster_2_room");
-		monster3RoomEnterSfx = LoadSfx("monster_3_room_enter");
-		monster4RoomEnterSfx = LoadSfx("monster_4_room");
+		accessibleMonsterRoomEnterSfx = LoadSfx("monster_accessible_room");
+		normalMonsterRoomEnterSfx = LoadSfx("monster_normal_room");
+		apocalypticMonsterRoomEnterSfx = LoadSfx("monster_apocalyptic_room");
 		bossBragusSoundtrack = LoadSfx("boss_bragus_soundtrack");
 		bossMedusaSoundtrack = LoadSfx("boss_medusa_soundtrack");
 		bossPalantirSoundtrack = LoadSfx("boss_palantir_soundtrack");
@@ -157,11 +162,14 @@ public sealed partial class BattleBoardController
 		{
 			bool muted = battleSfx?.Muted ?? false;
 			float volume = battleSfx?.Volume ?? 1f;
-			sfxVolumeText.text = muted ? "MUTO" : Mathf.RoundToInt(volume * 100f) + "%";
+			sfxVolumeText.text = muted
+				? GameText.Get(GameTextKeys.Common.Muted)
+				: GameText.Format(GameTextKeys.Audio.VolumePercent, Mathf.RoundToInt(volume * 100f));
 		}
 		if ((Object)(object)sfxMuteButtonText != (Object)null)
 		{
-			sfxMuteButtonText.text = battleSfx?.Muted == true ? "ATTIVA" : "MUTE";
+			sfxMuteButtonText.text = GameText.Get(
+				battleSfx?.Muted == true ? GameTextKeys.Common.Activate : GameTextKeys.Common.Mute);
 		}
 	}
 
@@ -202,11 +210,14 @@ public sealed partial class BattleBoardController
 	{
 		if ((Object)(object)musicVolumeText != (Object)null)
 		{
-			musicVolumeText.text = musicMuted ? "MUTO" : Mathf.RoundToInt(musicVolume * 100f) + "%";
+			musicVolumeText.text = musicMuted
+				? GameText.Get(GameTextKeys.Common.Muted)
+				: GameText.Format(GameTextKeys.Audio.VolumePercent, Mathf.RoundToInt(musicVolume * 100f));
 		}
 		if ((Object)(object)musicMuteButtonText != (Object)null)
 		{
-			musicMuteButtonText.text = musicMuted ? "ATTIVA" : "MUTE";
+			musicMuteButtonText.text = GameText.Get(
+				musicMuted ? GameTextKeys.Common.Activate : GameTextKeys.Common.Mute);
 		}
 	}
 
@@ -390,6 +401,16 @@ public sealed partial class BattleBoardController
 		battleSfx?.PlayClassAbility(heroClass);
 	}
 
+	private void PlayWarriorSupremeSfx()
+	{
+		battleSfx?.PlayWarriorSupreme();
+	}
+
+	private void PlayMageSupremeSfx()
+	{
+		battleSfx?.PlayMageSupreme();
+	}
+
 	private void PlayComposableGolemAttackSfx(ComposableGolemForm form)
 	{
 		battleSfx?.PlayComposableGolemAttack(form);
@@ -486,13 +507,11 @@ public sealed partial class BattleBoardController
 			StopMusic();
 			return;
 		}
-		PlayMusic(currentMonsterTier switch
+		PlayMusic(pendingRoomDifficulty switch
 		{
-			1 => monster1RoomEnterSfx,
-			2 => monster2RoomEnterSfx,
-			3 => monster3RoomEnterSfx,
-			4 => monster4RoomEnterSfx,
-			_ => null
+			RoomDifficulty.Easy => accessibleMonsterRoomEnterSfx,
+			RoomDifficulty.Hard => apocalypticMonsterRoomEnterSfx,
+			_ => normalMonsterRoomEnterSfx
 		});
 	}
 

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using AccardND.GameCore;
 using AccardND.GameCore.Pvp;
 using AccardND.GameData;
+using AccardND.Localization;
 using AccardND.NetProtocol;
 using UnityEngine;
 using UnityEngine.Events;
@@ -91,11 +92,13 @@ namespace AccardND.PvpUi
         private void BuildStaticUi()
         {
             RectTransform titleBand = PvpUiFactory.CreateTitleBand(
-                root, "ARSENALE", "Componi una squadra equilibrata per l'arena");
+                root,
+                GameText.Get(GameTextKeys.PvpLoadout.Title),
+                GameText.Get(GameTextKeys.PvpLoadout.Subtitle));
             PvpUiFactory.SetAnchors(titleBand, new Vector2(0.04f, 0.9f), new Vector2(0.76f, 0.985f));
 
             Button cancel = PvpUiFactory.CreateButton(
-                root, "Cancel", "INDIETRO", new Color(0.5f, 0.12f, 0.12f, 0.98f), onCancelled, 24);
+                root, "Cancel", GameText.Get(GameTextKeys.Common.Back), new Color(0.5f, 0.12f, 0.12f, 0.98f), onCancelled, 24);
             PvpUiFactory.SetAnchors((RectTransform)cancel.transform, new Vector2(0.79f, 0.92f), new Vector2(0.96f, 0.975f));
 
             RectTransform summaryPanel = PvpUiFactory.CreateSoftPanel(root, "Loadout Summary", new Color(0.035f, 0.06f, 0.09f, 0.96f));
@@ -105,10 +108,11 @@ namespace AccardND.PvpUi
             PvpUiFactory.Stretch((RectTransform)summaryText.transform, 18f, 8f);
 
             confirmButton = PvpUiFactory.CreateButton(
-                root, "Confirm", "SALVA", new Color(0.1f, 0.55f, 0.25f, 0.98f), Confirm, 28);
+                root, "Confirm", GameText.Get(GameTextKeys.PvpLoadout.Save), new Color(0.1f, 0.55f, 0.25f, 0.98f), Confirm, 28);
             PvpUiFactory.SetAnchors((RectTransform)confirmButton.transform, new Vector2(0.79f, 0.79f), new Vector2(0.96f, 0.885f));
 
-            Text catalogTitle = PvpUiFactory.CreateTitleText(root, "Catalog Title", "CATALOGO CARTE", 22, TextAnchor.MiddleLeft);
+            Text catalogTitle = PvpUiFactory.CreateTitleText(
+                root, "Catalog Title", GameText.Get(GameTextKeys.PvpLoadout.Catalog), 22, TextAnchor.MiddleLeft);
             catalogTitle.color = PvpUiFactory.Gold;
             PvpUiFactory.SetAnchors((RectTransform)catalogTitle.transform, new Vector2(0.05f, 0.745f), new Vector2(0.95f, 0.785f));
 
@@ -164,10 +168,15 @@ namespace AccardND.PvpUi
         {
             PvpLoadoutValidationResult result = Validate();
             string state = selection.Count < rules.RequiredCardCount
-                ? $"scegli ancora {rules.RequiredCardCount - selection.Count} carte"
-                : result.IsValid ? "loadout valido!" : result.Errors[0].Message;
-            summaryText.text =
-                $"{selection.Count}/{rules.RequiredCardCount} CARTE     {result.TotalCost}/{rules.Budget} BUDGET\n{state.ToUpperInvariant()}";
+                ? GameText.Format(GameTextKeys.PvpLoadout.ChooseRemaining, rules.RequiredCardCount - selection.Count)
+                : result.IsValid ? GameText.Get(GameTextKeys.PvpLoadout.Valid) : result.Errors[0].Message;
+            summaryText.text = GameText.Format(
+                GameTextKeys.PvpLoadout.Summary,
+                selection.Count,
+                rules.RequiredCardCount,
+                result.TotalCost,
+                rules.Budget,
+                state.ToUpperInvariant());
             summaryText.color = result.IsValid && selection.Count == rules.RequiredCardCount
                 ? PvpUiFactory.Good
                 : PvpUiFactory.Gold;
@@ -182,7 +191,7 @@ namespace AccardND.PvpUi
             {
                 Text warning = PvpUiFactory.CreateText(
                     gridContent, "NoDb",
-                    "CardDatabase non assegnato: verrà usato il loadout predefinito.", 22);
+                    GameText.Get(GameTextKeys.PvpLoadout.MissingDatabase), 22);
                 ((RectTransform)warning.transform).sizeDelta = new Vector2(900f, 80f);
                 return;
             }
@@ -213,7 +222,7 @@ namespace AccardND.PvpUi
                     PvpUiFactory.SetAnchors((RectTransform)artHolder.transform, new Vector2(0.05f, 0.33f), new Vector2(0.95f, 0.98f));
                 }
 
-                string selectedSuffix = selected ? "  - SCELTA" : string.Empty;
+                string selectedSuffix = selected ? GameText.Get(GameTextKeys.PvpLoadout.SelectedSuffix) : string.Empty;
                 string labelText = isLandscape
                     ? $"{card.DisplayName}  {card.Strength}{selectedSuffix}\n{card.HeroClass}"
                     : $"{card.DisplayName}\n{card.HeroClass}{selectedSuffix}";
@@ -274,7 +283,8 @@ namespace AccardND.PvpUi
             Button button = holder.GetComponent<Button>();
             button.targetGraphic = image;
 
-            inspectionBuyText = PvpUiFactory.CreateText(holder.transform, "Label", "AGGIUNGI", 20);
+            inspectionBuyText = PvpUiFactory.CreateText(
+                holder.transform, "Label", GameText.Get(GameTextKeys.PvpLoadout.Add), 20);
             inspectionBuyText.color = Color.white;
             PvpUiFactory.SetAnchors((RectTransform)inspectionBuyText.transform, new Vector2(0.16f, 0.02f), new Vector2(0.84f, 0.22f));
             return button;
@@ -299,7 +309,12 @@ namespace AccardND.PvpUi
             inspectionTitle.text = card != null ? card.DisplayName : string.Empty;
             inspectionBody.text = card == null
                 ? string.Empty
-                : $"Classe: {className}\nPotenza: {card.Strength}\nCosto loadout: {card.Strength}\n\n{CardRulesText(card)}";
+                : GameText.Format(
+                    GameTextKeys.PvpLoadout.InspectionBody,
+                    className,
+                    card.Strength,
+                    card.Strength,
+                    CardRulesText(card));
             RefreshInspectionBuyState();
             inspectionOverlay.gameObject.SetActive(true);
             inspectionOverlay.SetAsLastSibling();
@@ -322,7 +337,11 @@ namespace AccardND.PvpUi
             bool full = selection.Count >= rules.RequiredCardCount;
             bool canBuy = inspectedCard != null && !selected && !full;
             inspectionBuyButton.interactable = canBuy;
-            inspectionBuyText.text = selected ? "GIA NEL LOADOUT" : full ? "LOADOUT PIENO" : "AGGIUNGI";
+            inspectionBuyText.text = selected
+                ? GameText.Get(GameTextKeys.PvpLoadout.AlreadyAdded)
+                : full
+                    ? GameText.Get(GameTextKeys.PvpLoadout.Full)
+                    : GameText.Get(GameTextKeys.PvpLoadout.Add);
             inspectionBuyText.color = canBuy ? Color.white : new Color(0.7f, 0.72f, 0.74f);
         }
 
@@ -345,11 +364,11 @@ namespace AccardND.PvpUi
         {
             PvpUiFactory.Clear(selectionBar);
             Text caption = PvpUiFactory.CreateText(
-                selectionBar, "Caption", "IL TUO LOADOUT", 22, TextAnchor.MiddleLeft);
+                selectionBar, "Caption", GameText.Get(GameTextKeys.PvpLoadout.YourLoadout), 22, TextAnchor.MiddleLeft);
             caption.color = PvpUiFactory.Gold;
             PvpUiFactory.SetAnchors((RectTransform)caption.transform, new Vector2(0.025f, 0.82f), new Vector2(0.52f, 0.98f));
             Text hint = PvpUiFactory.CreateLabel(
-                selectionBar, "Hint", "Tocca una carta per rimuoverla", 18, TextAnchor.MiddleRight);
+                selectionBar, "Hint", GameText.Get(GameTextKeys.PvpLoadout.RemoveHint), 18, TextAnchor.MiddleRight);
             PvpUiFactory.SetAnchors((RectTransform)hint.transform, new Vector2(0.48f, 0.82f), new Vector2(0.975f, 0.98f));
 
             for (int index = 0; index < rules.RequiredCardCount; index++)
@@ -386,7 +405,12 @@ namespace AccardND.PvpUi
                     PvpUiFactory.SetAnchors((RectTransform)artHolder.transform, new Vector2(0.04f, 0.1f), new Vector2(0.29f, 0.9f));
                 }
                 Text label = PvpUiFactory.CreateText(
-                    slot, "Label", $"{card.DisplayName}\nPOTENZA {card.Strength}", 17, TextAnchor.MiddleLeft, FontStyle.Bold);
+                    slot,
+                    "Label",
+                    GameText.Format(GameTextKeys.PvpLoadout.CardPower, card.DisplayName, card.Strength),
+                    17,
+                    TextAnchor.MiddleLeft,
+                    FontStyle.Bold);
                 label.raycastTarget = false;
                 PvpUiFactory.SetAnchors((RectTransform)label.transform, new Vector2(card.Artwork != null ? 0.32f : 0.08f, 0.08f), new Vector2(0.96f, 0.92f));
 

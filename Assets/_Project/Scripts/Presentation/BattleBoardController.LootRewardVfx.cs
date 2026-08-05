@@ -36,6 +36,11 @@ public sealed partial class BattleBoardController
 		root.transform.SetAsLastSibling();
 		RectTransform rootRect = (RectTransform)root.transform;
 		Stretch(rootRect);
+		rootRect.anchorMin = new Vector2(0f, 0f);
+		rootRect.anchorMax = new Vector2(1f, 1f);
+		rootRect.offsetMin = new Vector2(0f, 140f);
+		rootRect.offsetMax = new Vector2(0f, 140f);
+		rootRect.localScale = Vector3.one * 1.1f;
 
 		CanvasGroup group = root.GetComponent<CanvasGroup>();
 		group.alpha = 0f;
@@ -73,7 +78,9 @@ public sealed partial class BattleBoardController
 		titleRect.anchorMin = new Vector2(0.5f, 0.72f);
 		titleRect.anchorMax = new Vector2(0.5f, 0.72f);
 		titleRect.pivot = new Vector2(0.5f, 0.5f);
+		titleRect.anchoredPosition = new Vector2(0f, 75f);
 		titleRect.sizeDelta = new Vector2(780f, 82f);
+		titleRect.localScale = Vector3.one * 1.3f;
 
 		PrototypeCardView card = PrototypeCardView.Create(root.transform, reward, configuration);
 		card.SetInteractable(false);
@@ -107,7 +114,7 @@ public sealed partial class BattleBoardController
 			ringRect.localScale = Vector3.one * Mathf.LerpUnclamped(0.45f, 1.42f, appear);
 			ringRect.localRotation = Quaternion.Euler(0f, 0f, t * 150f);
 			ring.color = new Color(0.38f, 0.95f, 1f, Mathf.Lerp(0.34f, 0.12f, t));
-			titleRect.anchoredPosition = new Vector2(0f, Mathf.Lerp(26f, 0f, appear));
+			titleRect.anchoredPosition = new Vector2(0f, Mathf.Lerp(101f, 75f, appear));
 			title.color = new Color(1f, 0.88f, 0.48f, appear);
 
 			UpdateLootRewardFireworks(particles, t, 0f);

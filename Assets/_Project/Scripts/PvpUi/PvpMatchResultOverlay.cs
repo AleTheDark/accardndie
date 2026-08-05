@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Text;
+using AccardND.Localization;
 using AccardND.NetProtocol;
 using UnityEngine;
 using UnityEngine.UI;
@@ -13,7 +14,11 @@ namespace AccardND.PvpUi
         private readonly RectTransform root;
         private readonly RectTransform confettiRoot;
 
-        public PvpMatchResultOverlay(Transform parent, MatchResultData result, Action onContinue)
+        private Button tripleButton;
+
+		public PvpMatchResultOverlay(
+			Transform parent, MatchResultData result, Action onContinue,
+			Action<MatchResultData, Action<bool>> onTripleExperience = null)
         {
             root = PvpUiFactory.CreatePanel(parent, "MatchResult", new Color(0.018f, 0.026f, 0.04f, 0.995f));
             bool landscape = Screen.width >= Screen.height;
@@ -24,9 +29,16 @@ namespace AccardND.PvpUi
             if (result.youWon)
                 confettiRoot = CreateVictoryConfetti(parent);
 
-            string headline = result.youWon ? "VITTORIA" : "SCONFITTA";
+            string headline = result.youWon
+                ? GameText.Get(GameTextKeys.PvpResult.Victory)
+                : GameText.Get(GameTextKeys.PvpResult.Defeat);
             Color headColor = result.youWon ? PvpUiFactory.Good : PvpUiFactory.Bad;
-            RectTransform titleBand = PvpUiFactory.CreateTitleBand(root, "RISULTATO ARENA", result.youWon ? "La tua leggenda avanza" : "Riorganizza il loadout e torna in arena");
+            RectTransform titleBand = PvpUiFactory.CreateTitleBand(
+                root,
+                GameText.Get(GameTextKeys.PvpResult.Title),
+                result.youWon
+                    ? GameText.Get(GameTextKeys.PvpResult.VictorySubtitle)
+                    : GameText.Get(GameTextKeys.PvpResult.DefeatSubtitle));
             PvpUiFactory.SetAnchors(
                 titleBand,
                 landscape ? new Vector2(0.06f, 0.82f) : new Vector2(0.06f, 0.78f),
@@ -58,11 +70,56 @@ namespace AccardND.PvpUi
             PvpUiFactory.Stretch((RectTransform)detail.transform, 16f, 12f);
 
             Button continueButton = PvpUiFactory.CreateButton(
-                root, "Continue", "CONTINUA", new Color(0.1f, 0.5f, 0.3f, 0.98f), () => onContinue?.Invoke(), landscape ? 25 : 22);
+                root,
+                "Continue",
+                GameText.Get(GameTextKeys.PvpResult.Continue),
+                new Color(0.1f, 0.5f, 0.3f, 0.98f),
+                () => onContinue?.Invoke(),
+                landscape ? 25 : 22);
             PvpUiFactory.SetAnchors(
                 (RectTransform)continueButton.transform,
                 landscape ? new Vector2(0.30f, 0.055f) : new Vector2(0.27f, 0.055f),
                 landscape ? new Vector2(0.70f, 0.16f) : new Vector2(0.73f, 0.145f));
+
+			// L'ultima condizione tiene fuori il bottone quando non c'e' nessun annuncio
+			// pronto: prometterlo e poi non averlo e' il modo piu' veloce per far sembrare
+			// rotto un riepilogo di fine partita.
+			if (result.accountExperienceCanTriple
+				&& result.accountExperienceEarned > 0
+				&& !string.IsNullOrWhiteSpace(result.accountExperienceRewardClaimId)
+				&& onTripleExperience != null
+				&& AccardND.Ads.AdService.IsReady(AccardND.Ads.AdPlacement.PvpExperienceTriple))
+			{
+				tripleButton = PvpUiFactory.CreateButton(
+					root,
+					"Triple Account EXP",
+					GameText.GetOrFallbackSilent(
+						GameTextKeys.PvpResult.TripleExperienceOffer,
+						"ADV  ×3 EXP ({0})",
+						result.accountExperienceEarned * 3),
+					new Color(0.42f, 0.18f, 0.62f, 0.98f),
+					() =>
+					{
+						tripleButton.interactable = false;
+						onTripleExperience(result, success =>
+						{
+							if (tripleButton == null) return;
+							tripleButton.GetComponentInChildren<Text>().text = success
+								? GameText.GetOrFallbackSilent(
+									GameTextKeys.PvpResult.TripleExperienceApplied,
+									"EXP TRIPLICATA: +{0}",
+									result.accountExperienceEarned * 3)
+								: GameText.GetOrFallbackSilent(
+									GameTextKeys.PvpResult.TripleExperienceUnavailable,
+									"ADV NON DISPONIBILE");
+							tripleButton.interactable = !success;
+						});
+					}, landscape ? 22 : 19);
+				PvpUiFactory.SetAnchors((RectTransform)tripleButton.transform,
+					new Vector2(0.18f, 0.055f), new Vector2(0.54f, 0.16f));
+				PvpUiFactory.SetAnchors((RectTransform)continueButton.transform,
+					new Vector2(0.58f, 0.055f), new Vector2(0.88f, 0.16f));
+			}
         }
 
         public void Destroy()
@@ -92,37 +149,59 @@ namespace AccardND.PvpUi
         {
             var builder = new StringBuilder();
             if (result.endedReason == "timeout")
-                builder.AppendLine("Vittoria/sconfitta per tempo scaduto.");
+                builder.AppendLine(GameText.Get(GameTextKeys.PvpResult.Timeout));
             else if (result.endedReason == "disconnect")
-                builder.AppendLine("L'avversario ha abbandonato.");
+                builder.AppendLine(GameText.Get(GameTextKeys.PvpResult.OpponentForfeit));
+            else if (result.endedReason == "surrender")
+            {
+                builder.AppendLine(result.youWon
+                    ? GameText.GetLocalizedFallback(
+                        GameTextKeys.PvpResult.OpponentSurrendered,
+                        "HAI VINTO: IL TUO AVVERSARIO SI È ARRESO",
+                        "YOU WON: YOUR OPPONENT SURRENDERED")
+                    : GameText.GetLocalizedFallback(
+                        GameTextKeys.PvpResult.Surrendered,
+                        "Ti sei arreso.",
+                        "You surrendered."));
+            }
 
             if (result.ranked)
             {
                 if (result.placement)
                 {
-                    builder.AppendLine($"Piazzamento: {result.placementRemaining} partite rimaste.");
+                    builder.AppendLine(GameText.Format(GameTextKeys.PvpResult.Placement, result.placementRemaining));
                 }
                 else
                 {
                     string sign = result.lpDelta >= 0 ? "+" : string.Empty;
-                    builder.AppendLine($"{result.tier} {result.division} — {result.leaguePoints} LP  ({sign}{result.lpDelta} LP)");
+                    builder.AppendLine(GameText.Format(
+                        GameTextKeys.PvpResult.League,
+                        result.tier,
+                        result.division,
+                        result.leaguePoints,
+                        sign,
+                        result.lpDelta));
                     if (result.promoted)
-                        builder.AppendLine("PROMOSSO!");
+                        builder.AppendLine(GameText.Get(GameTextKeys.PvpResult.Promoted));
                     else if (result.demoted)
-                        builder.AppendLine("Retrocesso.");
+                        builder.AppendLine(GameText.Get(GameTextKeys.PvpResult.Demoted));
                 }
+            }
+            if (result.ranked)
+            {
+                builder.AppendLine($"EXP ACCOUNT: +{result.accountExperienceEarned} ({result.scoreYou} round vinti × 5)");
             }
             else
             {
-                builder.AppendLine("Partita amichevole (nessuna variazione di rank).");
+                builder.AppendLine(GameText.Get(GameTextKeys.PvpResult.Friendly));
             }
 
             if (result.unlockedAchievements != null && result.unlockedAchievements.Length > 0)
             {
                 builder.AppendLine();
-                builder.AppendLine("TRAGUARDI SBLOCCATI:");
+                builder.AppendLine(GameText.Get(GameTextKeys.PvpResult.Achievements));
                 foreach (string achievement in result.unlockedAchievements)
-                    builder.AppendLine($"* {achievement}");
+                    builder.AppendLine(GameText.Format(GameTextKeys.PvpResult.AchievementItem, achievement));
             }
 
             return builder.ToString().TrimEnd();

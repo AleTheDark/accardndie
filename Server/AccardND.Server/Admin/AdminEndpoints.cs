@@ -1,3 +1,4 @@
+using AccardND.Server.Sessions;
 using Microsoft.AspNetCore.Http;
 
 namespace AccardND.Server.Admin;
@@ -12,11 +13,15 @@ public static class AdminEndpoints
     private sealed record LoginRequest(string username, string password);
     private sealed record RenameRequest(string name);
     private sealed record HoneyRequest(int honey);
+    private sealed record UnlockRequest(string type, string id, bool granted);
+    private sealed record UnlockAllRequest(bool granted);
+    private sealed record ClientVersionRequest(string target, bool enforce, string updateUrl);
 
     public static void MapAdminEndpoints(this WebApplication app)
     {
         var auth = app.Services.GetRequiredService<AdminAuth>();
         var service = app.Services.GetRequiredService<AdminService>();
+        var clientVersions = app.Services.GetRequiredService<ClientVersionGate>();
 
         // Pagina del pannello.
         app.MapGet("/admin", (HttpContext context) =>
@@ -79,6 +84,13 @@ public static class AdminEndpoints
         app.MapGet("/admin/api/seasons", (HttpContext context) =>
             Guard(context, auth, () => Results.Ok(service.GetSeasons())));
 
+        app.MapGet("/admin/api/seasons/{id:int}", (HttpContext context, int id) =>
+            Guard(context, auth, () =>
+            {
+                object detail = service.GetSeasonDetail(id);
+                return detail == null ? Results.NotFound() : Results.Ok(detail);
+            }));
+
         app.MapGet("/admin/api/quests", (HttpContext context, int? days) =>
             Guard(context, auth, () => Results.Ok(service.GetTavernQuests(days ?? 14))));
 
@@ -98,12 +110,85 @@ public static class AdminEndpoints
                 return ToResult(service.SetHoney(id, body?.honey ?? 0));
             }));
 
+        // Sblocchi a mano per gli account di prova. Le POST rispondono col catalogo
+        // aggiornato: il pannello ridisegna la griglia senza una seconda chiamata.
+        app.MapGet("/admin/api/players/{id}/unlocks", (HttpContext context, string id) =>
+            Guard(context, auth, () =>
+            {
+                object state = service.GetPlayerUnlocks(id);
+                return state == null ? Results.NotFound() : Results.Ok(state);
+            }));
+
+        app.MapPost("/admin/api/players/{id}/unlocks", async (HttpContext context, string id) =>
+            await GuardAsync(context, auth, async () =>
+            {
+                UnlockRequest body = await ReadBody<UnlockRequest>(context);
+                if (body == null)
+                    return Results.BadRequest(new { error = "Richiesta non valida." });
+                (bool ok, string error) = service.SetUnlock(id, body.type, body.id, body.granted);
+                return ok ? Results.Ok(service.GetPlayerUnlocks(id)) : Results.BadRequest(new { error });
+            }));
+
+        app.MapPost("/admin/api/players/{id}/unlocks/all", async (HttpContext context, string id) =>
+            await GuardAsync(context, auth, async () =>
+            {
+                UnlockAllRequest body = await ReadBody<UnlockAllRequest>(context);
+                (bool ok, string error) = service.SetAllUnlocks(id, body?.granted ?? true);
+                return ok ? Results.Ok(service.GetPlayerUnlocks(id)) : Results.BadRequest(new { error });
+            }));
+
         app.MapPost("/admin/api/players/{id}/reset", (HttpContext context, string id) =>
             Guard(context, auth, () => ToResult(service.ResetProgress(id))));
 
         app.MapPost("/admin/api/players/{id}/delete", (HttpContext context, string id) =>
             Guard(context, auth, () => ToResult(service.DeletePlayer(id))));
+
+        // --- Versione client richiesta --------------------------------------
+
+        app.MapGet("/admin/api/client-version", (HttpContext context) =>
+            Guard(context, auth, () => Results.Ok(Describe(clientVersions))));
+
+        // Il cast a Delegate non e' decorativo: un handler asincrono con il solo
+        // HttpContext combacia con l'overload RequestDelegate di MapPost, che scarta
+        // il valore restituito e risponde 200 con corpo vuoto (analizzatore ASP0016).
+        // Gli altri POST qui sopra si salvano solo perche' hanno anche {id}.
+        app.MapPost("/admin/api/client-version", (Delegate)(async (HttpContext context) =>
+            await GuardAsync(context, auth, () => SaveClientVersionAsync(context, clientVersions))));
+
+        app.MapPost("/admin/api/client-version/reset", (HttpContext context) =>
+            Guard(context, auth, () =>
+            {
+                clientVersions.ResetToConfiguration();
+                return Results.Ok(Describe(clientVersions));
+            }));
     }
+
+    /// <summary>
+    /// Tipo di ritorno dichiarato di proposito: dentro una lambda annidata i rami
+    /// con risultati di tipo diverso (Ok/BadRequest) non venivano inferiti come
+    /// <see cref="IResult"/>, e la risposta usciva 200 con corpo vuoto.
+    /// </summary>
+    private static async Task<IResult> SaveClientVersionAsync(HttpContext context, ClientVersionGate gate)
+    {
+        ClientVersionRequest body = await ReadBody<ClientVersionRequest>(context);
+        if (body == null)
+            return Results.BadRequest(new { error = "Richiesta non valida." });
+
+        (bool ok, string error) = gate.Update(body.target, body.enforce, body.updateUrl);
+        return ok
+            ? Results.Ok(Describe(gate))
+            : Results.BadRequest(new { error });
+    }
+
+    private static object Describe(ClientVersionGate gate) => new
+    {
+        target = gate.Target,
+        enforce = gate.Enforce,
+        updateUrl = gate.UpdateUrl,
+        source = gate.Source,
+        configuredTarget = gate.ConfiguredTarget,
+        blocking = gate.IsEnforced
+    };
 
     /// <summary>
     /// Il pannello mostra dati vivi: nessuna risposta deve essere memorizzata da

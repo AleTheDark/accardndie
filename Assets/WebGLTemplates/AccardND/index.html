@@ -6,6 +6,17 @@
     <title>Unity Web Player | {{{ PRODUCT_NAME }}}</title>
     <script>
       window.ACCARDND_GOOGLE_CLIENT_ID = "866249556431-mgdm97uvov7mjvect4bp453dpp2oe48u.apps.googleusercontent.com";
+
+      // Pubblicita' sul web (H5 Games Ads di AdSense). Il publisher id sta qui e non nel
+      // codice C# perche' e' una configurazione del sito, non del gioco: cambiarlo non
+      // richiede una build. Vuoto = niente pubblicita', il gioco parte lo stesso.
+      window.ACCARDND_ADSENSE_CLIENT_ID = "";
+
+      // true = annunci di PROVA. Si vedono anche prima che AdSense approvi il sito ed e'
+      // l'unico modo di collaudare senza generare traffico non valido. Va messo a false
+      // solo quando il sito e' approvato e si vuole pubblicita' vera: da quel momento
+      // cliccare i propri annunci significa chiusura dell'account.
+      window.ACCARDND_ADSENSE_TEST = true;
     </script>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">

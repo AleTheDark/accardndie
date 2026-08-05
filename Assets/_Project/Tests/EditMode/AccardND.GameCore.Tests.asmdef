@@ -4,9 +4,12 @@
   "references": [
     "AccardND.GameCore",
     "AccardND.GameData",
+    "AccardND.Localization",
     "AccardND.NetProtocol",
     "AccardND.Network",
-    "AccardND.Battlefield"
+    "AccardND.Battlefield",
+    "Unity.Localization",
+    "Unity.ResourceManager"
   ],
   "optionalUnityReferences": [
     "TestAssemblies"

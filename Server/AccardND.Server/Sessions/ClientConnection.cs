@@ -24,6 +24,14 @@ public sealed class ClientConnection
     public string ConnectionId { get; }
     public AccountIdentity Identity { get; set; }
     public Room CurrentRoom { get; set; }
+
+    /// <summary>
+    /// Token della sessione con cui questa connessione si è autenticata. Distingue
+    /// il rientro della stessa sessione dopo una caduta di rete (stesso token, il
+    /// socket vecchio è uno zombie da chiudere in silenzio) dall'accesso di un
+    /// altro dispositivo (token diverso, l'altro va avvisato e sloggato).
+    /// </summary>
+    public string SessionToken { get; set; }
     public bool IsAuthenticated => Identity != null;
     public bool IsOpen => socket.State == WebSocketState.Open;
 

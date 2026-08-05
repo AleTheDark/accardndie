@@ -56,6 +56,7 @@ public sealed class SinglePlayerProgressService
     private const int AdMultiplier = 3;
     private const int AccountAdMultiplier = 3;
     private const int AccountExperiencePerLevel = 100;
+    private const int HoneyPerAccountLevel = 5;
     private const int DeathRewardExperienceCeiling = 5000;
 
     public SinglePlayerProgressService(AccardDatabase database)
@@ -643,6 +644,46 @@ public sealed class SinglePlayerProgressService
         return (BuildReward(progress, claimRef, extraHoney, extraAccountExperience, levelsGained), null, null);
     }
 
+    /// <summary>
+    /// Riscuote in un'unica operazione atomica i level-up ancora da notificare. Il client
+    /// puo' solo chiedere il claim: conteggio e accredito restano interamente sul server.
+    /// </summary>
+    public (SinglePlayerRewardResult Result, string ErrorCode, string Error) ClaimLevelRewards(
+        AccountIdentity identity)
+    {
+        using SqliteConnection connection = database.Open();
+        using SqliteTransaction transaction = connection.BeginTransaction();
+        EnsureProgressRow(connection, transaction, identity.PlayerId);
+
+        int pendingLevels;
+        using (SqliteCommand query = connection.CreateCommand())
+        {
+            query.Transaction = transaction;
+            query.CommandText = @"SELECT pending_level_rewards FROM single_player_progress
+                WHERE player_id = $player";
+            query.Parameters.AddWithValue("$player", identity.PlayerId);
+            pendingLevels = Math.Max(0, Convert.ToInt32(query.ExecuteScalar()));
+        }
+
+        int honey = pendingLevels * HoneyPerAccountLevel;
+        using (SqliteCommand update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText = @"
+                UPDATE single_player_progress
+                SET honey = honey + $honey, pending_level_rewards = 0, updated_at = $now
+                WHERE player_id = $player";
+            update.Parameters.AddWithValue("$honey", honey);
+            update.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
+            update.Parameters.AddWithValue("$player", identity.PlayerId);
+            update.ExecuteNonQuery();
+        }
+
+        SinglePlayerProgressData progress = ReadProgress(connection, identity.PlayerId, transaction);
+        transaction.Commit();
+        return (BuildReward(progress, null, honey, levelsGained: pendingLevels), null, null);
+    }
+
     private static int CalculateAccountExperience(SinglePlayerDeathRewardRequest request)
     {
         if (request == null)
@@ -779,8 +820,6 @@ public sealed class SinglePlayerProgressService
             levelsGained++;
         }
 
-        // Il livello account non paga piu' miele: salire di livello giocando era un rubinetto
-        // parallelo a quello delle quest, e le quest devono restare l'unico.
         using SqliteCommand update = connection.CreateCommand();
         update.Transaction = transaction;
         update.CommandText = @"
@@ -789,12 +828,14 @@ public sealed class SinglePlayerProgressService
                 account_experience = $xp,
                 account_total_experience = $total,
                 account_experience_to_next_level = $next,
+                pending_level_rewards = pending_level_rewards + $levels,
                 updated_at = $now
             WHERE player_id = $player";
         update.Parameters.AddWithValue("$level", level);
         update.Parameters.AddWithValue("$xp", current);
         update.Parameters.AddWithValue("$total", total);
         update.Parameters.AddWithValue("$next", AccountExperiencePerLevel);
+        update.Parameters.AddWithValue("$levels", levelsGained);
         update.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
         update.Parameters.AddWithValue("$player", playerId);
         update.ExecuteNonQuery();
@@ -929,7 +970,8 @@ public sealed class SinglePlayerProgressService
             query.Transaction = transaction;
             query.CommandText = @"
                 SELECT honey, account_level, account_experience, account_total_experience,
-                       account_experience_to_next_level, tutorial_completed, hardcore_unlocked
+                       account_experience_to_next_level, pending_level_rewards,
+                       tutorial_completed, hardcore_unlocked
                 FROM single_player_progress
                 WHERE player_id = $player";
             query.Parameters.AddWithValue("$player", playerId);
@@ -941,8 +983,9 @@ public sealed class SinglePlayerProgressService
                 data.accountExperience = Math.Max(0, reader.GetInt32(2));
                 data.accountTotalExperience = Math.Max(0, reader.GetInt32(3));
                 data.accountExperienceToNextLevel = Math.Max(1, reader.GetInt32(4));
-                data.tutorialCompleted = reader.GetInt32(5) != 0;
-                data.hardcoreUnlocked = reader.GetInt32(6) != 0;
+                data.pendingLevelRewards = Math.Max(0, reader.GetInt32(5));
+                data.tutorialCompleted = reader.GetInt32(6) != 0;
+                data.hardcoreUnlocked = reader.GetInt32(7) != 0;
             }
         }
 

@@ -8,6 +8,8 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	private bool IsComposableGolemDebugSession => debugForceFirstRoomComposableGolem;
+
 	// Persistenza del save/resume della run di campagna. Isolato in questo partial per
 	// contenere la superficie di modifica sul controller: gli altri file lo agganciano solo
 	// nei punti di salvataggio/pulizia. La ripresa non deve bypassare la scelta single player.
@@ -24,6 +26,7 @@ public sealed partial class BattleBoardController
 			CampaignRunMapper.WriteProgress(save, runProgress);
 		if (campaignDeck != null)
 			CampaignRunMapper.WriteDeck(save, campaignDeck);
+		save.playerMana = CampaignPlayerManaCurrent;
 
 		save.campaignScenarioId = campaignScenarioId;
 		save.campaignScenarioBossId = campaignScenarioBossId;
@@ -50,8 +53,8 @@ public sealed partial class BattleBoardController
 	// combattimento è smontato e lo stato è coerente.
 	private void SaveCurrentRun()
 	{
-		// La scena di test del mercato non deve sporcare il save della campagna vera.
-		if (campaignDeck == null || runProgress == null || pvpPresentationActive || debugMerchantScene)
+		// Le scene di test non devono sporcare il save della campagna vera.
+		if (campaignDeck == null || runProgress == null || pvpPresentationActive || debugMerchantScene || IsComposableGolemDebugSession)
 			return;
 		try
 		{
@@ -65,6 +68,9 @@ public sealed partial class BattleBoardController
 
 	private void ClearSavedRun()
 	{
+		if (IsComposableGolemDebugSession)
+			return;
+
 		try
 		{
 			runSaveService.Clear();
@@ -82,6 +88,9 @@ public sealed partial class BattleBoardController
 	// es. carte non più presenti nel database dopo un aggiornamento).
 	private bool TryStartResumedCampaign()
 	{
+		if (IsComposableGolemDebugSession)
+			return false;
+
 		if (!runSaveService.TryLoad(out CampaignRunSave save) || save.deck == null || save.deck.Count == 0)
 			return false;
 
@@ -111,6 +120,7 @@ public sealed partial class BattleBoardController
 		// Progressione
 		ResetRunProgress();
 		CampaignRunMapper.ReadProgress(save, runProgress);
+		RestoreCampaignMana(save.playerMana);
 
 		// Scenario / regole di stanza
 		campaignScenarioId = string.IsNullOrWhiteSpace(save.campaignScenarioId) ? null : save.campaignScenarioId;
@@ -152,6 +162,10 @@ public sealed partial class BattleBoardController
 
 		SetAccountHubHudActive(false);
 		AppendLog($"CAMPAGNA RIPRESA - livello {runProgress.PlayerLevel}, stanze superate {runProgress.RoomsCleared}, {campaignDeck.Cards.Count} carte nel mazzo.");
+		// Una run ripresa non passa da LoadCampaignConsumablesFromBag: senza questa riga
+		// sarebbe l'unico modo di giocare senza che nessuno prepari gli annunci, e a fine run
+		// il TRIPLICA non comparirebbe mai.
+		WarmCampaignRunAds();
 		PlayTransitionSfx();
 		BeginRoomChoice();
 		return true;

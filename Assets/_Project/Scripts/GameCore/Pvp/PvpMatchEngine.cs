@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using AccardND.GameCore.Mana;
 
 namespace AccardND.GameCore.Pvp
 {
@@ -17,6 +18,20 @@ namespace AccardND.GameCore.Pvp
         public PvpActionException(string message) : base(message)
         {
         }
+
+        public PvpActionException(string errorCode, string message) : base(message)
+        {
+            ErrorCode = errorCode;
+        }
+
+        public string ErrorCode { get; }
+    }
+
+    public static class PvpActionErrorCodes
+    {
+        public const string AbilityRequiresAction = "ability_requires_action";
+        public const string NotEnoughMana = "not_enough_mana";
+        public const string SupremeNotAvailable = "supreme_not_available";
     }
 
     /// <summary>
@@ -45,9 +60,11 @@ namespace AccardND.GameCore.Pvp
             public bool FormationAuraUsed;
             public readonly List<PvpCardState> Board = new();
             public int RoundWins;
+            public ManaPool Mana;
         }
 
         private readonly PvpMatchRules rules;
+        private readonly ManaRules manaRules;
         private readonly IRandomSource random;
         private readonly CombatResolver resolver;
         private readonly PlayerState[] players = { new(), new() };
@@ -77,14 +94,29 @@ namespace AccardND.GameCore.Pvp
             IReadOnlyList<CombatCard> loadoutPlayer0,
             IReadOnlyList<CombatCard> loadoutPlayer1,
             PvpMatchRules rules,
-            IRandomSource random)
+            IRandomSource random,
+            ManaRules manaRules = null)
         {
             this.rules = rules ?? throw new ArgumentNullException(nameof(rules));
             this.random = random ?? throw new ArgumentNullException(nameof(random));
+            this.manaRules = manaRules ?? ManaRules.CreateDefault();
             resolver = new CombatResolver(random);
             players[0].Loadout = CopyLoadout(loadoutPlayer0, nameof(loadoutPlayer0));
             players[1].Loadout = CopyLoadout(loadoutPlayer1, nameof(loadoutPlayer1));
+            players[0].Mana = new ManaPool(this.manaRules);
+            players[1].Mana = new ManaPool(this.manaRules);
         }
+
+        /// <summary>Riserva di mana del giocatore. Il mana e' globale, non della singola pedina.</summary>
+        public int ManaOf(int player) => players[ValidPlayer(player)].Mana.Current;
+
+        /// <summary>Costo dell'abilita' base della pedina attiva. E' fisso, non sale mai.</summary>
+        public int PrimaryCostFor(int player) =>
+            players[ValidPlayer(player)].Mana.CostOfPrimary(RequireActiveCard(player).Card.HeroClass);
+
+        /// <summary>Costo della suprema della pedina attiva, ripetizione di classe inclusa.</summary>
+        public int SupremeCostFor(int player) =>
+            players[ValidPlayer(player)].Mana.CostOfSupreme(RequireActiveCard(player).Card.HeroClass);
 
         public PvpMatchPhase Phase { get; private set; } = PvpMatchPhase.NotStarted;
         public int MatchRound { get; private set; }
@@ -202,6 +234,11 @@ namespace AccardND.GameCore.Pvp
             if (actor.AbilityUsed || actor.AbilityArmed)
                 throw new PvpActionException("Abilità già usata in questo round.");
 
+            // La disponibilita' si verifica prima di toccare qualsiasi stato: un
+            // bersaglio non valido piu' avanti non deve lasciare il mana scalato.
+            int cost = players[player].Mana.CostOfPrimary(actor.Card.HeroClass);
+            RequireAffordable(player, cost);
+
             var events = new List<PvpEvent>();
             switch (actor.Card.HeroClass)
             {
@@ -289,8 +326,233 @@ namespace AccardND.GameCore.Pvp
                 default:
                     throw new PvpActionException($"{actor.Card.HeroClass} ha un'abilità passiva, non attivabile.");
             }
+            // Speso una volta che l'effetto e' andato a buon fine. Da qui in poi il
+            // mana e' perso comunque: se l'attacco successivo fallisce, non torna.
+            SpendMana(player, cost, events);
+            actor.AbilityUsedThisTurn = true;
             return events;
         }
+
+        /// <summary>
+        /// Abilita' suprema. Le supreme d'attacco (Mago, Cacciatore) consumano l'azione
+        /// d'attacco e chiudono l'attivazione; le altre no e lasciano la pedina libera
+        /// di attaccare, com'e' per le abilita' base. Vedi Docs/mana-design.md.
+        /// </summary>
+        public IReadOnlyList<PvpEvent> UseSupreme(int player, int targetPlayer, int targetSlot)
+        {
+            PvpCardState actor = RequireActiveCard(player);
+            HeroClass heroClass = actor.Card.HeroClass;
+
+            if (!AbilityManaCosts.IsSupremeImplemented(heroClass))
+                throw new PvpActionException(
+                    PvpActionErrorCodes.SupremeNotAvailable,
+                    $"La suprema di {heroClass} non è ancora disponibile.");
+
+            bool attackSupreme = AbilityManaCosts.IsAttackSupreme(heroClass);
+            // Per attivazione: una sola abilita' non-d'attacco, piu' una azione d'attacco.
+            if (!attackSupreme && actor.AbilityUsedThisTurn)
+                throw new PvpActionException(
+                    PvpActionErrorCodes.AbilityRequiresAction,
+                    "Hai già usato un'abilità in questa attivazione.");
+
+            int cost = players[player].Mana.CostOfSupreme(heroClass);
+            RequireAffordable(player, cost);
+
+            var events = new List<PvpEvent>();
+            int magnitude = ApplySupreme(actor, heroClass, targetPlayer, targetSlot, events);
+
+            SpendMana(player, cost, events);
+            // La Riserva del Paladino agisce dopo il pagamento: e' quello che la rende
+            // una soglia e non un guadagno secco (vedi Docs/mana-design.md).
+            if (heroClass == HeroClass.Paladin)
+                magnitude = ApplyManaReserve(actor, events);
+            players[player].Mana.RegisterSupremeUse(heroClass);
+            events.Add(new SupremeUsedEvent(
+                player,
+                actor.Slot,
+                heroClass,
+                AbilityManaCosts.SupremeOf(heroClass),
+                targetPlayer,
+                targetSlot,
+                magnitude));
+
+            if (attackSupreme)
+                EndTurn(events);
+            else
+                actor.AbilityUsedThisTurn = true;
+            return events;
+        }
+
+        private int ApplySupreme(
+            PvpCardState actor,
+            HeroClass heroClass,
+            int targetPlayer,
+            int targetSlot,
+            List<PvpEvent> events)
+        {
+            switch (heroClass)
+            {
+                case HeroClass.Warrior:
+                    return ApplyWarriorEmpower(actor);
+                case HeroClass.Rogue:
+                    return ApplyRogueStealBuffs(actor, targetPlayer, targetSlot);
+                case HeroClass.Mage:
+                case HeroClass.Hunter:
+                    return ApplyAreaStrike(actor, events);
+                case HeroClass.Barbarian:
+                    return ApplyWarHorn(actor);
+                case HeroClass.Paladin:
+                    // Applicata dopo la spesa, in UseSupreme: qui non c'e' nulla da fare.
+                    return 0;
+                case HeroClass.Priest:
+                    return ApplyDispel(actor);
+                case HeroClass.Assassin:
+                    return ApplyVanish(actor);
+                default:
+                    throw new PvpActionException(
+                        PvpActionErrorCodes.SupremeNotAvailable,
+                        $"La suprema di {heroClass} non è ancora disponibile.");
+            }
+        }
+
+        /// <summary>Guerriero: +2 permanente, +4 se e' rimasto solo. I due non si cumulano.</summary>
+        private int ApplyWarriorEmpower(PvpCardState actor)
+        {
+            int bonus = ActiveCount(players[actor.Owner].Board) <= 1 ? 4 : 2;
+            actor.PermanentCombatBonus += bonus;
+            return bonus;
+        }
+
+        /// <summary>
+        /// Ladro: ruba tutti i potenziamenti del bersaglio. Se non ne ha, gli sottrae
+        /// 2 di Potenza e se li prende: e' un furto, non una semplice riduzione.
+        /// </summary>
+        private int ApplyRogueStealBuffs(PvpCardState actor, int targetPlayer, int targetSlot)
+        {
+            PvpCardState target = RequireEnemyTarget(actor.Owner, targetPlayer, targetSlot);
+            int stolen = target.PendingAttackBonus + Math.Max(0, target.PermanentCombatBonus);
+            if (stolen > 0)
+            {
+                target.PendingAttackBonus = 0;
+                if (target.PermanentCombatBonus > 0)
+                    target.PermanentCombatBonus = 0;
+                target.PendingBonusKind = PvpPendingBonusKind.None;
+                actor.PermanentCombatBonus += stolen;
+                return stolen;
+            }
+
+            const int theft = 2;
+            target.PermanentCombatBonus -= theft;
+            actor.PermanentCombatBonus += theft;
+            return theft;
+        }
+
+        /// <summary>
+        /// Mago e Cacciatore: colpiscono tutte le pedine avversarie attive con il dado
+        /// vigore abbassato di uno step. La protezione del Paladino non si applica:
+        /// un colpo ad area raggiunge comunque tutti, non c'e' niente da deviare.
+        /// </summary>
+        private int ApplyAreaStrike(PvpCardState actor, List<PvpEvent> events)
+        {
+            int enemy = 1 - actor.Owner;
+            // Copia: la lista puo' cambiare durante gli scambi (spiriti, eliminazioni).
+            var targets = new List<PvpCardState>(players[enemy].Board);
+            // Un malus gia' subito (es. dal Mago avversario) si somma allo step
+            // dell'area invece di essere sovrascritto.
+            int carriedPenalty = actor.PendingVigorStepPenalty;
+            int hits = 0;
+            foreach (PvpCardState target in targets)
+            {
+                if (!target.IsActive || !actor.IsActive)
+                    continue;
+                // Il penalty viene consumato da ogni scambio: va rimesso per ciascun bersaglio.
+                actor.PendingVigorStepPenalty = carriedPenalty + 1;
+                ResolveExchange(actor, target, defenderAdvantage: false, isCounter: false, counterFlatBonus: 0, events);
+                hits++;
+            }
+            return hits;
+        }
+
+        /// <summary>Barbaro: la cornamusa potenzia tutto il party fino a fine round.</summary>
+        private int ApplyWarHorn(PvpCardState actor)
+        {
+            int bonus = rules.BarbarianRageBonus;
+            foreach (PvpCardState ally in players[actor.Owner].Board)
+            {
+                if (!ally.IsActive)
+                    continue;
+                ally.PendingAttackBonus += bonus;
+                // Furia e non Benedizione: la cornamusa vale anche in difesa.
+                ally.PendingBonusKind = PvpPendingBonusKind.Fury;
+            }
+            return bonus;
+        }
+
+        /// <summary>Paladino: la Riserva porta il mana alla soglia se e' sotto. Mai oltre.</summary>
+        private int ApplyManaReserve(PvpCardState actor, List<PvpEvent> events)
+        {
+            ManaPool pool = players[actor.Owner].Mana;
+            int gained = pool.RaiseTo(manaRules.PaladinReserveThreshold);
+            if (gained > 0)
+                events.Add(new ManaChangedEvent(actor.Owner, pool.Current, gained, ManaChangeReasons.Reserve));
+            return gained;
+        }
+
+        /// <summary>
+        /// Sacerdote: toglie i malus agli alleati e i potenziamenti agli avversari.
+        /// Non tocca le aure, che nascono dalla formazione e non da una giocata.
+        /// </summary>
+        private int ApplyDispel(PvpCardState actor)
+        {
+            int cleared = 0;
+            foreach (PvpCardState ally in players[actor.Owner].Board)
+            {
+                if (!ally.IsActive)
+                    continue;
+                if (ally.InhibitedTurns > 0) { ally.InhibitedTurns = 0; cleared++; }
+                if (ally.PendingVigorStepPenalty > 0) { ally.PendingVigorStepPenalty = 0; cleared++; }
+                if (ally.PermanentCombatBonus < 0) { ally.PermanentCombatBonus = 0; cleared++; }
+            }
+
+            int enemy = 1 - actor.Owner;
+            foreach (PvpCardState foe in players[enemy].Board)
+            {
+                if (!foe.IsActive)
+                    continue;
+                if (foe.PendingAttackBonus > 0)
+                {
+                    foe.PendingAttackBonus = 0;
+                    foe.PendingBonusKind = PvpPendingBonusKind.None;
+                    cleared++;
+                }
+                if (foe.PermanentCombatBonus > 0) { foe.PermanentCombatBonus = 0; cleared++; }
+                if (foe.IsUntargetable) { foe.IsUntargetable = false; cleared++; }
+            }
+            return cleared;
+        }
+
+        /// <summary>Assassino: diventa non bersagliabile e non decade.</summary>
+        private int ApplyVanish(PvpCardState actor)
+        {
+            actor.IsUntargetable = true;
+            return 1;
+        }
+
+        private static int ActiveCount(IReadOnlyList<PvpCardState> board)
+        {
+            int count = 0;
+            foreach (PvpCardState card in board)
+                if (card.IsActive)
+                    count++;
+            return count;
+        }
+
+        /// <summary>
+        /// L'invisibilita' protegge finche' l'Assassino non e' l'unica pedina attiva
+        /// del suo schieramento: a quel punto torna bersagliabile e difende con vantaggio.
+        /// </summary>
+        private bool IsShieldedByInvisibility(PvpCardState card) =>
+            card.IsUntargetable && ActiveCount(players[card.Owner].Board) > 1;
 
         public IReadOnlyList<PvpEvent> Attack(int player, int targetSlot)
         {
@@ -299,6 +561,8 @@ namespace AccardND.GameCore.Pvp
             PvpCardState defender = BoardCard(enemy, targetSlot);
             if (!defender.IsActive)
                 throw new PvpActionException("Il bersaglio è già eliminato.");
+            if (IsShieldedByInvisibility(defender))
+                throw new PvpActionException("Quel bersaglio non è raggiungibile: è invisibile.");
 
             var events = new List<PvpEvent>();
 
@@ -323,6 +587,10 @@ namespace AccardND.GameCore.Pvp
                 ConsumeProtection(defender);
                 defenderAdvantage = true;
             }
+
+            // Assassino invisibile rimasto solo: torna bersagliabile, ma difende con vantaggio.
+            if (defender.IsUntargetable)
+                defenderAdvantage = true;
 
             ResolveExchange(attacker, defender, defenderAdvantage, isCounter: false, counterFlatBonus: 0, events);
 
@@ -363,10 +631,21 @@ namespace AccardND.GameCore.Pvp
 
         public IReadOnlyList<PvpEvent> Pass(int player)
         {
-            RequireActiveCard(player);
+#if false // Regola precedente: obbligava ad attaccare dopo avere usato un'abilita'.
+            PvpCardState actor = RequireActiveCard(player);
+            if (actor.AbilityUsedThisTurn)
+                throw new PvpActionException(
+                    PvpActionErrorCodes.AbilityRequiresAction,
+                    "Dopo aver usato un'abilitÃ  devi attaccare o equipaggiarti.");
             var events = new List<PvpEvent>();
-            EndTurn(events);
+            EndTurn(events, skipped: true);
             return events;
+#endif
+            PvpCardState actor = RequireActiveCard(player);
+            bool actedBeforePassing = actor.AbilityUsedThisTurn;
+            var passEvents = new List<PvpEvent>();
+            EndTurn(passEvents, skipped: true, usedAbilityBeforeSkip: actedBeforePassing);
+            return passEvents;
         }
 
         public bool HasDecisiveChoice(int player) => players[ValidPlayer(player)].DecisiveChoice != null;
@@ -390,13 +669,26 @@ namespace AccardND.GameCore.Pvp
 
         private void StartRound(List<PvpEvent> events)
         {
-            foreach (PlayerState state in players)
+            for (int player = 0; player < players.Length; player++)
             {
+                PlayerState state = players[player];
                 state.Board.Clear();
                 state.Aura = PvpAuraType.None;
                 state.NecromancerSpiritUsed = false;
                 state.FormationAuraUsed = false;
                 state.DecisiveChoice = null;
+                // Il mana attraversa i round: si azzerano solo i contatori di
+                // ripetizione, e la riserva risale al pavimento se e' sotto.
+                int before = state.Mana.Current;
+                state.Mana.StartRound();
+				// Invia sempre il valore assoluto: al primo round il pool nasce gia' a
+				// RunStart e quindi il delta e' zero, ma il client deve comunque sapere
+				// che la partita comincia con quella riserva.
+				events.Add(new ManaChangedEvent(
+					player,
+					state.Mana.Current,
+					state.Mana.Current - before,
+					ManaChangeReasons.RoundFloor));
             }
             turnOrder.Clear();
             turnIndex = 0;
@@ -543,18 +835,84 @@ namespace AccardND.GameCore.Pvp
                     AdvanceTurnIndex();
                     continue;
                 }
+				// Le abilita' primarie sono riutilizzabili: il mana e' il loro limite.
+				// AbilityArmed resta separato per gli effetti ancora in attesa di risolversi.
+				card.AbilityUsed = false;
                 events.Add(new TurnStartedEvent(card.Owner, card.Slot, cycle));
                 return;
             }
         }
 
-        private void EndTurn(List<PvpEvent> events)
+        private void EndTurn(
+            List<PvpEvent> events,
+            bool skipped = false,
+            bool usedAbilityBeforeSkip = false)
         {
             PvpCardState card = turnOrder[turnIndex];
+            card.AbilityUsedThisTurn = false;
+            // Recupero di fine attivazione: +3 se la pedina ha rinunciato del tutto.
+            // Le pedine evocate non generano mana (vedi Docs/mana-design.md).
+            int reward = ManaActionPolicy.ActivationReward(
+                manaRules,
+                skipped,
+                usedAbilityBeforeSkip);
+            if (!card.IsSpirit && reward > 0)
+                GainMana(card.Owner, reward,
+                    skipped ? ManaChangeReasons.Skip : ManaChangeReasons.Activation, events);
             ExpireSpiritIfNeeded(card, events);
             if (CheckRoundEnd(events))
                 return;
             BeginTurn(events, advanceFirst: true);
+        }
+
+        // --- Mana ---
+
+        private void GainMana(int player, int amount, string reason, List<PvpEvent> events)
+        {
+            ManaPool pool = players[player].Mana;
+            int gained = pool.Gain(amount);
+            if (gained > 0)
+                events.Add(new ManaChangedEvent(player, pool.Current, gained, reason));
+        }
+
+        private void RequireAffordable(int player, int cost)
+        {
+            ManaPool pool = players[player].Mana;
+            if (!pool.CanAfford(cost))
+                throw new PvpActionException(
+                    PvpActionErrorCodes.NotEnoughMana,
+                    $"Mana insufficiente: servono {cost} rune, ne hai {pool.Current}.");
+        }
+
+        private void SpendMana(int player, int cost, List<PvpEvent> events)
+        {
+            RequireAffordable(player, cost);
+            ManaPool pool = players[player].Mana;
+            pool.Spend(cost);
+            events.Add(new ManaChangedEvent(player, pool.Current, -cost, ManaChangeReasons.Spend));
+        }
+
+        /// <summary>
+        /// Mana da parata: ogni volta che la pedina regge uno scontro reale senza
+        /// perdere vite, il suo proprietario guadagna mana.
+        /// </summary>
+        private void GainParryMana(PvpCardState defender, List<PvpEvent> events)
+        {
+            if (defender.IsSpirit)
+                return;
+            GainMana(defender.Owner, manaRules.GainOnParry, ManaChangeReasons.Parry, events);
+        }
+
+        /// <summary>
+        /// Un'eliminazione paga entrambi: chi uccide e chi perde la pedina. Il secondo
+        /// compensa la perdita di un generatore di mana ed e' l'anti-valanga del sistema.
+        /// </summary>
+        private void GainEliminationMana(PvpCardState killer, PvpCardState victim, List<PvpEvent> events)
+        {
+            if (killer != null)
+                GainMana(killer.Owner, manaRules.GainOnKill, ManaChangeReasons.Kill, events);
+            if (!victim.IsAttachment)
+                GainMana(victim.Owner, manaRules.GainOnLoss, ManaChangeReasons.Loss, events);
         }
 
         private void ExpireSpiritIfNeeded(PvpCardState card, List<PvpEvent> events)
@@ -640,11 +998,19 @@ namespace AccardND.GameCore.Pvp
                 ? new CombatModifiers(
                     sumAttackerVigor: false,
                     defenderAdvantage: false,
-                    rerollAttackerOnes: rules.RogueRerollsOnes && attacker.Card.HeroClass == HeroClass.Rogue,
-                    rerollAttackerTwos: players[attacker.Owner].Aura == PvpAuraType.Rogue && attacker.Card.HeroClass == HeroClass.Rogue,
+                    rerollAttackerOnes: false,
+                    rerollAttackerTwos: false,
                     attackerFlatBonus: counterFlatBonus,
-                    rerollDefenderOnes: rules.RogueRerollsOnes && defender.Card.HeroClass == HeroClass.Rogue,
-                    rerollDefenderTwos: players[defender.Owner].Aura == PvpAuraType.Rogue && defender.Card.HeroClass == HeroClass.Rogue)
+                    rerollDefenderOnes: false,
+                    rerollDefenderTwos: false,
+                    attackerConditionalRerollMax: (rules.RogueRerollsOnes || players[attacker.Owner].Aura == PvpAuraType.Rogue)
+                        && attacker.Card.HeroClass == HeroClass.Rogue
+                        ? RogueConditionalRerollMaximum(baseDie)
+                        : 0,
+                    defenderConditionalRerollMax: players[defender.Owner].Aura == PvpAuraType.Rogue
+                        && defender.Card.HeroClass == HeroClass.Rogue
+                        ? RogueConditionalRerollMaximum(baseDie)
+                        : 0)
                 : BuildAttackModifiers(attacker, defender, defenderAdvantage);
 
             CombatCertainty certainty = CombatCertaintyCalculator.Evaluate(
@@ -711,7 +1077,11 @@ namespace AccardND.GameCore.Pvp
             {
                 ApplyMageAuraDeathPenalty(defender, attacker, events);
                 ApplyMightAuraDeathBonuses(events);
+                GainEliminationMana(attacker, defender, events);
             }
+            bool defenderParried = !defenderEliminated
+                && certainty != CombatCertainty.Impossible
+                && !defenderLostLife;
 
             events.Add(new AttackResolvedEvent(
                 attacker.Owner,
@@ -731,6 +1101,11 @@ namespace AccardND.GameCore.Pvp
                 becameSpirit,
                 overkill,
                 isCounter));
+
+            // L'evento mana segue la risoluzione: la UI presenta prima la parata e
+            // accredita il premio soltanto al termine della relativa animazione.
+            if (defenderParried)
+                GainParryMana(defender, events);
         }
 
         private CombatModifiers BuildAttackModifiers(
@@ -739,16 +1114,23 @@ namespace AccardND.GameCore.Pvp
             PlayerState attackerTeam = players[attacker.Owner];
             PlayerState defenderTeam = players[defender.Owner];
             int attackerFlat = attacker.PendingAttackBonus + attacker.PermanentCombatBonus;
+            attackerFlat += MarkBonusForTarget(defender);
+            int defenderFlat = defender.PermanentCombatBonus + defender.PendingDefenseBonus;
+
+            // L'aura del Guerriero confronta la Potenza effettiva nello scontro,
+            // non il valore base stampato sulla carta. Il confronto deve quindi
+            // includere benedizioni applicabili, equipaggiamenti, malus e gli altri
+            // bonus gia' attivi, ma non il +2 dell'aura stessa.
+            int attackerEffectiveStrength = attacker.Card.Strength + attackerFlat;
+            int defenderEffectiveStrength = defender.Card.Strength + defenderFlat;
             if (attackerTeam.Aura == PvpAuraType.Warrior
                 && attacker.Card.HeroClass == HeroClass.Warrior
-                && attacker.Card.Strength < defender.Card.Strength)
+                && attackerEffectiveStrength < defenderEffectiveStrength)
                 attackerFlat += 2;
-            attackerFlat += MarkBonusForTarget(defender);
 
-            int defenderFlat = defender.PermanentCombatBonus + defender.PendingDefenseBonus;
             if (defenderTeam.Aura == PvpAuraType.Warrior
                 && defender.Card.HeroClass == HeroClass.Warrior
-                && defender.Card.Strength < attacker.Card.Strength)
+                && defenderEffectiveStrength < attackerEffectiveStrength)
                 defenderFlat += 2;
 
             bool forceAdvantage = attackerTeam.Aura == PvpAuraType.Cunning
@@ -757,24 +1139,44 @@ namespace AccardND.GameCore.Pvp
 
             bool neutralize = false;
             if (attackerTeam.Aura == PvpAuraType.Formation
-                && !attackerTeam.FormationAuraUsed
                 && ClassMatchup.Compare(attacker.Card.HeroClass, defender.Card.HeroClass) == MatchupResult.Disadvantage)
             {
                 neutralize = true;
-                attackerTeam.FormationAuraUsed = true;
             }
 
             return new CombatModifiers(
                 sumAttackerVigor: attacker.AbilityArmed && attacker.Card.HeroClass == HeroClass.Warrior,
                 defenderAdvantage: defenderAdvantage,
-                rerollAttackerOnes: rules.RogueRerollsOnes && attacker.Card.HeroClass == HeroClass.Rogue,
-                rerollAttackerTwos: attackerTeam.Aura == PvpAuraType.Rogue && attacker.Card.HeroClass == HeroClass.Rogue,
+                rerollAttackerOnes: false,
+                rerollAttackerTwos: false,
                 attackerFlatBonus: attackerFlat,
                 defenderFlatBonus: defenderFlat,
                 neutralizeAttackerMatchup: neutralize,
                 forceAttackerAdvantage: forceAdvantage,
-                rerollDefenderOnes: rules.RogueRerollsOnes && defender.Card.HeroClass == HeroClass.Rogue,
-                rerollDefenderTwos: defenderTeam.Aura == PvpAuraType.Rogue && defender.Card.HeroClass == HeroClass.Rogue);
+                rerollDefenderOnes: false,
+                rerollDefenderTwos: false,
+                attackerConditionalRerollMax: (rules.RogueRerollsOnes || attackerTeam.Aura == PvpAuraType.Rogue)
+                    && attacker.Card.HeroClass == HeroClass.Rogue
+                    ? RogueConditionalRerollMaximum(rules.VigorDieForRound(MatchRound))
+                    : 0,
+                defenderConditionalRerollMax: defenderTeam.Aura == PvpAuraType.Rogue
+                    && defender.Card.HeroClass == HeroClass.Rogue
+                    ? RogueConditionalRerollMaximum(rules.VigorDieForRound(MatchRound))
+                    : 0);
+        }
+
+        private static int RogueConditionalRerollMaximum(int attackerDieForReroll)
+        {
+            return attackerDieForReroll switch
+            {
+                4 => 1,
+                6 => 2,
+                8 => 3,
+                10 => 4,
+                12 => 5,
+                20 => 6,
+                _ => 0
+            };
         }
 
         private void ApplyPostAttackState(PvpCardState attacker, PvpCardState defender, bool defeatedTarget, List<PvpEvent> events)

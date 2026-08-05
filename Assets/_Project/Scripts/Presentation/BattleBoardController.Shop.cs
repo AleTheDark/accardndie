@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using AccardND.GameData;
 using AccardND.NetProtocol;
 using UnityEngine;
 using UnityEngine.Events;
@@ -18,6 +19,11 @@ public sealed partial class BattleBoardController
 	private GameObject shopEmptyState;
 	private Text shopEmptyText;
 	private Button shopSanctuaryButton;
+	private GameObject shopPurchaseConfirmation;
+	private Text shopPurchaseConfirmationText;
+	private Button shopPurchaseConfirmButton;
+	private SanctuaryEntryData pendingShopPurchaseEntry;
+	private string pendingShopPurchaseOfferId;
 	private readonly List<GameObject> shopDynamicObjects = new();
 	private bool shopLoading;
 	private bool shopPurchasing;
@@ -76,7 +82,7 @@ public sealed partial class BattleBoardController
 		SetRect(shopStatusText.rectTransform, new Vector2(0.08f, 0.73f), new Vector2(0.92f, 0.785f));
 
 		shopOffersRoot = CreateShopSection(root.transform, fallbackFont, "OFFERTE DEL MERCANTE",
-			new Vector2(0.055f, 0.465f), new Vector2(0.945f, 0.715f));
+			new Vector2(0.04f, 0.465f), new Vector2(0.96f, 0.715f));
 		shopCatalogRoot = CreateShopSection(root.transform, fallbackFont, "CATALOGO",
 			new Vector2(0.055f, 0.125f), new Vector2(0.945f, 0.445f));
 
@@ -102,7 +108,7 @@ public sealed partial class BattleBoardController
 		shopEmptyText.color = ShopBody;
 		SetRect(shopEmptyText.rectTransform, new Vector2(0.08f, 0.38f), new Vector2(0.92f, 0.72f));
 		shopSanctuaryButton = CreateButton("Shop Go Sanctuary", emptyPanel.transform, fallbackFont, "VAI AL SANTUARIO");
-		ApplyRankedPurpleCtaWithoutEffects(shopSanctuaryButton);
+		ApplyShopCampaignCta(shopSanctuaryButton);
 		shopSanctuaryButton.onClick.AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
@@ -110,8 +116,8 @@ public sealed partial class BattleBoardController
 			ShowSanctuary();
 			SelectSanctuaryAltar(SanctuaryAltar.Relics);
 		});
-		// Stesso formato della CTA "Prepara la bisaccia", ridotto del 10%.
-		SetRect((RectTransform)shopSanctuaryButton.transform, new Vector2(0.194f, 0.14425f), new Vector2(0.806f, 0.22075f));
+		// Larghezza ridotta del 10% rispetto alla CTA della bisaccia; altezza aumentata del 10%.
+		SetRect((RectTransform)shopSanctuaryButton.transform, new Vector2(0.194f, 0.140425f), new Vector2(0.806f, 0.224575f));
 
 		Button bag = CreateButton("Shop Prepare Bag", emptyPanel.transform, fallbackFont, "PREPARA LA BISACCIA");
 		ApplyRankedPurpleCtaWithoutEffects(bag);
@@ -130,7 +136,59 @@ public sealed partial class BattleBoardController
 		});
 		SetRect((RectTransform)bag.transform, new Vector2(0.16f, 0.045f), new Vector2(0.84f, 0.13f));
 
+		CreateShopPurchaseConfirmation(root.transform, fallbackFont);
+
 		shopPanel.SetActive(false);
+	}
+
+	private void CreateShopPurchaseConfirmation(Transform parent, Font fallbackFont)
+	{
+		Image overlay = CreateImage("Shop Purchase Confirmation", parent, new Color(0f, 0f, 0f, 0.82f));
+		shopPurchaseConfirmation = overlay.gameObject;
+		overlay.raycastTarget = true;
+		SetRect(overlay.rectTransform, Vector2.zero, Vector2.one);
+
+		Image dialog = CreateImage("Shop Purchase Dialog", overlay.transform, Color.white);
+		dialog.sprite = LoadSpriteResource("UI/Common/merchant_rock_panel_aaa");
+		dialog.type = Image.Type.Sliced;
+		SetRect(dialog.rectTransform, new Vector2(0.18f, 0.27f), new Vector2(0.82f, 0.7f));
+
+		Text title = CreateText("Shop Purchase Title", dialog.transform,
+			AccardND.Battlefield.MmoUiTheme.TitleFont ?? fallbackFont, 30,
+			FontStyle.Normal, TextAnchor.MiddleCenter);
+		title.text = "CONFERMA ACQUISTO";
+		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(title);
+		title.color = ShopGold;
+		SetRect(title.rectTransform, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.94f));
+
+		shopPurchaseConfirmationText = CreateText("Shop Purchase Copy", dialog.transform,
+			AccardND.Battlefield.MmoUiTheme.BodyFont ?? fallbackFont, 22,
+			FontStyle.Normal, TextAnchor.MiddleCenter);
+		shopPurchaseConfirmationText.color = ShopBody;
+		SetRect(shopPurchaseConfirmationText.rectTransform, new Vector2(0.08f, 0.32f), new Vector2(0.92f, 0.72f));
+
+		Button cancel = CreateButton("Shop Purchase Cancel", dialog.transform, fallbackFont, "ANNULLA");
+		ApplyRankedPurpleCtaWithoutEffects(cancel);
+		Image cancelImage = cancel.GetComponent<Image>();
+		if ((Object)(object)cancelImage != (Object)null)
+			cancelImage.preserveAspect = false;
+		cancel.onClick.AddListener((UnityAction)delegate
+		{
+			PlayGenericButtonClickSfx();
+			HideShopPurchaseConfirmation();
+		});
+		SetRect((RectTransform)cancel.transform, new Vector2(0.08f, 0.08f), new Vector2(0.46f, 0.28f));
+
+		shopPurchaseConfirmButton = CreateButton("Shop Purchase Confirm", dialog.transform, fallbackFont, "CONFERMA");
+		ApplyShopCampaignCta(shopPurchaseConfirmButton);
+		shopPurchaseConfirmButton.onClick.AddListener((UnityAction)delegate
+		{
+			PlayGenericButtonClickSfx();
+			ConfirmShopPurchase();
+		});
+		SetRect((RectTransform)shopPurchaseConfirmButton.transform, new Vector2(0.54f, 0.08f), new Vector2(0.92f, 0.28f));
+
+		shopPurchaseConfirmation.SetActive(false);
 	}
 
 	private static void ApplyShopCampaignCta(Button button)
@@ -175,11 +233,15 @@ public sealed partial class BattleBoardController
 		panel.type = Image.Type.Sliced;
 		SetRect(panel.rectTransform, minimum, maximum);
 		Text label = CreateText(heading + " Label", panel.transform,
-			AccardND.Battlefield.MmoUiTheme.TitleFont ?? font, 20, FontStyle.Normal, TextAnchor.MiddleLeft);
+			AccardND.Battlefield.MmoUiTheme.TitleFont ?? font, 22, FontStyle.Normal, TextAnchor.MiddleCenter);
 		label.text = heading;
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(label);
 		label.color = ShopGold;
-		SetRect(label.rectTransform, new Vector2(0.035f, 0.86f), new Vector2(0.96f, 1.02f));
+		// Tieni entrambe le intestazioni dentro la cornice di pietra. Quella delle
+		// offerte va leggermente piu' in basso per compensare il bordo superiore.
+		float labelMinY = heading.StartsWith("OFFERTE") ? 0.79f : 0.83f;
+		float labelMaxY = heading.StartsWith("OFFERTE") ? 0.95f : 0.99f;
+		SetRect(label.rectTransform, new Vector2(0.035f, labelMinY), new Vector2(0.965f, labelMaxY));
 		Image content = CreateImage(heading + " Content", panel.transform, Color.clear);
 		SetRect(content.rectTransform, new Vector2(0.035f, 0.08f), new Vector2(0.965f, 0.84f));
 		return content.rectTransform;
@@ -202,6 +264,7 @@ public sealed partial class BattleBoardController
 
 	private void HideShop(bool openHub = true)
 	{
+		HideShopPurchaseConfirmation();
 		if ((Object)(object)shopPanel != (Object)null)
 			shopPanel.SetActive(false);
 		if (openHub)
@@ -253,7 +316,7 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		SetShopStatus($"Miele disponibile: {sanctuaryData.honey:n0}  •  Prezzi bassi e quantità ancora più basse!");
+		SetShopStatus(string.Empty);
 		ShopOfferData[] offers = sanctuaryData.shopOffers ?? Array.Empty<ShopOfferData>();
 		for (int index = 0; index < offers.Length; index++)
 		{
@@ -269,29 +332,41 @@ public sealed partial class BattleBoardController
 	private void CreateShopTile(
 		RectTransform parent, SanctuaryEntryData entry, ShopOfferData offer, int index, int columns)
 	{
+		bool isOffer = parent == shopOffersRoot;
+		bool isSingleOffer = isOffer && columns == 1;
 		int row = index / columns;
 		int column = index % columns;
 		float gap = 0.018f;
-		float width = (1f - gap * (columns - 1)) / columns;
-		float height = parent == shopOffersRoot ? 1f : 0.47f;
+		float horizontalInset = isOffer ? 0f : 0.012f;
+		int layoutColumns = isSingleOffer ? 3 : columns;
+		float availableWidth = 1f - horizontalInset * 2f;
+		float width = (availableWidth - gap * (layoutColumns - 1)) / layoutColumns;
+		float height = isOffer ? 1f : 0.47f;
 		float top = 1f - row * (height + 0.055f);
-		Image tile = CreateImage("Shop Item " + entry.id, parent, new Color(0.025f, 0.035f, 0.045f, 0.96f));
-		tile.sprite = LoadSpriteResource("UI/MultiplayerRestyle/ornate_panel_frame");
-		tile.type = Image.Type.Sliced;
+		float left = isSingleOffer
+			? (1f - width) * 0.5f
+			: horizontalInset + column * (width + gap);
+		Image tile = CreateImage("Shop Item " + entry.id, parent, Color.white);
+		// Catalogo e offerte condividono il frame dedicato agli item del Santuario.
+		tile.sprite = LoadSpriteResource("UI/Sanctuary/santuary_items");
+		tile.type = Image.Type.Simple;
+		tile.preserveAspect = false;
 		SetRect(tile.rectTransform,
-			new Vector2(column * (width + gap), top - height),
-			new Vector2(column * (width + gap) + width, top));
+			new Vector2(left, top - height),
+			new Vector2(left + width, top));
 		shopDynamicObjects.Add(tile.gameObject);
 
 		Image icon = CreateImage(entry.id + " Icon", tile.transform, Color.white);
 		icon.sprite = ShopItemSprite(entry.id);
 		icon.preserveAspect = true;
+		icon.raycastTarget = false;
 		SetRect(icon.rectTransform, new Vector2(0.08f, 0.39f), new Vector2(0.92f, 0.94f));
 
 		Text name = CreateText(entry.id + " Name", tile.transform,
 			AccardND.Battlefield.MmoUiTheme.TitleFont, 16, FontStyle.Normal, TextAnchor.MiddleCenter);
 		name.text = entry.name.ToUpperInvariant();
 		name.color = ShopGold;
+		name.raycastTarget = false;
 		SetRect(name.rectTransform, new Vector2(0.04f, 0.25f), new Vector2(0.96f, 0.43f));
 
 		int owned = sanctuaryData.stash?.FirstOrDefault(item => item.itemId == entry.id)?.count ?? 0;
@@ -306,18 +381,52 @@ public sealed partial class BattleBoardController
 		info.supportRichText = true;
 		info.text = price;
 		info.color = offer != null && offer.remaining > 0 ? new Color(0.55f, 0.9f, 0.62f) : ShopBody;
+		info.raycastTarget = false;
 		SetRect(info.rectTransform, new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.27f));
 
 		Button button = tile.gameObject.AddComponent<Button>();
+		tile.raycastTarget = true;
 		button.targetGraphic = tile;
-		bool available = !shopPurchasing && cost > 0 && sanctuaryData.honey >= cost && (offer == null || offer.remaining > 0);
+		bool available = !shopPurchasing && cost > 0 && (offer == null || offer.remaining > 0);
 		button.interactable = available;
 		string offerId = offer?.offerId;
 		button.onClick.AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
-			BuyShopItem(entry, offerId);
+			ShowShopPurchaseConfirmation(entry, offerId, cost);
 		});
+	}
+
+	private void ShowShopPurchaseConfirmation(SanctuaryEntryData entry, string offerId, int cost)
+	{
+		if (shopPurchasing || entry == null || (Object)(object)shopPurchaseConfirmation == (Object)null)
+			return;
+
+		pendingShopPurchaseEntry = entry;
+		pendingShopPurchaseOfferId = offerId;
+		int currentHoney = sanctuaryData != null ? sanctuaryData.honey : singlePlayerProgressService.Honey;
+		int remainingHoney = Mathf.Max(0, currentHoney - cost);
+		shopPurchaseConfirmationText.text =
+			$"Vuoi comprare {entry.name} per {cost:n0} miele?\n\nSaldo dopo l'acquisto: {remainingHoney:n0}";
+		shopPurchaseConfirmButton.interactable = currentHoney >= cost;
+		shopPurchaseConfirmation.SetActive(true);
+		shopPurchaseConfirmation.transform.SetAsLastSibling();
+	}
+
+	private void HideShopPurchaseConfirmation()
+	{
+		pendingShopPurchaseEntry = null;
+		pendingShopPurchaseOfferId = null;
+		if ((Object)(object)shopPurchaseConfirmation != (Object)null)
+			shopPurchaseConfirmation.SetActive(false);
+	}
+
+	private void ConfirmShopPurchase()
+	{
+		SanctuaryEntryData entry = pendingShopPurchaseEntry;
+		string offerId = pendingShopPurchaseOfferId;
+		HideShopPurchaseConfirmation();
+		BuyShopItem(entry, offerId);
 	}
 
 	private async void BuyShopItem(SanctuaryEntryData entry, string offerId)
@@ -325,17 +434,19 @@ public sealed partial class BattleBoardController
 		if (shopPurchasing || entry == null)
 			return;
 		shopPurchasing = true;
-		SetShopStatus($"Il mercante prepara {entry.name}...");
 		RefreshShop();
+		SetShopStatus($"Il mercante prepara {entry.name}...");
+		string finalStatus;
 		try
 		{
 			sanctuaryData = await serverProgress.BuySanctuaryItemAsync(entry.id, offerId);
-			SetShopStatus($"Affare fatto! {entry.name} è nella tua scorta.");
+			SyncShopHoneyToHud();
+			finalStatus = $"Affare fatto! {entry.name} è nella tua scorta.";
 			RefreshAccountBannerView();
 		}
 		catch (Exception exception)
 		{
-			SetShopStatus("Affare saltato: " + exception.Message);
+			finalStatus = "Affare saltato: " + exception.Message;
 			AppendLog("NEGOZIO - acquisto fallito: " + exception.Message);
 		}
 		finally
@@ -343,6 +454,26 @@ public sealed partial class BattleBoardController
 			shopPurchasing = false;
 		}
 		RefreshShop();
+		SetShopStatus(finalStatus);
+	}
+
+	private void SyncShopHoneyToHud()
+	{
+		if (sanctuaryData == null)
+			return;
+
+		SinglePlayerProgressSave localSnapshot = JsonUtility.FromJson<SinglePlayerProgressSave>(
+			JsonUtility.ToJson(singlePlayerProgressService.Progress));
+		localSnapshot.honey = Mathf.Max(0, sanctuaryData.honey);
+		singlePlayerProgressService.ApplyAuthoritative(localSnapshot);
+
+		if (serverProgress != null)
+		{
+			SinglePlayerProgressSave serverSnapshot = JsonUtility.FromJson<SinglePlayerProgressSave>(
+				JsonUtility.ToJson(serverProgress.Progress));
+			serverSnapshot.honey = localSnapshot.honey;
+			serverProgress.ApplyAuthoritative(serverSnapshot);
+		}
 	}
 
 	private Sprite ShopItemSprite(string itemId)

@@ -15,6 +15,7 @@ namespace AccardND.Battlefield
         private AudioClip genericButtonClickSfx;
         private AudioClip rollingDiceSfx;
         private AudioClip drawCardSfx;
+        private AudioClip manaGainSfx;
         private AudioClip footstepSfx;
         private AudioClip detectorItemUseSfx;
         private AudioClip empowerItemUseSfx;
@@ -37,6 +38,8 @@ namespace AccardND.Battlefield
         private AudioClip necromancerAbilitySfx;
         private AudioClip priestAbilitySfx;
         private AudioClip warriorAbilitySfx;
+        private AudioClip warriorSupremeSfx;
+        private AudioClip mageSupremeSfx;
         private AudioClip assassinAttackHitSfx;
         private AudioClip assassinAttackBlockedSfx;
         private AudioClip warriorAttackHitSfx;
@@ -117,6 +120,8 @@ namespace AccardND.Battlefield
 
         public void PlayDrawCard() => PlayClip(drawCardSfx);
 
+        public void PlayManaGain() => PlayClip(manaGainSfx);
+
         public void PlayFootstep() => PlayClip(footstepSfx);
 
         public void PlayDetectorItemUse() => PlayClip(detectorItemUseSfx);
@@ -175,6 +180,10 @@ namespace AccardND.Battlefield
             PlayClip(abilitySfx);
         }
 
+        public void PlayWarriorSupreme() => PlayClip(warriorSupremeSfx);
+
+        public void PlayMageSupreme() => PlayClip(mageSupremeSfx);
+
         public void PlayAttackResult(HeroClass heroClass, bool hit)
         {
             AudioClip attackSfx = heroClass switch
@@ -217,6 +226,7 @@ namespace AccardND.Battlefield
             genericButtonClickSfx = LoadSfx("generic_button_click");
             rollingDiceSfx = LoadSfx("rolling_dice");
             drawCardSfx = LoadSfx("draw_card");
+            manaGainSfx = LoadSfx("mana_gain");
             footstepSfx = LoadSfx("footstep");
             detectorItemUseSfx = LoadSfx("detector_item_use");
             empowerItemUseSfx = LoadSfx("empower_item_use");
@@ -239,6 +249,8 @@ namespace AccardND.Battlefield
             necromancerAbilitySfx = LoadSfx("necromancer_ability");
             priestAbilitySfx = LoadSfx("priest_ability");
             warriorAbilitySfx = LoadSfx("warrior_ability");
+            warriorSupremeSfx = LoadSfx("warrior_supreme");
+            mageSupremeSfx = LoadSfx("mage_supreme");
             assassinAttackHitSfx = LoadSfx("assassin_attack_hit");
             assassinAttackBlockedSfx = LoadSfx("assassin_attack_blocked");
             warriorAttackHitSfx = LoadSfx("warrior_attack_hit");

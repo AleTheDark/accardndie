@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using AccardND.GameCore;
 using AccardND.GameCore.Pvp;
+using AccardND.GameCore.Mana;
 using AccardND.Presentation;
 using UnityEngine;
 
@@ -42,7 +43,6 @@ namespace AccardND.Battlefield
             };
 
         public static bool HasActivatableAbility(HeroClass heroClass) =>
-            heroClass != HeroClass.Barbarian
-            && heroClass != HeroClass.Rogue;
+            ManaActionPolicy.HasActivatablePrimary(heroClass);
     }
 }

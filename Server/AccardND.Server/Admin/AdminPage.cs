@@ -108,6 +108,17 @@ tbody tr:hover{background:var(--panel2)}
 .chips{display:flex;gap:.4em;flex-wrap:wrap}
 .qtitle{font-weight:600}
 .qdesc{color:var(--muted);font-size:12px}
+
+/* Sblocchi a mano (account di prova) */
+.ugroup{margin:.9em 0}
+.uhead{font-size:12px;font-weight:600;margin-bottom:.4em}
+.uhead span{font-weight:400;font-size:11px}
+.utoggle{display:inline-flex;align-items:center;gap:.45em;cursor:pointer;font-size:12px;
+  background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:.35em .6em}
+.utoggle.on{border-color:var(--green);color:var(--green)}
+.utoggle.locked{opacity:.55;cursor:not-allowed}
+.utoggle input{margin:0}
+.utoggle em{color:var(--muted);font-style:normal;font-size:11px}
 @media(max-width:640px){.grid2{grid-template-columns:1fr}}
 </style>
 </head>
@@ -140,6 +151,7 @@ tbody tr:hover{background:var(--panel2)}
     <button data-tab="quests">Quest taverna</button>
     <button data-tab="matches">Partite PvP</button>
     <button data-tab="seasons">Stagioni</button>
+    <button data-tab="version">Versione client</button>
   </nav>
   <main>
     <div id="tab-overview" class="tab">
@@ -232,11 +244,77 @@ tbody tr:hover{background:var(--panel2)}
     </div>
 
     <div id="tab-seasons" class="tab hidden">
-      <section class="panel">
+      <section class="panel" id="seasonsList">
         <h2>Stagioni</h2>
         <table><thead><tr>
           <th>ID</th><th>Nome</th><th>Inizio</th><th>Fine</th><th>Attiva</th><th>Match</th><th>Giocatori</th>
         </tr></thead><tbody id="seasonsBody"></tbody></table>
+        <p class="muted" style="font-size:12px">Clicca una stagione per vedere la classifica dei giocatori.</p>
+      </section>
+      <div id="seasonDetail" class="hidden">
+        <div class="toolbar" style="margin-bottom:.8em">
+          <button id="seasonBack">← Tutte le stagioni</button>
+          <h2 style="margin:0" id="seasonTitle"></h2>
+          <span id="seasonBadge"></span>
+          <span class="spacer"></span>
+          <span class="muted" id="seasonDates"></span>
+        </div>
+        <section class="kpis" id="seasonKpis"></section>
+        <section class="panel">
+          <div class="toolbar">
+            <h2 style="margin:0">Classifica</h2>
+            <span class="spacer"></span>
+            <span class="muted" id="seasonPlayersCount"></span>
+          </div>
+          <table><thead><tr id="seasonHead">
+            <th data-ssort="rank">#</th><th data-ssort="username">Giocatore</th>
+            <th data-ssort="tier">Tier</th><th data-ssort="mmr">MMR</th>
+            <th data-ssort="matches">Match</th><th data-ssort="wins">Vittorie</th>
+            <th data-ssort="losses">Sconfitte</th><th data-ssort="winRatePercent">Win rate</th>
+            <th data-ssort="bestStreak">Miglior streak</th><th data-ssort="lastMatchAt">Ultima partita</th>
+          </tr></thead><tbody id="seasonBody"></tbody></table>
+          <p class="muted" style="font-size:12px">
+            Match, vittorie e sconfitte contano tutte le partite della stagione; la posizione
+            e il tier vengono dall'MMR ranked, quindi chi ha giocato solo amichevoli resta
+            senza posizione.
+          </p>
+        </section>
+      </div>
+    </div>
+
+    <div id="tab-version" class="tab hidden">
+      <section class="panel">
+        <h2>Versione client richiesta</h2>
+        <p class="muted" style="margin-top:-.2em">
+          Chi accede con una versione diversa resta sulla schermata di login con
+          l'avviso di aggiornare. Il valore vale dal salvataggio: chi sta già
+          giocando non viene disconnesso.
+        </p>
+        <div id="versionState" class="field" style="margin:.9em 0"></div>
+        <div class="grid2">
+          <div class="row">
+            <label class="muted" style="font-size:12px">Versione target</label><br>
+            <input id="versionTarget" placeholder="0.9.3" style="width:100%;margin-top:.3em">
+          </div>
+          <div class="row">
+            <label class="muted" style="font-size:12px">Link di aggiornamento</label><br>
+            <input id="versionUrl" placeholder="https://accardndie.com" style="width:100%;margin-top:.3em">
+          </div>
+        </div>
+        <label style="display:inline-flex;align-items:center;gap:.5em;margin-top:.9em;cursor:pointer">
+          <input type="checkbox" id="versionEnforce" style="width:auto">
+          <span>Blocca l'accesso ai client con versione diversa</span>
+        </label>
+        <div class="actions">
+          <button class="primary" id="versionSave">Salva</button>
+          <button id="versionReset">Torna alla configurazione di avvio</button>
+        </div>
+        <p class="muted" style="font-size:12px">
+          Pubblica <strong>prima</strong> la build nuova, poi alza qui la versione:
+          al contrario chiudi fuori tutti finché la build non è online. Se ti chiudi
+          fuori da solo, "Torna alla configurazione di avvio" ripristina il valore
+          con cui è partito il server.
+        </p>
       </section>
     </div>
   </main>
@@ -296,7 +374,8 @@ async function showApp(){
 }
 
 /* ---- Tabs ---- */
-const LOADERS={overview:loadOverview,players:loadPlayers,quests:loadQuests,matches:loadMatches,seasons:loadSeasons};
+const LOADERS={overview:loadOverview,players:loadPlayers,quests:loadQuests,matches:loadMatches,
+  seasons:loadSeasons,version:loadVersion};
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
   b.classList.add('active');
@@ -466,6 +545,9 @@ async function openPlayer(id){
       <button class="danger" data-act="delete">Elimina account</button>
     </div>`;
 
+  /* Sblocchi a mano: il riquadro si ridisegna da solo a ogni modifica. */
+  html+=sub('Sblocchi a mano (account di prova)')+`<div id="unlockBox"></div>`;
+
   /* Taverna */
   html+=sub('Taverna · quest di oggi ('+tv.day+' UTC)');
   if(tv.quests.length){
@@ -567,6 +649,49 @@ async function openPlayer(id){
   el('modalBox').innerHTML=html;
   el('modal').classList.remove('hidden');
   el('modalBox').querySelectorAll('[data-act]').forEach(btn=>btn.addEventListener('click',()=>playerAction(a,btn.dataset.act)));
+  renderUnlocks(a.playerId,d.unlockables);
+}
+
+/* ---- Sblocchi a mano ----
+   Concessi e revocati senza costi in miele ne' prove del Santuario: servono a tenere in
+   piedi un account di prova. Ogni modifica ridisegna solo questo riquadro, cosi' la scheda
+   non torna in cima a ogni click. */
+function unlocksHtml(u){
+  return `<p class="muted" style="font-size:12px;margin:0 0 .6em">
+      Il gioco li legge alla prossima sincronizzazione della progressione: se l'account e'
+      in partita, torna al menu campagna per vederli.</p>
+    <div class="chips" style="margin-bottom:.4em">
+      <button data-uall="1">Sblocca tutto</button>
+      <button data-uall="0">Blocca tutto</button>
+    </div>`
+    + u.groups.map(g=>`<div class="ugroup">
+      <div class="uhead">${esc(g.label)}${g.note?` <span class="muted">${esc(g.note)}</span>`:''}</div>
+      <div class="chips">${g.entries.map(e=>`
+        <label class="utoggle${e.owned?' on':''}${e.locked?' locked':''}" title="${esc(e.lockedReason||e.note||'')}">
+          <input type="checkbox" data-utype="${esc(g.type)}" data-uid="${esc(e.id)}"${e.owned?' checked':''}${e.locked?' disabled':''}>
+          <span>${esc(e.name)}</span>${e.note&&!e.locked?`<em>${esc(e.note)}</em>`:''}
+        </label>`).join('')}</div>
+    </div>`).join('');
+}
+
+function renderUnlocks(playerId,u){
+  const box=el('unlockBox');
+  if(!box||!u) return;
+  box.innerHTML=unlocksHtml(u);
+  const post=(path,body)=>api(`/players/${encodeURIComponent(playerId)}${path}`,
+    {method:'POST',body:JSON.stringify(body)});
+  box.querySelectorAll('input[data-utype]').forEach(cb=>cb.addEventListener('change',async()=>{
+    try{
+      renderUnlocks(playerId, await post('/unlocks',
+        {type:cb.dataset.utype,id:cb.dataset.uid,granted:cb.checked}));
+    }catch(err){ cb.checked=!cb.checked; alert('Errore: '+err.message); }
+  }));
+  box.querySelectorAll('[data-uall]').forEach(btn=>btn.addEventListener('click',async()=>{
+    const granted=btn.dataset.uall==='1';
+    if(!granted&&!confirm('Togliere tutti gli sblocchi single player? Miele, livello e contatori restano.')) return;
+    try{ renderUnlocks(playerId, await post('/unlocks/all',{granted})); }
+    catch(err){ alert('Errore: '+err.message); }
+  }));
 }
 function closeModal(){ el('modal').classList.add('hidden'); }
 el('modal').addEventListener('click',e=>{ if(e.target===el('modal')) closeModal(); });
@@ -666,14 +791,140 @@ async function loadMatches(){
 }
 
 /* ---- Seasons ---- */
+// La stagione aperta si ricorda: "Aggiorna" e il cambio tab devono tornare sulla
+// classifica che si stava guardando, non sull'elenco.
+let openSeasonId=null, seasonRows=null, seasonSort={key:'rank',desc:false};
+const SEASON_SORT_ASC=['rank','username'];
+
 async function loadSeasons(){
+  if(openSeasonId!==null){ await openSeason(openSeasonId); return; }
+  showSeasonList();
   const data=await api('/seasons');
-  el('seasonsBody').innerHTML=data.seasons.map(s=>`<tr>
+  el('seasonsBody').innerHTML=data.seasons.map(s=>`<tr data-season="${s.seasonId}">
     <td>${s.seasonId}</td><td>${esc(s.name)}</td>
     <td class="muted">${fmtDay(s.startsAt)}</td><td class="muted">${fmtDay(s.endsAt)}</td>
     <td>${s.isActive?'<span class="tag ranked">attiva</span>':'—'}</td>
     <td>${s.matches}</td><td>${s.players}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">Nessuna stagione</td></tr>`;
+  el('seasonsBody').querySelectorAll('tr[data-season]').forEach(tr=>
+    tr.addEventListener('click',()=>openSeason(parseInt(tr.dataset.season,10))));
 }
+
+function showSeasonList(){
+  el('seasonsList').classList.remove('hidden');
+  el('seasonDetail').classList.add('hidden');
+}
+el('seasonBack').addEventListener('click',()=>{ openSeasonId=null; seasonRows=null; loadSeasons(); });
+
+async function openSeason(id){
+  const data=await api('/seasons/'+id);
+  openSeasonId=id;
+  seasonRows=data.players;
+  const s=data.season, sum=data.summary;
+  el('seasonsList').classList.add('hidden');
+  el('seasonDetail').classList.remove('hidden');
+  el('seasonTitle').textContent=s.name;
+  el('seasonBadge').innerHTML=s.isActive?'<span class="tag ranked">attiva</span>':'<span class="tag">conclusa</span>';
+  el('seasonDates').textContent=fmtDay(s.startsAt)+' → '+(s.endsAt?fmtDay(s.endsAt):'—');
+  const kpis=[
+    ['Giocatori',sum.players,`${sum.rankedPlayers} in classifica ranked`],
+    ['Partite',sum.matches,`${sum.rankedMatches} ranked`],
+    ['MMR medio',sum.averageMmr||'—','solo giocatori in ladder'],
+  ];
+  el('seasonKpis').innerHTML=kpis.map(k=>
+    `<div class="kpi"><div class="v">${esc(k[1])}</div><div class="l">${esc(k[0])}</div><div class="sub">${esc(k[2])}</div></div>`).join('');
+  el('seasonPlayersCount').textContent=`${sum.players} giocatori`;
+  renderSeasonPlayers();
+}
+
+// La classifica arriva intera, quindi qui l'ordinamento e' locale: non c'e' paginazione
+// che possa renderlo parziale.
+el('seasonHead').addEventListener('click',event=>{
+  const th=event.target.closest('th[data-ssort]');
+  if(!th||!seasonRows) return;
+  const key=th.dataset.ssort;
+  if(seasonSort.key===key) seasonSort.desc=!seasonSort.desc;
+  else seasonSort={key,desc:!SEASON_SORT_ASC.includes(key)};
+  renderSeasonPlayers();
+});
+
+function seasonSortValue(p,key){
+  if(key==='rank') return p.rank||Number.MAX_SAFE_INTEGER; // i non classificati restano in fondo
+  if(key==='tier'||key==='mmr') return p.mmr===null||p.mmr===undefined?-1:p.mmr;
+  if(key==='username') return (p.username||'').toLowerCase();
+  if(key==='lastMatchAt') return p.lastMatchAt?(Date.parse(p.lastMatchAt)||0):0;
+  return p[key]??0;
+}
+
+function renderSeasonPlayers(){
+  if(!seasonRows) return;
+  el('seasonHead').querySelectorAll('th[data-ssort]').forEach(th=>{
+    if(th.dataset.label===undefined) th.dataset.label=th.textContent;
+    th.style.cursor='pointer';
+    th.style.userSelect='none';
+    const active=th.dataset.ssort===seasonSort.key;
+    th.textContent=th.dataset.label+(active?(seasonSort.desc?' ▼':' ▲'):'');
+    th.style.color=active?'var(--gold)':'';
+  });
+
+  const dir=seasonSort.desc?-1:1;
+  const rows=seasonRows.slice().sort((a,b)=>{
+    const va=seasonSortValue(a,seasonSort.key), vb=seasonSortValue(b,seasonSort.key);
+    if(va<vb) return -dir;
+    if(va>vb) return dir;
+    return (a.rank||Number.MAX_SAFE_INTEGER)-(b.rank||Number.MAX_SAFE_INTEGER);
+  });
+
+  el('seasonBody').innerHTML=rows.map(p=>`
+    <tr data-id="${esc(p.playerId)}">
+      <td>${p.rank?'<b>#'+p.rank+'</b>':'<span class="muted">—</span>'}</td>
+      <td>${esc(p.username)}${p.online?' <span class="tag win">online</span>':''}
+          ${p.ranked&&!p.placementDone?' <span class="tag">piazzamento</span>':''}</td>
+      <td>${p.ranked?esc(p.tier)+' '+esc(p.division)+` <span class="muted">${p.leaguePoints} LP</span>`:'<span class="muted">non classificato</span>'}</td>
+      <td>${p.ranked?p.mmr+` <div class="muted" style="font-size:12px">picco ${p.peakMmr}</div>`:'—'}</td>
+      <td>${p.matches}${p.rankedGames?` <span class="muted">(${p.rankedGames} ranked)</span>`:''}</td>
+      <td style="color:var(--green)">${p.wins}</td>
+      <td>${p.losses}${p.forfeits?` <span class="muted">(${p.forfeits} abb.)</span>`:''}</td>
+      <td>${bar(p.wins,p.matches,p.winRatePercent>=50)}<span class="muted">${p.winRatePercent}%</span></td>
+      <td>${p.bestStreak}</td>
+      <td class="muted">${fmtDate(p.lastMatchAt)}</td>
+    </tr>`).join('') || `<tr><td colspan="10" class="muted">Nessun giocatore in questa stagione</td></tr>`;
+  el('seasonBody').querySelectorAll('tr[data-id]').forEach(tr=>
+    tr.addEventListener('click',()=>openPlayer(tr.dataset.id)));
+}
+
+/* ---- Versione client ---- */
+const VERSION_SOURCES={database:'impostata dal pannello',env:'variabile d\'ambiente',config:'serverconfig.json'};
+
+function renderVersion(v){
+  el('versionTarget').value=v.target||'';
+  el('versionUrl').value=v.updateUrl||'';
+  el('versionEnforce').checked=!!v.enforce;
+  const state=v.blocking
+    ? `<span class="tag ranked">blocco attivo</span> · passa solo la versione <strong>${esc(v.target)}</strong>`
+    : `<span class="tag draw">blocco spento</span> · entrano tutte le versioni`;
+  el('versionState').innerHTML=
+    `<div class="k">Stato attuale</div><div class="v">${state}</div>`+
+    `<div class="k" style="margin-top:.5em">Origine: ${esc(VERSION_SOURCES[v.source]||v.source)}`+
+    (v.configuredTarget?` · avvio: <span class="mono">${esc(v.configuredTarget)}</span>`:'')+`</div>`;
+}
+
+async function loadVersion(){ renderVersion(await api('/client-version')); }
+
+el('versionSave').addEventListener('click',async()=>{
+  const target=el('versionTarget').value.trim();
+  const enforce=el('versionEnforce').checked;
+  if(enforce && !confirm('Da adesso potranno accedere solo i client alla versione '+target+'.\n\nLa build nuova è già pubblicata?')) return;
+  try{
+    renderVersion(await api('/client-version',{method:'POST',
+      body:JSON.stringify({target,enforce,updateUrl:el('versionUrl').value.trim()})}));
+  }catch(err){ alert('Errore: '+err.message); }
+});
+
+el('versionReset').addEventListener('click',async()=>{
+  if(!confirm('Tornare alla versione con cui è stato avviato il server?')) return;
+  try{ renderVersion(await api('/client-version/reset',{method:'POST'})); }
+  catch(err){ alert('Errore: '+err.message); }
+});
 
 /* ---- Boot ---- */
 if(token){ showApp().catch(()=>logout()); }

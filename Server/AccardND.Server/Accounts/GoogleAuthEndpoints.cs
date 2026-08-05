@@ -16,6 +16,7 @@ public static class GoogleAuthEndpoints
     public static void MapGoogleAuthEndpoints(this WebApplication app)
     {
         var broker = app.Services.GetRequiredService<GoogleOAuthBroker>();
+        var deletion = app.Services.GetRequiredService<AccountDeletionService>();
 
         app.MapPost("/auth/google/begin", async (HttpContext context) =>
         {
@@ -40,14 +41,22 @@ public static class GoogleAuthEndpoints
         // I parametri si leggono a mano dalla query: Google omette "code" quando
         // l'utente annulla e "error" quando va a buon fine, e il binding
         // automatico dei minimal API su parametri mancanti risponderebbe 400.
+        //
+        // Il callback e' condiviso da tutti i flussi che passano dal broker (stesso
+        // redirect_uri registrato su Google): il purpose dell'esito dice se qui
+        // finisce un login dell'app o la cancellazione account dal web.
         app.MapGet("/auth/google/callback", async (HttpContext context) =>
         {
             NoStore(context);
-            (string message, bool ok) = await broker.CompleteAsync(
+            GoogleOAuthBroker.CallbackOutcome outcome = await broker.CompleteAsync(
                 context.Request.Query["state"],
                 context.Request.Query["code"],
                 context.Request.Query["error"]);
-            return Results.Content(Page(message, ok), "text/html; charset=utf-8");
+
+            if (outcome.Purpose == GoogleOAuthBroker.PurposeDeletion && outcome.IdToken != null)
+                return await AccountDeletionEndpoints.RenderConfirmationAsync(deletion, outcome.IdToken);
+
+            return Results.Content(Page(outcome.Message, outcome.Ok), "text/html; charset=utf-8");
         });
     }
 

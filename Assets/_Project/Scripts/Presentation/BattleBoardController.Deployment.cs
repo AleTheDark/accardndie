@@ -5,6 +5,7 @@ using System.Linq;
 using AccardND.Battlefield;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using AccardND.NetProtocol;
 using UnityEngine;
 using UnityEngine.Events;
@@ -21,6 +22,9 @@ public sealed partial class BattleBoardController
 {
 	private void BeginFormationDraft()
 	{
+		// La moneta del turno compare solo quando tutte le iniziative hanno
+		// terminato il volo nella timeline.
+		SetTurnCoinSuppressed(suppressed: true);
 		ClearDraftEntranceState();
 		SetCombatChromeVisible(visible: true);
 		draftActive = true;
@@ -72,16 +76,30 @@ public sealed partial class BattleBoardController
 		}
 		else if (campaignDeck != null)
 		{
-			draftCampaignCards.AddRange(campaignDeck.DrawCombatHand(random, configuration.DeckBuilding.CombatHandSize));
+			draftCampaignCards.AddRange(campaignDeck.DrawCombatHand(
+				random,
+				configuration.DeckBuilding.CombatHandSize,
+				configuration.Gameplay.FormationSize));
 			draftCandidates.AddRange(draftCampaignCards.Select((CampaignCardInstance card) => card.Definition));
 			if (draftCandidates.Count < configuration.Gameplay.FormationSize)
 			{
 				draftActive = false;
 				inputLocked = true;
 				gameFinished = true;
-				SetTurnBanner(playerTurn: false, "CAMPAGNA TERMINATA  -  MAZZO ESAURITO");
-				SetMessage($"Non hai abbastanza carte disponibili: {draftCandidates.Count}/" + $"{configuration.Gameplay.FormationSize}. Cimitero: {campaignDeck.GraveyardCount}. " + "Ritorno all'inizio tra 5 secondi.");
-				((MonoBehaviour)this).StartCoroutine(ReturnToStartAfterGameOver());
+				SetTurnBanner(
+					playerTurn: false,
+					GameText.GetOrFallbackSilent(
+						GameTextKeys.Campaign.DeckExhaustedBanner,
+						"CAMPAGNA TERMINATA  -  MAZZO ESAURITO"),
+					defeat: true,
+					campaignEnded: true);
+				SetMessage(GameText.GetOrFallbackSilent(
+					GameTextKeys.Campaign.NotEnoughCards,
+					"Non hai abbastanza carte disponibili: {0}/{1}. Cimitero: {2}. Calcolo della ricompensa di fine campagna.",
+					draftCandidates.Count,
+					configuration.Gameplay.FormationSize,
+					campaignDeck.GraveyardCount));
+				pendingCampaignRewardTask = ClaimCampaignRunAccountReward(completed: false);
 				return;
 			}
 		}
@@ -490,6 +508,7 @@ public sealed partial class BattleBoardController
 		{
 			AppendLog(string.Format("INIZIATIVA SCHIERAMENTO {0} - D{1} = {2}", item.BelongsToPlayer ?"TU" : "CPU", initiativeDieSides, item.Initiative));
 		}
+		SetTurnCoinSuppressed(suppressed: true);
 		SetTurnBanner(playerTurn: true, "SCHIERAMENTO");
 		RefreshInitiativeDisplay();
 		ClearDeploymentTimeline();
@@ -537,6 +556,45 @@ public sealed partial class BattleBoardController
 		cpuDeploymentHand.AddRange(formationDraftService.DrawCandidates(
 			cardDatabase.Cards,
 			Mathf.Min(configuration.DeckBuilding.CombatHandSize, monsterPoolCount)));
+
+		RoomDifficultyRules rules = RoomDifficultyRules.For(pendingRoomDifficulty);
+		int formationSize = configuration.Gameplay.FormationSize;
+		List<List<CardDefinition>> validFormations = BuildFormationCandidates(cpuDeploymentHand, formationSize)
+			.Where(formation =>
+			{
+				int power = formation.Sum(card => card.Strength);
+				return power >= rules.MinimumFormationPower && power <= rules.MaximumFormationPower;
+			})
+			.ToList();
+		if (validFormations.Count == 0)
+		{
+			List<CardDefinition> allMonsters = cardDatabase.Cards
+				.Where(card => (Object)(object)card != (Object)null
+					&& card.Category == CardCategory.Monster
+					&& card.CanEnterCombat)
+				.ToList();
+			validFormations = BuildFormationCandidates(allMonsters, formationSize)
+				.Where(formation =>
+				{
+					int power = formation.Sum(card => card.Strength);
+					return power >= rules.MinimumFormationPower && power <= rules.MaximumFormationPower;
+				})
+				.ToList();
+		}
+		if (validFormations.Count > 0)
+		{
+			List<CardDefinition> guaranteedFormation = validFormations[random.NextInclusive(0, validFormations.Count - 1)];
+			foreach (CardDefinition card in guaranteedFormation)
+			{
+				if (!cpuDeploymentHand.Contains(card))
+					cpuDeploymentHand.Add(card);
+			}
+		}
+		else
+		{
+			AppendLog($"SCHIERAMENTO CPU - nessuna combinazione valida per {rules.DisplayName} " +
+				$"({rules.MinimumFormationPower}-{rules.MaximumFormationPower}).");
+		}
 	}
 
 	private void ProcessNextDeploymentToken()
@@ -566,6 +624,11 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		DeploymentToken deploymentToken = deploymentOrder[currentDeploymentIndex];
+		SetTurnBanner(
+			deploymentToken.BelongsToPlayer,
+			deploymentToken.BelongsToPlayer
+				? "SCHIERAMENTO  -  IL TUO TURNO"
+				: "SCHIERAMENTO  -  TURNO CPU");
 		RefreshDeploymentTimeline();
 		if (deploymentToken.BelongsToPlayer)
 		{
@@ -724,9 +787,22 @@ public sealed partial class BattleBoardController
 
 	private CardDefinition ChooseAdaptiveCpuDeploymentCard()
 	{
+		RoomDifficultyRules difficultyRules = RoomDifficultyRules.For(pendingRoomDifficulty);
+		int selectedPower = selectedCpuDeploymentCards.Sum(card => card.Strength);
+		int remainingAfterChoice = Mathf.Max(0, configuration.Gameplay.FormationSize - selectedCpuDeploymentCards.Count - 1);
+		List<CardDefinition> legalCards = cpuDeploymentHand.Where(candidate =>
+		{
+			int powerAfterChoice = selectedPower + candidate.Strength;
+			IEnumerable<CardDefinition> remaining = cpuDeploymentHand.Where(card => card != candidate);
+			int minimumReachable = powerAfterChoice + remaining.OrderBy(card => card.Strength).Take(remainingAfterChoice).Sum(card => card.Strength);
+			int maximumReachable = powerAfterChoice + remaining.OrderByDescending(card => card.Strength).Take(remainingAfterChoice).Sum(card => card.Strength);
+			return minimumReachable <= difficultyRules.MaximumFormationPower
+				&& maximumReachable >= difficultyRules.MinimumFormationPower;
+		}).ToList();
+		IReadOnlyList<CardDefinition> candidates = legalCards.Count > 0 ? legalCards : cpuDeploymentHand;
 		CardDefinition result = cpuDeploymentHand[0];
 		int num = int.MinValue;
-		foreach (CardDefinition item in cpuDeploymentHand)
+		foreach (CardDefinition item in candidates)
 		{
 			int num2 = item.Strength * 10 + random.NextInclusive(0, 5);
 			foreach (int selectedPlayerDeploymentIndex in selectedPlayerDeploymentIndices)
@@ -790,8 +866,10 @@ public sealed partial class BattleBoardController
 
 	private IEnumerator PlayDeploymentInitiativeDiceRoll(int dieSides, string opponentLabel = "CPU")
 	{
+		SetTurnCoinSuppressed(suppressed: true);
 		if ((Object)(object)safeAreaRoot == (Object)null || deploymentOrder.Count == 0)
 		{
+			SetTurnCoinSuppressed(suppressed: false);
 			yield break;
 		}
 		Canvas.ForceUpdateCanvases();
@@ -829,6 +907,7 @@ public sealed partial class BattleBoardController
 		if (Dice3DRollView.IsSupported(dieSides))
 		{
 			yield return PlayDeploymentInitiativeDiceRoll3D(dieSides, opponentLabel, diceSize, width, height);
+			SetTurnCoinSuppressed(suppressed: false);
 			yield break;
 		}
 		List<DeploymentToken> playerTokens = deploymentOrder.Where((DeploymentToken token) => token.BelongsToPlayer).ToList();
@@ -925,6 +1004,7 @@ public sealed partial class BattleBoardController
 				Object.Destroy((Object)(object)((Component)rectTransform).gameObject);
 			}
 		}
+		SetTurnCoinSuppressed(suppressed: false);
 
 		void CreateDeploymentInitiativeDice(List<DeploymentToken> tokens, bool belongsToPlayer)
 		{
@@ -1359,6 +1439,7 @@ public sealed partial class BattleBoardController
 		else if (pendingAbilityUser != null)
 		{
 			BattleCardState battleCardState = pendingAbilityUser;
+			battleCardState.AbilityUsedThisTurn = false;
 			pendingAbilityUser = null;
 			activeAttachmentSource = null;
 			((Component)confirmActionButton).gameObject.SetActive(false);
@@ -1379,6 +1460,7 @@ public sealed partial class BattleBoardController
 				if (battleCardState2.Card.HeroClass == HeroClass.Warrior && battleCardState2.AbilityArmed && !battleCardState2.AbilityUsed)
 				{
 					battleCardState2.AbilityArmed = false;
+					battleCardState2.AbilityUsedThisTurn = false;
 					RefreshPersistentStatus(battleCardState2);
 				}
 				SetMessage("Attacco annullato: " + battleCardState2.Card.Name + " torna alla scelta dell'azione.");
@@ -1404,6 +1486,7 @@ public sealed partial class BattleBoardController
 			if (battleCardState4 != null)
 			{
 				battleCardState4.AbilityArmed = false;
+				battleCardState4.AbilityUsedThisTurn = false;
 				battleCardState4.ProtectedAlly = null;
 				RefreshPersistentStatus(battleCardState4);
 			}
@@ -1423,6 +1506,7 @@ public sealed partial class BattleBoardController
 			if (battleCardState5.AbilityArmed && !battleCardState5.AbilityUsed)
 			{
 				battleCardState5.AbilityArmed = false;
+				battleCardState5.AbilityUsedThisTurn = false;
 				battleCardState5.ProtectedAlly = null;
 				RefreshPersistentStatus(battleCardState5);
 				((Component)cancelActionButton).gameObject.SetActive(false);
@@ -1570,6 +1654,7 @@ public sealed partial class BattleBoardController
 			Vector2 playerRowStartSize = animatePlayerRowToBattlePosition ?playerRow.sizeDelta : Vector2.zero;
 			Vector2 playerRowStartPosition = animatePlayerRowToBattlePosition ?playerRow.anchoredPosition : Vector2.zero;
 			ApplyResponsiveLayout();
+			ApplyReverseDeploymentPawnOrder();
 			if (animatePlayerRowToBattlePosition)
 			{
 				StartPlayerBattlefieldRowTransition(
@@ -1680,6 +1765,7 @@ public sealed partial class BattleBoardController
 		Vector2 playerRowStartSize = animatePlayerRowToBattlePosition ?playerRow.sizeDelta : Vector2.zero;
 		Vector2 playerRowStartPosition = animatePlayerRowToBattlePosition ?playerRow.anchoredPosition : Vector2.zero;
 		ApplyResponsiveLayout();
+		ApplyReverseDeploymentPawnOrder();
 		if (animatePlayerRowToBattlePosition)
 		{
 			StartPlayerBattlefieldRowTransition(

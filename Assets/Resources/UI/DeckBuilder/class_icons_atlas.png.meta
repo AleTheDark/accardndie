@@ -174,7 +174,205 @@ TextureImporter:
     forceMaximumCompressionQuality_BC6H_BC7: 0
   spriteSheet:
     serializedVersion: 2
-    sprites: []
+    sprites:
+    - serializedVersion: 2
+      name: class_warrior
+      rect:
+        serializedVersion: 2
+        x: 608
+        y: 710
+        width: 265
+        height: 264
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 4502ca63f8862fa478569429babe813a
+      internalID: 2006146819
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: class_barbarian
+      rect:
+        serializedVersion: 2
+        x: 3
+        y: 717
+        width: 250
+        height: 245
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: d36821126f1cf954682420b76f54102c
+      internalID: 1391578903
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: class_mage
+      rect:
+        serializedVersion: 2
+        x: 6
+        y: 402
+        width: 229
+        height: 240
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 73300871631c54b4f8a72c165747232d
+      internalID: 620384555
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: class_necromancer
+      rect:
+        serializedVersion: 2
+        x: 323
+        y: 401
+        width: 240
+        height: 229
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 7faf6087b3fcf8a4bab8e3976e4c69c8
+      internalID: 907908729
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: class_priest
+      rect:
+        serializedVersion: 2
+        x: 642
+        y: 404
+        width: 228
+        height: 220
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: b2e4b92cf76afd24999c9d6e4d624587
+      internalID: -429638623
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: class_assassin
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 25
+        width: 226
+        height: 288
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 5dca0ec59d15b844483b244fe10d5a34
+      internalID: 1194560866
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: class_hunter
+      rect:
+        serializedVersion: 2
+        x: 324
+        y: 51
+        width: 235
+        height: 233
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a60b2c698d0c7244bb3f698513f62d03
+      internalID: 1576144260
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: class_rogue
+      rect:
+        serializedVersion: 2
+        x: 641
+        y: 49
+        width: 218
+        height: 246
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: a1db7ac255a28c74eba351958d4547d1
+      internalID: 271800185
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: class_paladin
+      rect:
+        serializedVersion: 2
+        x: 320
+        y: 732
+        width: 245
+        height: 235
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: cdf898eb1fe4a8546a111a009715ea2f
+      internalID: -492355478
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
     outline: []
     customData: 
     physicsShape: []
@@ -187,8 +385,29 @@ TextureImporter:
     weights: []
     secondaryTextures: []
     spriteCustomMetadata:
-      entries: []
-    nameFileIdTable: {}
+      entries:
+      - key: SpriteEditor.SliceSettings
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":64.0,"y":64.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":0,"keepEmptyRects":false,"isAlternate":false}'
+    nameFileIdTable:
+      class_assassin: 1194560866
+      class_barbarian: 1391578903
+      class_hunter: 1576144260
+      class_icons_atlas_0: -1596603904
+      class_icons_atlas_1: 1095239588
+      class_icons_atlas_17: 2067857883
+      class_icons_atlas_18: -1509345151
+      class_icons_atlas_2: 1968487459
+      class_icons_atlas_4: 711362484
+      class_icons_atlas_5: 747891282
+      class_icons_atlas_6: 1803474409
+      class_icons_atlas_7: -1727908162
+      class_icons_atlas_9: 710362045
+      class_mage: 620384555
+      class_necromancer: 907908729
+      class_paladin: -492355478
+      class_priest: -429638623
+      class_rogue: 271800185
+      class_warrior: 2006146819
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

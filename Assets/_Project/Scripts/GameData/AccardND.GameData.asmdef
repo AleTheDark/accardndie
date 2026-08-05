@@ -2,6 +2,7 @@
   "name": "AccardND.GameData",
   "rootNamespace": "AccardND.GameData",
   "references": [
-    "AccardND.GameCore"
+    "AccardND.GameCore",
+    "AccardND.Localization"
   ]
 }

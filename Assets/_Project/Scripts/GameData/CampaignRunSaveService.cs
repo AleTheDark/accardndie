@@ -89,6 +89,10 @@ namespace AccardND.GameData
                 save = null;
                 return false;
             }
+			// I save v1 precedenti al mana non contengono il campo: JsonUtility lo
+			// lascerebbe a zero, mentre una run esistente deve ripartire dalla riserva base.
+			if (!json.Contains("\"playerMana\""))
+				save.playerMana = CampaignRunSave.DefaultPlayerMana;
             return true;
         }
 

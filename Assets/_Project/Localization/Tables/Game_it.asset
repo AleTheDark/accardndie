@@ -1,0 +1,2525 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9620f8c34305754d8cc9a7e49e852d9, type: 3}
+  m_Name: Game_it
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.StringTable
+  m_LocaleId:
+    m_Code: it
+  m_SharedData: {fileID: 11400000, guid: cc0c3680b4c6ad84784751f99846ddcd, type: 2}
+  m_Metadata:
+    m_Items:
+    - rid: 7214883181289013806
+  m_TableData:
+  - m_Id: 161312837632
+    m_Localized: INDIETRO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161350586368
+    m_Localized: ANNULLA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780672
+    m_Localized: CHIUDI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780673
+    m_Localized: CONFERMA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780674
+    m_Localized: CONTINUA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780675
+    m_Localized: Carta
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780676
+    m_Localized: TU
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780677
+    m_Localized: ACCEDI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780678
+    m_Localized: ENTRA NEL REGNO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780679
+    m_Localized: Controllo aggiornamenti e accesso al tuo account di gioco.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780680
+    m_Localized: Accedi con Google per continuare.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780681
+    m_Localized: Ripristino sessione...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161354780682
+    m_Localized: Bentornato ({0}).
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161354780683
+    m_Localized: ACCEDI GOOGLE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169280
+    m_Localized: NICKNAME
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169281
+    m_Localized: AGGIORNA IL GIOCO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169282
+    m_Localized: AGGIORNA ORA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169283
+    m_Localized: "una versione pi\xF9 recente"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169284
+    m_Localized: la versione {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169285
+    m_Localized: "Il tuo gioco \xE8 alla versione {0}, ma per giocare serve {1}.\n\nAggiorna
+      il gioco e riavvialo per continuare."
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169286
+    m_Localized: Versione non aggiornata.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169287
+    m_Localized: 'Accesso non riuscito: {0}
+
+      Puoi riprovare con Google.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169288
+    m_Localized: Controllo aggiornamenti...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169289
+    m_Localized: Gioco aggiornato.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169290
+    m_Localized: Accesso con {0}...
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169291
+    m_Localized: Accesso completato ({0}).
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169292
+    m_Localized: Controllo account di gioco...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169293
+    m_Localized: Accedi con Google per scegliere o recuperare il tuo account.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169294
+    m_Localized: Scegli un nickname unico per continuare.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169295
+    m_Localized: Il nickname deve avere almeno 3 caratteri.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169296
+    m_Localized: Controllo nickname...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169297
+    m_Localized: Benvenuto, {0}.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169298
+    m_Localized: Nickname non disponibile. Scegline un altro.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169299
+    m_Localized: Apro il menu...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169300
+    m_Localized: Unity Authentication non disponibile.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169301
+    m_Localized: token mancante
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169302
+    m_Localized: token account non disponibile
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169303
+    m_Localized: server account non disponibile
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169304
+    m_Localized: errore server
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169305
+    m_Localized: timeout risposta server
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169306
+    m_Localized: ARSENALE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169307
+    m_Localized: Componi una squadra equilibrata per l'arena
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169308
+    m_Localized: SALVA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169309
+    m_Localized: CATALOGO CARTE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169310
+    m_Localized: scegli ancora {0} carte
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169311
+    m_Localized: loadout valido!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169312
+    m_Localized: '{0}/{1} CARTE     {2}/{3} BUDGET
+
+      {4}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169313
+    m_Localized: "CardDatabase non assegnato: verr\xE0 usato il loadout predefinito."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169314
+    m_Localized: '  - SCELTA'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169315
+    m_Localized: 'Classe: {0}
+
+      Potenza: {1}
+
+      Costo loadout: {2}
+
+
+      {3}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169316
+    m_Localized: AGGIUNGI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169317
+    m_Localized: "GI\xC0 NEL LOADOUT"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169318
+    m_Localized: LOADOUT PIENO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169319
+    m_Localized: IL TUO LOADOUT
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169320
+    m_Localized: Tocca una carta per rimuoverla
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169321
+    m_Localized: '{0}
+
+      POTENZA {1}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169322
+    m_Localized: VITTORIA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169323
+    m_Localized: SCONFITTA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169324
+    m_Localized: RISULTATO ARENA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169325
+    m_Localized: La tua leggenda avanza
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169326
+    m_Localized: Riorganizza il loadout e torna in arena
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169327
+    m_Localized: CONTINUA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169328
+    m_Localized: Vittoria/sconfitta per tempo scaduto.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169329
+    m_Localized: L'avversario ha abbandonato.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169330
+    m_Localized: 'Piazzamento: {0} partite rimaste.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169331
+    m_Localized: "{0} {1} \u2014 {2} LP  ({3}{4} LP)"
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169332
+    m_Localized: PROMOSSO!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169333
+    m_Localized: Retrocesso.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169334
+    m_Localized: Partita amichevole (nessuna variazione di rank).
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169335
+    m_Localized: 'TRAGUARDI SBLOCCATI:'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169336
+    m_Localized: "\u2022 {0}"
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169337
+    m_Localized: Match contro {0}.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169338
+    m_Localized: '--- Round {0}: dado vigore D{1} ---'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169339
+    m_Localized: 'Round decisivo: scegli {0} carte tra tutte le 9.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169340
+    m_Localized: 'Iniziative schieramento: {0} apre la sequenza.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169341
+    m_Localized: '{0} schiera {1} ({2}).'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169342
+    m_Localized: 'Aure: {0} contro {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169343
+    m_Localized: "{0} \xE8 inibito e salta il turno."
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169344
+    m_Localized: '{0} torna in gioco con {1} vita.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169345
+    m_Localized: "{0} devia l'attacco su di s\xE9."
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169346
+    m_Localized: '{0} si difende con vantaggio.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169347
+    m_Localized: '{0} si sacrifica: +{1} a {2}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169348
+    m_Localized: '{0} entra in Furia (+{1}).'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169349
+    m_Localized: 'Aura Might: {0} guadagna +1 permanente.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169350
+    m_Localized: 'Aura Mago: {0} subisce -{1} permanente.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169351
+    m_Localized: Lo spirito di {0} svanisce.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169352
+    m_Localized: "Tempo scaduto per {0} ({1}\xB0 timeout)."
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169353
+    m_Localized: '{0} abbandona: vittoria a {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169354
+    m_Localized: Round {0} a {1}. Parziale {2}-{3}.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169355
+    m_Localized: Risultato ricevuto dal server, ma il replay locale non mostra ancora
+      una formazione eliminata.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169356
+    m_Localized: HAI VINTO PER ABBANDONO DELL'AVVERSARIO!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169357
+    m_Localized: Hai perso per abbandono.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169358
+    m_Localized: HAI VINTO IL MATCH {0}-{1}!
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169359
+    m_Localized: Hai perso il match {0}-{1}.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169360
+    m_Localized: '{0} inibisce {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169361
+    m_Localized: '{0} abbassa il dado di {1} di {2} step.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169362
+    m_Localized: '{0} marca {1} (+{2} a chi lo attacca).'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169363
+    m_Localized: '{0} si prepara a difendersi con vantaggio.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169364
+    m_Localized: '{0} protegge {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169365
+    m_Localized: '{0} benedice {1} (+{2}).'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169366
+    m_Localized: '{0} prepara un colpo a due dadi.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169367
+    m_Localized: '{0} rialza {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169368
+    m_Localized: 'CONTRATTACCO: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169369
+    m_Localized: attacco impossibile, turno perso
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169370
+    m_Localized: '{0} contro {1} ({2}; {3})'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169371
+    m_Localized: ' {0} resiste.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169372
+    m_Localized: '{0} {1} resta come spirito!'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169373
+    m_Localized: '{0} {1} eliminato!'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169374
+    m_Localized: ' {0} perde una vita ({1}).'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169375
+    m_Localized: '{0}{1} attacca {2}: {3}.{4}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169376
+    m_Localized: '{0} {1}:{2}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169377
+    m_Localized: '{0} {1}[{2},{3}] {4}:{5}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 161363169378
+    m_Localized: max
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169379
+    m_Localized: min
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169380
+    m_Localized: somma
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169381
+    m_Localized: risultato
+    m_Metadata:
+      m_Items: []
+  - m_Id: 161363169382
+    m_Localized: G{0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1894294392832
+    m_Localized: ' OVERKILL!'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587136
+    m_Localized: Assassino
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587137
+    m_Localized: Guerriero
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587138
+    m_Localized: Mago
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587139
+    m_Localized: Paladino
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587140
+    m_Localized: Ladro
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587141
+    m_Localized: Cacciatore
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587142
+    m_Localized: Barbaro
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587143
+    m_Localized: Necromante
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587144
+    m_Localized: Sacerdote
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587145
+    m_Localized: Fortuza
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587146
+    m_Localized: Astuta
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587147
+    m_Localized: Magica
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587148
+    m_Localized: 'IN ATTACCO: SE SERVE, RITIRA FINO AL SUO LIVELLO'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587149
+    m_Localized: 'MARCA UN NEMICO: +{0} AL PROSSIMO ATTACCO'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1894298587150
+    m_Localized: FURIA +{0} SE NON ELIMINA
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1894298587151
+    m_Localized: RIALZA UN ALLEATO ELIMINATO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587152
+    m_Localized: BENEDIZIONE +{0} A UN ALLEATO
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1894298587153
+    m_Localized: 'SCEGLIE UN NEMICO: SALTA IL TURNO'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587154
+    m_Localized: 'PROSSIMO ATTACCO: SOMMA DADO VIGORE + DADO STEP -1'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587155
+    m_Localized: RIDUCE IL DADO VIGORE NEMICO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587156
+    m_Localized: SI RAFFORZA O PROTEGGE UN ALLEATO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587157
+    m_Localized: 'Attiva l''abilita: al prossimo attacco tira il dado Vigore e un
+      dado di uno step inferiore, poi somma i risultati.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587158
+    m_Localized: 'Se attacca ma non elimina il bersaglio, prepara Furia: +{0} al
+      prossimo attacco e alla prossima difesa.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1894298587159
+    m_Localized: Il Paladino puo rafforzarsi o proteggere un alleato deviando un
+      attacco su di se, si difendera con vantaggio.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587160
+    m_Localized: 'Abilita passiva: quando attacca, se il totale non basta a vincere,
+      ritira una volta ogni dado Vigore con un risultato pari o inferiore al suo
+      livello. Se sta gia vincendo, non ritira.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587161
+    m_Localized: 'Scegli un avversario: salta il suo prossimo turno.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587162
+    m_Localized: Marca un nemico. Il prossimo attacco contro quel bersaglio riceve
+      +{0}, poi tutti i marchi sul bersaglio vengono consumati. Piu marchi non si
+      sommano.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1894298587163
+    m_Localized: 'Scegli un nemico: nel prossimo confronto il suo dado Vigore scende
+      di una taglia.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587164
+    m_Localized: Riporta in vita un alleato eliminato che agisce subito dopo di te.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587165
+    m_Localized: Potenzia un alleato di +{0} al suo prossimo attacco.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1894298587166
+    m_Localized: Nessuna abilita di combattimento.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587167
+    m_Localized: Abilita {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1894298587168
+    m_Localized: Quando muore una pedina qualsiasi, ogni carta Fortuza con l'aura
+      attiva acquisisce +1 permanente.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587169
+    m_Localized: Le carte Astute attaccano con vantaggio i nemici che hanno bonus
+      o malus.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587170
+    m_Localized: Le carte Magiche si difendono con un dado Vigore di una taglia superiore.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587171
+    m_Localized: Nessun effetto.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587172
+    m_Localized: Durante un confronto, se la Potenza del Guerriero e inferiore a
+      quella dell'avversario, il Guerriero riceve +2 al totale.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587173
+    m_Localized: Furia vale +3 invece di +2, sia in attacco sia in difesa.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587174
+    m_Localized: Quando un Paladino sopravvive a una difesa, contrattacca con +1.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587175
+    m_Localized: 'L''abilita passiva del Ladro funziona anche in difesa: se il totale
+      non basta a resistere, ritira una volta ogni dado Vigore con un risultato pari
+      o inferiore al suo livello. Se sta gia resistendo, non ritira.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587176
+    m_Localized: Quando un Assassino inibisce un nemico, quel nemico subisce anche
+      -1 permanente.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587177
+    m_Localized: Il prossimo attacco contro un bersaglio marcato riceve +{0} invece
+      di +{1}; poi tutti i marchi sul bersaglio vengono consumati. I marchi non si
+      sommano.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1894298587178
+    m_Localized: Quando un Mago con questa aura muore per un attacco, l'attaccante
+      che lo ha eliminato subisce -2 permanente.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587179
+    m_Localized: La prima volta che un alleato viene eliminato, resta in campo come
+      Spirito per un ultimo turno.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587180
+    m_Localized: Benedizione vale +3 invece di +2.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894298587181
+    m_Localized: Si annulla lo svantaggio in attacco che diventa un tiro neutro.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890304
+    m_Localized: 1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890305
+    m_Localized: 2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890306
+    m_Localized: 3
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890307
+    m_Localized: 4
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890308
+    m_Localized: 5
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890309
+    m_Localized: 6
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890310
+    m_Localized: 7
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894369890311
+    m_Localized: 8
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894378278912
+    m_Localized: 9
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894378278913
+    m_Localized: 10
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894378278914
+    m_Localized: 11
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894378278915
+    m_Localized: 12
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894382473216
+    m_Localized: 13
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894386667520
+    m_Localized: Bragus
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894386667521
+    m_Localized: 'HP 45: Bragus Reattivo: Bragus non attacca nel suo turno. Quando
+      viene attaccato si difende; se l''attaccante non supera la sua difesa, Bragus
+      contrattacca subito. Presa Brutale: finche Bragus e vivo, gli avversari non
+      possono usare equipaggiamenti.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894386667522
+    m_Localized: Drakktharr
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894386667523
+    m_Localized: Kraken
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894390861824
+    m_Localized: Boss Medusa Card
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894390861825
+    m_Localized: Medusa
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894390861826
+    m_Localized: 'HP 50. Sguardo Pietrificante: quando attacca confronta il suo dado
+      da Mago contro ogni alleato vivo, applicando vantaggio, svantaggio o neutro
+      per ciascun matchup. Somma solo i risultati scelti dei dadi, senza aggiungere
+      la forza 8. Gli alleati sommano i propri dadi Vigore. Se Medusa supera la somma
+      totale, pietrifica tutte le pedine alleate. Nel proprio turno ogni pedina pietrificata
+      tira il proprio dado Vigore: se fallisce, muore.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894390861827
+    m_Localized: Palatir
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894390861828
+    m_Localized: 'Scudi Di Famiglia: Palatir ha tre scudi orbitanti Might, Cunning
+      e Magic. Finche almeno uno scudo e attivo non perde HP. Ogni scudo si rompe
+      solo con un attacco riuscito di una famiglia che ha vantaggio su quello scudo.
+      Distrutti tutti gli scudi, Palatir puo perdere HP.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894395056128
+    m_Localized: Golem Componibile
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894395056129
+    m_Localized: 'Possiede 30 hp.
+
+      Abilita: cambia forma ogni 2 turni tra Ferro,
+      Cristallo e Vetro. Ogni volta che entra in una forma, quella forma guadagna
+      +1 Potenza.
+
+      Forma Ferro: Potenza 8, Vigor D6.
+
+      Forma Cristallo:
+      Potenza 6, Vigor D10.
+
+      Forma Vetro: Potenza 5, Vigor D8; se resiste ad
+      un attacco, recupera hp pari alla differenza.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894395056130
+    m_Localized: Porcodio
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894395056131
+    m_Localized: Trentor
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894395056132
+    m_Localized: 'Marchio dei Rami: all''inizio del suo turno marca la tua carta
+      con piu Potenza non ancora marcata.
+
+      Predatore Rampicante: quando attacca
+      un bersaglio marcato ottiene +2 al totale d''attacco.
+
+      Rampicanti Avvolgenti:
+      ogni secondo turno intrappola il bersaglio marcato, abbassando di 1 step il
+      suo prossimo dado Vigore difensivo.
+
+      Radici Reattive: quando subisce
+      danno, marca l''attaccante.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894395056133
+    m_Localized: Retro Carta
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894399250432
+    m_Localized: Asso
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894399250433
+    m_Localized: Jack
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894403444736
+    m_Localized: Jolly
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894403444737
+    m_Localized: Re
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894403444738
+    m_Localized: Donna
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894411833344
+    m_Localized: Goblin
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894411833345
+    m_Localized: Goblin
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894411833346
+    m_Localized: Goblin
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894411833347
+    m_Localized: Goblin
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894420221952
+    m_Localized: Goblin
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894420221953
+    m_Localized: Goblin
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894420221954
+    m_Localized: Goblin
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894428610560
+    m_Localized: Goblin
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894428610561
+    m_Localized: Goblin
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894432804864
+    m_Localized: Skeleton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894432804865
+    m_Localized: Skeleton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894436999168
+    m_Localized: Skeleton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894436999169
+    m_Localized: Skeleton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894436999170
+    m_Localized: Skeleton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894441193472
+    m_Localized: Skeleton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894441193473
+    m_Localized: Skeleton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894445387776
+    m_Localized: Skeleton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894445387777
+    m_Localized: Skeleton
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894449582080
+    m_Localized: Animal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894453776384
+    m_Localized: Animal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894457970688
+    m_Localized: Animal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894457970689
+    m_Localized: Animal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894462164992
+    m_Localized: Animal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894462164993
+    m_Localized: Animal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894466359296
+    m_Localized: Animal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894466359297
+    m_Localized: Animal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894470553600
+    m_Localized: Animal
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894470553601
+    m_Localized: Darkelf
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894474747904
+    m_Localized: Darkelf
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894478942208
+    m_Localized: Darkelf
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894483136512
+    m_Localized: Darkelf
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894483136513
+    m_Localized: Darkelf
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894487330816
+    m_Localized: Darkelf
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894487330817
+    m_Localized: Darkelf
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894491525120
+    m_Localized: Darkelf
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894491525121
+    m_Localized: Darkelf
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894495719424
+    m_Localized: Chimera
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894495719425
+    m_Localized: Chimera
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894499913728
+    m_Localized: Chimera
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894499913729
+    m_Localized: Chimera
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894504108032
+    m_Localized: Chimera
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894504108033
+    m_Localized: Chimera
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894508302336
+    m_Localized: Chimera
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894512496640
+    m_Localized: Chimera
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894512496641
+    m_Localized: Chimera
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894512496642
+    m_Localized: Alien
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894512496643
+    m_Localized: Whitealien
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894516690944
+    m_Localized: Whitealien
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894516690945
+    m_Localized: Whitealien
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894520885248
+    m_Localized: Whitealien
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894520885249
+    m_Localized: Whitealien
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894525079552
+    m_Localized: Whitealien
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894529273856
+    m_Localized: Whitealien
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894529273857
+    m_Localized: Whitealien
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894533468160
+    m_Localized: Spirit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894533468161
+    m_Localized: Spirit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894537662464
+    m_Localized: Spirit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894537662465
+    m_Localized: Spirit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894541856768
+    m_Localized: Spirit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894541856769
+    m_Localized: Spirit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894546051072
+    m_Localized: Spirit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894550245376
+    m_Localized: Spirit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894550245377
+    m_Localized: Spirit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894554439680
+    m_Localized: Faceless
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894554439681
+    m_Localized: Faceless
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894558633984
+    m_Localized: Faceless
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894558633985
+    m_Localized: Faceless
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894562828288
+    m_Localized: Faceless
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894562828289
+    m_Localized: Faceless
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894567022592
+    m_Localized: Faceless
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894567022593
+    m_Localized: Faceless
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894567022594
+    m_Localized: Faceless
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894571216896
+    m_Localized: Champion
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894571216897
+    m_Localized: Champion
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894575411200
+    m_Localized: Champion
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894575411201
+    m_Localized: Champion
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894579605504
+    m_Localized: Champion
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894579605505
+    m_Localized: Champion
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894579605506
+    m_Localized: Champion
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894583799808
+    m_Localized: Champion
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894583799809
+    m_Localized: Champion
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894680268800
+    m_Localized: Rampicanti
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894684463104
+    m_Localized: climbing landscape
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894684463105
+    m_Localized: Cosmica
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894684463106
+    m_Localized: Dungeon
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894688657408
+    m_Localized: default landscape
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894692851712
+    m_Localized: Nebbia
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894692851713
+    m_Localized: fog landscape
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894697046016
+    m_Localized: Spettrale
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894697046017
+    m_Localized: ghost landscape
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894705434624
+    m_Localized: Mercante Divino
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894705434625
+    m_Localized: god merchant landscape
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894705434626
+    m_Localized: Infestata
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894705434627
+    m_Localized: infested landscape
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894709628928
+    m_Localized: Ricompensa
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894709628929
+    m_Localized: loot landscape
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894713823232
+    m_Localized: Mercante
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894713823233
+    m_Localized: low merchant landscape
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894713823234
+    m_Localized: Illuminata
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894722211840
+    m_Localized: Specchi
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894722211841
+    m_Localized: mirror landscape
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894726406144
+    m_Localized: Arcobaleno
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894726406145
+    m_Localized: rainbow landscape
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894730600448
+    m_Localized: Esalazioni Tossiche
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894730600449
+    m_Localized: toxic landscape
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894734794752
+    m_Localized: "Imprevisto o Opportunit\xE0"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1894734794753
+    m_Localized: unexpected opportunity landscape
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4568091889664
+    m_Localized: SANTUARIO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4568100278272
+    m_Localized: CLASSI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4568100278273
+    m_Localized: TECNICHE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4568100278274
+    m_Localized: RELIQUIE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4568100278275
+    m_Localized: ANNULLA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4568100278276
+    m_Localized: OFFRI IL MIELE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648643272704
+    m_Localized: ATTIVA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648697798656
+    m_Localized: MUTE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648697798657
+    m_Localized: MUTO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648697798658
+    m_Localized: USA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992960
+    m_Localized: '{0}%'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 11648701992961
+    m_Localized: Detector
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992962
+    m_Localized: Seconda Chance
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992963
+    m_Localized: Defrost
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992964
+    m_Localized: Empower
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992965
+    m_Localized: Sigillo Rubino
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992966
+    m_Localized: Doppia EXP
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992967
+    m_Localized: Consumabile
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992968
+    m_Localized: Rivela il contenuto delle tre porte nella prossima scelta della
+      via. Le etichette compaiono sulle porte prima di entrare.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992969
+    m_Localized: Resuscita tutte le carte nel cimitero e le rimette nel mazzo. Non
+      puo essere usata in battaglia.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992970
+    m_Localized: Scongela tutte le carte in cooldown e le rimette nel mazzo. Non
+      puo essere usata in battaglia.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992971
+    m_Localized: Aumenta di uno step il tuo dado Vigore in attacco per la stanza
+      corrente o per la prossima stanza. Non puo essere usato nelle stanze Boss o
+      Miniboss.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992972
+    m_Localized: Potenzia permanentemente di +2 una pedina schierata in campo. Ogni
+      carta puo ricevere un solo Sigillo Rubino.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992973
+    m_Localized: Raddoppia tutta l'esperienza ottenuta nella prossima stanza.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992974
+    m_Localized: Oggetto consumabile da campagna.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992975
+    m_Localized: '{0} non puo essere usato in battaglia.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 11648701992976
+    m_Localized: 'CONSUMABILE - {0} bloccato: battaglia in corso.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 11648701992977
+    m_Localized: Empower non puo essere usato nelle stanze Boss o Miniboss.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992978
+    m_Localized: 'CONSUMABILE - Empower bloccato: stanza Boss/Miniboss.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992979
+    m_Localized: 'Detector attivato: i destini delle tre porte sono rivelati.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992980
+    m_Localized: 'Detector attivato: la prossima scelta porte mostrera il destino
+      di ogni porta.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992981
+    m_Localized: CONSUMABILE - Detector attivato.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992982
+    m_Localized: 'Seconda Chance: {0} carte tornano dal cimitero al mazzo.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 11648701992983
+    m_Localized: CONSUMABILE - Seconda Chance recupera {0} carte.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 11648701992984
+    m_Localized: 'Defrost: {0} carte tornano dal cooldown al mazzo.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 11648701992985
+    m_Localized: CONSUMABILE - Defrost libera {0} carte.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 11648701992986
+    m_Localized: 'Empower attivato: il tuo dado Vigore in attacco sale di uno step
+      per questa stanza o la prossima.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992987
+    m_Localized: 'CONSUMABILE - Empower pronto: dado Vigore d''attacco +1 step nella
+      stanza corrente o prossima.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992988
+    m_Localized: 'Doppia EXP attivata: la prossima stanza dara esperienza doppia.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992989
+    m_Localized: CONSUMABILE - Doppia EXP pronta per la prossima stanza.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992990
+    m_Localized: 'Sigillo Rubino: nessuna pedina valida schierata in campo.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992991
+    m_Localized: 'CONSUMABILE - Sigillo Rubino bloccato: nessun bersaglio valido.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992992
+    m_Localized: 'Sigillo Rubino pronto: scegli una pedina schierata in campo.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992993
+    m_Localized: 'CONSUMABILE - Sigillo Rubino: scelta bersaglio attiva.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992994
+    m_Localized: 'Sigillo Rubino: scegli una pedina schierata, attiva e non ancora
+      sigillata.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992995
+    m_Localized: 'Sigillo Rubino: questa carta e'' gia'' sigillata.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648701992996
+    m_Localized: 'Sigillo Rubino inciso su {0}: forza permanente +2.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 11648701992997
+    m_Localized: 'CONSUMABILE - Sigillo Rubino: {0} ottiene +2 permanente.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 11648701992998
+    m_Localized: '{0} - ottieni consumabile {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 11648701992999
+    m_Localized: ' {0}: ottieni {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 11648706187264
+    m_Localized: 'BISACCIA - vuota: nessun consumabile in questa run.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648706187265
+    m_Localized: BISACCIA - {0} consumabili portati in run.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 11648706187266
+    m_Localized: CONSUMABILE - Doppia EXP consumata.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 11648706187267
+    m_Localized: '{0}
+
+
+      {1}
+
+
+      Quantita: {2}
+
+      Uso singolo. Solo
+      campagna.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 12761299849216
+    m_Localized: ESCI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432128
+    m_Localized: eliminata
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432129
+    m_Localized: resiste
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432130
+    m_Localized: '{0}: {1} [{2}] contro {3} [{4}] - {5}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 12761312432131
+    m_Localized: '{0} elimina {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 12761312432132
+    m_Localized: '{0} resiste all''attacco di {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 12761312432133
+    m_Localized: '0%: {0} arriva al massimo a {1} ({2}{3} + {4}), mentre {5} parte
+      da {6} ({7}{8} + D{9}:1).'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 12761312432134
+    m_Localized: Aura Guerriero +2
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432135
+    m_Localized: Preda Hunter +{0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 12761312432136
+    m_Localized: Furia +{0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 12761312432137
+    m_Localized: Equip/Malus
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432138
+    m_Localized: Aura Forzuta
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432139
+    m_Localized: Altro
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432140
+    m_Localized: Furia
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432141
+    m_Localized: Benedizione
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432142
+    m_Localized: Bonus
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432143
+    m_Localized: USCIRE AL MENU?
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432144
+    m_Localized: La campagna in corso verra' abbandonata. I progressi di questa sessione
+      andranno persi.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 12761312432145
+    m_Localized: '[STANZA {0} / ROUND {1}] {2}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983037689856
+    m_Localized: CPU
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661376
+    m_Localized: AVVERSARIO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661377
+    m_Localized: 'Schieramento completato: in combattimento agiscono prima le iniziative
+      piu alte.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661378
+    m_Localized: INIZIATIVE  -  TUTTI I D20 IN LANCIO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661379
+    m_Localized: 'Tiro di iniziativa: ogni carta lancia un D20.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661380
+    m_Localized: 'INIZIATIVA {0} - {1}: D{2} = {3}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661381
+    m_Localized: INIZIATIVA {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661382
+    m_Localized: '{0} e inibito e salta il turno.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661383
+    m_Localized: IL TUO TURNO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661384
+    m_Localized: Scegli un'azione sopra la pedina o ispeziona una carta.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661385
+    m_Localized: TURNO CPU  -  {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661386
+    m_Localized: 'Turno CPU: {0} sta scegliendo un bersaglio...'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661387
+    m_Localized: 'PALADINO CPU: {0} devia su di se l''attacco diretto a {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661388
+    m_Localized: 'PALADINO CPU: {0} si difende con vantaggio.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661389
+    m_Localized: ' Turno saltato.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661390
+    m_Localized: 'Attacco impossibile: turno saltato.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661391
+    m_Localized: '100%: {0} elimina direttamente {1}. Nessun dado necessario.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661392
+    m_Localized: 'CPU: {0} sceglie {1} - {2}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661393
+    m_Localized: 'PALADINO: {0} devia su di se l''attacco diretto a {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661394
+    m_Localized: 'PALADINO: {0} si difende con vantaggio.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661395
+    m_Localized: ' La CPU salta il turno.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661396
+    m_Localized: 'Attacco CPU impossibile: turno saltato.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661397
+    m_Localized: 'ATTACCO: scegli una pedina avversaria da colpire con {0}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661398
+    m_Localized: 'ABILITA ASSASSINO: scegli un nemico da inibire.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661399
+    m_Localized: "ABILITA GUERRIERO: {0} sommer\xE0 il dado Vigore e un dado di uno
+      step inferiore nel prossimo attacco."
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661400
+    m_Localized: 'ABILITA MAGO: scegli un nemico a cui abbassare il dado Vigore.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661401
+    m_Localized: 'ABILITA PALADINO: scegli una pedina alleata o {0} stesso da proteggere.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661402
+    m_Localized: 'ABILITA CACCIATORE: scegli un nemico da marcare.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661403
+    m_Localized: 'ABILITA NECROMANTE: scegli una carta alleata eliminata da rialzare.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661404
+    m_Localized: 'ABILITA SACERDOTE: scegli una carta alleata da benedire.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661405
+    m_Localized: Puoi equipaggiare questa carta sacrificandola, aumentando di +{0}
+      la forza di una carta alleata.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661406
+    m_Localized: 'AUTO-VITTORIA - la CPU non ha attacchi possibili, abilita disponibili
+      o equip utili: la stanza viene risolta automaticamente.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661407
+    m_Localized: 'AUTO-VITTORIA: la CPU non puo piu colpirti ne usare azioni utili.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 13983058661408
+    m_Localized: 'POTENZIA: {0} viene sacrificata e potenzia {1} di +{2} per tutta
+      la battaglia.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661409
+    m_Localized: 'POTENZIA - {0} sacrificata: {1} ottiene +{2} permanente.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661410
+    m_Localized: 'CPU POTENZIA: {0} viene sacrificata e potenzia {1} di +{2} per
+      tutta la battaglia.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661411
+    m_Localized: 'CPU POTENZIA - {0} sacrificata: {1} ottiene +{2} permanente.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661412
+    m_Localized: ULTIMO TURNO - {0} svanisce dopo aver agito.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661413
+    m_Localized: 'GOLEM - nuova forma attiva: {0}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661414
+    m_Localized: AURA ATTIVA - {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 13983058661415
+    m_Localized: AURA CPU ATTIVA - {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 20773020274688
+    m_Localized: "Dopo aver usato un'abilit\xC3\_ devi attaccare o equipaggiarti."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246208
+    m_Localized: Attacca
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246209
+    m_Localized: "Abilit\xE0"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246210
+    m_Localized: Equipaggia
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246211
+    m_Localized: Salta
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246212
+    m_Localized: Cambia forma
+    m_Metadata:
+      m_Items: []
+  - m_Id: 20773041246213
+    m_Localized: '{0} salta il turno.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 20773041246214
+    m_Localized: SALTA - {0} passa senza agire.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 377469467004928
+    m_Localized: Ti sei arreso.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469483782144
+    m_Localized: "HAI VINTO: IL TUO AVVERSARIO SI \xC8 ARRESO"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976448
+    m_Localized: Suprema
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976449
+    m_Localized: MENU
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976450
+    m_Localized: ARRENDITI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976451
+    m_Localized: ARRENDERSI?
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976452
+    m_Localized: 'Ti arrendi: la partita e'' persa e la vittoria va al tuo avversario.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976453
+    m_Localized: VAI AVANTI!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 377469487976454
+    m_Localized: RIPROVA STANZA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644039897088
+    m_Localized: PROCEDI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062912
+    m_Localized: "Il tuo account \xE8 stato usato su un altro dispositivo."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062913
+    m_Localized: "{0}\n\nQuesta sessione \xE8 stata chiusa."
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062914
+    m_Localized: CHIUDI IL GIOCO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062915
+    m_Localized: TORNA AL LOGIN
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062916
+    m_Localized: "ADV  \xD73 EXP ({0})"
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062917
+    m_Localized: 'EXP TRIPLICATA: +{0}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062918
+    m_Localized: ADV NON DISPONIBILE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062919
+    m_Localized: "Ti sei arreso: la vittoria \xE8 andata all'avversario."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062920
+    m_Localized: 'Partita ripresa: restano {0}s di riconnessione per questo match.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062921
+    m_Localized: "Partita ripresa: hai esaurito il tempo di riconnessione, un'altra
+      caduta \xE8 sconfitta."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062922
+    m_Localized: 'Resa non inviata: connessione persa.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062923
+    m_Localized: Mossa rifiutata dal server.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062924
+    m_Localized: 'Mossa non confermata dal server: riprova.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062925
+    m_Localized: 'Mossa non inviata: connessione persa.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062926
+    m_Localized: PVP - resa inviata al server.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062927
+    m_Localized: 'Mana insufficiente: servono {0}, disponibili {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062928
+    m_Localized: Mana insufficiente per eseguire l'azione.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062929
+    m_Localized: "La suprema non \xE8 ancora disponibile."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062930
+    m_Localized: Turno concluso. In attesa del server...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062931
+    m_Localized: 'Ti sei arreso: la vittoria va all''avversario.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062932
+    m_Localized: Mana insufficiente per l'abilita di {0}.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062933
+    m_Localized: DIFESA {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062934
+    m_Localized: ATTACCO {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062935
+    m_Localized: REROLL 1-{0} SE SERVE
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062936
+    m_Localized: GOLEM - {0}/{1} HP e bonus Potenza delle forme conservati per il
+      nuovo tentativo.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062937
+    m_Localized: 'ACCOUNT - reward fine campagna ({0}) salvata: verra'' registrata
+      alla riconnessione.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062938
+    m_Localized: 'ACCOUNT - reward fine campagna ({0}) non registrata: server non
+      disponibile e account assente.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062939
+    m_Localized: 'Riepilogo della run salvato: EXP, statistiche e quest verranno
+      sincronizzati alla riconnessione.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062940
+    m_Localized: Connessione al server necessaria per registrare la ricompensa di
+      fine campagna.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062941
+    m_Localized: Connessione al server necessaria per applicare il moltiplicatore.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062942
+    m_Localized: 'Nessuna pubblicita'' disponibile in questo momento: riprova piu''
+      tardi.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062943
+    m_Localized: Il video va guardato per intero per triplicare l'EXP.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062944
+    m_Localized: 'ACCOUNT - moltiplicatore ADV non applicato: {0}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062945
+    m_Localized: CAMPAGNA TERMINATA  -  MAZZO ESAURITO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062946
+    m_Localized: 'Non hai abbastanza carte disponibili: {0}/{1}. Cimitero: {2}. Calcolo
+      della ricompensa di fine campagna.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062947
+    m_Localized: completato
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062948
+    m_Localized: sblocca il primo capitolo
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062949
+    m_Localized: sbloccato
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062950
+    m_Localized: costo {0} miele
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062951
+    m_Localized: SCONFITTA  -  FORMAZIONE ELIMINATA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062952
+    m_Localized: SCONFITTA - RITIRATA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062953
+    m_Localized: 'MERCATO: il mercante non ha altre carte da offrirti.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062954
+    m_Localized: 'MERCATO: servono {0} EXP, disponibili {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062955
+    m_Localized: una carta ignota
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062956
+    m_Localized: CARTE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062957
+    m_Localized: OGGETTI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062958
+    m_Localized: SCEGLI IL BANCO {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062959
+    m_Localized: "Stai per acquistare {0} per {1} EXP. Questo primo acquisto chiuder\xE0
+      il banco {2} fino alla prossima stanza Mercato.\n\nVuoi procedere?"
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062960
+    m_Localized: 'MERCATO: servono {0} EXP per recuperare {1}, disponibili {2}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062961
+    m_Localized: SANTUARIO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062962
+    m_Localized: CLASSI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062963
+    m_Localized: TECNICHE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062964
+    m_Localized: RELIQUIE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062965
+    m_Localized: Consulto l'alveare...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062966
+    m_Localized: "Riconnessione in corso: il Santuario si aggiorner\xE0 automaticamente."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062967
+    m_Localized: 'Santuario non disponibile offline: serve la connessione al server.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062968
+    m_Localized: 'Il Santuario non risponde: {0}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062969
+    m_Localized: Nessuna voce in questo altare.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062970
+    m_Localized: Ogni classe chiede una prova guadagnata giocando, oltre al miele.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062971
+    m_Localized: Ogni tecnica chiede la classe corrispondente, oltre al miele.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062972
+    m_Localized: 'Sblocca gli oggetti per renderli acquistabili al negozio. Slot
+      bisaccia: {0}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062973
+    m_Localized: 'Sblocca {0} per {1} vasetti di miele: da quel momento il negozio
+      potra'' vendertelo. Lo sblocco non ti da'' una copia.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062974
+    m_Localized: Apri uno slot in piu' nella bisaccia per {0} vasetti di miele.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062975
+    m_Localized: 'Possiedi la classe. Offri {0} vasetti di miele per apprendere questa
+      tecnica: sara'' tua su ogni carta della classe.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062976
+    m_Localized: Hai superato le prove. Offri {0} vasetti di miele all'alveare per
+      ricordare questa classe.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062977
+    m_Localized: '{0}
+
+
+      Miele disponibile: {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062978
+    m_Localized: 'Servono {0} vasetti di miele e ne hai {1}.
+
+
+      Torna quando
+      ne avrai abbastanza.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062979
+    m_Localized: OFFRI IL MIELE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062980
+    m_Localized: MIELE INSUFFICIENTE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062981
+    m_Localized: Serve la connessione al server per offrire il miele.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062982
+    m_Localized: '{0} sbloccato: ora il negozio puo'' vendertelo.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062983
+    m_Localized: '{0} ora e'' tua.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062984
+    m_Localized: OTTENUTA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062985
+    m_Localized: IN ARRIVO - {0} MIELE
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062986
+    m_Localized: DAL TUTORIAL
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062987
+    m_Localized: '{0} MIELE'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062988
+    m_Localized: CLASSI SCOPERTE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062989
+    m_Localized: TECNICHE SCOPERTE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062990
+    m_Localized: RELIQUIE SCOPERTE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062991
+    m_Localized: 'SANTUARIO - catalogo ricevuto: {0} voci.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062992
+    m_Localized: SANTUARIO - nessuna connessione al server.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 378644065062993
+    m_Localized: 'SANTUARIO - catalogo non ricevuto: {0}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062994
+    m_Localized: SANTUARIO - {0} acquistato per {1} miele.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644065062995
+    m_Localized: 'SANTUARIO - acquisto {0} rifiutato: {1}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 378644073451520
+    m_Localized: SIGILLO RUBINO - SCEGLI UNA PEDINA SCHIERATA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 380459435331584
+    m_Localized: Suprema di {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 380459435331585
+    m_Localized: Tecnica non ancora appresa. Si sblocca al Santuario.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 380459435331586
+    m_Localized: '{0} mana'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 380459435331587
+    m_Localized: Gratuita
+    m_Metadata:
+      m_Items: []
+  references:
+    version: 2
+    RefIds:
+    - rid: 7214883181289013806
+      type: {class: SmartFormatTag, ns: UnityEngine.Localization.Metadata, asm: Unity.Localization}
+      data:
+        m_Entries: 
+        m_SharedEntries:
+        - id: 161354780682
+        - id: 161363169284
+        - id: 161363169285
+        - id: 161363169287
+        - id: 161363169290
+        - id: 161363169291
+        - id: 161363169297
+        - id: 161363169310
+        - id: 161363169312
+        - id: 161363169315
+        - id: 161363169321
+        - id: 161363169330
+        - id: 161363169331
+        - id: 161363169336
+        - id: 161363169337
+        - id: 161363169338
+        - id: 161363169339
+        - id: 161363169340
+        - id: 161363169341
+        - id: 161363169342
+        - id: 161363169343
+        - id: 161363169344
+        - id: 161363169345
+        - id: 161363169346
+        - id: 161363169347
+        - id: 161363169348
+        - id: 161363169349
+        - id: 161363169350
+        - id: 161363169351
+        - id: 161363169352
+        - id: 161363169353
+        - id: 161363169354
+        - id: 161363169358
+        - id: 161363169359
+        - id: 161363169360
+        - id: 161363169361
+        - id: 161363169362
+        - id: 161363169363
+        - id: 161363169364
+        - id: 161363169365
+        - id: 161363169366
+        - id: 161363169367
+        - id: 161363169370
+        - id: 161363169371
+        - id: 161363169372
+        - id: 161363169373
+        - id: 161363169374
+        - id: 161363169375
+        - id: 161363169376
+        - id: 161363169377
+        - id: 161363169382
+        - id: 1894298587149
+        - id: 1894298587150
+        - id: 1894298587152
+        - id: 1894298587158
+        - id: 1894298587162
+        - id: 1894298587165
+        - id: 1894298587167
+        - id: 1894298587177
+        - id: 11648701992960
+        - id: 11648701992975
+        - id: 11648701992976
+        - id: 11648701992982
+        - id: 11648701992983
+        - id: 11648701992984
+        - id: 11648701992985
+        - id: 11648701992996
+        - id: 11648701992997
+        - id: 11648701992998
+        - id: 11648701992999
+        - id: 11648706187265
+        - id: 11648706187267
+        - id: 12761312432130
+        - id: 12761312432131
+        - id: 12761312432132
+        - id: 12761312432133
+        - id: 12761312432135
+        - id: 12761312432136
+        - id: 12761312432145
+        - id: 13983058661380
+        - id: 13983058661381
+        - id: 13983058661382
+        - id: 13983058661385
+        - id: 13983058661386
+        - id: 13983058661387
+        - id: 13983058661388
+        - id: 13983058661391
+        - id: 13983058661392
+        - id: 13983058661393
+        - id: 13983058661394
+        - id: 13983058661397
+        - id: 13983058661399
+        - id: 13983058661401
+        - id: 13983058661405
+        - id: 13983058661408
+        - id: 13983058661409
+        - id: 13983058661410
+        - id: 13983058661411
+        - id: 13983058661412
+        - id: 13983058661413
+        - id: 13983058661414
+        - id: 13983058661415
+        - id: 20773041246213
+        - id: 20773041246214
+        - id: 378644065062913
+        - id: 378644065062916
+        - id: 378644065062917
+        - id: 378644065062920
+        - id: 378644065062927
+        - id: 378644065062932
+        - id: 378644065062933
+        - id: 378644065062934
+        - id: 378644065062935
+        - id: 378644065062936
+        - id: 378644065062937
+        - id: 378644065062938
+        - id: 378644065062944
+        - id: 378644065062946
+        - id: 378644065062950
+        - id: 378644065062954
+        - id: 378644065062958
+        - id: 378644065062959
+        - id: 378644065062960
+        - id: 378644065062968
+        - id: 378644065062972
+        - id: 378644065062973
+        - id: 378644065062974
+        - id: 378644065062975
+        - id: 378644065062976
+        - id: 378644065062977
+        - id: 378644065062978
+        - id: 378644065062982
+        - id: 378644065062983
+        - id: 378644065062985
+        - id: 378644065062987
+        - id: 378644065062991
+        - id: 378644065062993
+        - id: 378644065062994
+        - id: 378644065062995
+        - id: 380459435331584
+        - id: 380459435331586

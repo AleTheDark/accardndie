@@ -22,9 +22,16 @@ namespace AccardND.PvpUi
                 Initiative = source.initiative,
                 HasHeroClass = source.heroClass > 0,
                 HeroClass = (HeroClass)source.heroClass,
-                HasAbilityClass = source.ability > 0,
+                // Assassin e' il valore zero di HeroClass: il controllo numerico
+                // precedente scartava proprio la sua AbilityUsed, impedendo alla
+                // regia di riprodurre callout, SFX e fumo.
+                HasAbilityClass = IsAbilityPresentationEvent(source.type)
+                    && System.Enum.IsDefined(typeof(HeroClass), source.ability),
                 AbilityClass = (HeroClass)source.ability,
                 AbilityMagnitude = source.magnitude,
+				ManaCurrent = source.mana,
+				ManaDelta = source.manaDelta,
+				ManaReason = source.reason,
                 Certainty = ParseCombatCertainty(source.certainty),
                 AttackerDieSides = source.attackerDieSides,
                 DefenderDieSides = source.defenderDieSides,
@@ -60,6 +67,10 @@ namespace AccardND.PvpUi
 
             return target;
         }
+
+        private static bool IsAbilityPresentationEvent(string eventType) =>
+            string.Equals(eventType, "AbilityUsed", System.StringComparison.Ordinal)
+            || string.Equals(eventType, "SupremeUsed", System.StringComparison.Ordinal);
 
         private static CombatCertainty ParseCombatCertainty(string value)
         {

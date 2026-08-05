@@ -1,0 +1,324 @@
+using System;
+using System.Collections;
+using System.Threading.Tasks;
+using UnityEngine;
+
+namespace AccardND.Ads
+{
+    /// <summary>
+    /// Il punto da cui il gioco chiede una pubblicita'. Sopra c'e' il gameplay, che conosce
+    /// solo i <see cref="AdPlacement"/>; sotto c'e' un <see cref="IAdProvider"/>, che conosce
+    /// un SDK. In mezzo stanno le tre cose che nessuno dei due deve rifare: le regole di
+    /// frequenza (<see cref="AdPolicy"/>), la pausa del gioco mentre l'annuncio e' a schermo,
+    /// e la garanzia che non partano due annunci insieme.
+    ///
+    /// Nessuna chiamata qui dentro puo' lanciare verso il gameplay: se la rete pubblicitaria
+    /// va giu', il gioco continua senza pubblicita'.
+    /// </summary>
+    public static class AdService
+    {
+        private static IAdProvider provider;
+        private static Task<bool> initialization;
+        private static bool showing;
+
+        /// <summary>
+        /// Aggancio per il log del gioco (AppendLog e simili). Facoltativo: se nessuno lo
+        /// riempie, le righe finiscono solo nella console di Unity.
+        /// </summary>
+        public static Action<string> Log;
+
+        /// <summary>
+        /// Un annuncio e' a schermo adesso. Chi disegna la UI puo' usarlo per non far partire
+        /// animazioni o suoni sotto la pubblicita'.
+        /// </summary>
+        public static bool IsShowingAd => showing;
+
+        /// <summary>
+        /// Le ultime righe di diario della pubblicita'. Esistono perche' su un telefono con
+        /// un apk installato a mano non c'e' logcat: se non e' il gioco a dire cosa e'
+        /// successo, non lo dice nessuno.
+        /// </summary>
+        private static readonly System.Collections.Generic.List<string> recentLog =
+            new System.Collections.Generic.List<string>();
+
+        private const int RecentLogCapacity = 25;
+
+        public static System.Collections.Generic.IReadOnlyList<string> RecentLog => recentLog;
+
+        /// <summary>Chi sta servendo gli annunci, per la schermata di diagnostica.</summary>
+        public static string ActiveProviderId => provider?.ProviderId ?? "nessuno";
+
+        /// <summary>
+        /// Il provider e' stato preparato con successo. Falso puo' voler dire "non ancora"
+        /// oppure "non ci riesce": la differenza sta nelle righe di <see cref="RecentLog"/>.
+        /// </summary>
+        public static bool IsProviderReady =>
+            initialization != null && initialization.IsCompleted && initialization.Result;
+
+        /// <summary>
+        /// Sostituisce il provider. E' cosi' che AdMob (o l'adattatore web) si presenta senza
+        /// che questa classe debba conoscerlo: va chiamata prima del primo annuncio.
+        /// </summary>
+        public static void SetProvider(IAdProvider newProvider)
+        {
+            provider = newProvider;
+            initialization = null;
+            Write($"provider impostato: {newProvider?.ProviderId ?? "nessuno"}.");
+        }
+
+        /// <summary>
+        /// C'e' qualcosa da mostrare per questo placement. Serve a decidere se disegnare un
+        /// bottone "guarda la pubblicita'": offrirlo e poi non avere niente e' peggio che
+        /// non offrirlo. Non prepara il provider, quindi prima del primo annuncio risponde no.
+        /// </summary>
+        public static bool IsReady(AdPlacement placement)
+        {
+            if (provider == null || initialization == null || !initialization.IsCompleted)
+                return false;
+            if (!AdPolicy.Allows(AdPlacements.FormatOf(placement), out _))
+                return false;
+            try
+            {
+                return provider.IsReady(placement);
+            }
+            catch (Exception exception)
+            {
+                Write($"IsReady({AdPlacements.KeyOf(placement)}) fallita: {exception.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Avvisa che fra poco potrebbe servire un annuncio per questo placement: si apre la
+        /// taverna, comincia una run, parte una partita d'arena. E' il solo modo di far partire
+        /// una richiesta alla rete, e va chiamata con qualche secondo di anticipo, perche' fino
+        /// a quando l'annuncio non e' arrivato <see cref="IsReady"/> risponde no e i bottoni
+        /// costruiti su quella risposta non compaiono.
+        ///
+        /// Non aspetta e non lancia: se la rete non c'e', il posto si apre lo stesso e la
+        /// pubblicita' semplicemente non ci sara'.
+        /// </summary>
+        public static void Warm(AdPlacement placement)
+        {
+            // Un interstitial oltre il tetto di sessione non si mostrera' comunque: chiederlo
+            // sarebbe inventario buttato, ed e' esattamente il rapporto richieste/impressioni
+            // che si sta cercando di tenere sano.
+            if (!AdPolicy.Allows(AdPlacements.FormatOf(placement), out string reason))
+            {
+                Write($"{AdPlacements.KeyOf(placement)}: non si prepara niente ({reason}).");
+                return;
+            }
+            _ = WarmAsync(placement);
+        }
+
+        /// <summary>
+        /// Il giocatore ha lasciato il posto che aveva chiesto l'annuncio. Quello gia' caricato
+        /// resta buono - se torna indietro fra un minuto lo trova pronto - ma nessuno ne
+        /// carichera' un altro dopo il prossimo show.
+        /// </summary>
+        public static void Cool(AdPlacement placement)
+        {
+            if (provider == null)
+                return;
+            try
+            {
+                provider.Cool(placement);
+            }
+            catch (Exception exception)
+            {
+                Write($"Cool({AdPlacements.KeyOf(placement)}) fallita: {exception.Message}");
+            }
+        }
+
+        private static async Task WarmAsync(AdPlacement placement)
+        {
+            if (!await EnsureProviderAsync())
+                return;
+            try
+            {
+                provider.Warm(placement);
+                Write($"{AdPlacements.KeyOf(placement)}: annuncio in preparazione.");
+            }
+            catch (Exception exception)
+            {
+                Write($"{AdPlacements.KeyOf(placement)}: preparazione fallita ({exception.Message}).");
+            }
+        }
+
+        /// <summary>
+        /// Mostra un annuncio e restituisce com'e' andata. Non lancia mai: al punto di
+        /// chiamata si legge <see cref="AdResult.Watched"/> per decidere se pagare, e
+        /// <see cref="AdResult.Unavailable"/> per distinguere "la rete non ha annunci" da
+        /// "l'ha chiuso a meta'", che al giocatore vanno spiegati in modo diverso.
+        ///
+        /// <paramref name="asGate"/> dice che l'annuncio sta davanti a una ricompensa e non
+        /// la accompagna. Cambia due cose: si aspetta il caricamento invece di rinunciare
+        /// subito (il giocatore ha premuto sapendo che arriva una pubblicita', e dirgli di no
+        /// mentre l'annuncio sta arrivando gli costerebbe la ricompensa), e non si applicano
+        /// le regole di frequenza, che esistono per difenderlo dagli annunci che non ha
+        /// chiesto. Sopra, chi ha aperto il cancello paga solo su <see cref="AdResult.Watched"/>:
+        /// niente pubblicita' vuol dire niente riscossione, e la ricompensa resta li'.
+        ///
+        /// Su un cancello fatto con un interstitial "guardato" resta pero' una parola del
+        /// client: gli interstitial non hanno SSV, quindi il server non puo' verificare
+        /// niente. Solo un rewarded permette di pretendere l'impression verificata prima di
+        /// accreditare (vedi Docs/ads-design.md).
+        /// </summary>
+        public static async Task<AdResult> ShowAsync(
+            AdPlacement placement, AdRewardContext context = default, bool asGate = false)
+        {
+            AdFormat format = AdPlacements.FormatOf(placement);
+            string key = AdPlacements.KeyOf(placement);
+
+            // Due annunci insieme non sono un caso di scuola: un doppio tocco sul bottone di
+            // riscossione basta a produrli.
+            if (showing)
+            {
+                Write($"{key}: annuncio saltato, ce n'e' gia' uno a schermo.");
+                return AdResult.Of(AdOutcome.Suppressed);
+            }
+
+            // Le regole di frequenza difendono il giocatore dalla pubblicita' che non ha
+            // chiesto, e un cancello e' il caso opposto: l'ha chiesta lui, in cambio di
+            // qualcosa. Applicarle qui vorrebbe dire togliergli il miele delle quest perche'
+            // ha gia' visto troppi interstitial altrove.
+            if (!asGate && !AdPolicy.Allows(format, out string reason))
+            {
+                Write($"{key}: interstitial saltato ({reason}).");
+                return AdResult.Of(AdOutcome.Suppressed);
+            }
+
+            if (!await EnsureProviderAsync())
+                return AdResult.Of(AdOutcome.NoFill);
+
+            // Davanti a un cancello si aspetta il caricamento (ci pensa il provider, con la sua
+            // scadenza): il giocatore ha premuto sapendo che arriva una pubblicita', e
+            // rispondergli di no mentre l'annuncio sta arrivando gli costerebbe la ricompensa.
+            // Fuori dai cancelli no: l'annuncio e' un di piu' e non vale un'attesa.
+            if (!asGate && !provider.IsReady(placement))
+            {
+                // Questa occasione e' persa: si prepara la prossima, che e' anche il recupero
+                // automatico se un Warm e' stato dimenticato o se l'annuncio e' scaduto.
+                Write($"{key}: nessun annuncio pronto da {provider.ProviderId}.");
+                Warm(placement);
+                return AdResult.Of(AdOutcome.NoFill);
+            }
+
+            showing = true;
+            AdPause.Begin();
+            AdResult result;
+            try
+            {
+                result = await provider.ShowAsync(placement, context);
+            }
+            catch (Exception exception)
+            {
+                Write($"{key}: annuncio fallito ({exception.Message}).");
+                result = AdResult.Of(AdOutcome.Failed);
+            }
+            finally
+            {
+                AdPause.End();
+                showing = false;
+            }
+
+            if (result.Watched)
+                AdPolicy.RecordShown(format);
+            Write($"{key}: {result.Outcome}.");
+            return result;
+        }
+
+        /// <summary>
+        /// Prepara l'SDK all'avvio del gioco: consenso, inizializzazione, niente altro. Non
+        /// carica nessun annuncio - a quello pensa <see cref="Warm"/>, dal posto che ne ha
+        /// bisogno - ma toglie di mezzo in anticipo la parte lenta, cosi' il primo Warm trova
+        /// la rete gia' in piedi e ha solo da chiedere. Da chiamare una volta, presto.
+        /// </summary>
+        public static Task<bool> PrepareAsync() => EnsureProviderAsync();
+
+        /// <summary>
+        /// Interstitial "e vai avanti comunque": non c'e' niente da aspettare, l'esito non
+        /// cambia nulla per il giocatore. Chi la chiama non deve nemmeno essere async.
+        ///
+        /// Parte un frame dopo: chi chiama sta finendo di applicare l'effetto che ha appena
+        /// prodotto (un oggetto usato, una riscossione), e coprirlo nello stesso istante in
+        /// cui succede fa sembrare che la pubblicita' abbia interrotto l'azione invece di
+        /// seguirla.
+        /// </summary>
+        public static void ShowInterstitial(AdPlacement placement)
+        {
+            AdRunner.Instance.Run(ShowAfterFrame(placement));
+        }
+
+        private static IEnumerator ShowAfterFrame(AdPlacement placement)
+        {
+            yield return null;
+            _ = ShowAsync(placement);
+        }
+
+        private static async Task<bool> EnsureProviderAsync()
+        {
+            if (provider == null)
+                SetProvider(CreateDefaultProvider());
+
+            initialization ??= InitializeAsync(provider);
+            try
+            {
+                return await initialization;
+            }
+            catch (Exception exception)
+            {
+                Write($"inizializzazione di {provider.ProviderId} fallita: {exception.Message}");
+                return false;
+            }
+        }
+
+        private static async Task<bool> InitializeAsync(IAdProvider target)
+        {
+            bool ready = await target.InitializeAsync();
+            Write(ready
+                ? $"{target.ProviderId} pronto."
+                : $"{target.ProviderId} non disponibile: si gioca senza pubblicita'.");
+            return ready;
+        }
+
+        /// <summary>
+        /// Chi serve gli annunci quando nessuno ha chiamato <see cref="SetProvider"/>.
+        ///
+        /// Su Android c'e' AdMob e sul web gli H5 Games Ads di AdSense, anche nelle build di
+        /// sviluppo: collaudare l'integrazione vera e' il punto, e a non generare traffico non
+        /// valido pensano <see cref="AdUnits.For"/> (unita' di prova in sviluppo) e, sul web,
+        /// il flag <c>ACCARDND_ADSENSE_TEST</c> del template.
+        /// In editor la pubblicita' e' finta, perche' nessuno dei due SDK su desktop ha
+        /// qualcosa da mostrare. Altrove non arriva nulla, che e' meglio di una pubblicita'
+        /// finta addosso a un giocatore vero.
+        ///
+        /// ACCARDND_FAKE_ADS forza il pannello finto ovunque, per provare i punti di aggancio
+        /// in una build senza SDK.
+        /// </summary>
+        private static IAdProvider CreateDefaultProvider()
+        {
+#if ACCARDND_FAKE_ADS
+            return new FakeAdProvider();
+#elif UNITY_ANDROID && !UNITY_EDITOR
+            return new AdMobProvider();
+#elif UNITY_WEBGL && !UNITY_EDITOR
+            return new H5GamesAdProvider();
+#elif UNITY_EDITOR || DEVELOPMENT_BUILD
+            return new FakeAdProvider();
+#else
+            return new NoAdsProvider();
+#endif
+        }
+
+        private static void Write(string message)
+        {
+            string line = "ADV - " + message;
+            recentLog.Add(line);
+            if (recentLog.Count > RecentLogCapacity)
+                recentLog.RemoveRange(0, recentLog.Count - RecentLogCapacity);
+            Log?.Invoke(line);
+            Debug.Log("[Ads] " + message);
+        }
+    }
+}

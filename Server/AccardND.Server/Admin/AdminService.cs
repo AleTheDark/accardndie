@@ -1,3 +1,4 @@
+using AccardND.Server.Accounts;
 using AccardND.Server.Data;
 using AccardND.Server.Progression;
 using AccardND.Server.Sessions;
@@ -17,14 +18,17 @@ public sealed class AdminService
     private readonly PresenceRegistry presence;
     private readonly SeasonService seasons;
     private readonly RankedService ranked;
+    private readonly AccountEraser eraser;
 
     public AdminService(
-        AccardDatabase database, PresenceRegistry presence, SeasonService seasons, RankedService ranked)
+        AccardDatabase database, PresenceRegistry presence, SeasonService seasons, RankedService ranked,
+        AccountEraser eraser)
     {
         this.database = database;
         this.presence = presence;
         this.seasons = seasons;
         this.ranked = ranked;
+        this.eraser = eraser;
     }
 
     /// <summary>
@@ -470,7 +474,8 @@ public sealed class AdminService
             recentMatches,
             recentRuns,
             recentLogins,
-            unlocks
+            unlocks,
+            unlockables = BuildUnlockState(connection, playerId)
         };
     }
 
@@ -1090,6 +1095,141 @@ public sealed class AdminService
         return new { seasons };
     }
 
+    /// <summary>
+    /// Classifica di una stagione: tutti i giocatori che l'hanno toccata (ladder ranked,
+    /// aggregati di stagione o anche solo una partita amichevole) con vittorie, sconfitte
+    /// e win rate. Null se la stagione non esiste.
+    /// </summary>
+    public object GetSeasonDetail(int seasonId)
+    {
+        using SqliteConnection connection = database.Open();
+
+        object season;
+        int matchesTotal, rankedMatches;
+        using (SqliteCommand command = connection.CreateCommand())
+        {
+            command.CommandText = @"
+                SELECT s.season_id, s.name, s.starts_at, s.ends_at, s.is_active,
+                       (SELECT COUNT(*) FROM match_history m WHERE m.season_id = s.season_id),
+                       (SELECT COUNT(*) FROM match_history m
+                        WHERE m.season_id = s.season_id AND m.ranked = 1)
+                FROM seasons s WHERE s.season_id = $season";
+            command.Parameters.AddWithValue("$season", seasonId);
+            using SqliteDataReader reader = command.ExecuteReader();
+            if (!reader.Read())
+                return null;
+            matchesTotal = reader.GetInt32(5);
+            rankedMatches = reader.GetInt32(6);
+            season = new
+            {
+                seasonId = reader.GetInt32(0),
+                name = reader.GetString(1),
+                startsAt = NullableString(reader, 2),
+                endsAt = NullableString(reader, 3),
+                isActive = reader.GetInt32(4) != 0,
+                matches = matchesTotal,
+                rankedMatches
+            };
+        }
+
+        var players = new List<object>();
+        int rankedPlayers = 0, mmrSum = 0;
+        using (SqliteCommand command = connection.CreateCommand())
+        {
+            // L'insieme dei partecipanti non e' solo la ladder: chi ha giocato amichevoli
+            // non ha una riga in ranked_state, ma nella stagione ci e' comunque passato.
+            // L'ordinamento ricalca quello della leaderboard (MMR decrescente, a pari MMR
+            // davanti chi ha giocato meno), lo stesso con cui si scatta la hall of fame:
+            // le posizioni qui e quelle congelate a fine stagione coincidono.
+            command.CommandText = @"
+                WITH participants AS (
+                    SELECT player_a AS player_id, ended_at FROM match_history WHERE season_id = $season
+                    UNION ALL
+                    SELECT player_b, ended_at FROM match_history WHERE season_id = $season
+                ),
+                played AS (
+                    SELECT player_id, COUNT(*) AS matches, MAX(ended_at) AS last_at
+                    FROM participants GROUP BY player_id
+                ),
+                ids AS (
+                    SELECT player_id FROM played
+                    UNION
+                    SELECT player_id FROM ranked_state WHERE season_id = $season
+                    UNION
+                    SELECT player_id FROM player_stats WHERE scope = $scope
+                )
+                SELECT ids.player_id, COALESCE(a.username, ids.player_id),
+                       r.mmr, r.games_played, r.placement_done, r.peak_mmr,
+                       COALESCE(st.matches, pl.matches, 0), COALESCE(st.wins, 0),
+                       COALESCE(st.losses, 0), COALESCE(st.forfeits, 0),
+                       COALESCE(st.best_streak, 0), COALESCE(st.current_streak, 0),
+                       COALESCE(st.total_match_seconds, 0), pl.last_at
+                FROM ids
+                LEFT JOIN accounts a ON a.player_id = ids.player_id
+                LEFT JOIN ranked_state r ON r.player_id = ids.player_id AND r.season_id = $season
+                LEFT JOIN player_stats st ON st.player_id = ids.player_id AND st.scope = $scope
+                LEFT JOIN played pl ON pl.player_id = ids.player_id
+                ORDER BY (r.mmr IS NULL), r.mmr DESC, r.games_played ASC,
+                         COALESCE(st.wins, 0) DESC, ids.player_id ASC";
+            command.Parameters.AddWithValue("$season", seasonId);
+            command.Parameters.AddWithValue("$scope", $"season:{seasonId}");
+            using SqliteDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                string playerId = reader.GetString(0);
+                bool isRanked = !reader.IsDBNull(2);
+                int mmr = isRanked ? reader.GetInt32(2) : 0;
+                RankedTierInfo tier = isRanked ? ranked.Describe(mmr) : null;
+                int matches = reader.GetInt32(6);
+                int wins = reader.GetInt32(7);
+                if (isRanked)
+                {
+                    rankedPlayers++;
+                    mmrSum += mmr;
+                }
+                players.Add(new
+                {
+                    // Chi non e' in ladder resta senza posizione: la classifica e' quella ranked.
+                    rank = isRanked ? rankedPlayers : 0,
+                    playerId,
+                    username = reader.GetString(1),
+                    online = presence.IsOnline(playerId),
+                    ranked = isRanked,
+                    mmr = isRanked ? mmr : (int?)null,
+                    peakMmr = isRanked ? reader.GetInt32(5) : (int?)null,
+                    rankedGames = isRanked ? reader.GetInt32(3) : 0,
+                    placementDone = isRanked && reader.GetInt32(4) != 0,
+                    tier = tier?.TierName,
+                    division = tier?.Division,
+                    leaguePoints = tier?.LeaguePoints ?? 0,
+                    matches,
+                    wins,
+                    losses = reader.GetInt32(8),
+                    forfeits = reader.GetInt32(9),
+                    bestStreak = reader.GetInt32(10),
+                    currentStreak = reader.GetInt32(11),
+                    totalMatchSeconds = reader.GetInt32(12),
+                    lastMatchAt = NullableString(reader, 13),
+                    winRatePercent = matches > 0 ? (int)Math.Round(wins * 100.0 / matches) : 0
+                });
+            }
+        }
+
+        return new
+        {
+            season,
+            summary = new
+            {
+                players = players.Count,
+                rankedPlayers,
+                matches = matchesTotal,
+                rankedMatches,
+                averageMmr = rankedPlayers > 0 ? (int)Math.Round(mmrSum / (double)rankedPlayers) : 0
+            },
+            players
+        };
+    }
+
     // ---- Azioni di scrittura (curate) ---------------------------------------
 
     public (bool ok, string error) RenamePlayer(string playerId, string newName)
@@ -1181,49 +1321,209 @@ public sealed class AdminService
         return (true, null);
     }
 
-    public (bool ok, string error) DeletePlayer(string playerId)
+    // ---- Sblocchi a mano (account di prova) ---------------------------------
+
+    /// <summary>
+    /// Catalogo concedibile con lo stato attuale del giocatore. Serve agli account di prova:
+    /// da qui classi, supreme, oggetti e capitoli si danno e si tolgono senza pagare miele e
+    /// senza superare le prove del Santuario.
+    /// </summary>
+    public object GetPlayerUnlocks(string playerId)
+    {
+        using SqliteConnection connection = database.Open();
+        return PlayerExists(connection, playerId) ? BuildUnlockState(connection, playerId) : null;
+    }
+
+    private static object BuildUnlockState(SqliteConnection connection, string playerId)
+    {
+        var owned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using (SqliteCommand command = connection.CreateCommand())
+        {
+            command.CommandText =
+                "SELECT unlock_type, unlock_id FROM single_player_unlocks WHERE player_id = $id";
+            command.Parameters.AddWithValue("$id", playerId);
+            using SqliteDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+                owned.Add(reader.GetString(0) + "/" + reader.GetString(1));
+        }
+
+        bool tutorial = ReadProgressFlag(connection, playerId, "tutorial_completed");
+        bool hardcore = ReadProgressFlag(connection, playerId, "hardcore_unlocked");
+
+        var groups = new List<object>();
+        foreach (AdminUnlockCatalog.Group group in AdminUnlockCatalog.Groups)
+        {
+            var entries = new List<object>();
+            foreach (AdminUnlockCatalog.Entry entry in group.Entries)
+            {
+                // Le classi base non hanno bisogno della riga: il gioco le rimette in lista
+                // finche' il tutorial risulta completato, quindi toglierle non avrebbe effetto.
+                bool fromTutorial = tutorial && AdminUnlockCatalog.IsStarterClass(group.Type, entry.Id);
+                bool isOwned = group.Type switch
+                {
+                    AdminUnlockCatalog.TypeTutorial => tutorial,
+                    AdminUnlockCatalog.TypeMode => hardcore,
+                    _ => fromTutorial || owned.Contains(group.Type + "/" + entry.Id)
+                };
+                entries.Add(new
+                {
+                    id = entry.Id,
+                    name = entry.Name,
+                    note = entry.Note,
+                    owned = isOwned,
+                    locked = fromTutorial,
+                    lockedReason = fromTutorial ? "Consegnata dal tutorial: torna finche' risulta completato." : null
+                });
+            }
+            groups.Add(new { type = group.Type, label = group.Label, note = group.Note, entries });
+        }
+        return new { groups };
+    }
+
+    /// <summary>Concede o revoca una singola voce. Nessun costo, nessuna prova: e' il punto.</summary>
+    public (bool ok, string error) SetUnlock(string playerId, string type, string id, bool granted)
+    {
+        string unlockType = CanonicalUnlockType(type);
+        if (unlockType == null ||
+            !AdminUnlockCatalog.TryResolve(unlockType, id?.Trim(), out string unlockId))
+            return (false, "Sblocco non riconosciuto.");
+
+        using SqliteConnection connection = database.Open();
+        if (!PlayerExists(connection, playerId))
+            return (false, "Giocatore inesistente.");
+
+        using SqliteTransaction transaction = connection.BeginTransaction();
+        EnsureProgressRow(connection, transaction, playerId);
+
+        if (unlockType == AdminUnlockCatalog.TypeTutorial)
+        {
+            SetProgressFlag(connection, transaction, playerId, "tutorial_completed", granted);
+            // Stessa dotazione che il gioco consegna a fine tutorial: senza, il pannello
+            // direbbe "tutorial fatto" e il giocatore si troverebbe senza classi.
+            if (granted)
+            {
+                foreach (string classId in AdminUnlockCatalog.StarterClassIds)
+                    GrantUnlockRow(connection, transaction, playerId, "class", classId);
+                GrantUnlockRow(connection, transaction, playerId, "chapter", "chapter-1");
+            }
+        }
+        else if (unlockType == AdminUnlockCatalog.TypeMode)
+        {
+            SetProgressFlag(connection, transaction, playerId, "hardcore_unlocked", granted);
+        }
+        else if (granted)
+        {
+            GrantUnlockRow(connection, transaction, playerId, unlockType, unlockId);
+        }
+        else
+        {
+            if (AdminUnlockCatalog.IsStarterClass(unlockType, unlockId) &&
+                ReadProgressFlag(connection, playerId, "tutorial_completed", transaction))
+                return (false, "Classe base: torna da sola col tutorial completato. Togli prima il tutorial.");
+
+            Execute(connection, transaction, @"
+                DELETE FROM single_player_unlocks
+                WHERE player_id = $id AND unlock_type = $type AND unlock_id = $unlock",
+                ("$id", playerId), ("$type", unlockType), ("$unlock", unlockId));
+        }
+
+        transaction.Commit();
+        return (true, null);
+    }
+
+    /// <summary>
+    /// Sblocca o blocca tutto in un colpo. Il "blocca tutto" tocca solo gli sblocchi: miele,
+    /// livello e contatori restano dove sono (per azzerare quelli c'e' il reset progressi).
+    /// </summary>
+    public (bool ok, string error) SetAllUnlocks(string playerId, bool granted)
     {
         using SqliteConnection connection = database.Open();
         if (!PlayerExists(connection, playerId))
             return (false, "Giocatore inesistente.");
 
-        // Ordine: prima le tabelle figlie, poi accounts. match_history/campaign_runs/
-        // login_events sono storici e vengono rimossi con l'account.
-        // Le connessioni girano con foreign_keys=ON: se anche una sola tabella figlia con
-        // FK verso accounts resta piena, l'ultima DELETE fallisce e l'account non si
-        // cancella. Quando si aggiunge una tabella per-giocatore va aggiunta anche qui.
-        string[] byPlayer =
-        {
-            "DELETE FROM single_player_unlocks WHERE player_id = $id",
-            "DELETE FROM single_player_reward_claims WHERE player_id = $id",
-            "DELETE FROM single_player_progress WHERE player_id = $id",
-            "DELETE FROM player_counters WHERE player_id = $id",
-            "DELETE FROM player_consumables WHERE player_id = $id",
-            "DELETE FROM player_bag WHERE player_id = $id",
-            "DELETE FROM player_tavern_quests WHERE player_id = $id",
-            "DELETE FROM player_tavern_bonus WHERE player_id = $id",
-            "DELETE FROM campaign_runs WHERE player_id = $id",
-            "DELETE FROM login_events WHERE player_id = $id",
-            "DELETE FROM player_stats WHERE player_id = $id",
-            "DELETE FROM ranked_state WHERE player_id = $id",
-            "DELETE FROM player_achievements WHERE player_id = $id",
-            "DELETE FROM player_icons WHERE player_id = $id",
-            "DELETE FROM campaign_kills WHERE player_id = $id",
-            "DELETE FROM profiles WHERE player_id = $id",
-            "DELETE FROM account_nicknames WHERE player_id = $id",
-            "DELETE FROM external_identities WHERE player_id = $id",
-            "DELETE FROM friends WHERE owner_id = $id OR other_id = $id",
-            "DELETE FROM match_history WHERE player_a = $id OR player_b = $id",
-            "DELETE FROM hall_of_fame WHERE player_id = $id",
-            "DELETE FROM accounts WHERE player_id = $id"
-        };
-
         using SqliteTransaction transaction = connection.BeginTransaction();
-        foreach (string sql in byPlayer)
-            Execute(connection, transaction, sql, ("$id", playerId));
+        EnsureProgressRow(connection, transaction, playerId);
+
+        if (granted)
+        {
+            foreach ((string type, string id) in AdminUnlockCatalog.UnlockRows())
+                GrantUnlockRow(connection, transaction, playerId, type, id);
+        }
+        else
+        {
+            Execute(connection, transaction,
+                "DELETE FROM single_player_unlocks WHERE player_id = $id", ("$id", playerId));
+        }
+
+        SetProgressFlag(connection, transaction, playerId, "tutorial_completed", granted);
+        SetProgressFlag(connection, transaction, playerId, "hardcore_unlocked", granted);
         transaction.Commit();
         return (true, null);
     }
+
+    private static string CanonicalUnlockType(string type) => (type ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "class" => SanctuaryCatalog.TypeClass,
+        "secondability" => SanctuaryCatalog.TypeSecondAbility,
+        "item" => SanctuaryCatalog.TypeItem,
+        "slot" => SanctuaryCatalog.TypeSlot,
+        "chapter" => AdminUnlockCatalog.TypeChapter,
+        "chaptercleared" => AdminUnlockCatalog.TypeChapterCleared,
+        "mode" => AdminUnlockCatalog.TypeMode,
+        "tutorial" => AdminUnlockCatalog.TypeTutorial,
+        _ => null
+    };
+
+    private static void GrantUnlockRow(
+        SqliteConnection connection, SqliteTransaction transaction,
+        string playerId, string type, string id) =>
+        Execute(connection, transaction, @"
+            INSERT OR IGNORE INTO single_player_unlocks (player_id, unlock_type, unlock_id, unlocked_at)
+            VALUES ($id, $type, $unlock, $now)",
+            ("$id", playerId), ("$type", type), ("$unlock", id), ("$now", DateTime.UtcNow.ToString("O")));
+
+    /// <summary>
+    /// Il nome della colonna e' interpolato nella query: puo' arrivare solo dalle costanti qui
+    /// dentro, mai dalla richiesta.
+    /// </summary>
+    private static void SetProgressFlag(
+        SqliteConnection connection, SqliteTransaction transaction,
+        string playerId, string column, bool value) =>
+        Execute(connection, transaction,
+            $"UPDATE single_player_progress SET {column} = $value, updated_at = $now WHERE player_id = $id",
+            ("$value", value ? 1 : 0), ("$now", DateTime.UtcNow.ToString("O")), ("$id", playerId));
+
+    private static bool ReadProgressFlag(
+        SqliteConnection connection, string playerId, string column, SqliteTransaction transaction = null)
+    {
+        using SqliteCommand command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"SELECT {column} FROM single_player_progress WHERE player_id = $id";
+        command.Parameters.AddWithValue("$id", playerId);
+        object result = command.ExecuteScalar();
+        return result != null && result != DBNull.Value && Convert.ToInt32(result) != 0;
+    }
+
+    /// <summary>
+    /// Riga di progressione minima, per poter scrivere su un account che non ha ancora giocato.
+    /// A differenza del percorso di gioco non assegna le quest del giorno: fissarne il baseline
+    /// dal pannello significherebbe farlo al posto del giocatore.
+    /// </summary>
+    private static void EnsureProgressRow(
+        SqliteConnection connection, SqliteTransaction transaction, string playerId) =>
+        Execute(connection, transaction, @"
+            INSERT OR IGNORE INTO single_player_progress
+                (player_id, honey, account_level, account_experience, account_total_experience,
+                 account_experience_to_next_level, tutorial_completed, hardcore_unlocked, updated_at)
+            VALUES ($id, 0, 1, 0, 0, 100, 0, 0, $now)",
+            ("$id", playerId), ("$now", DateTime.UtcNow.ToString("O")));
+
+    /// <summary>
+    /// La cancellazione vera vive in <see cref="AccountEraser"/>: la condivide con la
+    /// pagina pubblica /account/delete, cosi' la lista delle tabelle da svuotare resta
+    /// una sola e non puo' divergere tra i due percorsi.
+    /// </summary>
+    public (bool ok, string error) DeletePlayer(string playerId) => eraser.DeletePlayer(playerId);
 
     // ---- Helper -------------------------------------------------------------
 

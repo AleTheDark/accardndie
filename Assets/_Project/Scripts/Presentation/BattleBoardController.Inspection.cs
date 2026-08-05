@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using AccardND.GameCore;
+using AccardND.GameCore.Mana;
 using AccardND.GameData;
 using UnityEngine;
 using UnityEngine.Events;
@@ -111,6 +112,13 @@ public sealed partial class BattleBoardController
 		if (ShouldShowAbilitySummary(definition))
 		{
 			ruleDetails.Add(new InspectionStatusDetail(CardAbilityInspectionLabel(definition), CardAbilityInspectionDescription(definition), new Color(1f, 0.78f, 0.24f)));
+			if (ShouldShowSupremeSummary(definition))
+			{
+				ruleDetails.Add(new InspectionStatusDetail(
+					CardSupremeInspectionLabel(definition),
+					CardSupremeInspectionDescription(definition),
+					SupremeInspectionColor));
+			}
 		}
 		if (ShouldShowEquipSummary(definition, state))
 		{
@@ -174,14 +182,40 @@ public sealed partial class BattleBoardController
 		return CardRulesGlossary.AbilityTitle(definition.HeroClass) + ":\n" + description;
 	}
 
-	private static string CardAbilityInspectionLabel(CardDefinition definition)
+	private string CardAbilityInspectionLabel(CardDefinition definition)
 	{
 		if ((Object)(object)definition == (Object)null || !definition.HasHeroClass)
 		{
 			return "ABILITA'";
 		}
 		string prefix = IsPassiveClassAbility(definition.HeroClass) ? "ABILITA' PASSIVA " : "ABILITA' ";
-		return prefix + CardRulesGlossary.HeroClassName(definition.HeroClass).ToUpperInvariant();
+		string label = prefix + CardRulesGlossary.HeroClassName(definition.HeroClass).ToUpperInvariant();
+		return label + ManaCostSuffix(PrimaryCostForInspection(definition.HeroClass));
+	}
+
+	/// <summary>
+	/// Costo che verrebbe addebitato adesso, non il valore a listino: per la suprema
+	/// include la ripetizione di classe del round. Fuori partita (deck builder,
+	/// Santuario) non c'e' una riserva viva, quindi si mostra la base.
+	/// </summary>
+	private int PrimaryCostForInspection(HeroClass heroClass)
+	{
+		return CampaignManaEnabled
+			? campaignPlayerMana.CostOfPrimary(heroClass)
+			: AbilityManaCosts.Primary(heroClass);
+	}
+
+	private int SupremeCostForInspection(HeroClass heroClass)
+	{
+		return CampaignManaEnabled
+			? campaignPlayerMana.CostOfSupreme(heroClass)
+			: AbilityManaCosts.Supreme(heroClass);
+	}
+
+	/// <summary>Suffisso da attaccare all'intestazione. Le passive costano 0 e non lo mostrano.</summary>
+	private static string ManaCostSuffix(int cost)
+	{
+		return cost <= 0 ? string.Empty : $" ({cost} MANA)";
 	}
 
 	private string CardAbilityInspectionDescription(CardDefinition definition)
@@ -202,6 +236,8 @@ public sealed partial class BattleBoardController
 		{
 			description = description.Substring(passivePrefix.Length);
 		}
+		// Il costo sta nell'intestazione, non in coda: si legge prima di decidere
+		// se l'abilita' ti interessa, non dopo aver finito la descrizione.
 		return description;
 	}
 
@@ -209,6 +245,51 @@ public sealed partial class BattleBoardController
 	{
 		return heroClass == HeroClass.Barbarian
 			|| heroClass == HeroClass.Rogue;
+	}
+
+	// --- Abilita' suprema ---
+
+	private static readonly Color SupremeInspectionColor = new Color(0.44f, 0.86f, 0.36f);
+
+	/// <summary>Id dell'unlock al Santuario, es. "ability-mage-2".</summary>
+	private static string SupremeUnlockId(HeroClass heroClass) =>
+		$"ability-{heroClass.ToString().ToLowerInvariant()}-2";
+
+	/// <summary>
+	/// La suprema compare solo se la tecnica e' stata appresa: mostrarla bloccata
+	/// occuperebbe spazio nell'ispezione senza dare niente al giocatore.
+	/// </summary>
+	private bool ShouldShowSupremeSummary(CardDefinition definition)
+	{
+		if ((Object)(object)definition == (Object)null || !definition.HasHeroClass)
+		{
+			return false;
+		}
+		if (!CardRulesGlossary.HasSupreme(definition.HeroClass))
+		{
+			return false;
+		}
+		return IsSupremeUnlocked(definition.HeroClass);
+	}
+
+	private bool IsSupremeUnlocked(HeroClass heroClass)
+	{
+		return singlePlayerProgressService != null
+			&& singlePlayerProgressService.IsUnlocked(
+				AccardND.GameData.SinglePlayerUnlockType.SecondAbility,
+				SupremeUnlockId(heroClass));
+	}
+
+	private string CardSupremeInspectionLabel(CardDefinition definition)
+	{
+		return "SUPREMA: "
+			+ CardRulesGlossary.SupremeName(definition.HeroClass).ToUpperInvariant()
+			+ ManaCostSuffix(SupremeCostForInspection(definition.HeroClass));
+	}
+
+	private static string CardSupremeInspectionDescription(CardDefinition definition)
+	{
+		return CardRulesGlossary.SupremeDescription(definition.HeroClass);
 	}
 
 	private static string HeroClassDisplayName(HeroClass heroClass)
@@ -476,8 +557,9 @@ public sealed partial class BattleBoardController
 			image.raycastTarget = false;
 			LayoutElement layoutElement = ((Component)image).gameObject.AddComponent<LayoutElement>();
 			bool abilityRow = label.StartsWith("ABILITA", StringComparison.OrdinalIgnoreCase);
+			bool supremeRow = label.StartsWith("SUPREMA", StringComparison.OrdinalIgnoreCase);
 			bool attachmentRow = label.StartsWith("EQUIPAGGIA", StringComparison.OrdinalIgnoreCase);
-			float iconSize = (abilityRow || attachmentRow) ?54f :44f;
+			float iconSize = (abilityRow || supremeRow || attachmentRow) ?54f :44f;
 			layoutElement.minWidth = iconSize;
 			layoutElement.preferredWidth = iconSize;
 			layoutElement.minHeight = iconSize;

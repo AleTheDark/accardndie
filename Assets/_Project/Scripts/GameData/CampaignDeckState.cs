@@ -151,14 +151,25 @@ namespace AccardND.GameData
             return cards.Remove(card);
         }
 
-        public List<CampaignCardInstance> DrawCombatHand(IRandomSource random, int handSize)
+        public List<CampaignCardInstance> DrawCombatHand(IRandomSource random, int handSize, int minimumFormationSize = 0)
         {
             if (random == null)
                 throw new ArgumentNullException(nameof(random));
             if (handSize < 1)
                 throw new ArgumentOutOfRangeException(nameof(handSize));
+            if (minimumFormationSize < 0 || minimumFormationSize > handSize)
+                throw new ArgumentOutOfRangeException(nameof(minimumFormationSize));
 
             ReturnUnusedHandToDeck();
+
+            // Il cooldown impedisce di riproporre la stessa formazione quando esistono
+            // alternative, ma non deve terminare una campagna ancora giocabile.
+            if (AvailableCount < minimumFormationSize
+                && AvailableCount + CooldownCount >= minimumFormationSize)
+            {
+                ReleaseCooldown();
+            }
+
             var available = FindZone(CampaignCardZone.Deck);
             Shuffle(available, random);
             int drawCount = Math.Min(handSize, available.Count);

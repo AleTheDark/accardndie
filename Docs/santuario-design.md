@@ -16,6 +16,10 @@ Principio guida: **il miele non compra lo sblocco, lo conferma**. Ogni sblocco r
 una prova guadagnata giocando, piu' un costo in miele. Il Santuario non genera contenuto,
 converte quello che il giocatore ha gia' fatto.
 
+> **Aggiornamento 2026-08-01.** Le classi fanno eccezione: le prove sono state tolte e
+> il prezzo in miele e' l'unico cancello. Vedi [Altare delle Classi](#altare-delle-classi).
+> Il motore dei requisiti resta in piedi e continua a servire le tecniche.
+
 ## Stato attuale
 
 ### Cosa esiste gia'
@@ -76,8 +80,8 @@ piu' vittorie sullo stesso boss sono quindi soddisfacibili.
 
 ```
 HUB -> [SANTUARIO] -> tre altari
-     |- CLASSI     griglia 3x3 per ClassFamily, costo + prova con progresso
-     |- TECNICHE   lista per classe posseduta, visibili ma bloccate
+     |- CLASSI     griglia 3x3 per ClassFamily, costo (le prove sono state tolte)
+     |- TECNICHE   una per classe, acquistabili con la classe posseduta
      |- RELIQUIE   oggetti, bisaccia, slot
 ```
 
@@ -91,45 +95,65 @@ deve creare aspettative che il server poi rifiuta.
 
 Le 3 starter sono mostrate come "ottenuta col tutorial", non nascoste.
 
-| Classe | Miele | Prova |
-| --- | --- | --- |
-| Assassino | 40 | Sconfiggi Bragus 2 volte |
-| Cacciatore | 40 | Sconfiggi Trentor 2 volte |
-| Paladino | 40 | Sconfiggi il Golem 3 volte |
-| Barbaro | 60 | Sconfiggi Medusa 2 volte |
-| Negromante | 60 | Livello account 5 + 300 nemici sconfitti |
-| Sacerdote | 60 | Sconfiggi Palatir 2 volte + completa 5 volte la missione giornaliera |
+| Classe | Miele |
+| --- | --- |
+| Assassino | 40 |
+| Cacciatore | 40 |
+| Paladino | 40 |
+| Barbaro | 60 |
+| Negromante | 60 |
+| Sacerdote | 60 |
 
-Criteri dietro la tabella:
+**Le classi non hanno prove** (dal 2026-08-01): si comprano col solo miele, e il prezzo
+resta l'unico segnale di quanto valgono. Le carte mostrano il costo e nient'altro; la UI
+gestisce gia' la lista di prove vuota, quindi togliere le prove e' stato togliere righe dal
+catalogo del server, non toccare il client.
 
-- la difficolta' della prova sale insieme al costo in miele: i due segnali devono dire
-  la stessa cosa al giocatore
-- tutti e quattro i boss di capitolo sono usati, in ordine
-- il Paladino e' legato al Golem (miniboss) e non a un capitolo, cosi' resta ottenibile
-  in parallelo invece che in coda
-- la giornaliera e' sull'ultima classe: li' funziona come gancio di ritorno, mentre su una
-  classe iniziale sarebbe un muro di calendario (5 giorni reali) subito dopo il tutorial
+<details>
+<summary>Le prove che c'erano prima, e perche'</summary>
 
-Nota sul bilanciamento del Negromante: "livello account 5" vale circa 4.000 EXP campagna
-(~13 run), mentre 100 nemici sarebbero ~3 run. La soglia e' stata alzata a 300 perche' i
-due termini pesino in modo confrontabile.
+| Classe | Prova |
+| --- | --- |
+| Assassino | Sconfiggi Bragus 2 volte |
+| Cacciatore | Sconfiggi Trentor 2 volte |
+| Paladino | Sconfiggi il Golem 3 volte |
+| Barbaro | Sconfiggi Medusa 2 volte |
+| Negromante | Livello account 5 + 300 nemici sconfitti |
+| Sacerdote | Sconfiggi Palatir 2 volte + completa 5 volte la missione giornaliera |
 
-La UI mostra sempre la prova e il progresso, anche per le classi non ancora avviate: e' il
-modo piu' efficace di comunicare "c'e' altro la' fuori" senza tutorial.
+Criteri di allora: la difficolta' della prova saliva insieme al costo in miele; erano usati
+tutti e quattro i boss di capitolo, in ordine; il Paladino era legato al Golem (miniboss)
+per restare ottenibile in parallelo invece che in coda; la giornaliera stava sull'ultima
+classe, dove funzionava da gancio di ritorno invece che da muro di calendario subito dopo
+il tutorial. Il Negromante chiedeva 300 nemici (non 100) perche' i due termini pesassero
+in modo confrontabile: "livello account 5" vale circa 4.000 EXP campagna, ~13 run.
+
+I contatori che alimentavano queste prove (`boss_*`, `miniboss_golem`, `enemies_defeated`,
+`daily_completed`) restano vivi: li usano le quest della taverna e il pannello admin.
+</details>
 
 ## Altare delle Tecniche (seconde abilita')
 
-Gli effetti non sono ancora definiti. In questa fase le tecniche sono **visibili con il
-prezzo ma non acquistabili**.
+Dal 2026-08-01 le tecniche sono **acquistabili**: le supreme di `Docs/mana-design.md` sono
+definite e implementate nel motore, quindi non c'e' piu' motivo di tenerle dietro un blocco.
 
 - id definitivi da subito: `ability-warrior-2`, `ability-mage-2`, ... Finiscono nel DB
   degli unlock e non si rinominano piu'
 - il tipo `SecondAbility` e il mapping stringa `secondAbility` esistono gia' su client e
   server: nessun lavoro di plumbing
-- costo indicativo mostrato: 80 miele
-- stato `LOCKED`, badge "in arrivo", bottone disabilitato
-- nome e descrizione arrivano **dal server**, cosi' si riempiono senza toccare il client
-- requisito gia' visibile: possedere la classe
+- costo: 80 miele, uguale per tutte
+- acquistabile **solo se la suprema e' implementata**: il catalogo lo chiede a
+  `AbilityManaCosts.IsSupremeImplemented`, cosi' non si vende un effetto che non esiste.
+  Oggi tocca solo il **Negromante** (Evoca Sgherri ancora da definire), che resta a
+  catalogo col prezzo e lo stato "in arrivo"
+- nome e descrizione arrivano dal server ma la sorgente e' `SupremeAbilityText` in
+  GameCore, lo stesso che alimenta l'ispezione carta: l'effetto promesso all'altare e
+  quello scritto sulla carta non possono divergere
+- requisito: possedere la classe
+
+Comprare la tecnica oggi registra il diritto e basta: il motore PvP sa gia' eseguire le
+supreme, ma non controlla ancora l'unlock e nessuna UI di partita le espone. Il gate di
+possesso e il bottone in combattimento sono i due pezzi che restano.
 
 Decisione rimandata, ma da prendere prima di scrivere gli effetti: la seconda abilita' e'
 **alternativa** alla prima (si sceglie in loadout, aggiunge varieta') o **aggiuntiva** (si
@@ -312,8 +336,10 @@ in PvP.
    - contatori esposti al client in `SinglePlayerProgressData.counters` e rispecchiati nella
      cache locale, leggibili con `GetCounter(key)`
 3. **Motore requisiti + `sanctuary.get`**, con validazione dentro `PurchaseUnlock` — FATTA
-   - `SanctuaryCatalog`: 9 classi (3 starter non acquistabili, 6 avanzate con le prove
-     approvate) e 9 tecniche placeholder bloccate, con id definitivi
+   - `SanctuaryCatalog`: 9 classi (3 starter non acquistabili, 6 avanzate) e 9 tecniche
+     con id definitivi (8 acquistabili, il Negromante bloccato finche' la sua suprema non
+     esiste). Le prove delle classi avanzate sono state tolte il 2026-08-01: restano solo
+     il costo in miele e il `classOwned` delle tecniche
    - `SanctuaryRequirementContext` valuta le prove sullo stesso snapshot che viene mandato
      al client: quello che il giocatore vede e quello che il server valida non divergono
    - tipi di prova implementati: `counter`, `accountLevel`, `classOwned`. Aggiungerne uno
@@ -321,7 +347,7 @@ in PvP.
    - costi delle classi rimossi da `UnlockCosts`: il listino tiene solo capitoli e modalita',
      mentre le voci del Santuario hanno una sola sorgente
    - `PurchaseUnlock` rifiuta con `requirements_not_met` quando una prova manca, e rifiuta
-     del tutto le voci non acquistabili (starter, tecniche)
+     del tutto le voci non acquistabili (starter, tecnica del Negromante)
 4. **Schermata Santuario** a tre altari (`BattleBoardController.Sanctuary.cs`) — FATTA
    - il bottone dell'hub apre il Santuario invece del popup "in sviluppo"
    - tre altari a tab: Classi, Tecniche, Reliquie (quest'ultimo con il solo messaggio
@@ -357,9 +383,10 @@ in PvP.
      di ogni oggetto, parte con la bisaccia
    - gli oggetti usati vengono riportati a fine run (`consumedItemIds`) e scalati dalla
      scorta; quelli non usati restano
-7. **Altare Tecniche** in sola visualizzazione — FATTA (consegnata dalle fasi 3 e 4: le 9
-   tecniche sono a catalogo con id definitivi, mostrate bloccate con prezzo e requisito di
-   classe). Resta solo da definire gli effetti.
+7. **Altare Tecniche** — FATTA. Prima in sola visualizzazione (fasi 3 e 4), poi aperta
+   all'acquisto il 2026-08-01 quando le supreme sono state implementate: 8 comprabili a 80
+   miele con la classe posseduta, il Negromante ancora bloccato. Restano il gate di
+   possesso nel motore e il bottone suprema in partita.
 8. **Missione giornaliera** — FATTA
    - `player_daily_missions (player_id, day, mission_id, baseline, claimed_at)`
    - ogni obiettivo e' "fai salire di N un contatore che gia' esiste": all'assegnazione si
@@ -376,7 +403,11 @@ in PvP.
 
 ## Punti aperti
 
-- seconde abilita': alternative o aggiuntive? Valgono in PvP?
+- seconde abilita': `Docs/mana-design.md` le ha rese **aggiuntive** (prima abilita' e
+  suprema convivono, con costi in mana diversi). Resta aperto se valgano in PvP: il motore
+  oggi le esegue per chiunque, quindi finche' non c'e' il gate di possesso l'asimmetria tra
+  chi ha pagato 80 miele e chi no non esiste — ma e' esattamente la domanda da chiudere
+  prima di scrivere quel gate
 - prezzi della bisaccia da ricalibrare dopo la correzione di `enemiesDefeated`
 - la giornaliera va nella fase 8 o si anticipa? Finche' non c'e', il Sacerdote non e'
   completabile

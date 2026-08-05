@@ -8,9 +8,14 @@ namespace AccardND.Battlefield
         void Deploy(int handIndex);
         void Attack(int enemySlot);
         void UseAbility(bool targetIsEnemy, int targetSlot);
+        void UseSupreme(bool targetIsEnemy, int targetSlot);
         void Attach(int allySlot);
         void Pass();
         void SubmitDecisive(int[] loadoutIndices);
+
+        /// <summary>Resa: la partita è persa e la vittoria va all'avversario.</summary>
+        void Surrender();
+
         void LeaveToLobby();
     }
 
@@ -40,6 +45,9 @@ namespace AccardND.Battlefield
         public bool HasAbilityClass { get; set; }
         public HeroClass AbilityClass { get; set; }
         public int AbilityMagnitude { get; set; }
+		public int ManaCurrent { get; set; }
+		public int ManaDelta { get; set; }
+		public string ManaReason { get; set; }
         public int Initiative { get; set; }
         public CombatCertainty Certainty { get; set; }
         public int AttackerDieSides { get; set; }

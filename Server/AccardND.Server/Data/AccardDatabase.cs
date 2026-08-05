@@ -214,6 +214,7 @@ public sealed class AccardDatabase
                 account_experience INTEGER NOT NULL DEFAULT 0,
                 account_total_experience INTEGER NOT NULL DEFAULT 0,
                 account_experience_to_next_level INTEGER NOT NULL DEFAULT 100,
+                pending_level_rewards INTEGER NOT NULL DEFAULT 0,
                 tutorial_completed INTEGER NOT NULL DEFAULT 0,
                 hardcore_unlocked  INTEGER NOT NULL DEFAULT 0,
                 updated_at         TEXT NOT NULL,
@@ -392,12 +393,23 @@ public sealed class AccardDatabase
                 PRIMARY KEY (player_id, request_id)
             );
             CREATE INDEX IF NOT EXISTS ix_request_dedup_expiry ON request_dedup(expires_at);
+
+            -- Impostazioni cambiabili a caldo dal pannello admin. Stanno qui e non in
+            -- serverconfig.json perche' quel file viene sovrascritto dal deploy: una
+            -- versione client alzata dal pannello deve sopravvivere alla pubblicazione
+            -- del binario successivo.
+            CREATE TABLE IF NOT EXISTS server_settings (
+                key        TEXT PRIMARY KEY,
+                value      TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
         ";
         command.ExecuteNonQuery();
         AddColumnIfMissing(connection, "single_player_progress", "account_level", "INTEGER NOT NULL DEFAULT 1");
         AddColumnIfMissing(connection, "single_player_progress", "account_experience", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "single_player_progress", "account_total_experience", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "single_player_progress", "account_experience_to_next_level", "INTEGER NOT NULL DEFAULT 100");
+        AddColumnIfMissing(connection, "single_player_progress", "pending_level_rewards", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "single_player_reward_claims", "base_account_experience", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "campaign_runs", "minibosses_defeated", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "campaign_runs", "defeated_boss_ids", "TEXT");

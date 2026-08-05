@@ -1496,7 +1496,7 @@ namespace AccardND.Battlefield
             }
         }
 
-        public IEnumerator PlayBragusCleaverCounterattack(PrototypeCardView attacker, PrototypeCardView defender, bool hit)
+        public IEnumerator PlayBragusCleaverCounterattack(PrototypeCardView attacker, PrototypeCardView defender, bool hit, Action onHitImpact = null)
         {
             RectTransform parent = ResolveProjectileParent(attacker);
             if (parent == null || attacker == null || defender == null)
@@ -1590,6 +1590,8 @@ namespace AccardND.Battlefield
                 Destroy(trailSegments[i]);
             Destroy(aura);
             Destroy(cleaver);
+            if (hit)
+                onHitImpact?.Invoke();
             yield return StartCoroutine(PlayBragusCleaverImpact(
                 parent,
                 hit ? end : travelEnd,
@@ -3076,6 +3078,196 @@ namespace AccardND.Battlefield
             yield return StartCoroutine(PlayHolySparkScatter(parent, blockPoint, blocked: true));
         }
 
+		public IEnumerator PlayMageFireballSupreme(PrototypeCardView mage, IReadOnlyList<PrototypeCardView> targets)
+		{
+			RectTransform parent = ResolveProjectileParent(mage);
+			if (parent == null || mage == null || targets == null || targets.Count == 0)
+				yield break;
+
+			Vector3 center = Vector3.zero;
+			int visibleTargets = 0;
+			foreach (PrototypeCardView target in targets)
+			{
+				if (target == null || target.RectTransform == null) continue;
+				center += target.RectTransform.position;
+				visibleTargets++;
+			}
+			if (visibleTargets == 0) yield break;
+			center /= visibleTargets;
+
+			GameObject meteor = CreateOverlaySprite(parent, "Mage Supreme Meteor", LoadHunterExplosionCoreSprite(), new Vector2(720f, 720f), out RectTransform meteorRect, out Image meteorImage);
+			GameObject corona = CreateOverlaySprite(parent, "Mage Supreme Corona", LoadHunterExplosionRingSprite(), new Vector2(900f, 900f), out RectTransform coronaRect, out Image coronaImage);
+			Vector3 start = center + new Vector3(-420f, 760f, 0f);
+			float elapsed = 0f;
+			const float flight = 0.82f;
+			while (elapsed < flight)
+			{
+				elapsed += Time.unscaledDeltaTime;
+				float p = Mathf.Clamp01(elapsed / flight);
+				float eased = p * p;
+				meteorRect.position = Vector3.LerpUnclamped(start, center, eased);
+				meteorRect.localScale = Vector3.one * Mathf.Lerp(0.18f, 1.18f, p);
+				meteorRect.localRotation = Quaternion.Euler(0f, 0f, elapsed * 240f);
+				meteorImage.color = new Color(1f, Mathf.Lerp(0.92f, 0.24f, p), 0.04f, Mathf.Clamp01(p * 5f));
+				coronaRect.position = meteorRect.position;
+				coronaRect.localScale = meteorRect.localScale * 1.15f;
+				coronaImage.color = new Color(1f, 0.28f, 0.02f, Mathf.Clamp01(p * (1f - p) * 2.8f));
+				yield return null;
+			}
+
+			List<GameObject> impacts = new List<GameObject>();
+			foreach (PrototypeCardView target in targets)
+			{
+				if (target == null || target.RectTransform == null) continue;
+				GameObject impact = CreateOverlaySprite(parent, "Mage Supreme Fire Pillar", LoadHunterExplosionCoreSprite(), new Vector2(420f, 420f), out RectTransform rect, out Image image);
+				rect.position = target.RectTransform.position;
+				image.color = new Color(1f, 0.42f, 0.03f, 0f);
+				impacts.Add(impact);
+			}
+
+			elapsed = 0f;
+			const float blast = 0.72f;
+			while (elapsed < blast)
+			{
+				elapsed += Time.unscaledDeltaTime;
+				float p = Mathf.Clamp01(elapsed / blast);
+				float fade = 1f - p;
+				meteorRect.position = center;
+				meteorRect.localScale = Vector3.one * Mathf.Lerp(1.2f, 3.8f, Mathf.SmoothStep(0f, 1f, p));
+				meteorImage.color = new Color(1f, 0.72f, 0.12f, fade);
+				coronaRect.position = center;
+				coronaRect.localScale = Vector3.one * Mathf.Lerp(0.25f, 4.5f, p);
+				coronaImage.color = new Color(1f, 0.22f, 0.01f, fade * 0.9f);
+				foreach (GameObject impact in impacts)
+				{
+					RectTransform rect = impact.GetComponent<RectTransform>();
+					Image image = impact.GetComponent<Image>();
+					rect.localScale = new Vector3(Mathf.Lerp(0.35f, 1.5f, p), Mathf.Lerp(0.2f, 2.4f, p), 1f);
+					image.color = new Color(1f, Mathf.Lerp(0.95f, 0.18f, p), 0.02f, Mathf.Clamp01(Mathf.Min(p * 8f, fade * 1.8f)));
+				}
+				yield return null;
+			}
+
+			Destroy(meteor);
+			Destroy(corona);
+			foreach (GameObject impact in impacts) Destroy(impact);
+		}
+
+		public IEnumerator PlayHunterVolleySupreme(
+			PrototypeCardView hunter,
+			IReadOnlyList<PrototypeCardView> targets,
+			IReadOnlyList<bool> hits,
+			Action onArrowShot = null)
+		{
+			RectTransform parent = ResolveProjectileParent(hunter);
+			if (parent == null || hunter == null || targets == null || hits == null)
+				yield break;
+
+			List<GameObject> arrows = new List<GameObject>();
+			List<RectTransform> arrowRects = new List<RectTransform>();
+			List<Image> arrowImages = new List<Image>();
+			List<Vector3> starts = new List<Vector3>();
+			List<Vector3> ends = new List<Vector3>();
+			List<bool> arrowHits = new List<bool>();
+			List<int> volleySteps = new List<int>();
+			int count = Mathf.Min(targets.Count, hits.Count);
+			for (int targetIndex = 0; targetIndex < count; targetIndex++)
+			{
+				PrototypeCardView target = targets[targetIndex];
+				if (target == null || target.RectTransform == null) continue;
+				Vector3 baseStart = EdgePoint(hunter.RectTransform, target.RectTransform.position);
+				Vector3 impact = EdgePoint(target.RectTransform, hunter.RectTransform.position);
+				Vector3 direction = (impact - baseStart).normalized;
+				Vector3 perpendicular = new Vector3(-direction.y, direction.x, 0f);
+				for (int arrowIndex = 0; arrowIndex < 3; arrowIndex++)
+				{
+					float lane = (arrowIndex - 1) * 24f;
+					Vector3 start = baseStart + perpendicular * lane;
+					Vector3 end = impact + perpendicular * lane;
+					if (!hits[targetIndex])
+						end += direction * 780f; // Il colpo perso attraversa la linea e vola fuori campo.
+
+					GameObject arrow = CreateHunterArrowProjectile(parent, out RectTransform rect, out Image image);
+					rect.position = start;
+					rect.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg);
+					arrows.Add(arrow);
+					arrowRects.Add(rect);
+					arrowImages.Add(image);
+					starts.Add(start);
+					ends.Add(end);
+					arrowHits.Add(hits[targetIndex]);
+					volleySteps.Add(arrowIndex);
+				}
+			}
+			if (arrows.Count == 0) yield break;
+
+			Vector3 originalScale = hunter.RectTransform.localScale;
+			float elapsed = 0f;
+			const float drawDuration = 0.32f;
+			while (elapsed < drawDuration)
+			{
+				elapsed += Time.unscaledDeltaTime;
+				float p = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / drawDuration));
+				hunter.RectTransform.localScale = Vector3.LerpUnclamped(originalScale, originalScale * 1.13f, p);
+				for (int index = 0; index < arrows.Count; index++)
+				{
+					arrowRects[index].position = starts[index];
+					arrowImages[index].color = new Color(1f, 0.86f, 0.38f, 0f);
+				}
+				yield return null;
+			}
+
+			List<GameObject> impacts = new List<GameObject>();
+			elapsed = 0f;
+			const float singleArrowFlight = 0.46f;
+			const float shotInterval = 0.16f;
+			float volleyDuration = singleArrowFlight + shotInterval * 2f;
+			bool[] shotSfxPlayed = new bool[3];
+			while (elapsed < volleyDuration)
+			{
+				elapsed += Time.unscaledDeltaTime;
+				for (int step = 0; step < shotSfxPlayed.Length; step++)
+				{
+					if (!shotSfxPlayed[step] && elapsed >= step * shotInterval)
+					{
+						shotSfxPlayed[step] = true;
+						onArrowShot?.Invoke();
+					}
+				}
+				for (int index = 0; index < arrows.Count; index++)
+				{
+					float shotElapsed = elapsed - volleySteps[index] * shotInterval;
+					if (shotElapsed < 0f)
+					{
+						arrowImages[index].color = new Color(1f, 0.94f, 0.62f, 0f);
+						continue;
+					}
+					float p = Mathf.Clamp01(shotElapsed / singleArrowFlight);
+					float eased = p * p;
+					arrowRects[index].position = Vector3.LerpUnclamped(starts[index], ends[index], eased);
+					arrowRects[index].localScale = Vector3.one * Mathf.Lerp(1f, 1.38f, Mathf.Sin(p * Mathf.PI));
+					arrowImages[index].color = new Color(1f, 0.94f, 0.62f, p >= 1f ? 0f : Mathf.Clamp01(Mathf.Min(p * 12f, (1f - p) * 8f)));
+				}
+				yield return null;
+			}
+
+			for (int index = 0; index < arrows.Count; index++)
+			{
+				if (arrowHits[index] && index % 3 == 1)
+				{
+					GameObject impact = CreateOverlaySprite(parent, "Hunter Volley Impact", LoadHunterExplosionCoreSprite(), new Vector2(300f, 300f), out RectTransform rect, out Image image);
+					rect.position = ends[index];
+					rect.localScale = Vector3.one * 1.35f;
+					image.color = new Color(1f, 0.58f, 0.08f, 0.95f);
+					impacts.Add(impact);
+				}
+			}
+			yield return new WaitForSecondsRealtime(0.2f);
+			hunter.RectTransform.localScale = originalScale;
+			foreach (GameObject arrow in arrows) Destroy(arrow);
+			foreach (GameObject impact in impacts) Destroy(impact);
+		}
+
         public IEnumerator PlayPriestBlessing(PrototypeCardView caster, PrototypeCardView target, int magnitude = 0)
         {
             if (caster == null || target == null)
@@ -3161,6 +3353,50 @@ namespace AccardND.Battlefield
             Destroy(haloObject);
             Destroy(coreObject);
             yield return StartCoroutine(PlayHolySparkScatter(parent, end, blocked: false));
+        }
+
+        /// <summary>
+        /// Impulso condiviso della Riserva del Paladino. Vive nella regia Battlefield
+        /// affinche' campagna e PvP riproducano esattamente lo stesso VFX.
+        /// </summary>
+        public IEnumerator PlayPaladinSupremePulse(PrototypeCardView paladin)
+        {
+            if (paladin == null)
+                yield break;
+
+            RectTransform parent = ResolveProjectileParent(paladin);
+            if (parent == null)
+                yield break;
+
+            GameObject ring = CreateOverlaySprite(
+                parent,
+                "Paladin Supreme Blue Pulse",
+                LoadHunterExplosionRingSprite(),
+                new Vector2(330f, 330f),
+                out RectTransform ringRect,
+                out Image ringImage);
+            Vector3 originalScale = paladin.RectTransform.localScale;
+            ringRect.position = paladin.RectTransform.position;
+
+            const float duration = 0.62f;
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+                float eased = Mathf.SmoothStep(0f, 1f, progress);
+                float pulse = Mathf.Sin(progress * Mathf.PI);
+                float alpha = (1f - eased) * Mathf.Clamp01(progress * 9f);
+
+                ringRect.position = paladin.RectTransform.position;
+                ringRect.localScale = Vector3.one * Mathf.Lerp(0.35f, 2.15f, eased);
+                ringImage.color = new Color(0.16f, 0.62f, 1f, alpha * 0.92f);
+                paladin.RectTransform.localScale = originalScale * (1f + pulse * 0.07f);
+                yield return null;
+            }
+
+            paladin.RectTransform.localScale = originalScale;
+            Destroy(ring);
         }
 
         public IEnumerator PlayHunterArrowMiss(PrototypeCardView attacker)

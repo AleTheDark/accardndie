@@ -92,11 +92,22 @@ namespace AccardND.Network
 
         private async void HandleAccountReconnected()
         {
-            if (repository == null)
-                return;
             try
             {
-                await repository.RefreshAsync();
+                // Il primo tentativo dell'Hub puo' avvenire prima che la sessione account
+                // sia pronta. In quel caso non esiste ancora un repository: la notifica di
+                // riconnessione deve crearlo, non essere ignorata, altrimenti il banner
+                // continua a mostrare per tutta la sessione i valori locali predefiniti.
+                if (repository == null)
+                {
+                    if (await EnsureRepositoryAsync() == null)
+                        return;
+                }
+                else
+                {
+                    await repository.RefreshAsync();
+                }
+
                 Reconnected?.Invoke();
             }
             catch (Exception exception)

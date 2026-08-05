@@ -57,8 +57,23 @@ namespace AccardND.GameCore
             int healing,
             int hitPointsBefore,
             int hitPointsAfter)
+            : this(form, form.VigorDieSides, attackerTotal, vigorRoll, defenseTotal, damage, healing, hitPointsBefore, hitPointsAfter)
+        {
+        }
+
+        public ComposableGolemDefenseResult(
+            ComposableGolemFormStats form,
+            int vigorDieSides,
+            int attackerTotal,
+            int vigorRoll,
+            int defenseTotal,
+            int damage,
+            int healing,
+            int hitPointsBefore,
+            int hitPointsAfter)
         {
             Form = form;
+            VigorDieSides = vigorDieSides;
             AttackerTotal = attackerTotal;
             VigorRoll = vigorRoll;
             DefenseTotal = defenseTotal;
@@ -69,6 +84,7 @@ namespace AccardND.GameCore
         }
 
         public ComposableGolemFormStats Form { get; }
+        public int VigorDieSides { get; }
         public int AttackerTotal { get; }
         public int VigorRoll { get; }
         public int DefenseTotal { get; }
@@ -87,8 +103,21 @@ namespace AccardND.GameCore
             int attackTotal,
             int targetVigorRoll,
             int targetDefenseTotal)
+            : this(form, form.VigorDieSides, target, vigorRoll, attackTotal, targetVigorRoll, targetDefenseTotal)
+        {
+        }
+
+        public ComposableGolemAttackResult(
+            ComposableGolemFormStats form,
+            int vigorDieSides,
+            CombatCard target,
+            int vigorRoll,
+            int attackTotal,
+            int targetVigorRoll,
+            int targetDefenseTotal)
         {
             Form = form;
+            VigorDieSides = vigorDieSides;
             Target = target ?? throw new ArgumentNullException(nameof(target));
             VigorRoll = vigorRoll;
             AttackTotal = attackTotal;
@@ -97,6 +126,7 @@ namespace AccardND.GameCore
         }
 
         public ComposableGolemFormStats Form { get; }
+        public int VigorDieSides { get; }
         public CombatCard Target { get; }
         public int VigorRoll { get; }
         public int AttackTotal { get; }
@@ -126,10 +156,22 @@ namespace AccardND.GameCore
             int maxHitPoints,
             int roundsPerForm,
             IReadOnlyList<ComposableGolemFormStats> forms)
+            : this(random, maxHitPoints, maxHitPoints, roundsPerForm, forms)
+        {
+        }
+
+        public ComposableGolem(
+            IRandomSource random,
+            int maxHitPoints,
+            int currentHitPoints,
+            int roundsPerForm,
+            IReadOnlyList<ComposableGolemFormStats> forms)
         {
             this.random = random ?? throw new ArgumentNullException(nameof(random));
             if (maxHitPoints < 1)
                 throw new ArgumentOutOfRangeException(nameof(maxHitPoints));
+            if (currentHitPoints < 0 || currentHitPoints > maxHitPoints)
+                throw new ArgumentOutOfRangeException(nameof(currentHitPoints));
             if (roundsPerForm < 1)
                 throw new ArgumentOutOfRangeException(nameof(roundsPerForm));
             if (forms == null)
@@ -142,7 +184,7 @@ namespace AccardND.GameCore
                 this.forms[index] = forms[index];
 
             MaxHitPoints = maxHitPoints;
-            HitPoints = maxHitPoints;
+            HitPoints = currentHitPoints;
             this.roundsPerForm = roundsPerForm;
         }
 
@@ -173,21 +215,40 @@ namespace AccardND.GameCore
 
             RoundsInActiveForm = 0;
             activeFormIndex = (activeFormIndex + 1) % forms.Length;
-            forms[activeFormIndex] = forms[activeFormIndex].AddPowerBonus(1);
+            if (activeFormIndex == 0)
+            {
+                for (int index = 0; index < forms.Length; index++)
+                    forms[index] = forms[index].AddPowerBonus(1);
+            }
             return true;
         }
 
         public ComposableGolemDefenseResult DefendAgainst(int attackerTotal)
         {
+            return DefendAgainst(attackerTotal, ActiveForm.VigorDieSides);
+        }
+
+        public ComposableGolemDefenseResult DefendAgainst(int attackerTotal, int vigorDieSides)
+        {
+            return DefendAgainst(attackerTotal, vigorDieSides, powerModifier: 0);
+        }
+
+        public ComposableGolemDefenseResult DefendAgainst(
+            int attackerTotal,
+            int vigorDieSides,
+            int powerModifier)
+        {
             if (attackerTotal < 1)
                 throw new ArgumentOutOfRangeException(nameof(attackerTotal));
+            if (vigorDieSides < 2)
+                throw new ArgumentOutOfRangeException(nameof(vigorDieSides));
             if (IsDefeated)
                 throw new InvalidOperationException("A defeated golem cannot defend.");
 
             ComposableGolemFormStats form = ActiveForm;
             int hitPointsBefore = HitPoints;
-            int vigorRoll = random.NextInclusive(1, form.VigorDieSides);
-            int defenseTotal = form.Power + vigorRoll;
+            int vigorRoll = random.NextInclusive(1, vigorDieSides);
+            int defenseTotal = form.Power + powerModifier + vigorRoll;
             int damage = Math.Max(0, attackerTotal - defenseTotal);
             int healing = form.Form == ComposableGolemForm.Glass
                 ? Math.Max(0, defenseTotal - attackerTotal)
@@ -200,6 +261,7 @@ namespace AccardND.GameCore
 
             return new ComposableGolemDefenseResult(
                 form,
+                vigorDieSides,
                 attackerTotal,
                 vigorRoll,
                 defenseTotal,
@@ -211,22 +273,42 @@ namespace AccardND.GameCore
 
         public ComposableGolemAttackResult Attack(CombatCard target, int targetVigorDieSides)
         {
+            return Attack(target, targetVigorDieSides, ActiveForm.VigorDieSides);
+        }
+
+        public ComposableGolemAttackResult Attack(
+            CombatCard target,
+            int targetVigorDieSides,
+            int vigorDieSides)
+        {
+            return Attack(target, targetVigorDieSides, vigorDieSides, powerModifier: 0);
+        }
+
+        public ComposableGolemAttackResult Attack(
+            CombatCard target,
+            int targetVigorDieSides,
+            int vigorDieSides,
+            int powerModifier)
+        {
             if (target == null)
                 throw new ArgumentNullException(nameof(target));
             if (targetVigorDieSides < 2)
                 throw new ArgumentOutOfRangeException(nameof(targetVigorDieSides));
+            if (vigorDieSides < 2)
+                throw new ArgumentOutOfRangeException(nameof(vigorDieSides));
             if (IsDefeated)
                 throw new InvalidOperationException("A defeated golem cannot attack.");
 
             ComposableGolemFormStats form = ActiveForm;
-            int vigorRoll = random.NextInclusive(1, form.VigorDieSides);
+            int vigorRoll = random.NextInclusive(1, vigorDieSides);
             int targetVigorRoll = random.NextInclusive(1, targetVigorDieSides);
 
             return new ComposableGolemAttackResult(
                 form,
+                vigorDieSides,
                 target,
                 vigorRoll,
-                form.Power + vigorRoll,
+                form.Power + powerModifier + vigorRoll,
                 targetVigorRoll,
                 target.Strength + targetVigorRoll);
         }

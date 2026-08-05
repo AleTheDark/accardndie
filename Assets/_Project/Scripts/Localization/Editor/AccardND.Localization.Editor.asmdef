@@ -1,0 +1,12 @@
+{
+  "name": "AccardND.Localization.Editor",
+  "rootNamespace": "AccardND.Localization.Editor",
+  "references": [
+    "AccardND.Localization",
+    "Unity.Localization",
+    "Unity.Localization.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ]
+}

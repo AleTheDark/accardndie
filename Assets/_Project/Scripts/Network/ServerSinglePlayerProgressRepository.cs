@@ -192,6 +192,14 @@ namespace AccardND.Network
             return outcome;
         }
 
+        public async Task<SinglePlayerRewardOutcome> ClaimLevelRewardsAsync()
+        {
+            SinglePlayerRewardOutcome outcome = await server.ClaimLevelRewardsAsync();
+            cache.ApplyAuthoritative(outcome.Progress);
+            IsSynced = true;
+            return outcome;
+        }
+
         public void ApplyAuthoritative(SinglePlayerProgressSave snapshot)
         {
             cache.ApplyAuthoritative(snapshot);
