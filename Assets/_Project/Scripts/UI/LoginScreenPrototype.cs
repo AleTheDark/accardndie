@@ -40,14 +40,20 @@ namespace AccardND.UI
         private PvpServerClient serverClient;
         private TaskCompletionSource<string> pendingNickname;
         private string signedInAccessToken;
+        private bool interfaceReady;
 
-        private void Awake()
+        private async void Awake()
         {
+            await GameText.InitializeAsync();
             BuildInterface();
+            interfaceReady = true;
         }
 
         private async void Start()
         {
+            while (!interfaceReady)
+                await PvpAsync.NextFrameAsync();
+
             // Ripristina soltanto sessioni create da un accesso Google confermato.
             // Token delle versioni precedenti o di origine incerta non devono
             // saltare la scelta dell'account.
@@ -262,8 +268,8 @@ namespace AccardND.UI
                 PlayerPrefs.DeleteKey(LoginProviderPrefsKey);
                 PlayerPrefs.Save();
                 SetGuestMode(false);
-                await CheckForUpdatesAsync();
                 await AuthenticateWithGoogleAsync();
+                await CheckForUpdatesAsync();
                 if (await ConnectAccountServerAsync(true))
                     OpenMainScene();
             }

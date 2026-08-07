@@ -134,12 +134,26 @@ namespace AccardND.Network
                     GameTextKeys.Account.SessionUsedElsewhere,
                     "Il tuo account è stato usato su un altro dispositivo.")
                 : kick.message;
+            Debug.LogWarning($"[Net] Sessione chiusa dal server: {pendingKickMessage}");
 
             // Stacca subito la riconnessione automatica: senza, il client rientrerebbe
             // col token di sessione e sloggherebbe a sua volta il dispositivo nuovo.
             dispatcher?.ConfigureReconnect(null, null);
             sessionToken = null;
         }
+
+        /// <summary>
+        /// C'è un avviso di sloggatura in attesa di essere mostrato. Vale anche come
+        /// "questa sessione è finita": chi la sta riaprendo deve mollare.
+        /// </summary>
+        private static bool SessionKickPending => pendingKickMessage != null;
+
+        /// <summary>
+        /// L'app è in secondo piano (telefono in tasca, altra app davanti). Solo su
+        /// mobile: nell'editor e su desktop non arriva mai la pausa, quindi lì il
+        /// comportamento resta quello di sempre.
+        /// </summary>
+        private static bool ApplicationIsPaused => AccountServerSessionDriver.ApplicationPaused;
 
         /// <summary>Raccoglie l'avviso di sloggatura, una volta sola.</summary>
         internal static bool TryConsumeSessionKick(out string message)
@@ -209,6 +223,15 @@ namespace AccardND.Network
             }
 
             var auth = PvpServerClient.ParsePayload<AuthResponse>(response);
+
+            // Il server ha risposto che questa sessione era già stata chiusa perché
+            // l'account è entrato altrove (l'avviso è arrivato mentre aspettavamo la
+            // risposta ed è stato instradato dall'handshake). Non è un token scaduto:
+            // rifare il login Google qui sbatterebbe fuori il dispositivo su cui il
+            // giocatore sta giocando adesso, e da lì si rimpallerebbe a vuoto.
+            if (SessionKickPending)
+                return false;
+
             if (auth is { requiresUpdate: true })
             {
                 // Il server ha alzato la versione richiesta mentre giocavamo: rifare il
@@ -220,6 +243,18 @@ namespace AccardND.Network
 
             if (auth is not { ok: true })
             {
+                // Il login Google completo non è un riaggancio: è un accesso nuovo, e un
+                // accesso nuovo slogga chi è dentro. Con l'app in secondo piano (su Android
+                // continua a girare, vedi runInBackground) il telefono in tasca si
+                // riprenderebbe da solo la sessione a chi sta giocando sul PC. Qui si molla:
+                // al ritorno in primo piano il giocatore trova il badge per rientrare.
+                if (ApplicationIsPaused)
+                {
+                    Debug.Log(
+                        "[Net] Token non più valido con l'app in secondo piano: niente accesso automatico, si rientra al ritorno.");
+                    return false;
+                }
+
                 Debug.LogWarning($"[Net] Token server non valido ({auth?.error ?? "nessuna risposta"}), provo la sessione Google.");
                 if (refreshGoogleAuthentication == null)
                     return false;
@@ -322,6 +357,13 @@ namespace AccardND.Network
         private static readonly Color SessionLostColor = new(0.62f, 0.12f, 0.10f, 0.97f);
 
         private static AccountServerSessionDriver instance;
+
+        /// <summary>
+        /// true mentre l'app è in secondo piano su mobile. Statico perché lo legge la
+        /// sessione, che non è un MonoBehaviour e non riceve la pausa.
+        /// </summary>
+        internal static bool ApplicationPaused { get; private set; }
+
         private GameObject kickedOverlay;
         private GameObject connectionBadge;
         private Text connectionBadgeText;
@@ -340,6 +382,10 @@ namespace AccardND.Network
         {
             if (instance != null)
                 return;
+            // Una sessione appena adottata nasce con il giocatore davanti allo schermo:
+            // senza questo, un "in pausa" rimasto in piedi da un play mode precedente
+            // (dominio non ricaricato) bloccherebbe il rientro automatico.
+            ApplicationPaused = false;
             var host = new GameObject("AccountServerSession") { hideFlags = HideFlags.HideAndDontSave };
             DontDestroyOnLoad(host);
             instance = host.AddComponent<AccountServerSessionDriver>();
@@ -351,6 +397,14 @@ namespace AccardND.Network
         private void OnDisable() => AccountServerSession.ReconnectFailed -= HandleSessionLost;
 
         private void HandleSessionLost() => sessionLost = true;
+
+        /// <summary>
+        /// Su Android l'app continua a girare in secondo piano (runInBackground), quindi
+        /// la riconnessione automatica lavora anche a telefono bloccato: qui si segna che
+        /// il giocatore non è davanti allo schermo, così un token scaduto non si trasforma
+        /// in un accesso nuovo che slogga l'altro dispositivo.
+        /// </summary>
+        private void OnApplicationPause(bool paused) => ApplicationPaused = paused;
 
         private void BuildConnectionBadge()
         {

@@ -45,9 +45,10 @@ public sealed partial class BattleBoardController
 
 	private void CreatePlayerHudView(Font font)
 	{
-		playerHud = CreateCombatantHud("Player HUD", font, ResolvePlayerHudDisplayName());
+		// Il vecchio pannello "Player HUD" non viene piu' creato: il Combat HUD
+		// moderno legge direttamente stato, esperienza e dado Vigore.
+		playerHud = null;
 		cpuHud = CreateCombatantHud("CPU HUD", font, "CPU MASTER");
-		ConfigureCombatantHudTooltips(playerHud, isPlayer: true);
 		ConfigureCombatantHudTooltips(cpuHud, isPlayer: false);
 		CreateHudTooltip(font);
 		CreateManaHudView(font);
@@ -332,26 +333,13 @@ public sealed partial class BattleBoardController
 
 	private void RefreshPlayerHud()
 	{
-		if (playerHud == null || runProgress == null)
+		RefreshBagGoldCounter();
+		if (runProgress == null)
 		{
 			return;
 		}
-		// Il mana ha il suo contatore in basso a sinistra: qui sarebbe un doppione.
-		string progressLabel = $"{runProgress.CurrentExperience}/{runProgress.ExperiencePerLevel} EXP";
 		RefreshManaHud();
 
-		RefreshCombatantHud(
-			playerHud,
-			isPlayer: true,
-			ResolvePlayerHudDisplayName(),
-			$"LV {runProgress.PlayerLevel}",
-			progressLabel,
-			runProgress.ExperiencePerLevel <= 0 ?0f : (float)runProgress.CurrentExperience / runProgress.ExperiencePerLevel,
-			EffectivePlayerHudVigorDieSides(),
-			campaignDeck?.AvailableCount ?? playerReserve.Count,
-			campaignDeck?.CooldownCount ?? 0,
-			campaignDeck?.GraveyardCount ?? 0);
-		ConfigurePlayerCampaignHudPresentation(playerHud);
 		RefreshCombatHudRefactor();
 	}
 

@@ -40,20 +40,24 @@ public sealed partial class BattleBoardController
 		StylePanel(dialog);
 		SetRect(dialog.rectTransform, new Vector2(0.18f, 0.34f), new Vector2(0.82f, 0.66f));
 
-		Text title = CreateText("Logout Title", ((Component)dialog).transform, font, 29, (FontStyle)1, (TextAnchor)4);
+		Text title = CreateText("Logout Title", ((Component)dialog).transform, font, 50, (FontStyle)1, (TextAnchor)4);
 		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(title);
+		Font logoutTitleFont = Resources.Load<Font>("Fonts/IMFellEnglishSC");
+		if (logoutTitleFont != null)
+			title.font = logoutTitleFont;
+		title.fontSize = 50;
+		title.resizeTextForBestFit = false;
 		title.text = "USCIRE DALL'ACCOUNT?";
 		title.color = new Color(0.95f, 0.79f, 0.34f);
 		SetRect(title.rectTransform, new Vector2(0.06f, 0.68f), new Vector2(0.94f, 0.9f));
 
-		Text body = CreateText("Logout Body", ((Component)dialog).transform, font, 20, (FontStyle)0, (TextAnchor)4);
+		Text body = CreateText("Logout Body", ((Component)dialog).transform, font, 30, (FontStyle)0, (TextAnchor)4);
 		body.text = "Tornerai alla schermata di accesso. La campagna in corso verra' abbandonata.";
 		body.color = new Color(0.86f, 0.92f, 0.94f);
 		body.horizontalOverflow = HorizontalWrapMode.Wrap;
 		body.verticalOverflow = VerticalWrapMode.Truncate;
-		body.resizeTextForBestFit = true;
-		body.resizeTextMinSize = 13;
-		body.resizeTextMaxSize = 20;
+		body.resizeTextForBestFit = false;
+		body.fontSize = 30;
 		SetRect(body.rectTransform, new Vector2(0.08f, 0.36f), new Vector2(0.92f, 0.66f));
 
 		Button cancelButton = CreateButton("Cancel Logout", ((Component)dialog).transform, font, "ANNULLA");

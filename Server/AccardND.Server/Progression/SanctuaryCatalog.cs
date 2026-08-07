@@ -21,6 +21,7 @@ public static class SanctuaryCatalog
     public const string TypeSecondAbility = "secondAbility";
     public const string TypeItem = "item";
     public const string TypeSlot = "slot";
+    public const string TypeChapter = "chapter";
 
     /// <summary>Slot bisaccia disponibili senza acquisti.</summary>
     public const int BaseBagSlots = 2;
@@ -110,8 +111,26 @@ public static class SanctuaryCatalog
         entries.Add(Slot("bag-slot-3", "Terzo slot", 60));
         entries.Add(Slot("bag-slot-4", "Quarto slot", 150));
 
+        // Capitoli. Il Santuario e' il solo banco dove si comprano: nella schermata
+        // Avventura un capitolo chiuso non si apre piu' pagando, si guarda e basta. Restano
+        // due strade per averlo, ed e' voluto che siano alternative: batti il boss del
+        // capitolo prima, oppure paghi per non aspettare.
+        foreach (ChapterCatalog.Chapter chapter in ChapterCatalog.All)
+            entries.Add(ChapterEntry(chapter));
+
         return entries.ToArray();
     }
+
+    private static Entry ChapterEntry(ChapterCatalog.Chapter chapter) => new(
+        TypeChapter,
+        chapter.Id,
+        chapter.Name,
+        chapter.Playable
+            ? "Accesso al capitolo. Si ottiene anche battendo il boss del capitolo precedente."
+            : "In arrivo: il capitolo esiste gia' nella campagna ma il suo boss non e' ancora pronto.",
+        chapter.HoneyCost,
+        ChapterCatalog.IsPurchasable(chapter),
+        Array.Empty<Requirement>());
 
     private static Entry StarterClass(string id, string name) => new(
         TypeClass, id, name, "Ottenuta completando il tutorial.", 0, false, Array.Empty<Requirement>());

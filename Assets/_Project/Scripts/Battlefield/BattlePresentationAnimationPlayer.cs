@@ -653,13 +653,7 @@ namespace AccardND.Battlefield
                 fadeOut: false));
 
             StartCoroutine(PlayAssassinBlockedDaggers(parent, defenderRect, ambushPoint));
-            yield return StartCoroutine(PlayClassBlockedWard(
-                parent,
-                blockPoint,
-                defenderRect,
-                new Color(0.18f, 1f, 0.38f, 1f),
-                new Color(0.03f, 0f, 0.05f, 1f),
-                "Assassin Shadow Guard"));
+            yield return StartCoroutine(PlaySmokePuff(parent, blockPoint, 1.15f));
 
             yield return StartCoroutine(PlaySmokeWithScale(
                 parent,

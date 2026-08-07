@@ -81,6 +81,12 @@ public static class AdminEndpoints
         app.MapGet("/admin/api/matches", (HttpContext context, int? limit, int? offset) =>
             Guard(context, auth, () => Results.Ok(service.GetMatches(limit ?? 50, offset ?? 0))));
 
+        // status si legge dalla query e non dalla firma: un parametro mancante non deve
+        // diventare un 400 per un pannello aperto da prima.
+        app.MapGet("/admin/api/runs", (HttpContext context, int? limit, int? offset) =>
+            Guard(context, auth, () => Results.Ok(service.GetRuns(
+                context.Request.Query["status"], limit ?? 100, offset ?? 0))));
+
         app.MapGet("/admin/api/seasons", (HttpContext context) =>
             Guard(context, auth, () => Results.Ok(service.GetSeasons())));
 

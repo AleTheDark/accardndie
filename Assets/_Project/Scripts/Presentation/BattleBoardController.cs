@@ -28,11 +28,13 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private const int MinibossGolemDebugPlayerLevel = 4;
 	private const string MedusaBossDebugSceneName = "MedusaBossDebug";
 	private const string TrentorBossDebugSceneName = "TrentorBossDebug";
+	private const string TrentorBossForcedDebugSceneName = "TrentorBossForcedDebug";
 	private const string BragusBossDebugSceneName = "BragusBossDebug";
 	private const string PalatirBossDebugSceneName = "PalatirBossDebug";
 	private const string PromotionalTrailerSceneName = "PromotionalTrailer";
 	private const string MerchantDebugSceneName = "MerchantDebug";
 	private const string LootRoomDebugSceneName = "LootRoomDebug";
+	private const string ClassChoiceDebugSceneName = "ClassChoiceDebug";
 
 	private const string MageVigorConstellationDebugSceneName = "MageVigorConstellationDebug";
 	private const string DiceRollDebugSceneName = "DiceRollDebug";
@@ -59,6 +61,14 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private string pendingCampaignRewardClaimId;
 	private int pendingCampaignRewardBaseAccountExperience;
 	private bool pendingCampaignRewardAdClaimed;
+
+	/// <summary>
+	/// La reward di questa run esiste sul server (o ci arrivera' col replay dell'outbox),
+	/// quindi il x3 saltato si ritrova nei messaggi del profilo. E' falso quando il server
+	/// ha rifiutato la reward: li' non c'e' niente da recuperare, e mandare il giocatore a
+	/// cercare una comunicazione che non arrivera' e' peggio del silenzio.
+	/// </summary>
+	private bool pendingCampaignRewardRecoverable;
 	private GameObject campaignDefeatRewardPopup;
 	private Text campaignDefeatRewardBodyText;
 	private Button campaignDefeatRewardDoubleButton;
@@ -578,6 +588,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private readonly List<GameObject> adventureChapterRows = new List<GameObject>();
 	private System.Threading.Tasks.Task pendingAdventureChapterClearTask = System.Threading.Tasks.Task.CompletedTask;
 	private System.Threading.Tasks.Task pendingCampaignRewardTask = System.Threading.Tasks.Task.CompletedTask;
+	private GameObject classChoicePopup;
+	private RectTransform classChoiceButtonsRoot;
+	private Text classChoiceStatusText;
+	private readonly List<GameObject> classChoiceButtonViews = new List<GameObject>();
+	private bool classChoiceSubmitting;
 
 	private GameObject adventureTutorialConfirmPopup;
 
@@ -876,6 +891,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private Button implementationArchiveButton;
 
 	private Text implementationArchiveButtonLabel;
+	private Text implementationArchiveGoldText;
 
 	private GameObject implementationArchivePanel;
 
@@ -914,6 +930,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private Text combatOutcomeText;
 
 	private GameObject cardInspectionPanel;
+
+	private int suppressCardInspectionUntilFrame = -1;
+
+	private int suppressPaladinTargetSelectionUntilFrame = -1;
 
 	private RectTransform cardInspectionBookRoot;
 
@@ -1097,6 +1117,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private TrentorBoss activeTrentorBoss;
 
 	private BragusBoss activeBragusBoss;
+	private bool bragusBossPresentationActive;
+	private bool trentorBossPresentationActive;
 
 	private PalatirBoss activePalatirBoss;
 
@@ -1118,6 +1140,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private bool debugLootRoomScene;
 
+	private bool debugClassChoiceScene;
+	private static string bootstrapSceneName;
+
 	[RuntimeInitializeOnLoadMethod(/*Could not decode attribute arguments.*/)]
 	private static void Bootstrap()
 	{
@@ -1133,18 +1158,33 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private static void EnsureControllerForScene(Scene scene)
 	{
+		// Conserva il nome ricevuto dall'evento sceneLoaded: Awake del nuovo controller
+		// non deve dipendere da quale scena Unity renda attiva nello stesso frame.
+		bootstrapSceneName = scene.name;
+		// Il controller sopravvive ai normali cambi scena, ma non deve sopravvivere
+		// al ritorno al login. In quel caso la UI della vecchia sessione viene
+		// smontata durante lo scene unload; conservarne l'istanza impedirebbe al
+		// bootstrap di crearne una nuova al successivo ingresso in MainScene,
+		// lasciando visibili soltanto camera e skybox.
+		if (string.Equals(
+			scene.name,
+			LoginScreenPrototypeSceneName,
+			StringComparison.OrdinalIgnoreCase))
+		{
+			BattleBoardController staleController = Object.FindAnyObjectByType<BattleBoardController>();
+			if ((Object)(object)staleController != (Object)null)
+				Object.Destroy((Object)staleController.gameObject);
+			return;
+		}
+
 		if (string.Equals(
 			scene.name,
 			MageVigorConstellationDebugSceneName,
 			StringComparison.OrdinalIgnoreCase)
 			|| string.Equals(
-			scene.name,
-			DiceRollDebugSceneName,
-			StringComparison.OrdinalIgnoreCase)
-			|| string.Equals(
-			scene.name,
-			LoginScreenPrototypeSceneName,
-			StringComparison.OrdinalIgnoreCase)
+				scene.name,
+				DiceRollDebugSceneName,
+				StringComparison.OrdinalIgnoreCase)
 			|| string.Equals(
 			scene.name,
 			PromotionalTrailerSceneName,
@@ -1153,7 +1193,26 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			return;
 		}
 
-		if (!((Object)(object)Object.FindAnyObjectByType<BattleBoardController>() != (Object)null))
+		// Le scene debug boss devono sempre partire da uno stato pulito. Il controller
+		// e' DontDestroyOnLoad: riutilizzarlo dopo una sessione Bragus conserva scenario,
+		// flag e UI del boss precedente (particolarmente con Domain Reload disattivato).
+		bool bossDebugScene = string.Equals(scene.name, MinibossGolemDebugSceneName, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(scene.name, MedusaBossDebugSceneName, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(scene.name, TrentorBossDebugSceneName, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(scene.name, TrentorBossForcedDebugSceneName, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(scene.name, BragusBossDebugSceneName, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(scene.name, PalatirBossDebugSceneName, StringComparison.OrdinalIgnoreCase);
+		BattleBoardController existingController = Object.FindAnyObjectByType<BattleBoardController>();
+		if (bossDebugScene && (Object)(object)existingController != (Object)null)
+		{
+			Object.Destroy((Object)existingController.gameObject);
+			GameObject freshBoard = new GameObject("Accard N' Die - Battle Board");
+			Object.DontDestroyOnLoad((Object)freshBoard);
+			freshBoard.AddComponent<BattleBoardController>();
+			return;
+		}
+
+		if (!((Object)(object)existingController != (Object)null))
 		{
 			GameObject val = new GameObject("Accard N' Die - Battle Board");
 			Object.DontDestroyOnLoad((Object)val);
@@ -1168,34 +1227,21 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		{
 			configuration = ScriptableObject.CreateInstance<GameConfiguration>();
 		}
-		debugForceFirstRoomComposableGolem = string.Equals(
-			SceneManager.GetActiveScene().name,
-			MinibossGolemDebugSceneName,
-			StringComparison.OrdinalIgnoreCase);
-		debugForceFirstRoomMedusa = string.Equals(
-			SceneManager.GetActiveScene().name,
-			MedusaBossDebugSceneName,
-			StringComparison.OrdinalIgnoreCase);
-		debugForceFirstRoomTrentor = string.Equals(
-			SceneManager.GetActiveScene().name,
-			TrentorBossDebugSceneName,
-			StringComparison.OrdinalIgnoreCase);
-		debugForceFirstRoomBragus = string.Equals(
-			SceneManager.GetActiveScene().name,
-			BragusBossDebugSceneName,
-			StringComparison.OrdinalIgnoreCase);
-		debugForceFirstRoomPalatir = string.Equals(
-			SceneManager.GetActiveScene().name,
-			PalatirBossDebugSceneName,
-			StringComparison.OrdinalIgnoreCase);
-		debugMerchantScene = string.Equals(
-			SceneManager.GetActiveScene().name,
-			MerchantDebugSceneName,
-			StringComparison.OrdinalIgnoreCase);
-		debugLootRoomScene = string.Equals(
-			SceneManager.GetActiveScene().name,
-			LootRoomDebugSceneName,
-			StringComparison.OrdinalIgnoreCase);
+		debugForceFirstRoomTrentor = IsBootstrapOrLoadedScene(TrentorBossForcedDebugSceneName)
+			|| IsBootstrapOrLoadedScene(TrentorBossDebugSceneName);
+		debugForceFirstRoomComposableGolem = !debugForceFirstRoomTrentor
+			&& IsSceneLoaded(MinibossGolemDebugSceneName);
+		debugForceFirstRoomMedusa = !debugForceFirstRoomTrentor
+			&& IsSceneLoaded(MedusaBossDebugSceneName);
+		debugForceFirstRoomBragus = !debugForceFirstRoomTrentor
+			&& IsSceneLoaded(BragusBossDebugSceneName);
+		if (debugForceFirstRoomBragus)
+			EnsureBragusDebugAudioListener();
+		debugForceFirstRoomPalatir = !debugForceFirstRoomTrentor
+			&& IsSceneLoaded(PalatirBossDebugSceneName);
+		debugMerchantScene = IsSceneLoaded(MerchantDebugSceneName);
+		debugLootRoomScene = IsSceneLoaded(LootRoomDebugSceneName);
+		debugClassChoiceScene = IsSceneLoaded(ClassChoiceDebugSceneName);
 		int num = (configuration.UseRandomSeedEachSession ?Guid.NewGuid().GetHashCode() : configuration.Gameplay.RandomSeed);
 		random = new SeededRandomSource(num);
 		combatResolver = new CombatResolver(random);
@@ -1220,8 +1266,43 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		_ = EnsureServerProgressAsync();
 	}
 
+	private static bool IsSceneLoaded(string sceneName)
+	{
+		for (int index = 0; index < SceneManager.sceneCount; index++)
+		{
+			Scene scene = SceneManager.GetSceneAt(index);
+			if (scene.isLoaded
+				&& string.Equals(scene.name, sceneName, StringComparison.OrdinalIgnoreCase))
+				return true;
+		}
+		return false;
+	}
+
+	private static bool IsBootstrapOrLoadedScene(string sceneName)
+	{
+		return string.Equals(bootstrapSceneName, sceneName, StringComparison.OrdinalIgnoreCase)
+			|| IsSceneLoaded(sceneName);
+	}
+
+	private void EnsureBragusDebugAudioListener()
+	{
+		AudioListener[] sceneListeners = Object.FindObjectsOfType<AudioListener>(includeInactive: true);
+		for (int index = 0; index < sceneListeners.Length; index++)
+		{
+			AudioListener listener = sceneListeners[index];
+			if ((Object)(object)listener != (Object)null && listener.gameObject != gameObject)
+				listener.enabled = false;
+		}
+
+		AudioListener persistentListener = GetComponent<AudioListener>();
+		if ((Object)(object)persistentListener == (Object)null)
+			persistentListener = gameObject.AddComponent<AudioListener>();
+		persistentListener.enabled = true;
+	}
+
 	private void Update()
 	{
+		UpdateTavernNotificationBadgeRefresh();
 		ResumePendingPvpMatchIfAny();
 
 		if (IsEscapePressedThisFrame() && CloseTopmostOverlay())
@@ -1286,6 +1367,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		else if (IsActive(merchantPanel))
 		{
 			CloseMerchantPanel();
+			return true;
+		}
+		else if (IsActive(languageDropdownOverlay))
+		{
+			CloseLanguageDropdown();
 			return true;
 		}
 		else if (IsActive(optionsPanel))
@@ -1371,6 +1457,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		Stretch(topInfoText.rectTransform, 10f);
 		((Component)topInfoBarRect).gameObject.SetActive(false);
 		logButton = CreateImageButton("Options Button", (Transform)(object)safeAreaRoot, builtinResource, settingsButtonSprite, string.Empty);
+		AddHubButtonOutline(logButton);
 		((UnityEvent)logButton.onClick).AddListener(new UnityAction(ToggleOptionsPanel));
 		Canvas optionsButtonCanvas = ((Component)logButton).gameObject.AddComponent<Canvas>();
 		optionsButtonCanvas.overrideSorting = true;
@@ -1392,92 +1479,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		((UnityEvent)button.onClick).AddListener(new UnityAction(ToggleLogPanel));
 		SetRect((RectTransform)((Component)button).transform, new Vector2(0.84f, 0.93f), new Vector2(0.98f, 0.99f));
 		logPanel.SetActive(false);
-		Image optionsBackdrop = CreateImage("Options Backdrop", ((Component)val).transform, new Color(0f, 0f, 0f, 0.72f));
-		optionsBackdrop.raycastTarget = true;
-		Stretch(optionsBackdrop.rectTransform);
-		optionsBackdropPanel = ((Component)optionsBackdrop).gameObject;
-		Button optionsBackdropButton = optionsBackdropPanel.AddComponent<Button>();
-		optionsBackdropButton.transition = Selectable.Transition.None;
-		((UnityEvent)optionsBackdropButton.onClick).AddListener(new UnityAction(CloseOptionsPanel));
-		Canvas optionsBackdropCanvas = optionsBackdropPanel.AddComponent<Canvas>();
-		optionsBackdropCanvas.overrideSorting = true;
-		optionsBackdropCanvas.sortingOrder = 980;
-		optionsBackdropPanel.AddComponent<GraphicRaycaster>();
-		optionsBackdropPanel.SetActive(false);
-		Image imageOptions = CreateImage("Options Panel", (Transform)(object)safeAreaRoot, new Color(0.008f, 0.014f, 0.022f, 0.97f));
-		StylePanel(imageOptions);
-		optionsPanel = ((Component)imageOptions).gameObject;
-		SetRect(imageOptions.rectTransform, new Vector2(0.64f, 0.52f), new Vector2(0.98f, 0.92f));
-		Canvas optionsCanvas = optionsPanel.AddComponent<Canvas>();
-		optionsCanvas.overrideSorting = true;
-		optionsCanvas.sortingOrder = 981;
-		optionsPanel.AddComponent<GraphicRaycaster>();
-		Text optionsTitle = CreateText("Options Title", optionsPanel.transform, builtinResource, 22, (FontStyle)1, (TextAnchor)4);
-		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(optionsTitle);
-		optionsTitle.text = "OPZIONI";
-		optionsTitle.color = new Color(0.95f, 0.79f, 0.34f);
-		SetRect(optionsTitle.rectTransform, new Vector2(0.06f, 0.87f), new Vector2(0.94f, 0.97f));
-		Button optionsLogButton = CreateButton("Options Open Log", optionsPanel.transform, builtinResource, "LOG");
-		((UnityEvent)optionsLogButton.onClick).AddListener(new UnityAction(OpenLogFromOptions));
-		ApplyBattleButtonVariant(optionsLogButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Gold);
-		Button optionsAuraButton = CreateButton("Options Open Aura Codex", optionsPanel.transform, builtinResource, "AURE");
-		((UnityEvent)optionsAuraButton.onClick).AddListener(new UnityAction(OpenAuraCodexFromOptions));
-		ApplyBattleButtonVariant(optionsAuraButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Arcane);
-		SetRect((RectTransform)((Component)optionsLogButton).transform, new Vector2(0.06f, 0.7f), new Vector2(0.48f, 0.84f));
-		SetRect((RectTransform)((Component)optionsAuraButton).transform, new Vector2(0.52f, 0.7f), new Vector2(0.94f, 0.84f));
-		Text volumeLabel = CreateText("SFX Volume Label", optionsPanel.transform, builtinResource, 17, (FontStyle)1, (TextAnchor)4);
-		volumeLabel.text = "VOLUME SFX";
-		volumeLabel.color = new Color(0.82f, 0.9f, 0.92f);
-		SetRect(volumeLabel.rectTransform, new Vector2(0.06f, 0.57f), new Vector2(0.94f, 0.65f));
-		Button sfxDownButton = CreateButton("SFX Volume Down", optionsPanel.transform, builtinResource, "-");
-		((UnityEvent)sfxDownButton.onClick).AddListener(new UnityAction(DecreaseSfxVolume));
-		SetRect((RectTransform)((Component)sfxDownButton).transform, new Vector2(0.06f, 0.45f), new Vector2(0.25f, 0.55f));
-		sfxVolumeText = CreateText("SFX Volume Value", optionsPanel.transform, builtinResource, 19, (FontStyle)1, (TextAnchor)4);
-		sfxVolumeText.color = new Color(0.95f, 0.79f, 0.34f);
-		SetRect(sfxVolumeText.rectTransform, new Vector2(0.28f, 0.45f), new Vector2(0.54f, 0.55f));
-		Button sfxUpButton = CreateButton("SFX Volume Up", optionsPanel.transform, builtinResource, "+");
-		((UnityEvent)sfxUpButton.onClick).AddListener(new UnityAction(IncreaseSfxVolume));
-		SetRect((RectTransform)((Component)sfxUpButton).transform, new Vector2(0.57f, 0.45f), new Vector2(0.76f, 0.55f));
-		sfxMuteButton = CreateButton("SFX Mute", optionsPanel.transform, builtinResource, "MUTE");
-		((UnityEvent)sfxMuteButton.onClick).AddListener(new UnityAction(ToggleSfxMute));
-		sfxMuteButtonText = ((Component)sfxMuteButton).GetComponentInChildren<Text>();
-		SetRect((RectTransform)((Component)sfxMuteButton).transform, new Vector2(0.79f, 0.45f), new Vector2(0.94f, 0.55f));
-		Text musicLabel = CreateText("Music Volume Label", optionsPanel.transform, builtinResource, 17, (FontStyle)1, (TextAnchor)4);
-		musicLabel.text = "VOLUME MUSICA";
-		musicLabel.color = new Color(0.82f, 0.9f, 0.92f);
-		SetRect(musicLabel.rectTransform, new Vector2(0.06f, 0.32f), new Vector2(0.94f, 0.4f));
-		Button musicDownButton = CreateButton("Music Volume Down", optionsPanel.transform, builtinResource, "-");
-		((UnityEvent)musicDownButton.onClick).AddListener(new UnityAction(DecreaseMusicVolume));
-		SetRect((RectTransform)((Component)musicDownButton).transform, new Vector2(0.06f, 0.2f), new Vector2(0.25f, 0.3f));
-		musicVolumeText = CreateText("Music Volume Value", optionsPanel.transform, builtinResource, 19, (FontStyle)1, (TextAnchor)4);
-		musicVolumeText.color = new Color(0.95f, 0.79f, 0.34f);
-		SetRect(musicVolumeText.rectTransform, new Vector2(0.28f, 0.2f), new Vector2(0.54f, 0.3f));
-		Button musicUpButton = CreateButton("Music Volume Up", optionsPanel.transform, builtinResource, "+");
-		((UnityEvent)musicUpButton.onClick).AddListener(new UnityAction(IncreaseMusicVolume));
-		SetRect((RectTransform)((Component)musicUpButton).transform, new Vector2(0.57f, 0.2f), new Vector2(0.76f, 0.3f));
-		musicMuteButton = CreateButton("Music Mute", optionsPanel.transform, builtinResource, "MUTE");
-		((UnityEvent)musicMuteButton.onClick).AddListener(new UnityAction(ToggleMusicMute));
-		musicMuteButtonText = ((Component)musicMuteButton).GetComponentInChildren<Text>();
-		SetRect((RectTransform)((Component)musicMuteButton).transform, new Vector2(0.79f, 0.2f), new Vector2(0.94f, 0.3f));
-		// Tre bottoni in fondo: uscire al menu, uscire dall'account, chiudere.
-		Button closeOptionsButton = CreateButton("Close Options", optionsPanel.transform, builtinResource, "CHIUDI");
-		((UnityEvent)closeOptionsButton.onClick).AddListener(new UnityAction(ToggleOptionsPanel));
-		ApplyBattleButtonVariant(closeOptionsButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Crimson);
-		SetRect((RectTransform)((Component)closeOptionsButton).transform, new Vector2(0.66f, 0.04f), new Vector2(0.94f, 0.14f));
-		optionsMainMenuButton = CreateButton("Options Main Menu", optionsPanel.transform, builtinResource, "MENU");
-		optionsMainMenuButtonText = ((Component)optionsMainMenuButton).GetComponentInChildren<Text>();
-		((UnityEvent)optionsMainMenuButton.onClick).AddListener(new UnityAction(ReturnToMainMenuFromOptions));
-		ApplyBattleButtonVariant(optionsMainMenuButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Violet);
-		SetRect((RectTransform)((Component)optionsMainMenuButton).transform, new Vector2(0.06f, 0.04f), new Vector2(0.34f, 0.14f));
-		Button optionsLogoutButton = CreateButton("Options Logout", optionsPanel.transform, builtinResource, "LOGOUT");
-		((UnityEvent)optionsLogoutButton.onClick).AddListener(new UnityAction(LogoutFromOptions));
-		ApplyBattleButtonVariant(optionsLogoutButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Gold);
-		SetRect((RectTransform)((Component)optionsLogoutButton).transform, new Vector2(0.36f, 0.04f), new Vector2(0.64f, 0.14f));
-		SetOptionsPanelVisible(false);
+		CreateOptionsPanel(((Component)val).transform, builtinResource);
 		CreateReturnToMenuConfirmation((Transform)(object)safeAreaRoot, builtinResource);
 		CreateLogoutConfirmation((Transform)(object)safeAreaRoot, builtinResource);
-		RefreshSfxOptionsUi();
-		RefreshMusicOptionsUi();
 		Text text2 = (cpuTitleText = CreateText("CPU Title", (Transform)(object)safeAreaRoot, builtinResource, 25, (FontStyle)1, (TextAnchor)3));
 		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(text2);
 		cpuTitleRect = text2.rectTransform;
@@ -1601,6 +1605,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		CreateHintOverlay((Transform)(object)safeAreaRoot, builtinResource);
 		CreateAuraCodexView(((Component)val).transform, builtinResource);
 		CreateCampaignDefeatRewardPopup((Transform)(object)safeAreaRoot, builtinResource);
+		CreateCampaignLevelUpPopup((Transform)(object)safeAreaRoot, builtinResource);
+		CreateClassChoicePopup((Transform)(object)safeAreaRoot, builtinResource);
 		RefreshPlayerHud();
 		RefreshCpuHud();
 		RefreshRoomHud("PREPARAZIONE", (((Object)(object)currentScenario != (Object)null) ?currentScenario.DisplayName.ToUpperInvariant() : "SCENARIO"));

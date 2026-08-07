@@ -58,6 +58,12 @@ public sealed class MessageRouter
         MessageTypes.FriendBlock
     };
 
+    /// <summary>
+    /// Un account, una sessione: il testo che legge chi resta fuori. Lo usano sia la
+    /// sloggatura in diretta sia il rifiuto di un riaggancio già sostituito.
+    /// </summary>
+    private const string SessionUsedElsewhereMessage = "Il tuo account è stato usato su un altro dispositivo.";
+
     private const int LeaderboardLimit = 50;
     private const int HallOfFameLimit = 50;
     private const int RoomListLimit = 30;
@@ -379,6 +385,15 @@ public sealed class MessageRouter
                     connection, singlePlayerProgress.ClaimTutorialReward(connection.Identity, request), cancellation);
                 break;
             }
+            case MessageTypes.SinglePlayerRunStarted:
+            {
+                var request = ClientConnection.ParsePayload<SinglePlayerRunStartRequest>(envelope);
+                await connection.SendAsync(
+                    MessageTypes.SinglePlayerRunStartedAck,
+                    singlePlayerProgress.RecordRunStart(connection.Identity, request),
+                    cancellation);
+                break;
+            }
             case MessageTypes.SinglePlayerClaimDeathReward:
             {
                 var request = ClientConnection.ParsePayload<SinglePlayerDeathRewardRequest>(envelope);
@@ -393,6 +408,12 @@ public sealed class MessageRouter
                     connection, singlePlayerProgress.ClaimAdMultiplier(connection.Identity, request), cancellation);
                 break;
             }
+            case MessageTypes.SinglePlayerPendingAdRewardsGet:
+                await connection.SendAsync(
+                    MessageTypes.SinglePlayerPendingAdRewardsData,
+                    singlePlayerProgress.GetPendingAdRewards(connection.Identity),
+                    cancellation);
+                break;
             case MessageTypes.SinglePlayerClaimLevelRewards:
             {
                 await SendRewardResultAsync(
@@ -582,6 +603,23 @@ public sealed class MessageRouter
 
         // L'account può essere cambiato (nickname) dopo l'emissione del token.
         (AccountIdentity identity, bool requiresNickname) = accounts.Reload(issued);
+
+        // Il token non c'è più perché l'account è entrato da un'altra parte, e questo
+        // client non ha mai letto l'avviso: glielo diamo adesso. Rispondere solo
+        // "sessione scaduta" lo farebbe ripiegare sul login completo, rientrando come
+        // sessione nuova e sloggando il dispositivo su cui si sta giocando ora.
+        bool wasSuperseded = identity == null && sessionTokens.WasSuperseded(request?.sessionToken);
+        if (wasSuperseded)
+        {
+            logger.LogInformation(
+                "Riaggancio rifiutato su {ConnectionId}: quella sessione era già stata chiusa da un altro dispositivo.",
+                connection.ConnectionId);
+            await connection.SendAsync(
+                MessageTypes.SessionKicked,
+                new SessionKickedMessage { message = SessionUsedElsewhereMessage },
+                cancellation);
+        }
+
         if (identity != null)
         {
             connection.Identity = identity;
@@ -597,7 +635,11 @@ public sealed class MessageRouter
         await connection.SendAsync(MessageTypes.AuthResponse, new AuthResponse
         {
             ok = identity != null,
-            error = identity != null ? null : "Sessione scaduta: rifai l'accesso.",
+            error = identity != null
+                ? null
+                : wasSuperseded
+                    ? SessionUsedElsewhereMessage
+                    : "Sessione scaduta: rifai l'accesso.",
             playerId = identity?.PlayerId,
             username = identity?.Username,
             requiresNickname = requiresNickname,
@@ -864,7 +906,7 @@ public sealed class MessageRouter
                     connection.Identity.Username, previous.ConnectionId);
                 await previous.SendAsync(MessageTypes.SessionKicked, new SessionKickedMessage
                 {
-                    message = "Il tuo account è stato usato su un altro dispositivo."
+                    message = SessionUsedElsewhereMessage
                 });
                 // Senza revoca il client sloggato rientrerebbe da solo con la
                 // riconnessione automatica, sbattendo fuori a sua volta il nuovo.

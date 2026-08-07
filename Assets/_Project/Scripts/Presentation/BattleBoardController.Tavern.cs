@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -30,31 +31,54 @@ namespace AccardND.Presentation
 		private bool tavernLoading;
 		private bool tavernClaiming;
 		private bool tavernBadgeLoading;
+		private float nextTavernBadgeRefreshAt;
+		private const float TavernBadgeRefreshIntervalSeconds = 60f;
 
 		private void CreateTavernNotificationBadge(Button tavernButton, Font font)
 		{
-			Image badge = CreateImage("Tavern Quest Notification", tavernButton.transform, new Color(0.78f, 0.08f, 0.045f, 1f));
-			badge.sprite = AccardND.Battlefield.MmoUiTheme.GetRadialGlowSprite();
+			Sprite circleSprite = AccardND.Battlefield.MmoUiTheme.GetSolidCircleSprite();
+			Image badgeFrame = CreateImage("Tavern Quest Notification", tavernButton.transform, Color.black);
+			badgeFrame.sprite = circleSprite;
+			badgeFrame.type = Image.Type.Simple;
+			badgeFrame.raycastTarget = false;
+
+			RectTransform badgeRect = badgeFrame.rectTransform;
+			// Il banner usa preserveAspect: il suo bordo visibile e il bordo del RectTransform
+			// non coincidono. Queste ancore tengono il badge dentro la parte disegnata.
+			badgeRect.anchorMin = new Vector2(0.86f, 0.78f);
+			badgeRect.anchorMax = new Vector2(0.86f, 0.78f);
+			badgeRect.pivot = new Vector2(0.5f, 0.5f);
+			badgeRect.localScale = new Vector3(0.8f, 0.8f, 1f);
+			badgeRect.sizeDelta = new Vector2(58f, 58f);
+			badgeRect.anchoredPosition = new Vector2(-26.7f, -11.9f);
+
+			Outline frameOutline = badgeFrame.gameObject.AddComponent<Outline>();
+			frameOutline.effectColor = Color.black;
+			frameOutline.effectDistance = new Vector2(1f, -1f);
+
+			Shadow frameShadow = badgeFrame.gameObject.AddComponent<Shadow>();
+			frameShadow.effectColor = new Color(0f, 0f, 0f, 0.65f);
+			frameShadow.effectDistance = new Vector2(2f, -2f);
+
+			Image badge = CreateImage(
+				"Tavern Quest Notification Inner", badgeFrame.transform,
+				new Color(0.82f, 0.035f, 0.025f, 1f));
+			badge.sprite = circleSprite;
 			badge.type = Image.Type.Simple;
 			badge.raycastTarget = false;
-
-			RectTransform badgeRect = badge.rectTransform;
-			badgeRect.anchorMin = Vector2.one;
-			badgeRect.anchorMax = Vector2.one;
-			badgeRect.pivot = new Vector2(0.5f, 0.5f);
-			badgeRect.sizeDelta = new Vector2(58f, 58f);
-			badgeRect.anchoredPosition = new Vector2(-5f, -5f);
-
-			Outline outline = badge.gameObject.AddComponent<Outline>();
-			outline.effectColor = new Color(1f, 0.72f, 0.2f, 0.95f);
-			outline.effectDistance = new Vector2(3f, -3f);
+			RectTransform innerRect = badge.rectTransform;
+			innerRect.anchorMin = new Vector2(0.5f, 0.5f);
+			innerRect.anchorMax = new Vector2(0.5f, 0.5f);
+			innerRect.pivot = new Vector2(0.5f, 0.5f);
+			innerRect.sizeDelta = new Vector2(46f, 46f);
+			innerRect.anchoredPosition = Vector2.zero;
 
 			tavernNotificationBadgeText = CreateText(
 				"Tavern Quest Notification Count", badge.transform, font, 28, FontStyle.Bold, TextAnchor.MiddleCenter);
 			tavernNotificationBadgeText.color = Color.white;
 			tavernNotificationBadgeText.raycastTarget = false;
 			Stretch(tavernNotificationBadgeText.rectTransform);
-			tavernNotificationBadge = badge.gameObject;
+			tavernNotificationBadge = badgeFrame.gameObject;
 			tavernNotificationBadge.SetActive(false);
 		}
 
@@ -70,6 +94,8 @@ namespace AccardND.Presentation
 				if (quests[i] != null && quests[i].completed && !quests[i].claimed)
 					claimable++;
 			}
+			if (data != null && data.bonusAvailable && !data.bonusClaimed)
+				claimable++;
 
 			tavernNotificationBadgeText.text = claimable > 9 ? "9+" : claimable.ToString();
 			tavernNotificationBadge.SetActive(claimable > 0);
@@ -102,7 +128,24 @@ namespace AccardND.Presentation
 			finally
 			{
 				tavernBadgeLoading = false;
+				nextTavernBadgeRefreshAt = Time.unscaledTime + TavernBadgeRefreshIntervalSeconds;
 			}
+		}
+
+		/// <summary>
+		/// Tiene il badge allineato al server anche se l'Hub era gia' visibile quando la
+		/// sessione account e' diventata pronta o una quest e' stata completata altrove.
+		/// </summary>
+		private void UpdateTavernNotificationBadgeRefresh()
+		{
+			if (!IsAccountHubVisible())
+			{
+				nextTavernBadgeRefreshAt = 0f;
+				return;
+			}
+
+			if (!tavernBadgeLoading && Time.unscaledTime >= nextTavernBadgeRefreshAt)
+				_ = RefreshTavernNotificationBadgeAsync();
 		}
 
 		private void CreateTavernView(Transform canvasTransform, Font fallbackFont)
@@ -526,7 +569,12 @@ namespace AccardND.Presentation
 		/// </summary>
 		private async System.Threading.Tasks.Task<bool> ShowTavernAdGateAsync(AdPlacement placement)
 		{
-			SetTavernNotice("Un attimo: sto caricando la pubblicità...");
+			// Dove la ricompensa e' condonata non c'e' nessuna pubblicita' in arrivo:
+			// annunciarla sarebbe una promessa che non manteniamo, e per un attimo farebbe
+			// anche sembrare lento un incasso immediato.
+			SetTavernNotice(AdService.RewardsWaivedWithoutAds
+				? GameText.GetOrFallbackSilent(GameTextKeys.Tavern.Claiming, "Un attimo: sto riscuotendo...")
+				: GameText.GetOrFallbackSilent(GameTextKeys.Tavern.LoadingAd, "Un attimo: sto caricando la pubblicità..."));
 			// Le righe si spengono durante l'attesa: senza, un secondo tocco su un'altra quest
 			// mentre l'annuncio sta partendo si prenderebbe uno scarto per "annuncio gia' a
 			// schermo" e il giocatore si vedrebbe rifiutare una riscossione buona.
@@ -542,16 +590,23 @@ namespace AccardND.Presentation
 				tavernClaiming = false;
 			}
 
-			if (ad.Watched)
+			if (ad.Grants)
 			{
 				SetTavernNotice(string.Empty);
 				return true;
 			}
 
 			SetTavernNotice(ad.Unavailable
-				? "Nessuna pubblicità disponibile in questo momento: la ricompensa resta qui, riprova più tardi."
-				: "La pubblicità va guardata per intero per riscuotere.");
-			AppendLog($"TAVERNA - riscossione non sbloccata: annuncio {ad.Outcome}.");
+				? GameText.GetOrFallbackSilent(
+					GameTextKeys.Tavern.AdUnavailable,
+					"Nessuna pubblicità disponibile in questo momento: la ricompensa resta qui, riprova più tardi.")
+				: GameText.GetOrFallbackSilent(
+					GameTextKeys.Tavern.AdIncomplete,
+					"La pubblicità va guardata per intero per riscuotere."));
+			AppendLog(GameText.GetOrFallbackSilent(
+				GameTextKeys.Tavern.ClaimNotUnlockedLog,
+				"TAVERNA - riscossione non sbloccata: annuncio {0}.",
+				ad.Outcome));
 			ApplyTavernData(tavernData);
 			return false;
 		}

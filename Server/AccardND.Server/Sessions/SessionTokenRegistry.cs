@@ -21,6 +21,19 @@ public sealed class SessionTokenRegistry
 
     private readonly ConcurrentDictionary<string, Entry> entries = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Pietre tombali dei token revocati perché l'account è entrato altrove.
+    /// Togliere il token non basta: il client sloggato può non aver mai letto
+    /// l'avviso (app Android in pausa, scheda del browser in secondo piano: lì il
+    /// loop di gioco è fermo e i messaggi restano in coda) e al risveglio prova a
+    /// riagganciarsi. Trovando un token "sconosciuto" ripiegherebbe sul login
+    /// Google, rientrerebbe come sessione nuova e sbatterebbe fuori il dispositivo
+    /// che sta giocando adesso — che a sua volta rifarebbe lo stesso, all'infinito.
+    /// Ricordandoci la revoca possiamo invece rispondergli "sei stato sostituito",
+    /// e quello è un rifiuto su cui si ferma.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, DateTime> superseded = new(StringComparer.Ordinal);
+
     /// <summary>Emette un token per l'identità appena autenticata.</summary>
     public string Issue(AccountIdentity identity)
     {
@@ -59,8 +72,29 @@ public sealed class SessionTokenRegistry
     /// </summary>
     public void Revoke(string token)
     {
-        if (!string.IsNullOrEmpty(token))
-            entries.TryRemove(token, out _);
+        if (string.IsNullOrEmpty(token))
+            return;
+        entries.TryRemove(token, out _);
+        // Il ricordo dura quanto sarebbe durato il token: oltre, un riaggancio
+        // sarebbe comunque scaduto e "rifai l'accesso" è la risposta giusta.
+        superseded[token] = DateTime.UtcNow.Add(Lifetime);
+    }
+
+    /// <summary>
+    /// true se questo token era valido ed è stato revocato perché l'account è
+    /// entrato da un altro dispositivo. Un token mai emesso o semplicemente
+    /// scaduto non conta: quello merita un login nuovo, non l'avviso di
+    /// sloggatura.
+    /// </summary>
+    public bool WasSuperseded(string token)
+    {
+        if (string.IsNullOrEmpty(token) || !superseded.TryGetValue(token, out DateTime rememberUntil))
+            return false;
+        if (rememberUntil > DateTime.UtcNow)
+            return true;
+
+        superseded.TryRemove(token, out _);
+        return false;
     }
 
     private void Prune()
@@ -70,6 +104,12 @@ public sealed class SessionTokenRegistry
         {
             if (pair.Value.ExpiresAtUtc <= now)
                 entries.TryRemove(pair.Key, out _);
+        }
+
+        foreach (KeyValuePair<string, DateTime> pair in superseded)
+        {
+            if (pair.Value <= now)
+                superseded.TryRemove(pair.Key, out _);
         }
     }
 }

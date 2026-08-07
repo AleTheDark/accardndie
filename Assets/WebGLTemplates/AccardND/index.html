@@ -1,23 +1,40 @@
 <!DOCTYPE html>
-<html lang="en-us">
+<html lang="it">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Unity Web Player | {{{ PRODUCT_NAME }}}</title>
+    <!-- Questa pagina e' servita da https://accardndie.com/game/ , non dalla radice:
+         la radice e' la homepage del sito. Tutti i percorsi delle risorse qui sotto
+         (Build, TemplateData, StreamingAssets, sw.js, manifest) sono RELATIVI apposta,
+         cosi' si risolvono dentro /game/ senza dover ripetere il prefisso. -->
+    <title>Gioca — {{{ PRODUCT_NAME }}}</title>
+    <meta name="description" content="Gioca ad Accard N' Die direttamente nel browser: carte, nove classi e dadi, senza installare niente.">
+    <link rel="canonical" href="https://accardndie.com/game/">
     <script>
       window.ACCARDND_GOOGLE_CLIENT_ID = "866249556431-mgdm97uvov7mjvect4bp453dpp2oe48u.apps.googleusercontent.com";
 
       // Pubblicita' sul web (H5 Games Ads di AdSense). Il publisher id sta qui e non nel
       // codice C# perche' e' una configurazione del sito, non del gioco: cambiarlo non
       // richiede una build. Vuoto = niente pubblicita', il gioco parte lo stesso.
-      window.ACCARDND_ADSENSE_CLIENT_ID = "";
-
-      // true = annunci di PROVA. Si vedono anche prima che AdSense approvi il sito ed e'
-      // l'unico modo di collaudare senza generare traffico non valido. Va messo a false
-      // solo quando il sito e' approvato e si vuole pubblicita' vera: da quel momento
-      // cliccare i propri annunci significa chiusura dell'account.
-      window.ACCARDND_ADSENSE_TEST = true;
+      window.ACCARDND_ADSENSE_CLIENT_ID = "ca-pub-3580486749764055";
     </script>
+    <!-- Precaricato: il click Unity puo' aprire Google subito, conservando il gesto utente. -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <!-- Lo snippet AdSense sta qui, statico, e non viene iniettato da AccardNdAds.jslib.
+         Due motivi, tutti e due appresi sul campo:
+         - il crawler che verifica la proprieta' del sito legge l'HTML e non aspetta che
+           Unity si avvii, quindi un tag creato da JavaScript per lui non esiste;
+         - due copie dello script sulla stessa pagina fanno fallire adsbygoogle con
+           "only one AdSense head tag supported per page".
+
+         data-adbreak-test="on" fa uscire annunci di PROVA: si vedono anche prima
+         dell'approvazione ed e' l'unico modo di collaudare senza generare traffico non
+         valido. TOGLIERE quell'attributo quando il sito e' approvato - da quel momento gli
+         annunci sono veri e cliccare i propri significa chiusura dell'account. -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3580486749764055"
+            crossorigin="anonymous"
+            data-adbreak-test="on"></script>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
     <link rel="manifest" href="manifest.webmanifest">
@@ -52,8 +69,36 @@
         <img id="diagnostics-icon" src="TemplateData/webmemd-icon.png">
 #endif
         <div id="unity-build-title">{{{ PRODUCT_NAME }}}</div>
+
+        <!-- Collegamenti alle pagine di contenuto del sito. Non sono decorazione: sono
+             l'unico percorso da cui un crawler puo' raggiungere il regolamento, il database
+             delle carte e l'informativa, perche' la pagina di gioco per lui e' un canvas
+             vuoto. Stanno dentro #unity-footer per ereditarne il posizionamento (sotto al
+             canvas su desktop, nascosto sul telefono, dove il gioco occupa tutto lo
+             schermo): nel documento restano comunque, ed e' quello che conta.
+             Sono tutti assoluti perche' questa pagina vive in /game/, mentre il resto del
+             sito sta in radice: un href relativo cercherebbe /game/guida.html. -->
+        <nav id="site-links">
+          <a href="/">Home</a>
+          <a href="/guida.html">Come si gioca</a>
+          <a href="/classi.html">Le nove classi</a>
+          <a href="/carte.html">Database carte</a>
+          <a href="/statistiche">Statistiche</a>
+          <a href="/privacy.html">Privacy</a>
+        </nav>
       </div>
     </div>
+    <style>
+      /* Riga propria sotto al logo Unity: il canvas su desktop e' un ritratto stretto, e
+         quattro link in fila accanto al logo e al pulsante schermo intero non ci starebbero.
+         Il clear serve proprio a scendere sotto quei float. */
+      #site-links {
+        clear: both; text-align: center; padding-top: 2px;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: .8rem;
+      }
+      #site-links a { color: #a89c88; text-decoration: none; margin: 0 .55rem; }
+      #site-links a:hover { color: #f0b93d; }
+    </style>
     <script>
       var canvas = document.querySelector("#unity-canvas");
 
@@ -166,7 +211,9 @@
         // L'aspect ratio arriva dalle dimensioni WebGL di default (Player Settings).
         var portraitAspect = {{{ WIDTH }}} / {{{ HEIGHT }}};
         function fitPortrait() {
-          var h = window.innerHeight - 44; // spazio per il footer
+          // 68 e non 44: il footer ha due righe, la barra Unity piu' i collegamenti alle
+          // pagine del sito. Sottostimarlo taglierebbe i link fuori dallo schermo.
+          var h = window.innerHeight - 68; // spazio per il footer
           var w = h * portraitAspect;
           if (w > window.innerWidth) {
             w = window.innerWidth;

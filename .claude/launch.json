@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sito",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "C:/Users/accar/AppData/Local/Temp/claude/C--Users-accar-AccardND-AccardND/47110aea-bff8-46df-8b05-e6d774686ab4/scratchpad/devsite.py"
+      ],
+      "port": 8123
+    }
+  ]
+}

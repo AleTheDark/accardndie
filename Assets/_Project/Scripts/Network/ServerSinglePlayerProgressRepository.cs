@@ -171,6 +171,24 @@ namespace AccardND.Network
         }
 
         /// <summary>
+        /// Segnala l'inizio di una run di campagna. Non tocca la cache: non e' progressione,
+        /// e' la riga dello storico che la reward di fine run andra' a chiudere. Non lancia:
+        /// una run non deve fermarsi perche' il server non ha preso nota dell'avvio.
+        /// </summary>
+        public async Task NotifyRunStartedAsync(string runId, string mode, string chapterId, string stageId)
+        {
+            try
+            {
+                await server.NotifyRunStartedAsync(runId, mode, chapterId, stageId);
+                IsSynced = true;
+            }
+            catch (Exception)
+            {
+                IsSynced = false;
+            }
+        }
+
+        /// <summary>
         /// Riscatta la ricompensa alla morte: il server calcola il miele dal sommario (con cap)
         /// e restituisce anche il rewardClaimId, da passare a <see cref="ClaimAdMultiplierAsync"/>
         /// se il player guarda la pubblicita per triplicare.
@@ -183,6 +201,17 @@ namespace AccardND.Network
             return outcome;
         }
 
+        /// <summary>
+        /// Le reward che aspettano ancora il video del triplicatore. Come Santuario e taverna
+        /// non tocca la cache: e' una fotografia per la UI del profilo.
+        /// </summary>
+        public async Task<SinglePlayerPendingAdRewardsData> GetPendingAdRewardsAsync()
+        {
+            SinglePlayerPendingAdRewardsData data = await server.GetPendingAdRewardsAsync();
+            IsSynced = true;
+            return data;
+        }
+
         /// <summary>Applica il triplicatore pubblicitario a una reward gia concessa.</summary>
         public async Task<SinglePlayerRewardOutcome> ClaimAdMultiplierAsync(string rewardClaimId, string adImpressionId)
         {
@@ -190,6 +219,13 @@ namespace AccardND.Network
             cache.ApplyAuthoritative(outcome.Progress);
             IsSynced = true;
             return outcome;
+        }
+
+        public async Task ChooseClassAsync(string classId)
+        {
+            SinglePlayerProgressSave snapshot = await server.ChooseClassAsync(classId);
+            cache.ApplyAuthoritative(snapshot);
+            IsSynced = true;
         }
 
         public async Task<SinglePlayerRewardOutcome> ClaimLevelRewardsAsync()

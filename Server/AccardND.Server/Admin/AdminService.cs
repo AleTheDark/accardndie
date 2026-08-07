@@ -86,11 +86,23 @@ public sealed class AdminService
         int matches7d = ScalarInt(connection,
             "SELECT COUNT(*) FROM match_history WHERE ended_at >= $s", ("$s", since7d));
 
-        int totalCampaignRuns = ScalarInt(connection, "SELECT COUNT(*) FROM campaign_runs");
+        // "Concluse" e "iniziate" sono due conti diversi da quando la riga della run nasce
+        // all'avvio: chi molla a meta' non compare fra le prime e va cercato fra le seconde.
+        int totalCampaignRuns = ScalarInt(connection,
+            "SELECT COUNT(*) FROM campaign_runs WHERE ended_at IS NOT NULL");
         int campaign24h = ScalarInt(connection,
             "SELECT COUNT(*) FROM campaign_runs WHERE ended_at >= $s", ("$s", since24h));
         int campaign7d = ScalarInt(connection,
             "SELECT COUNT(*) FROM campaign_runs WHERE ended_at >= $s", ("$s", since7d));
+        int startedRuns24h = ScalarInt(connection,
+            "SELECT COUNT(*) FROM campaign_runs WHERE started_at >= $s", ("$s", since24h));
+        int startedRuns7d = ScalarInt(connection,
+            "SELECT COUNT(*) FROM campaign_runs WHERE started_at >= $s", ("$s", since7d));
+        int openRuns24h = ScalarInt(connection,
+            "SELECT COUNT(*) FROM campaign_runs WHERE started_at >= $s AND ended_at IS NULL",
+            ("$s", since24h));
+        int openRunsTotal = ScalarInt(connection,
+            "SELECT COUNT(*) FROM campaign_runs WHERE ended_at IS NULL");
 
         var accountsBySource = new List<object>();
         using (SqliteCommand command = connection.CreateCommand())
@@ -138,6 +150,10 @@ public sealed class AdminService
             totalCampaignRuns,
             campaignRuns24h = campaign24h,
             campaignRuns7d = campaign7d,
+            startedRuns24h,
+            startedRuns7d,
+            openRuns24h,
+            openRunsTotal,
             activeSeason
         };
     }
@@ -154,6 +170,7 @@ public sealed class AdminService
         Dictionary<string, int> signups = DailyCounts(connection, "accounts", "created_at", since);
         Dictionary<string, int> matches = DailyCounts(connection, "match_history", "ended_at", since);
         Dictionary<string, int> campaign = DailyCounts(connection, "campaign_runs", "ended_at", since);
+        Dictionary<string, int> campaignStarted = DailyCounts(connection, "campaign_runs", "started_at", since);
 
         var points = new List<object>();
         DateTime start = DateTime.UtcNow.Date.AddDays(-(days - 1));
@@ -166,7 +183,8 @@ public sealed class AdminService
                 logins = logins.GetValueOrDefault(day),
                 signups = signups.GetValueOrDefault(day),
                 matches = matches.GetValueOrDefault(day),
-                campaign = campaign.GetValueOrDefault(day)
+                campaign = campaign.GetValueOrDefault(day),
+                campaignStarted = campaignStarted.GetValueOrDefault(day)
             });
         }
         return new { days, points };
@@ -394,11 +412,13 @@ public sealed class AdminService
         var recentRuns = new List<object>();
         using (SqliteCommand command = connection.CreateCommand())
         {
+            // Ordinate sull'ultimo momento noto della run: le abbandonate non hanno una
+            // fine, e ordinarle su ended_at le spedirebbe tutte in coda.
             command.CommandText = @"
                 SELECT ended_at, mode, chapter_id, stage_id, rooms_cleared,
-                       enemies_defeated, bosses_defeated, honey_reward
+                       enemies_defeated, bosses_defeated, honey_reward, started_at
                 FROM campaign_runs WHERE player_id = $id
-                ORDER BY ended_at DESC LIMIT 20";
+                ORDER BY COALESCE(ended_at, started_at) DESC LIMIT 20";
             command.Parameters.AddWithValue("$id", playerId);
             using SqliteDataReader reader = command.ExecuteReader();
             while (reader.Read())
@@ -411,7 +431,8 @@ public sealed class AdminService
                     roomsCleared = reader.GetInt32(4),
                     enemiesDefeated = reader.GetInt32(5),
                     bossesDefeated = reader.GetInt32(6),
-                    honeyReward = reader.GetInt32(7)
+                    honeyReward = reader.GetInt32(7),
+                    startedAt = NullableString(reader, 8)
                 });
         }
 
@@ -557,10 +578,15 @@ public sealed class AdminService
     private static object ReadCampaignTotals(SqliteConnection connection, string playerId)
     {
         using SqliteCommand command = connection.CreateCommand();
+        // COUNT(ended_at) conta le run chiuse: le righe aperte all'avvio e mai concluse
+        // stanno nella colonna a parte, non gonfiano il totale delle run giocate fino in
+        // fondo. Le somme non ne risentono: una run aperta ha ancora tutti i contatori a zero.
         command.CommandText = @"
-            SELECT COUNT(*), COALESCE(SUM(rooms_cleared), 0), COALESCE(SUM(enemies_defeated), 0),
+            SELECT COUNT(ended_at), COALESCE(SUM(rooms_cleared), 0), COALESCE(SUM(enemies_defeated), 0),
                    COALESCE(SUM(bosses_defeated), 0), COALESCE(SUM(minibosses_defeated), 0),
-                   COALESCE(SUM(honey_reward), 0), MIN(ended_at), MAX(ended_at)
+                   COALESCE(SUM(honey_reward), 0), MIN(ended_at), MAX(ended_at),
+                   COUNT(started_at), SUM(CASE WHEN ended_at IS NULL THEN 1 ELSE 0 END),
+                   MAX(COALESCE(ended_at, started_at))
             FROM campaign_runs WHERE player_id = $id";
         command.Parameters.AddWithValue("$id", playerId);
         using SqliteDataReader reader = command.ExecuteReader();
@@ -575,7 +601,10 @@ public sealed class AdminService
             minibossesDefeated = reader.GetInt32(4),
             honeyReward = reader.GetInt32(5),
             firstRunAt = NullableString(reader, 6),
-            lastRunAt = NullableString(reader, 7)
+            lastRunAt = NullableString(reader, 7),
+            startedRuns = reader.GetInt32(8),
+            openRuns = reader.IsDBNull(9) ? 0 : reader.GetInt32(9),
+            lastActivityAt = NullableString(reader, 10)
         };
     }
 
@@ -884,6 +913,90 @@ public sealed class AdminService
             rows.Add(ReadMatchRow(reader, null));
 
         return new { total, limit, offset, matches = rows };
+    }
+
+    // ---- Run di campagna ----------------------------------------------------
+
+    /// <summary>
+    /// Storico delle run di campagna, iniziate e concluse. Il filtro accetta 'ended' (solo
+    /// le run arrivate a una fine), 'open' (iniziate e mai concluse: gioco chiuso a meta',
+    /// crash, run ancora in corso in questo momento) e qualsiasi altro valore per tutte.
+    ///
+    /// L'ordinamento e' sull'ultimo momento noto della run, non su <c>ended_at</c>: una run
+    /// aperta stamattina deve stare in cima insieme alle altre di stamattina, non in fondo
+    /// con le righe senza data.
+    /// </summary>
+    public object GetRuns(string status, int limit, int offset)
+    {
+        limit = Math.Clamp(limit, 1, 200);
+        offset = Math.Max(0, offset);
+        // Whitelist: dalla query arriva solo la scelta, mai il pezzo di SQL.
+        string filter = status switch
+        {
+            "ended" => "WHERE ended_at IS NOT NULL",
+            "open" => "WHERE ended_at IS NULL",
+            _ => string.Empty
+        };
+
+        using SqliteConnection connection = database.Open();
+        int total = ScalarInt(connection, $"SELECT COUNT(*) FROM campaign_runs {filter}");
+        int open = ScalarInt(connection, "SELECT COUNT(*) FROM campaign_runs WHERE ended_at IS NULL");
+        int ended = ScalarInt(connection, "SELECT COUNT(*) FROM campaign_runs WHERE ended_at IS NOT NULL");
+
+        var rows = new List<object>();
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = $@"
+            SELECT r.player_id, a.username, r.started_at, r.ended_at, r.mode, r.chapter_id,
+                   r.stage_id, r.rooms_cleared, r.enemies_defeated, r.bosses_defeated,
+                   r.minibosses_defeated, r.honey_reward
+            FROM campaign_runs r
+            LEFT JOIN accounts a ON a.player_id = r.player_id
+            {filter}
+            ORDER BY COALESCE(r.ended_at, r.started_at) DESC
+            LIMIT $limit OFFSET $offset";
+        command.Parameters.AddWithValue("$limit", limit);
+        command.Parameters.AddWithValue("$offset", offset);
+        using SqliteDataReader reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            string startedAt = NullableString(reader, 2);
+            string endedAt = NullableString(reader, 3);
+            rows.Add(new
+            {
+                playerId = reader.GetString(0),
+                username = NullableString(reader, 1) ?? reader.GetString(0),
+                startedAt,
+                endedAt,
+                durationSeconds = DurationSeconds(startedAt, endedAt),
+                mode = NullableString(reader, 4),
+                chapterId = NullableString(reader, 5),
+                stageId = NullableString(reader, 6),
+                roomsCleared = reader.GetInt32(7),
+                enemiesDefeated = reader.GetInt32(8),
+                bossesDefeated = reader.GetInt32(9),
+                minibossesDefeated = reader.GetInt32(10),
+                honeyReward = reader.GetInt32(11)
+            });
+        }
+
+        return new { total, open, ended, limit, offset, status, runs = rows };
+    }
+
+    /// <summary>
+    /// Durata della run in secondi, o null quando manca un capo: le run precedenti al
+    /// tracciamento dell'avvio non hanno un inizio, quelle abbandonate non hanno una fine.
+    /// </summary>
+    private static int? DurationSeconds(string startedAt, string endedAt)
+    {
+        if (startedAt == null || endedAt == null)
+            return null;
+        if (!DateTime.TryParse(startedAt, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind, out DateTime start) ||
+            !DateTime.TryParse(endedAt, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind, out DateTime end))
+            return null;
+        double seconds = (end - start).TotalSeconds;
+        return seconds < 0 ? null : (int)seconds;
     }
 
     // ---- Quest della taverna ------------------------------------------------

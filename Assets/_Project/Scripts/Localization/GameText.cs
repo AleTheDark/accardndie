@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Localization;
 using UnityEngine.Localization.Settings;
@@ -44,6 +45,22 @@ namespace AccardND.Localization
         }
 
         /// <summary>
+        /// Precarica locale e tabella senza bloccare il main thread. In WebGL
+        /// WaitForCompletion non puo' far avanzare i download Addressables, quindi
+        /// la UI deve attendere questa inizializzazione prima di chiedere i testi.
+        /// </summary>
+        public static async Task InitializeAsync()
+        {
+            var initialization = LocalizationSettings.InitializationOperation;
+            while (!initialization.IsDone)
+                await Task.Yield();
+
+            var table = LocalizationSettings.StringDatabase.GetTableAsync(TableName);
+            while (!table.IsDone)
+                await Task.Yield();
+        }
+
+        /// <summary>
         /// Consente una migrazione non distruttiva dei vecchi ScriptableObject: il testo
         /// serializzato rimane un fallback finché la relativa chiave non è nel catalogo.
         /// </summary>
@@ -66,6 +83,80 @@ namespace AccardND.Localization
             bool english = CurrentLocaleCode.StartsWith("en", StringComparison.OrdinalIgnoreCase);
             string fallback = english ? englishFallback : italianFallback;
             return Resolve(key, fallback, arguments, reportMissing: false);
+        }
+
+        /// <summary>Una lingua installata nel progetto, già pronta da mostrare in un menu.</summary>
+        public readonly struct LanguageOption
+        {
+            public LanguageOption(string code, string displayName)
+            {
+                Code = code;
+                DisplayName = displayName;
+            }
+
+            public string Code { get; }
+
+            public string DisplayName { get; }
+        }
+
+        /// <summary>
+        /// Le lingue effettivamente disponibili, in ordine alfabetico. La UI non deve
+        /// conoscere Unity.Localization: aggiungere una Locale al progetto basta perché
+        /// compaia nel selettore, senza toccare il pannello delle opzioni.
+        /// </summary>
+        public static IReadOnlyList<LanguageOption> AvailableLanguages()
+        {
+            var options = new List<LanguageOption>();
+            ILocalesProvider provider = LocalizationSettings.AvailableLocales;
+            if (provider?.Locales == null)
+                return options;
+
+            foreach (Locale locale in provider.Locales)
+            {
+                if (locale == null)
+                    continue;
+
+                string code = locale.Identifier.Code;
+                if (string.IsNullOrWhiteSpace(code))
+                    continue;
+
+                options.Add(new LanguageOption(code, DescribeLocale(locale)));
+            }
+
+            options.Sort((left, right) => string.Compare(
+                left.DisplayName,
+                right.DisplayName,
+                StringComparison.CurrentCultureIgnoreCase));
+            return options;
+        }
+
+        /// <summary>Nome della lingua attiva nella lingua stessa ("Italiano", "English").</summary>
+        public static string CurrentLanguageName => DescribeLocale(LocalizationSettings.SelectedLocale);
+
+        private static string DescribeLocale(Locale locale)
+        {
+            if (locale == null)
+                return string.Empty;
+
+            string name = null;
+            try
+            {
+                // Una locale personalizzata può non avere una CultureInfo corrispondente.
+                name = locale.Identifier.CultureInfo?.NativeName;
+            }
+            catch (Exception)
+            {
+                name = null;
+            }
+
+            if (string.IsNullOrWhiteSpace(name))
+                name = locale.LocaleName;
+            if (string.IsNullOrWhiteSpace(name))
+                name = locale.Identifier.Code;
+
+            return string.IsNullOrWhiteSpace(name)
+                ? string.Empty
+                : char.ToUpperInvariant(name[0]) + name.Substring(1);
         }
 
         public static bool TrySelectLocale(string localeCode, bool persist = true)

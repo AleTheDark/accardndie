@@ -25,33 +25,13 @@ var AccardNdAdsLib = {
       return window.ACCARDND_ADSENSE_CLIENT_ID || '';
     },
 
-    // Annunci di prova: si vedono anche prima che AdSense approvi il sito, ed e'
-    // l'unico modo di collaudare l'integrazione senza generare traffico non valido
-    // sul proprio account. Vale la stessa regola di AdMob: cliccare i propri
-    // annunci veri significa chiusura dell'account.
-    isTest: function () {
-      return typeof window !== 'undefined' && window.ACCARDND_ADSENSE_TEST === true;
-    },
-
     unavailable: function () { AccardNdAds.state = 2; },
 
     // adConfig e adBreak sono la stessa cosa: una push nella coda di adsbygoogle,
     // che l'SDK svuota quando arriva. Per questo l'ordine fra il caricamento dello
-    // script e le chiamate non conta.
+    // script e le chiamate non conta, e qui non si aspetta niente.
     push: function (options) {
       (window.adsbygoogle = window.adsbygoogle || []).push(options);
-    },
-
-    loadScript: function (clientId) {
-      var script = document.createElement('script');
-      script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client='
-        + encodeURIComponent(clientId);
-      script.async = true;
-      script.crossOrigin = 'anonymous';
-      script.setAttribute('data-ad-client', clientId);
-      if (AccardNdAds.isTest()) script.setAttribute('data-adbreak-test', 'on');
-      script.onerror = function () { AccardNdAds.unavailable(); };
-      document.head.appendChild(script);
     },
 
     finish: function (request, outcome) {
@@ -84,22 +64,27 @@ var AccardNdAdsLib = {
     }
   },
 
-  /// Carica lo script di AdSense e configura la sessione. Una volta sola: le
-  /// chiamate successive non fanno niente.
+  /// Configura la sessione pubblicitaria. Una volta sola: le chiamate successive
+  /// non fanno niente.
+  ///
+  /// Lo script di AdSense NON si carica da qui: sta nel <head> di index.html, e
+  /// deve restare li'. Il crawler che verifica la proprieta' del sito legge l'HTML
+  /// senza aspettare l'avvio di Unity, e due copie dello script sulla stessa pagina
+  /// fanno fallire adsbygoogle con "only one AdSense head tag supported per page".
+  /// Se il tag manca o un blocco pubblicita' lo fa sparire, la coda non viene mai
+  /// svuotata, onReady non arriva e il C# lo dichiara non utilizzabile alla scadenza.
   AccardNdAdsInit: function () {
     if (AccardNdAds.started) return;
     AccardNdAds.started = true;
 
-    var clientId = AccardNdAds.clientId();
-    if (!clientId) {
+    if (!AccardNdAds.clientId()) {
       // Nessun publisher id nel template: non e' un guasto, e' una build senza
-      // pubblicita'. Si gioca lo stesso.
+      // pubblicita'. Si gioca lo stesso, e si evita di restare appesi alla scadenza.
       AccardNdAds.unavailable();
       return;
     }
 
     try {
-      AccardNdAds.loadScript(clientId);
       AccardNdAds.push({
         // Con il preload acceso l'SDK si tiene un annuncio pronto da solo: sul web
         // non esiste il Warm per singolo placement che c'e' su AdMob.

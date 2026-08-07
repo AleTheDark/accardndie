@@ -270,6 +270,11 @@ public sealed partial class BattleBoardController
         RefreshPvpMessage();
         RefreshPvpTurnBanner();
         ApplyResponsiveLayout();
+        // ApplyResponsiveLayout assegna prima gli slot lineari. In battaglia il PvP
+        // passa poi alla stessa gestione a carosello della campagna: pedina attiva
+        // centrale e rialzata, con rotazione della formazione al cambio turno.
+        if (pvpState.Phase == PvpClientPhase.Battle && playerCards.Any(card => card != null && !card.Eliminated))
+            RefreshCombatPawnCarousel(animate: true);
         RefreshPvpTimeline();
         ApplyHandFan();
         ConfigurePvpActionOverlays();
@@ -514,10 +519,13 @@ public sealed partial class BattleBoardController
             string capturedDefinitionId = pvpState.Hand[position].DefinitionId;
             view.Button.onClick.AddListener(new UnityAction(() =>
             {
+                if (DeploymentHandSwipeSelector.ShouldSuppressClick(view.Button))
+                    return;
                 if (pvpState == null || !pvpState.IsMyDeployTurn)
                     return;
                 SelectPvpDeploymentCard(captured, capturedDefinitionId, view);
             }));
+            ConfigurePvpDeploymentHandSwipe(view, captured, capturedDefinitionId);
             pvpHandViews.Add(view);
         }
         RefreshPvpDeploymentPendingUi();
@@ -977,6 +985,9 @@ public sealed partial class BattleBoardController
 				abilityMana: canUseAbility ? -ManaActionPolicy.PrimaryCost(active.Card.HeroClass) : null,
 				skipMana: ManaActionPolicy.ActivationReward(
 					ManaRules.CreateDefault(), true, active.AbilityUsedThisTurn));
+            active.View.SetAbilityActionInteractable(
+                !canUseAbility
+                || BattlePlayerManaCurrent >= ManaActionPolicy.PrimaryCost(active.Card.HeroClass));
         }
         else if (canUseAbility && canAttach)
         {
@@ -989,17 +1000,23 @@ public sealed partial class BattleBoardController
         {
             active.View.ShowDualActions(
                 attack, new UnityAction(ActivatePvpAttack),
-                ability, new UnityAction(ActivatePvpAbility));
+                ability, new UnityAction(ActivatePvpAbility),
+				-ManaActionPolicy.AttackCost(ManaRules.CreateDefault()),
+				-ManaActionPolicy.PrimaryCost(active.Card.HeroClass));
         }
         else if (canAttach)
         {
             active.View.ShowDualActions(
                 attack, new UnityAction(ActivatePvpAttack),
-                attachment, new UnityAction(ActivatePvpAttachment));
+                attachment, new UnityAction(ActivatePvpAttachment),
+				-ManaActionPolicy.AttackCost(ManaRules.CreateDefault()));
         }
         else
         {
-            active.View.ShowClassAction(attack, new UnityAction(ActivatePvpAttack));
+            active.View.ShowClassAction(
+                attack,
+                new UnityAction(ActivatePvpAttack),
+                -ManaActionPolicy.AttackCost(ManaRules.CreateDefault()));
         }
     }
 
@@ -1047,6 +1064,8 @@ public sealed partial class BattleBoardController
         }
 
         pvpTargetMode = PvpPresentationTargetMode.Ability;
+		if (active.Card.HeroClass == HeroClass.Paladin)
+			suppressPaladinTargetSelectionUntilFrame = Time.frameCount + 1;
         RenderPvpMatch();
     }
 
@@ -1079,6 +1098,11 @@ public sealed partial class BattleBoardController
         BattleCardState card = FindPvpLocalCard(slot);
         if (card == null)
             return;
+		if (pvpTargetMode == PvpPresentationTargetMode.Ability
+			&& Time.frameCount <= suppressPaladinTargetSelectionUntilFrame)
+		{
+			return;
+		}
 
         if (pvpState != null && pvpState.IsMyBattleTurn && pvpTargetMode == PvpPresentationTargetMode.Attachment)
         {
@@ -1125,23 +1149,8 @@ public sealed partial class BattleBoardController
 
     private void RefreshPvpHud()
     {
-        if (playerHud == null || cpuHud == null || pvpState == null)
+        if (cpuHud == null || pvpState == null)
             return;
-
-        RefreshCombatantHud(
-            playerHud,
-            isPlayer: true,
-            ResolvePlayerHudDisplayName(),
-            // In arena il livello della campagna non dice niente: al suo posto la lega.
-            $"RANK {GetCachedPvpLeagueLabel().ToUpperInvariant()}",
-            $"{PvpActiveCount(playerCards)}/{playerCards.Count} ATTIVI",
-            playerCards.Count == 0 ? 0f : (float)PvpActiveCount(playerCards) / playerCards.Count,
-            Mathf.Max(1, pvpState.VigorDieSides),
-            pvpState.Hand.Count,
-            0,
-            PvpDefeatedCount(playerCards));
-
-        ConfigurePvpPlayerHudPresentation(playerHud);
 
         RefreshCombatantHud(
             cpuHud,
@@ -1157,6 +1166,7 @@ public sealed partial class BattleBoardController
 
 		RefreshManaHud();
 		RefreshEnemyManaHud();
+		RefreshCombatHudRefactor();
 
         if ((Object)(object)topInfoText != (Object)null)
             topInfoText.text = $"PVP  |  ROUND {pvpState.MatchRound}  |  VIGORE D{pvpState.VigorDieSides}  |  TU {pvpState.Wins[pvpState.MyIndex]} - {pvpState.Wins[OpponentIndex()]} {pvpState.OpponentName.ToUpperInvariant()}";
@@ -1653,10 +1663,13 @@ public sealed partial class BattleBoardController
                     Canvas.ForceUpdateCanvases();
                     BattleCardState barbarian = FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
                     if (barbarian != null
-                        && (Object)(object)barbarian.View != (Object)null
-                        && (Object)(object)battleAnimationPlayer != (Object)null)
+                        && (Object)(object)barbarian.View != (Object)null)
                     {
-                        yield return battleAnimationPlayer.PlayBarbarianFury(barbarian.View);
+                        barbarian.View.PlayAbilityActionCallout();
+                        if ((Object)(object)battleAnimationPlayer != (Object)null)
+                        {
+                            yield return battleAnimationPlayer.PlayBarbarianFury(barbarian.View);
+                        }
                     }
                     break;
                 }

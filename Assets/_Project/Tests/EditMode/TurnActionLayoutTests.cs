@@ -14,6 +14,9 @@ namespace AccardND.GameCore.Tests
         private static readonly MethodInfo SetTurnActionSlot = typeof(PrototypeCardView).GetMethod(
             "SetTurnActionSlot",
             BindingFlags.NonPublic | BindingFlags.Static);
+        private static readonly MethodInfo OverlayWidth = typeof(PrototypeCardView).GetMethod(
+            "TurnActionOverlayWidth",
+            BindingFlags.NonPublic | BindingFlags.Static);
 
         [Test]
         public void ThreeActions_PlacesCenterAboveMatchingExtremes()
@@ -109,10 +112,39 @@ namespace AccardND.GameCore.Tests
             }
         }
 
-        private static RectTransform[] CreateSlots(float edgeBias)
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(3)]
+        [TestCase(4)]
+        [TestCase(5)]
+        public void EveryActionCount_UsesSamePhysicalButtonWidthAndStaysCentered(int count)
+        {
+            RectTransform[] slots = CreateSlots(0f, count);
+
+            try
+            {
+                Assert.That(OverlayWidth, Is.Not.Null);
+                float overlayWidth = (float)OverlayWidth.Invoke(null, new object[] { count });
+
+                foreach (RectTransform slot in slots)
+                {
+                    float physicalWidth = (slot.anchorMax.x - slot.anchorMin.x) * overlayWidth;
+                    Assert.That(physicalWidth, Is.EqualTo(0.30f).Within(0.0001f));
+                }
+
+                float groupCenter = (slots[0].anchorMin.x + slots[slots.Length - 1].anchorMax.x) * 0.5f;
+                Assert.That(groupCenter, Is.EqualTo(0.5f).Within(0.0001f));
+            }
+            finally
+            {
+                DestroySlots(slots);
+            }
+        }
+
+        private static RectTransform[] CreateSlots(float edgeBias, int count = 4)
         {
             Assert.That(SetTurnActionSlot, Is.Not.Null);
-            var slots = new RectTransform[4];
+            var slots = new RectTransform[count];
             for (int index = 0; index < slots.Length; index++)
             {
                 var gameObject = new GameObject(
@@ -122,7 +154,7 @@ namespace AccardND.GameCore.Tests
                     typeof(Image),
                     typeof(Button));
                 Button button = gameObject.GetComponent<Button>();
-                SetTurnActionSlot.Invoke(null, new object[] { button, index, 4, edgeBias });
+                SetTurnActionSlot.Invoke(null, new object[] { button, index, count, edgeBias });
                 slots[index] = gameObject.GetComponent<RectTransform>();
             }
             return slots;

@@ -16,7 +16,16 @@ namespace AccardND.Ads
         Failed,
 
         /// <summary>Fermata dalle nostre regole di frequenza. Non e' un guasto.</summary>
-        Suppressed
+        Suppressed,
+
+        /// <summary>
+        /// Non c'era nessuna pubblicita' da mostrare, e su questo canale la ricompensa si
+        /// concede lo stesso. Non e' un annuncio andato bene: e' un cancello che abbiamo
+        /// deciso di lasciare aperto (vedi <see cref="AdService.RewardsWaivedWithoutAds"/>).
+        /// Tenerlo distinto da <see cref="Watched"/> serve a non contarlo mai come
+        /// impressione, ne' nei nostri tetti ne' nei dati che finiscono sul server.
+        /// </summary>
+        Waived
     }
 
     /// <summary>
@@ -46,8 +55,21 @@ namespace AccardND.Ads
             ImpressionId = impressionId ?? string.Empty;
         }
 
-        /// <summary>Vista per intero: la ricompensa spetta.</summary>
+        /// <summary>
+        /// Vista per intero. E' l'unico esito che conta come impressione: non usarlo per
+        /// decidere se pagare, per quello c'e' <see cref="Grants"/>.
+        /// </summary>
         public bool Watched => Outcome == AdOutcome.Watched;
+
+        /// <summary>
+        /// La ricompensa spetta. Di norma significa "vista per intero", ma comprende anche
+        /// il condono (<see cref="AdOutcome.Waived"/>): un canale dove la pubblicita' non
+        /// e' ancora attiva non deve tenersi il premio in ostaggio.
+        ///
+        /// E' questa - non <see cref="Watched"/> - la domanda da fare al punto di chiamata
+        /// prima di accreditare qualcosa.
+        /// </summary>
+        public bool Grants => Outcome == AdOutcome.Watched || Outcome == AdOutcome.Waived;
 
         /// <summary>
         /// Non c'e' stata pubblicita' per motivi che non dipendono dal giocatore. Non apre

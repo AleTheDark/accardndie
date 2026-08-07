@@ -59,17 +59,17 @@ public sealed partial class BattleBoardController
 		runeRect.localScale = Vector3.one * BattleResourceIconScale;
 		ApplyManaRuneSprite();
 
-		manaRuneText = CreateText("Mana Rune Value", ((Component)manaRuneImage).transform, font, 34, (FontStyle)1, (TextAnchor)4);
+		manaRuneText = CreateText("Mana Rune Value", ((Component)manaRuneImage).transform, font, 55, (FontStyle)1, (TextAnchor)4);
 		manaRuneText.color = Color.white;
 		manaRuneText.raycastTarget = false;
 		manaRuneText.resizeTextForBestFit = true;
 		manaRuneText.resizeTextMinSize = 14;
-		manaRuneText.resizeTextMaxSize = 44;
+		manaRuneText.resizeTextMaxSize = 55;
 		RectTransform valueRect = manaRuneText.rectTransform;
 		valueRect.anchorMin = new Vector2(0f, 0f);
 		valueRect.anchorMax = new Vector2(1f, 1f);
-		valueRect.offsetMin = new Vector2(6f, 10.3f);
-		valueRect.offsetMax = new Vector2(-6f, -1.7f);
+		valueRect.offsetMin = new Vector2(6f, 14f);
+		valueRect.offsetMax = new Vector2(-6f, 2f);
 
 		// Contorno scuro: il numero bianco deve restare leggibile sopra il blu chiaro
 		// delle sfaccettature della gemma.
@@ -105,10 +105,11 @@ public sealed partial class BattleBoardController
 		manaRuneAuraImage.sprite = BuildManaAuraSprite();
 		manaRuneAuraImage.raycastTarget = false;
 		RectTransform auraRect = manaRuneAuraImage.rectTransform;
-		auraRect.anchorMin = auraRect.anchorMax = Vector2.zero;
+		auraRect.anchorMin = auraRect.anchorMax = new Vector2(0.5f, 0.5f);
 		auraRect.pivot = new Vector2(0.5f, 0.5f);
-		auraRect.anchoredPosition = new Vector2(41.5f, 42.5f);
+		auraRect.anchoredPosition = Vector2.zero;
 		auraRect.sizeDelta = new Vector2(101f, 101f);
+		auraRect.localScale = Vector3.one * 2f;
 		auraRect.SetAsFirstSibling();
 
 		manaRuneOutlineImage = CreateImage("Mana Rune Circular Outline", manaRuneImage.transform, new Color(0.28f, 0.78f, 1f, 0.9f));
@@ -136,7 +137,7 @@ public sealed partial class BattleBoardController
 				Mathf.Lerp(0.56f, 0.72f, sparkle),
 				1f,
 				Mathf.Lerp(0.25f, 0.46f, pulse) + sparkle * 0.06f);
-			manaRuneAuraImage.rectTransform.localScale = Vector3.one * Mathf.Lerp(0.93f, 1.1f, pulse);
+			manaRuneAuraImage.rectTransform.localScale = Vector3.one * Mathf.Lerp(1.86f, 2.2f, pulse);
 			if (manaRuneOutlineImage != null)
 			{
 				manaRuneOutlineImage.color = new Color(0.28f, 0.78f, 1f, Mathf.Lerp(0.72f, 1f, pulse));
@@ -374,7 +375,7 @@ public sealed partial class BattleBoardController
 			"Mana Delta Callout",
 			(Transform)(object)safeAreaRoot,
 			manaHudFont,
-			34,
+			46,
 			(FontStyle)1,
 			(TextAnchor)4);
 		label.text = delta > 0 ? $"+{delta}" : delta.ToString();
@@ -385,19 +386,23 @@ public sealed partial class BattleBoardController
 
 		Outline outline = ((Component)label).gameObject.AddComponent<Outline>();
 		outline.effectColor = new Color(0.02f, 0.05f, 0.12f, 0.95f);
-		outline.effectDistance = new Vector2(1.8f, -1.8f);
+		outline.effectDistance = new Vector2(3f, -3f);
 		outline.useGraphicAlpha = true;
 
 		RectTransform rect = label.rectTransform;
 		rect.anchorMin = rect.anchorMax = new Vector2(0f, 0f);
 		rect.pivot = new Vector2(0.5f, 0f);
-		rect.sizeDelta = new Vector2(140f, 46f);
+		rect.sizeDelta = new Vector2(180f, 64f);
 
 		// Variazioni ravvicinate non si sovrappongono perfettamente.
 		float lane = (manaDeltaCalloutIndex++ % 3) * 12f;
-		float x = 105f + lane;
-		const float startY = 190f;
-		const float endY = 300f;
+		RectTransform runeRect = manaRuneImage.rectTransform;
+		RectTransform safeRect = safeAreaRoot;
+		Vector3 runeCenterLocal = safeRect.InverseTransformPoint(
+			runeRect.TransformPoint(runeRect.rect.center));
+		float x = runeCenterLocal.x - safeRect.rect.xMin + lane;
+		float startY = runeCenterLocal.y - safeRect.rect.yMin;
+		float endY = startY + 110f;
 		const float duration = 0.8f;
 
 		float elapsed = 0f;

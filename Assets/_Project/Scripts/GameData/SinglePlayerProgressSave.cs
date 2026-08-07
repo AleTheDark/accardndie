@@ -21,6 +21,7 @@ namespace AccardND.GameData
         public List<string> unlockedChapters = new List<string>();
         public List<string> unlockedStages = new List<string>();
         public List<string> unlockedClasses = new List<string>();
+        public List<string> pendingClassChoices = new List<string>();
         public List<string> unlockedScenarios = new List<string>();
         public List<string> unlockedSecondAbilities = new List<string>();
 
@@ -286,6 +287,7 @@ namespace AccardND.GameData
             save.unlockedChapters ??= new List<string>();
             save.unlockedStages ??= new List<string>();
             save.unlockedClasses ??= new List<string>();
+            save.pendingClassChoices ??= new List<string>();
             save.unlockedScenarios ??= new List<string>();
             save.unlockedSecondAbilities ??= new List<string>();
             save.clearedChapters ??= new List<string>();
@@ -312,6 +314,7 @@ namespace AccardND.GameData
             unlockedChapters = new List<string>(source.unlockedChapters ?? new List<string>()),
             unlockedStages = new List<string>(source.unlockedStages ?? new List<string>()),
             unlockedClasses = new List<string>(source.unlockedClasses ?? new List<string>()),
+            pendingClassChoices = new List<string>(source.pendingClassChoices ?? new List<string>()),
             unlockedScenarios = new List<string>(source.unlockedScenarios ?? new List<string>()),
             unlockedSecondAbilities = new List<string>(source.unlockedSecondAbilities ?? new List<string>()),
             clearedChapters = new List<string>(source.clearedChapters ?? new List<string>()),

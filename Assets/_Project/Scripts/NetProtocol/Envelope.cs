@@ -121,7 +121,18 @@ namespace AccardND.NetProtocol
         public const string SinglePlayerClaimAdMultiplier = "singleplayer.reward.ad_multiplier";
         public const string SinglePlayerClaimLevelRewards = "singleplayer.reward.levels";
         public const string SinglePlayerRewardResult = "singleplayer.reward.result";
+        public const string SinglePlayerPendingAdRewardsGet = "singleplayer.reward.pending_ads.get";
+        public const string SinglePlayerPendingAdRewardsData = "singleplayer.reward.pending_ads.data";
         public const string SinglePlayerClearChapter = "singleplayer.chapter.cleared";
+        public const string SinglePlayerChooseClass = "singleplayer.class.choose";
+
+        /// <summary>
+        /// Inizio di una run di campagna. Serve solo allo storico: la reward di fine run
+        /// arriva alla morte, quindi senza questo messaggio una run abbandonata a meta'
+        /// non lascerebbe alcuna traccia sul server.
+        /// </summary>
+        public const string SinglePlayerRunStarted = "singleplayer.run.started";
+        public const string SinglePlayerRunStartedAck = "singleplayer.run.started_ack";
 
         public const string SanctuaryGet = "sanctuary.get";
         public const string SanctuaryData = "sanctuary.data";

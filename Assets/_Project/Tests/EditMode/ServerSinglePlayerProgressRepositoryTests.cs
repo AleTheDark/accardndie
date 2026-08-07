@@ -75,6 +75,23 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void ChooseClassAsync_ForwardsChoiceAndClearsPendingReward()
+        {
+            var server = new FakeServerClient
+            {
+                NextSnapshot = new SinglePlayerProgressSave { unlockedClasses = { "hunter" } }
+            };
+            var repo = new ServerSinglePlayerProgressRepository(
+                server, new LocalSinglePlayerProgressRepository(new InMemoryStore()));
+
+            Await(repo.ChooseClassAsync("hunter"));
+
+            Assert.That(server.LastChosenClassId, Is.EqualTo("hunter"));
+            Assert.That(repo.IsUnlocked(SinglePlayerUnlockType.Class, "hunter"), Is.True);
+            Assert.That(repo.Progress.pendingClassChoices, Is.Empty);
+        }
+
+        [Test]
         public void RefreshAsync_MirrorsServerCounters()
         {
             var server = new FakeServerClient
@@ -148,6 +165,31 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void NotifyRunStartedAsync_ForwardsRunToServer()
+        {
+            var server = new FakeServerClient();
+            var repo = new ServerSinglePlayerProgressRepository(
+                server, new LocalSinglePlayerProgressRepository(new InMemoryStore()));
+
+            Await(repo.NotifyRunStartedAsync("run-9", "campaign", "chapter-1", "climbing"));
+
+            Assert.That(server.LastRunStart, Is.EqualTo(("run-9", "campaign", "chapter-1", "climbing")));
+        }
+
+        [Test]
+        public void NotifyRunStartedAsync_SwallowsServerFailure()
+        {
+            // Lo storico admin non e' progressione: se il server non prende nota dell'avvio,
+            // la run deve partire lo stesso.
+            var server = new FakeServerClient { ThrowOnRunStart = new Exception("offline") };
+            var repo = new ServerSinglePlayerProgressRepository(
+                server, new LocalSinglePlayerProgressRepository(new InMemoryStore()));
+
+            Assert.DoesNotThrow(() => Await(repo.NotifyRunStartedAsync("run-9", "campaign", null, null)));
+            Assert.That(repo.IsSynced, Is.False);
+        }
+
+        [Test]
         public void ClaimDeathRewardAsync_ForwardsSummaryAndAppliesState()
         {
             var server = new FakeServerClient
@@ -186,6 +228,37 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void GetPendingAdRewardsAsync_ReturnsServerListWithoutTouchingCache()
+        {
+            var server = new FakeServerClient
+            {
+                NextPendingAdRewards = new SinglePlayerPendingAdRewardsData
+                {
+                    rewards = new[]
+                    {
+                        new SinglePlayerPendingAdRewardData
+                        {
+                            claimId = "claim-death",
+                            rewardType = "death",
+                            baseAccountExperience = 12,
+                            extraAccountExperience = 24
+                        }
+                    }
+                }
+            };
+            var repo = new ServerSinglePlayerProgressRepository(
+                server, new LocalSinglePlayerProgressRepository(new InMemoryStore()));
+            repo.ApplyAuthoritative(new SinglePlayerProgressSave { honey = 7 });
+
+            SinglePlayerPendingAdRewardsData pending = Await(repo.GetPendingAdRewardsAsync());
+
+            Assert.That(pending.rewards.Length, Is.EqualTo(1));
+            Assert.That(pending.rewards[0].claimId, Is.EqualTo("claim-death"));
+            Assert.That(pending.rewards[0].extraAccountExperience, Is.EqualTo(24));
+            Assert.That(repo.Honey, Is.EqualTo(7));
+        }
+
+        [Test]
         public void LocalMutators_ThrowBecauseServerIsAuthoritative()
         {
             var repo = new ServerSinglePlayerProgressRepository(
@@ -210,6 +283,8 @@ namespace AccardND.GameCore.Tests
             public (SinglePlayerUnlockType Type, string Id)? LastPurchase;
             public string LastTutorialRunId;
             public DeathRewardSummary? LastDeathSummary;
+            public (string RunId, string Mode, string ChapterId, string StageId)? LastRunStart;
+            public Exception ThrowOnRunStart;
             public (string ClaimId, string AdId)? LastAd;
 
             public Task<SinglePlayerProgressSave> LoadProgressAsync() =>
@@ -236,6 +311,7 @@ namespace AccardND.GameCore.Tests
             }
 
             public string LastClearedChapterBossId;
+            public string LastChosenClassId;
             public SanctuaryData NextSanctuary = new SanctuaryData();
 
             public Task<SanctuaryData> GetSanctuaryAsync() => Task.FromResult(NextSanctuary);
@@ -287,6 +363,12 @@ namespace AccardND.GameCore.Tests
                 return Task.FromResult(NextReward);
             }
 
+            public Task NotifyRunStartedAsync(string runId, string mode, string chapterId, string stageId)
+            {
+                LastRunStart = (runId, mode, chapterId, stageId);
+                return ThrowOnRunStart != null ? Task.FromException(ThrowOnRunStart) : Task.CompletedTask;
+            }
+
             public Task<SinglePlayerRewardOutcome> ClaimDeathRewardAsync(DeathRewardSummary summary)
             {
                 LastDeathSummary = summary;
@@ -299,8 +381,21 @@ namespace AccardND.GameCore.Tests
                 return Task.FromResult(NextReward);
             }
 
+            public Task<SinglePlayerProgressSave> ChooseClassAsync(string classId)
+            {
+                LastChosenClassId = classId;
+                return ThrowOnPurchase != null
+                    ? Task.FromException<SinglePlayerProgressSave>(ThrowOnPurchase)
+                    : Task.FromResult(NextSnapshot);
+            }
+
             public Task<SinglePlayerRewardOutcome> ClaimLevelRewardsAsync() =>
                 Task.FromResult(NextReward);
+
+            public SinglePlayerPendingAdRewardsData NextPendingAdRewards = new SinglePlayerPendingAdRewardsData();
+
+            public Task<SinglePlayerPendingAdRewardsData> GetPendingAdRewardsAsync() =>
+                Task.FromResult(NextPendingAdRewards);
         }
 
         private sealed class InMemoryStore : ISinglePlayerProgressStore

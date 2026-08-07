@@ -28,6 +28,7 @@ public sealed partial class BattleBoardController
 			CampaignRunMapper.WriteDeck(save, campaignDeck);
 		save.playerMana = CampaignPlayerManaCurrent;
 
+		save.runRewardId = campaignRunRewardId;
 		save.campaignScenarioId = campaignScenarioId;
 		save.campaignScenarioBossId = campaignScenarioBossId;
 		save.adventureChapterId = activeAdventureChapterId;
@@ -121,6 +122,10 @@ public sealed partial class BattleBoardController
 		ResetRunProgress();
 		CampaignRunMapper.ReadProgress(save, runProgress);
 		RestoreCampaignMana(save.playerMana);
+
+		// Id della run: la riga dello storico aperta all'avvio si chiude con questo, e una
+		// run ripresa non deve restare fra le abbandonate.
+		campaignRunRewardId = string.IsNullOrWhiteSpace(save.runRewardId) ? null : save.runRewardId;
 
 		// Scenario / regole di stanza
 		campaignScenarioId = string.IsNullOrWhiteSpace(save.campaignScenarioId) ? null : save.campaignScenarioId;

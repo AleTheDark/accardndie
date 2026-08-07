@@ -16,6 +16,8 @@ namespace AccardND.NetProtocol
         public string[] unlockedChapters;
         public string[] unlockedStages;
         public string[] unlockedClasses;
+        /// <summary>Classi offerte da una ricompensa ancora da scegliere.</summary>
+        public string[] pendingClassChoices;
         public string[] unlockedScenarios;
         public string[] unlockedSecondAbilities;
 
@@ -68,6 +70,12 @@ namespace AccardND.NetProtocol
     }
 
     [Serializable]
+    public sealed class SinglePlayerChooseClassRequest
+    {
+        public string classId;
+    }
+
+    [Serializable]
     public sealed class SinglePlayerPurchaseUnlockRequest
     {
         public string type;
@@ -78,6 +86,28 @@ namespace AccardND.NetProtocol
     public sealed class SinglePlayerTutorialRewardRequest
     {
         public string tutorialRunId;
+    }
+
+    /// <summary>
+    /// Apertura di una run di campagna: stesso <c>runId</c> che chiudera' la run con la
+    /// death reward, cosi' inizio e fine sono la stessa riga nello storico. Il momento lo
+    /// mette il server, il client dichiara solo cosa sta per giocare.
+    /// </summary>
+    [Serializable]
+    public sealed class SinglePlayerRunStartRequest
+    {
+        public string runId;
+        public string mode;
+        public string chapterId;
+        public string stageId;
+    }
+
+    /// <summary>Conferma della presa in carico: il client la usa solo per sapere che e' arrivata.</summary>
+    [Serializable]
+    public sealed class SinglePlayerRunStartAck
+    {
+        public string runId;
+        public string startedAt;
     }
 
     [Serializable]
@@ -122,6 +152,46 @@ namespace AccardND.NetProtocol
     {
         public string rewardClaimId;
         public string adImpressionId;
+    }
+
+    /// <summary>
+    /// Una ricompensa gia' concessa su cui il moltiplicatore pubblicitario e' ancora
+    /// disponibile: il video non e' mai partito (rete assente, annuncio non pronto, popup
+    /// chiuso). Il server la ripropone finche' la finestra non scade, cosi' una caduta di
+    /// connessione a fine run non brucia il x3.
+    /// </summary>
+    [Serializable]
+    public sealed class SinglePlayerPendingAdRewardData
+    {
+        public string claimId;
+
+        /// <summary>'death' per le run di campagna, 'tutorial' per la reward del tutorial.</summary>
+        public string rewardType;
+
+        /// <summary>EXP account gia' accreditata da questa reward.</summary>
+        public int baseAccountExperience;
+
+        /// <summary>EXP account che il video aggiungerebbe (base * (moltiplicatore - 1)).</summary>
+        public int extraAccountExperience;
+
+        /// <summary>Capitolo della run, quando la reward viene da una campagna.</summary>
+        public string chapterId;
+
+        /// <summary>Stanze superate nella run, per riconoscere di quale partita si parla.</summary>
+        public int roomsCleared;
+
+        /// <summary>Momento in cui la reward e' stata concessa (ISO 8601 UTC).</summary>
+        public string createdAt;
+
+        /// <summary>Ore che restano prima che l'offerta scada.</summary>
+        public int hoursLeft;
+    }
+
+    /// <summary>Le offerte di moltiplicatore ancora in piedi per questo giocatore.</summary>
+    [Serializable]
+    public sealed class SinglePlayerPendingAdRewardsData
+    {
+        public SinglePlayerPendingAdRewardData[] rewards;
     }
 
     /// <summary>

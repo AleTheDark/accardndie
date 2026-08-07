@@ -1,0 +1,628 @@
+/* Accard N' Die — stile comune delle pagine di contenuto del sito.
+ *
+ * Le pagine sono statiche e servite da nginx dalla radice del dominio. La palette
+ * e' quella dell'informativa privacy, che e' arrivata prima: pergamena scura e oro,
+ * come il gioco. Niente framework e nessuna richiesta a domini terzi: il font dei
+ * titoli e' servito da qui, perche' sono pagine che devono caricare
+ * istantaneamente anche su un telefono che sta gia' scaricando la build.
+ */
+
+/* Il font del titolo. system-ui va benissimo per leggere un regolamento, ma su un
+ * sito che vende un gioco fantasy fa "documento", non "gioco".
+ *
+ * Va SOLO sul titolo della pagina (h1) e sul marchio in barra, che e' il titolo
+ * del sito. Sottotitoli, paragrafi e tutto il resto restano al font di sistema:
+ * un carattere decorativo oltre quella misura si smette di leggerlo.
+ *
+ * swap: finche' il file non e' arrivato si vede il fallback invece del vuoto. Sono
+ * 45 KB, quindi lo scambio dura un lampo, ma su rete mobile "un lampo" e' comunque
+ * meglio di un titolo invisibile. */
+@font-face {
+  font-family: "AcCardTitle";
+  src: url("fonts/lifecraft.ttf") format("truetype");
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+  --bg: #14100c;
+  --ink: #e8e2d6;
+  --gold: #f0b93d;
+  --muted: #a89c88;
+  --line: #3a3226;
+  --panel: #1f1913;
+  --panel-soft: #1c1710;
+  --link: #7fb8ff;
+  --might: #d9784a;
+  --cunning: #6fbf8e;
+  --magic: #8f9ef0;
+  --title: "AcCardTitle", "Trajan Pro", Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+
+/* La barra di scorrimento occupa spazio sempre, anche dove la pagina e' corta e
+ * non ne avrebbe bisogno. Senza, passando da una pagina lunga (la guida) a una
+ * corta (l'accesso alle statistiche) la larghezza utile cambia di una quindicina
+ * di pixel e tutto cio' che e' centrato - barra in cima compresa - scivola di
+ * lato: e' il classico saltello che si vede navigando e non si sa spiegare. */
+html { scrollbar-gutter: stable; }
+
+/* Il padding orizzontale sta su .wrap e non su body: serve a far esistere le
+ * fasce a tutta larghezza (.band), che devono poter toccare i bordi dello schermo
+ * mentre il testo dentro resta incolonnato. */
+body {
+  margin: 0;
+  padding: 0 0 4rem;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.65;
+  background: var(--bg);
+  color: var(--ink);
+  overflow-x: hidden;
+}
+
+/* La colonna del testo. 52rem e' la misura per leggere; .wide (64rem) e' quella
+ * della homepage, che non e' un testo da leggere ma una vetrina.
+ * Sta qui e non nella sezione della homepage perche' la regola che tiene ferma la
+ * barra in cima deve poterla sovrascrivere, e a parita' di specificita' vince
+ * l'ultima scritta. */
+.wrap { max-width: 52rem; margin: 0 auto; padding: 0 1.25rem; }
+.wrap.wide { max-width: 64rem; }
+
+h1 {
+  font-family: var(--title);
+  font-size: 2.4rem;
+  color: var(--gold);
+  margin: 0 0 .2rem;
+  line-height: 1.2;
+  letter-spacing: .01em;
+}
+h2 { font-size: 1.35rem; color: var(--gold); margin: 2.4rem 0 .6rem; }
+h3 { font-size: 1.05rem; color: var(--ink); margin: 1.6rem 0 .4rem; }
+p { margin: .7rem 0; }
+a { color: var(--link); }
+
+.lead { font-size: 1.05rem; color: var(--muted); margin-top: 0; }
+
+/* --- fasce a tutta larghezza con l'arte del gioco -------------------------
+ * L'immagine sta in un ::before invece che sul background dell'elemento per due
+ * motivi: si puo' sfocare senza sfocare anche il testo, e si puo' spegnere sotto
+ * prefers-reduced-data senza toccare il resto. Sopra ci va sempre una sfumatura
+ * che scende al colore di fondo: e' quella a rendere leggibile il testo e a far
+ * sparire il taglio netto fra la fascia e la pagina.
+ *
+ * L'arte e' quella degli scenari di gioco (arene viste dall'alto, 1280px): a
+ * schermo intero e' morbida, ma sotto la sfumatura e la sfocatura non si nota,
+ * e vale piu' un'immagine vera del gioco di uno stock qualsiasi. */
+.band {
+  position: relative;
+  isolation: isolate;
+  padding: 3.5rem 0;
+  overflow: hidden;
+}
+.band::before {
+  content: "";
+  position: absolute;
+  inset: -2rem;                 /* deborda: la sfocatura non deve scoprire i bordi */
+  z-index: -2;
+  background-image: var(--band-image);
+  background-size: cover;
+  background-position: center;
+  filter: blur(2px) saturate(.85);
+  transform: scale(1.04);
+}
+.band::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(120% 80% at 50% 35%, rgba(20, 16, 12, .35), rgba(20, 16, 12, .88) 70%),
+    linear-gradient(180deg, var(--bg) 0%, rgba(20, 16, 12, .1) 22%, rgba(20, 16, 12, .1) 78%, var(--bg) 100%);
+}
+.band-hero { --band-image: url("media/bg/hero.jpg"); padding: 4rem 0 3.5rem; }
+.band-classi { --band-image: url("media/bg/banda-classi.jpg"); }
+.band-inizia { --band-image: url("media/bg/banda-inizia.jpg"); }
+.band-testata { --band-image: url("media/bg/banda-testata.jpg"); padding: 2.6rem 0 2.2rem; }
+
+/* Chi ha chiesto meno animazioni o meno dati al sistema si tiene il fondo pieno:
+ * le fasce sono decorazione, e nessuna informazione vive dentro l'immagine. */
+@media (prefers-reduced-data: reduce) {
+  .band::before { display: none; }
+}
+
+/* --- navigazione: la stessa in cima a ogni pagina, cosi' il sito e' un sito ---
+ *
+ * Su desktop e' una riga sola: marchio, sezioni, e il tasto "Gioca" spinto a
+ * destra. Sul telefono le sezioni andavano a capo su tre righe e spingevano giu'
+ * l'intestazione, quindi li' si raccolgono dietro un pulsante "Menu": resta una
+ * riga sola con marchio e "Gioca", e le sezioni si aprono al tocco.
+ *
+ * Il primo tentativo era un <details> con display:contents, per non usare
+ * JavaScript. Non funziona: il contenuto di <details> vive dentro una scatola
+ * dello shadow DOM del browser, quindi display:contents non lo appiattisce nella
+ * riga flex e i link finiscono impilati uno sull'altro. Da qui il pulsante vero,
+ * acceso da site.js. Senza JavaScript i link restano visibili e vanno a capo: e'
+ * il comportamento di prima, cioe' brutto ma completo. */
+.nav {
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(31, 25, 19, .9), rgba(20, 16, 12, .9));
+}
+/* La larghezza e' la stessa su ogni pagina, e non e' un dettaglio: la colonna di
+ * testo della homepage e' piu' larga (.wrap.wide, 64rem) di quella delle pagine di
+ * contenuto (52rem), quindi finche' la barra ereditava la misura della pagina il
+ * marchio e il tasto "Gioca" si spostavano a ogni click. La barra e' arredamento
+ * fisso: sta ferma mentre cambia quello che c'e' sotto. Vale anche per il piede.
+ * Il max-width e' ripetuto perche' deve vincere anche su .wrap.wide. */
+.nav .wrap,
+footer.site .wrap { max-width: 64rem; }
+.nav .wrap {
+  display: flex;
+  gap: .3rem 1.1rem;
+  align-items: center;
+  padding: .8rem 1.25rem;
+}
+.nav .brand {
+  font-family: var(--title);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--gold);
+  text-decoration: none;
+  margin-right: .6rem;
+  white-space: nowrap;
+}
+.nav a { color: var(--muted); text-decoration: none; font-size: .95rem; }
+.nav a:hover, .nav a[aria-current="page"] { color: var(--ink); }
+.nav a[aria-current="page"] { border-bottom: 2px solid var(--gold); }
+
+.nav a.nav-play {
+  margin-left: auto;
+  color: #191308;
+  background: linear-gradient(180deg, #ffd071, var(--gold));
+  font-weight: 700;
+  padding: .35rem 1.1rem;
+  border-radius: 2rem;
+  border-bottom: 0;
+  white-space: nowrap;
+}
+.nav a.nav-play:hover { background: #ffd071; color: #191308; }
+
+/* Su desktop i link sono una riga e basta. Il pulsante "Menu" non esiste: lo
+ * accende site.js solo dove serve (vedi sotto). */
+.nav .menu-links { display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; align-items: center; }
+.nav .menu-toggle { display: none; }
+
+@media (max-width: 52rem) {
+  /* Il pulsante compare solo se site.js ha marcato la barra con .js-menu. Senza
+     JavaScript i link restano visibili e vanno a capo come prima: sara' brutto,
+     ma un menu che non si apre sarebbe un sito senza pagine. */
+  .nav.js-menu .menu-toggle {
+    display: block;
+    margin-left: auto;
+    font: inherit;
+    font-size: .95rem;
+    cursor: pointer;
+    color: var(--muted);
+    background: transparent;
+    padding: .35rem .9rem;
+    border: 1px solid var(--line);
+    border-radius: 2rem;
+    white-space: nowrap;
+  }
+  .nav.js-menu .menu-toggle[aria-expanded="true"] { color: var(--gold); border-color: var(--gold); }
+
+  /* Il pannello e' sopra la pagina, non dentro la riga: aprirlo non deve far
+     saltare in basso tutto il contenuto sotto. */
+  .nav.js-menu .menu-links {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: .1rem;
+    position: absolute;
+    top: calc(100% + .4rem);
+    right: 1.25rem;
+    z-index: 20;
+    min-width: 12rem;
+    padding: .5rem;
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    background: #1a150f;
+    box-shadow: 0 1rem 2rem rgba(0, 0, 0, .55);
+  }
+  .nav.js-menu .menu-links[hidden] { display: none; }
+  .nav.js-menu .menu-links a { padding: .5rem .6rem; border-radius: .3rem; }
+  .nav.js-menu .menu-links a[aria-current="page"] { border-bottom: 0; color: var(--gold); }
+  .nav.js-menu .menu-links a:hover { background: var(--panel); }
+
+  /* Il pannello e' in position:absolute rispetto alla barra, non alla colonna. */
+  .nav .wrap { position: relative; }
+
+  /* Con il pulsante che si prende margin-left:auto, il tasto Gioca perde la
+     spinta: glielo togliamo, altrimenti finirebbero ai due estremi con un buco. */
+  .nav.js-menu a.nav-play { margin-left: .5rem; }
+}
+
+/* --- tabelle --- */
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+th, td { border: 1px solid var(--line); padding: .5rem .6rem; text-align: left; vertical-align: top; }
+th { background: var(--panel); color: var(--gold); font-weight: 600; }
+caption { text-align: left; color: var(--muted); font-size: .9rem; padding-bottom: .4rem; }
+
+/* Una tabella larga deve scorrere da sola, non far scorrere la pagina. */
+.scroll { overflow-x: auto; margin: 1rem 0; }
+.scroll table { margin: 0; }
+
+code {
+  background: var(--panel);
+  padding: .1rem .3rem;
+  border-radius: .2rem;
+  font-size: .9em;
+}
+
+.box {
+  border-left: 3px solid var(--gold);
+  background: var(--panel-soft);
+  padding: .8rem 1rem;
+  margin: 1.4rem 0;
+}
+
+/* --- famiglie: il colore e' informazione, non decorazione --- */
+.fam { font-weight: 600; }
+.fam-might { color: var(--might); }
+.fam-cunning { color: var(--cunning); }
+.fam-magic { color: var(--magic); }
+
+.badge {
+  display: inline-block;
+  font-size: .75rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  border-radius: .8rem;
+  padding: .05rem .5rem;
+  vertical-align: .1em;
+}
+
+/* --- griglia delle carte --- */
+.grid { font-size: .88rem; }
+.grid th, .grid td { text-align: center; padding: .4rem .3rem; white-space: nowrap; }
+.grid th.rowhead { text-align: left; white-space: nowrap; }
+.grid td .val { display: block; color: var(--gold); font-weight: 700; }
+.grid td .who { display: block; color: var(--muted); font-size: .8rem; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin: 1.2rem 0;
+}
+/* Sfumatura invece di un fondo piatto, e un filo di luce sul bordo alto: bastano
+ * quei due dettagli a far sembrare i riquadri appoggiati sulla pagina invece che
+ * disegnati dentro. */
+.card {
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  background: linear-gradient(180deg, #241d15, var(--panel-soft));
+  box-shadow: inset 0 1px 0 rgba(240, 185, 61, .12), 0 .5rem 1.2rem rgba(0, 0, 0, .35);
+  padding: 1rem 1.1rem;
+}
+.card h3 { margin-top: 0; }
+.card p { margin: .4rem 0; font-size: .93rem; }
+
+/* --- stemmi delle classi -------------------------------------------------
+ * Ritagliati dall'atlante che il gioco usa nel costruttore di mazzi
+ * (Assets/Resources/UI/DeckBuilder/class_icons_atlas.png), quindi sono gli stessi
+ * che si vedono in partita: e' il punto, riconoscere la classe prima di leggerne
+ * il nome. alt vuoto perche' il nome della classe e' scritto accanto: farlo
+ * leggere due volte a uno screen reader non aiuta nessuno. */
+.emblem {
+  width: 3.25rem;
+  height: 3.25rem;
+  flex: 0 0 auto;
+  object-fit: contain;
+  filter: drop-shadow(0 .2rem .5rem rgba(0, 0, 0, .6));
+}
+.card h3 .emblem { width: 2.6rem; height: 2.6rem; }
+
+/* Il titolo della scheda classe diventa una riga: stemma, nome, famiglia.
+ * flex-wrap: senza, su una scheda stretta la pastiglia della famiglia veniva
+ * spinta oltre il bordo invece di andare a capo. */
+.card h3.classhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .3rem .7rem;
+  margin-bottom: .6rem;
+}
+
+/* Fila di stemmi: quante ne stanno, senza barra di scorrimento. Allineata a
+ * sinistra come il testo che la precede - centrata sotto un titolo e un paragrafo
+ * allineati a sinistra sembrava un blocco capitato li' per caso. */
+.emblem-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin: 1.2rem 0 0;
+}
+.emblem-row .emblem { width: 2.75rem; height: 2.75rem; }
+
+footer.site {
+  border-top: 1px solid var(--line);
+  margin-top: 3.5rem;
+  padding-top: 1.2rem;
+  color: var(--muted);
+  font-size: .9rem;
+}
+footer.site a { color: var(--muted); }
+
+/* ==========================================================================
+   Homepage
+   ==========================================================================
+   La homepage e' l'unica pagina che non e' un testo da leggere: e' una porta.
+   Percio' ha una colonna piu' larga delle altre e blocchi che si impaginano da
+   soli, invece del solito flusso di paragrafi.
+   ========================================================================== */
+
+/* --- il tasto Gioca ------------------------------------------------------
+ * E' il motivo per cui la pagina esiste, quindi e' grosso, sta in alto e non
+ * divide lo spazio con nient'altro. min-height 3rem: sotto quella misura un
+ * pollice lo manca, ed e' esattamente il tasto che nessuno deve mancare. */
+.cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  min-height: 3.25rem;
+  padding: .85rem 2.4rem;
+  border-radius: 2rem;
+  background: linear-gradient(180deg, #ffd071, var(--gold));
+  color: #191308;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-decoration: none;
+  box-shadow: 0 .5rem 1.6rem rgba(240, 185, 61, .28);
+}
+.cta:hover { background: #ffd071; }
+.cta:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+
+.cta-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.25rem;
+  padding: .85rem 1.8rem;
+  border-radius: 2rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.cta-ghost:hover { border-color: var(--gold); color: var(--gold); }
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  justify-content: center;
+  margin: 1.6rem 0 .8rem;
+}
+
+.play-note { color: var(--muted); font-size: .9rem; text-align: center; margin: 0; }
+
+/* --- intestazione --------------------------------------------------------
+ * Il titolo ha un'ombra e non un bagliore: sopra una fascia illustrata serve a
+ * staccarlo dal fondo, e un bagliore dorato su fondo dorato non stacca niente. */
+.hero { text-align: center; }
+.hero h1 {
+  font-size: clamp(2.6rem, 10vw, 4.6rem);
+  margin: 0 0 .6rem;
+  line-height: 1.05;
+  text-shadow: 0 .15rem 1.2rem rgba(0, 0, 0, .85), 0 0 2.5rem rgba(240, 185, 61, .18);
+}
+.hero .tagline {
+  font-size: clamp(1.05rem, 3.8vw, 1.4rem);
+  color: var(--ink);
+  max-width: 34rem;
+  margin: 0 auto;
+  text-shadow: 0 .1rem .8rem rgba(0, 0, 0, .8);
+}
+.hero .sub { color: var(--muted); max-width: 34rem; margin: .8rem auto 0; }
+
+/* --- vetrina video -------------------------------------------------------
+ * I video sono verticali perche' il gioco e' verticale. auto-fit con minmax fa
+ * una colonna sul telefono e tre su desktop senza una sola media query. */
+.reel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1.1rem;
+  margin: 1.4rem 0;
+}
+.reel figure { margin: 0; }
+.reel video,
+.reel img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  background: var(--panel-soft);
+}
+.reel figcaption {
+  color: var(--muted);
+  font-size: .9rem;
+  padding-top: .5rem;
+  text-align: center;
+}
+
+/* --- riquadri di richiamo ------------------------------------------------ */
+.pillars { grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+.pillars .card h3 { color: var(--gold); }
+
+/* --- chiusura ------------------------------------------------------------
+ * Dentro una fascia illustrata, quindi niente riquadro: sarebbe una cornice
+ * dentro una cornice. Restano il testo centrato e il tasto. */
+.closer { text-align: center; }
+.closer h2 { margin-top: 0; text-shadow: 0 .1rem .8rem rgba(0, 0, 0, .8); }
+.closer p { max-width: 38rem; margin-left: auto; margin-right: auto; }
+
+/* ==========================================================================
+   Pagina delle statistiche (/statistiche)
+   ==========================================================================
+   Quella pagina e' generata dal server .NET, non e' un file statico, ma il CSS
+   sta qui lo stesso: e' servita dallo stesso dominio e deve avere la stessa
+   faccia del resto del sito. Se un giorno cambiasse la palette, cambierebbe
+   anche li' senza ricompilare il server.
+   ========================================================================== */
+
+/* --- riquadri numerici ---------------------------------------------------
+ * auto-fit su 7.5rem: due colonne su un telefono stretto, quattro o cinque su
+ * desktop. I numeri sono tabular-nums cosi' colonne diverse restano allineate
+ * anche con cifre di larghezza diversa. */
+.statgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: .6rem;
+  margin: 1rem 0 1.6rem;
+}
+.stat {
+  border: 1px solid var(--line);
+  border-radius: .4rem;
+  background: var(--panel-soft);
+  padding: .7rem .6rem;
+  text-align: center;
+}
+.stat b {
+  display: block;
+  color: var(--gold);
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.stat span { display: block; color: var(--muted); font-size: .8rem; }
+
+/* --- fascia del grado ---------------------------------------------------- */
+.rank {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  border-radius: .4rem;
+  background: var(--panel);
+  padding: 1rem 1.1rem;
+  margin: 1rem 0;
+}
+.rank .tier { color: var(--gold); font-size: 1.4rem; font-weight: 700; }
+.rank p { margin: .3rem 0 0; color: var(--muted); font-size: .92rem; }
+
+/* --- barre di avanzamento ------------------------------------------------ */
+.meter {
+  display: block;
+  height: .4rem;
+  border-radius: .2rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  margin: .35rem 0 0;
+}
+.meter i { display: block; height: 100%; background: var(--gold); }
+.meter.done i { background: var(--cunning); }
+
+/* --- pastiglie: capitoli, classi, sblocchi ------------------------------- */
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: .8rem 0 1.4rem; padding: 0; list-style: none; }
+.chips li {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: .2rem .75rem;
+  font-size: .88rem;
+  background: var(--panel-soft);
+}
+/* Il grigio non e' decorazione: e' l'unica differenza fra "fatto" e "da fare". */
+.chips li.on { border-color: var(--gold); color: var(--gold); }
+.chips li.off { color: var(--muted); opacity: .75; }
+
+/* --- elenco degli obiettivi ---------------------------------------------- */
+.ach { list-style: none; padding: 0; margin: 1rem 0; }
+.ach li {
+  border-bottom: 1px solid var(--line);
+  padding: .7rem 0;
+}
+.ach .name { font-weight: 600; }
+.ach .name.done { color: var(--cunning); }
+.ach .desc { color: var(--muted); font-size: .9rem; }
+.ach .count { float: right; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+
+/* --- barra di sessione: chi sei, quale account, esci --------------------- */
+.session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .6rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: .4rem;
+  background: var(--panel-soft);
+  padding: .7rem .9rem;
+  margin: 0 0 1.6rem;
+  font-size: .92rem;
+}
+.session .who { color: var(--muted); }
+.session form { margin: 0 0 0 auto; }
+
+/* Pulsanti delle pagine generate dal server (accesso Google, esci, cambia
+   account): sono <button> dentro <form>, non link, perche' aprono o chiudono
+   una sessione e un GET non deve poterlo fare da solo. */
+button.primary, button.quiet {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 2rem;
+  padding: .6rem 1.4rem;
+  border: 1px solid var(--line);
+}
+button.primary {
+  background: var(--gold);
+  color: #191308;
+  border-color: var(--gold);
+  font-weight: 700;
+}
+button.primary:hover { background: #ffd071; }
+button.quiet { background: transparent; color: var(--muted); }
+button.quiet:hover { color: var(--ink); border-color: var(--gold); }
+
+/* --- telefono ------------------------------------------------------------
+ * I due tasti a tutta larghezza: su uno schermo stretto due pillole affiancate
+ * diventano due bersagli piccoli, e uno dei due e' il tasto che conta.
+ *
+ * La barra invece va stretta un po': marchio, "Menu" e "Gioca" alla misura di
+ * desktop stanno dentro un telefono da 320px per una manciata di pixel, e un
+ * margine cosi' sottile si perde al primo ritocco. Con body{overflow-x:hidden}
+ * un traboccamento qui non si vedrebbe nemmeno - il tasto Gioca sparirebbe e
+ * basta - ed e' il tipo di rottura che non si nota finche' non la si misura. */
+@media (max-width: 30rem) {
+  .cta, .cta-ghost { width: 100%; }
+  .band { padding: 2.5rem 0; }
+  .band-hero { padding: 2.5rem 0; }
+
+  .nav .wrap { padding-left: .9rem; padding-right: .9rem; gap: .3rem .5rem; }
+  .nav .brand { font-size: 1rem; margin-right: .2rem; }
+  .nav.js-menu .menu-toggle { padding: .35rem .7rem; font-size: .9rem; }
+  .nav a.nav-play { padding: .35rem .8rem; font-size: .9rem; margin-left: .4rem; }
+  .nav.js-menu .menu-links { right: .9rem; }
+}
+
+/* Rete di sicurezza per larghezze che non ho previsto: il marchio e' l'unica voce
+ * della barra che si puo' accorciare senza perdere una funzione, quindi e' lui a
+ * cedere. Gli altri due sono un menu e il tasto che porta al gioco. */
+.nav .brand { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nav .menu-toggle, .nav a.nav-play { flex: 0 0 auto; }
+
+/* --- tabelle su schermo stretto ------------------------------------------
+ * Le tabelle del regolamento non si comprimono sotto una certa larghezza. Con
+ * body{overflow-x:hidden} verrebbero tagliate a destra senza modo di leggerle:
+ * display:block le rende scorrevoli per conto loro, che e' la regola che vale
+ * gia' per .scroll. Vale solo dentro main, cosi' non tocca eventuali tabelle di
+ * impaginazione altrove. */
+@media (max-width: 40rem) {
+  main table { display: block; overflow-x: auto; max-width: 100%; }
+}

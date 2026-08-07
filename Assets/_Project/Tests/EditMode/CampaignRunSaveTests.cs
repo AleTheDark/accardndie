@@ -13,6 +13,7 @@ namespace AccardND.GameCore.Tests
             RunProgressState original = CreateProgress();
             original.CompleteMonsterRoom(new[] { 3, 4 });
             original.CompleteMonsterRoom(new[] { 5 });
+			original.AddGold(7);
             original.TrySpendExperience(2);
 
             var save = new CampaignRunSave();
@@ -25,6 +26,7 @@ namespace AccardND.GameCore.Tests
             Assert.That(restored.CurrentExperience, Is.EqualTo(original.CurrentExperience));
             Assert.That(restored.TotalExperience, Is.EqualTo(original.TotalExperience));
             Assert.That(restored.AvailableExperience, Is.EqualTo(original.AvailableExperience));
+			Assert.That(restored.Gold, Is.EqualTo(original.Gold));
             Assert.That(restored.RoomsCleared, Is.EqualTo(original.RoomsCleared));
         }
 

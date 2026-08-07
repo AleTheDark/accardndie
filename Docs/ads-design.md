@@ -61,12 +61,12 @@ frequenza** di `AdPolicy`, che difendono il giocatore dagli annunci che non ha c
 tetto raggiunto altrove gli chiuderebbe l'unica fonte di miele del gioco. Gli annunci mostrati
 da un cancello continuano pero' a contare per quel tetto.
 
-> **Debito noto.** `TavernQuestClaim` e' un cancello fatto con un interstitial. Sono due
-> problemi in uno: usare un interstitial come condizione per una ricompensa e' contro le
-> policy AdMob (il formato previsto e' il rewarded, o il rewarded interstitial), e senza SSV
-> il server non puo' verificare niente, quindi "l'ho guardata" e' parola del client su una
-> progressione che per tutto il resto e' autoritativa lato server. Convertirlo a rewarded
-> costa una ad unit nuova in console e sposta l'accredito dietro l'impression verificata.
+> **Scelta consapevole, non debito.** `TavernQuestClaim` e' un cancello fatto con un
+> interstitial, e resta cosi' per decisione presa il 2026-08-05. Le due conseguenze che si
+> accettano: usare un interstitial come condizione per una ricompensa e' contro le policy
+> AdMob e AdSense (il formato previsto e' il rewarded), e senza SSV il server non puo'
+> verificare niente, quindi "l'ho guardata" e' parola del client su una progressione che per
+> tutto il resto e' autoritativa lato server. Il seguito sta in Fase 3, sotto.
 
 ## I placement di oggi
 
@@ -77,6 +77,32 @@ da un cancello continuano pero' a contare per quel tetto.
 | `CampaignExperienceTriple` | rewarded | fine run di campagna | EXP account × 3 |
 | `PvpExperienceTriple` | rewarded | fine partita PvP ranked | EXP account × 3 |
 | `BagItemUsed` | interstitial | uso di un consumabile della bisaccia | — |
+
+### Il triplicatore di campagna ha una seconda occasione
+
+A fine run il x3 puo' saltare per motivi che non c'entrano col giocatore: la rete cade proprio
+mentre il popup e' a schermo (niente claim id dal server, niente da far verificare), oppure
+l'annuncio non arriva in tempo. Prima quell'occasione moriva con la run.
+
+Adesso no: la reward resta sul server a `multiplier = 1`, e
+`SinglePlayerProgressService.GetPendingAdRewards` la ripropone nella pagina **MESSAGGI** del
+profilo, dove il TRIPLICA e' lo stesso di fine run — stesso placement, stesso claim, stessa
+verifica lato server (`singleplayer.reward.pending_ads.get`).
+
+- Vale **sette giorni** (`PendingAdRewardWindowHours`), al massimo 20 offerte in vetrina. La
+  finestra vale solo per la lista: `ClaimAdMultiplier` non la ricontrolla, cosi' un video
+  partito a cavallo della scadenza non finisce nel vuoto.
+- Solo le reward di campagna (`reward_type = 'death'`). I claim delle partite classificate
+  sono moltiplicabili allo stesso modo, ma passano da `PvpExperienceTriple`: mostrarli qui
+  vorrebbe dire pagarli sull'ad unit sbagliata.
+- Un badge rosso sul bottone PROFILO dell'hub dice che c'e' posta, altrimenti l'offerta
+  dipenderebbe dal fatto che il giocatore apra il profilo per caso.
+- Anche il popup di fine run e la riga di riepilogo lo dicono, quando il TRIPLICA non e'
+  comparso: "Il triplicatore ti aspetta fra i messaggi del profilo".
+
+Effetto collaterale voluto: pure il giocatore che a fine run preme CONTINUA ritrova l'offerta
+nel profilo. Non e' un buco, e' la stessa promessa fatta due volte — l'occasione non si perde
+per distrazione, e la pubblicita' la si guarda quando si vuole.
 
 Nota su `BagItemUsed`: l'aggancio e' in `RecordConsumedBagItem`, cioe' dopo che l'oggetto
 e' stato davvero tolto dalla borsa. Cosi' un uso rifiutato (sigillo senza bersaglio,
@@ -153,6 +179,7 @@ bisogno: `AdService.Warm(placement)` all'ingresso, `AdService.Cool(placement)` a
 |---|---|---|
 | `TavernQuestClaim`, `TavernBonusClaim` | apertura della taverna | uscita dalla taverna |
 | `CampaignExperienceTriple`, `BagItemUsed` | inizio run (bisaccia composta, o run ripresa da salvataggio) | fine run (`ReturnToStart`) |
+| `CampaignExperienceTriple` (offerte recuperate) | apertura del profilo | uscita dal profilo |
 | `PvpExperienceTriple` | `MatchStart` | — (non si ripete, non si ricarica mai) |
 
 Il motivo e' un numero: nella prima giornata di AdMob (2026-08-02) le richieste sono state 36
@@ -229,23 +256,35 @@ Scritto:
    invece di farsi richiamare dal browser dentro il runtime Unity.
 2. `H5GamesAdProvider : IAdProvider` — l'adattatore, e il ramo `UNITY_WEBGL` in
    `AdService.CreateDefaultProvider`. Il gameplay non cambia di una riga.
-3. `ACCARDND_ADSENSE_CLIENT_ID` e `ACCARDND_ADSENSE_TEST` in `index.html` del template, come
-   gia' si fa col client id di Google: il publisher id e' configurazione del sito, non del
-   gioco, e cambiarlo non richiede una build.
-4. `ads.txt` nel template (da compilare col publisher id) e nella lista dei file di deploy in
-   `Docs/webgl-hosting-cache.md`.
+3. Nel `<head>` di `index.html` del template: `ACCARDND_ADSENSE_CLIENT_ID` (l'interruttore
+   "questa build ha la pubblicita'") e **lo snippet AdSense scritto a mano**, statico.
+4. `ads.txt` nel template e nella lista dei file di deploy in `Docs/webgl-hosting-cache.md`.
+
+Il publisher id e' `pub-3580486749764055`, lo stesso numero che sta prima della tilde
+nell'app id AdMob: iscrivendosi ad AdMob, Google crea l'account AdSense collegato, e i due
+condividono l'id. In `index.html` va col prefisso (`ca-pub-...`), in `ads.txt` senza.
+
+> **Lo snippet non va iniettato da JavaScript.** Il bridge inizialmente creava il tag da se';
+> non funziona per due motivi. Il crawler che verifica la proprieta' del sito legge l'HTML e
+> non aspetta che Unity si avvii, quindi un tag creato a runtime per lui non esiste; e due
+> copie dello script sulla stessa pagina fanno fallire `adsbygoogle` con *"only one AdSense
+> head tag supported per page"*. Il tag sta nel template, il bridge si limita a chiamare
+> `adConfig`.
 
 Da fare nella console, senza toccare il codice:
 
-5. Account AdSense, sito `accardndie.com` aggiunto, publisher id incollato in `index.html` e
-   in `ads.txt`.
+5. Sito `accardndie.com` aggiunto e proprieta' verificata. Vanno bene sia lo snippet nel
+   `<head>` (gia' presente nel template) sia il metodo "Snippet ads.txt", perche' la riga in
+   `ads.txt` e' gia' quella giusta: basta che il deploy sia stato fatto prima di premere
+   *Verifica*.
 6. **Messaggio di consenso UE** sotto *Privacy e messaggistica*, pubblicato. E' l'equivalente
    web di UMP, e come su AdMob: senza, al traffico europeo non arriva pubblicita'. La CMP la
    serve Google dallo script, il gioco non ha niente da chiamare — `AdConsent` resta una cosa
    di Android.
-7. Approvazione del sito, e solo allora `ACCARDND_ADSENSE_TEST = false`. Fino a quel punto si
-   vedono annunci di prova, che e' esattamente quello che serve per collaudare: valgono le
-   stesse regole di AdMob, cliccare i propri annunci veri significa chiusura dell'account.
+7. Approvazione del sito, e solo allora si toglie `data-adbreak-test="on"` dal tag in
+   `index.html`. Fino a quel punto escono annunci di prova, che e' esattamente quello che
+   serve per collaudare: valgono le stesse regole di AdMob, cliccare i propri annunci veri
+   significa chiusura dell'account.
 
 ### Cosa il web non puo' fare come Android
 
@@ -261,38 +300,73 @@ Il x3 sul web resta quindi protetto solo da idempotenza e cap lato server. E' un
 accettabile finche' il web non e' il canale principale, e non c'e' modo di fare meglio: gli
 H5 Games Ads non chiamano nessun endpoint a video finito.
 
-### Il problema vero del web: il blocco pubblicita'
+### Il condono sul web (deciso il 2026-08-05)
 
 Su Android un cancello pubblicitario si chiude solo quando la rete non ha annunci, cioe' di
-rado. Sul web un blocco pubblicita' fa sparire lo script di AdSense in silenzio, il provider
-risponde che non e' utilizzabile, e per quel giocatore **il miele delle quest diventa
-irraggiungibile per sempre**, non "adesso riprova". Il codice si comporta come previsto; e'
-la regola di gioco che su questo canale ha una conseguenza diversa.
+rado. Sul web no: finche' AdSense non ha approvato il sito non arriva **nessun** annuncio, e
+anche dopo un blocco pubblicita' fa sparire lo script in silenzio. In entrambi i casi il
+miele delle quest — l'unica fonte del gioco — sarebbe irraggiungibile, non "riprova piu'
+tardi".
 
-Le tre strade, in ordine di quanto costano: lasciare com'e' e accettare di perdere quei
-giocatori; sul solo web far pagare la riscossione senza annuncio quando il provider non e'
-utilizzabile (`AdService.IsProviderReady` falso), tenendo il cancello per chi la pubblicita'
-ce l'ha; oppure chiedere l'installazione della PWA come alternativa. La prima e' una scelta,
-non un default: va presa sapendo cosa costa.
+Per questo sul web le ricompense dietro un annuncio si concedono comunque:
 
-### `TavernQuestClaim` va convertito a rewarded
+- `AdService.RewardsWaivedWithoutAds` e' vero solo su WebGL. E' **l'unico punto** che nomina
+  la piattaforma: togliere il condono e' una riga sola.
+- Un annuncio che non c'e' (`NoFill`, `Failed`, provider non inizializzato) diventa
+  `AdOutcome.Waived` invece del rifiuto.
+- I punti di chiamata chiedono `AdResult.Grants`, non piu' `AdResult.Watched`. Le due domande
+  ora sono diverse: `Grants` decide se pagare, `Watched` conta le impressioni vere e resta
+  quella che alimenta i tetti di `AdPolicy`.
+- `AdService.IsReady` risponde di si' dove c'e' condono, altrimenti il bottone TRIPLICA non
+  comparirebbe e non ci sarebbe niente da premere.
+- L'identificativo mandato al server e' `waived-<guid>`. Il server rifiuta una richiesta senza
+  identificativo, quindi qualcosa va mandato; marcarlo evita di sporcare gli unici dati che
+  dicono quanta pubblicita' e' stata davvero guardata, e permette di contare i condoni.
+- Dove il condono e' attivo, la UI non nomina la pubblicita': niente "guardando una
+  pubblicita'" nel popup di fine campagna, niente "sto caricando la pubblicita'" in taverna.
 
-Il debito segnalato piu' sopra qui diventa bloccante. Le policy degli H5 Games Ads sono le
-stesse di AdMob: **un premio si paga solo dietro un rewarded**, e un interstitial usato come
-cancello e' una violazione. Finche' resta un interstitial, la fonte principale di miele sul
-web sta su un formato che non dovrebbe pagarla.
+Un annuncio **chiuso a meta'** resta un no anche col condono: li' una pubblicita' c'era
+davvero ed e' stata rifiutata.
 
-La conversione e' una riga in `AdPlacements.FormatOf` (spostare il caso fra i rewarded) piu'
-una ad unit nuova in console AdMob per Android; sul web non serve niente, perche' il formato
-lo decide la stessa tabella.
+Quando togliere il condono e' una decisione, non una scadenza: dopo l'approvazione AdSense
+si riprende il miele a chi ha un blocca-pubblicita', e quei giocatori si perdono.
 
-### Se AdSense dice di no
+### `TavernQuestClaim` resta un interstitial (deciso il 2026-08-05)
 
-L'approvazione richiede un sito con del contenuto, e un dominio che serve solo un canvas
-Unity viene rifiutato spesso. Prima di cambiare rete conviene dare al sito delle pagine vere
-(database delle carte, guide, note di versione), che servono comunque all'unico canale di
-acquisizione gratuito che c'e'. In alternativa restano gli SDK dei portali (CrazyGames,
-Poki, GameDistribution), che pero' monetizzano il loro dominio, non il nostro.
+La conversione a rewarded e' stata proposta e **scartata**: il claim delle quest resta un
+interstitial usato come cancello, su web come su Android. La decisione e' di chi tiene
+l'account, e questo paragrafo esiste perche' non venga riaperta per distrazione.
+
+Cosa si accetta con questa scelta, detto una volta e non piu': per AdSense e AdMob un premio
+si paga dietro un rewarded, e dare qualcosa in cambio di un interstitial e' fuori policy.
+Il rischio non e' che l'annuncio non parta - parte - ma che l'account prenda una limitazione
+del servizio se la cosa viene notata. La conversione, se un giorno servisse, e' una riga in
+`AdPlacements.FormatOf` (spostare il caso fra i rewarded) piu' una ad unit nuova in console
+AdMob; sul web non servirebbe niente, perche' il formato lo decide la stessa tabella.
+
+### I contenuti del sito, prima della revisione
+
+L'approvazione AdSense richiede un sito con del contenuto, e un dominio che serve solo un
+canvas Unity viene rifiutato spesso: e' il motivo di rifiuto piu' comune per i giochi
+self-hosted. Per questo, prima di chiedere la revisione, `Docs/web/` e' diventato un piccolo
+sito vero:
+
+| pagina | cosa contiene |
+|---|---|
+| `guida.html` | il regolamento completo: mazzo e mano, triangolo delle famiglie, scala del Vigore, tutte le aure, e come si sceglie uno schieramento |
+| `classi.html` | le nove classi, con abilita, aura da tre copie e una nota su come si giocano |
+| `carte.html` | le 81 carte schierabili, **generate** dagli asset da `gen-carte.sh` |
+| `privacy.html` | l'informativa, aggiornata con AdSense e i cookie pubblicitari sul web |
+
+Tutte condividono `site.css` e la stessa navigazione, e sono raggiungibili dal footer di
+`index.html`: senza quei collegamenti il crawler vedrebbe solo il canvas, perche' la pagina
+di gioco per lui e' vuota. `sitemap.xml` e `robots.txt` completano il percorso.
+
+`carte.html` si rigenera con `gen-carte.sh` e non si modifica a mano: e' l'unico modo perche'
+la pagina non diverga dal gioco quando cambiano le carte.
+
+Se la revisione va male lo stesso, restano gli SDK dei portali (CrazyGames, Poki,
+GameDistribution), che pero' monetizzano il loro dominio, non il nostro.
 
 ## Economia: perche' la pubblicita' non paga miele
 

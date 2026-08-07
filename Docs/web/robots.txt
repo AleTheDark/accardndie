@@ -1,0 +1,17 @@
+# accardndie.com — tutto aperto.
+#
+# Il file esiste per una ragione sola: dichiarare la sitemap. Nessuna regola di blocco,
+# perche' un Disallow di troppo qui impedirebbe ai crawler di Google (compreso quello di
+# AdSense, che deve poter leggere le pagine per servire annunci pertinenti) di vedere il
+# sito. Se un giorno servisse escludere qualcosa, verificare prima l'effetto su AdSense.
+#
+# Nemmeno /statistiche e' bloccato qui: e' dietro un accesso Google, quindi un crawler
+# vede solo la pagina che invita ad accedere. A dire di non indicizzarla e' quella
+# pagina stessa, con un meta robots noindex, che e' il posto giusto: un Disallow
+# impedirebbe al crawler di leggere il noindex, e la pagina potrebbe finire in indice
+# lo stesso, senza descrizione.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://accardndie.com/sitemap.xml

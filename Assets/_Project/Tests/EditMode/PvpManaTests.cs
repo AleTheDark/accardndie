@@ -304,6 +304,23 @@ namespace AccardND.GameCore.Tests
             Assert.That(engine.ManaOf(1), Is.EqualTo(before));
         }
 
+        [Test]
+        public void ImpossibleAttack_AutomaticallyRewardsSkipMana()
+        {
+            PvpMatchEngine engine = BattleReady(
+                Loadout("p0", HeroClass.Warrior, 1),
+                Loadout("p1", HeroClass.Warrior, 20));
+            int before = engine.ManaOf(0);
+
+            IReadOnlyList<PvpEvent> events = engine.Attack(0, 0);
+
+            Assert.That(engine.ManaOf(0), Is.EqualTo(before + 3));
+            Assert.That(events.OfType<ManaChangedEvent>().Any(e =>
+                e.Player == 0
+                && e.Delta == 3
+                && e.Reason == ManaChangeReasons.Skip), Is.True);
+        }
+
         /// <summary>
         /// Uccidere non produce mana. L'economia sta su tre voci: +1 parata,
         /// +1 fine attivazione, -1 attacco base (piu' il +3 dello skip).

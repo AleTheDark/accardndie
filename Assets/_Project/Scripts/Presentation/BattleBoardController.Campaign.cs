@@ -17,6 +17,8 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	private Coroutine scenarioBackgroundTransitionRoutine;
+
 	public bool LoadScenario(RoomType roomType, RoomDifficulty difficulty, string bossId = null, string scenarioId = null)
 	{
 		if ((Object)(object)scenarioCatalog == (Object)null)
@@ -33,6 +35,14 @@ public sealed partial class BattleBoardController
 		{
 			return false;
 		}
+		if (scenarioBackgroundTransitionRoutine != null)
+		{
+			((MonoBehaviour)this).StopCoroutine(scenarioBackgroundTransitionRoutine);
+			scenarioBackgroundTransitionRoutine = null;
+			SetScenarioBackgroundAlpha(1f);
+		}
+		bragusBossPresentationActive = false;
+		trentorBossPresentationActive = false;
 		currentScenario = scenario;
 		currentScenarioDisplayOverride = null;
 		RefreshScenarioBackground();
@@ -46,6 +56,40 @@ public sealed partial class BattleBoardController
 
 	private Sprite CurrentScenarioBackgroundSprite()
 	{
+		// Lo sfondo con Trentor incorporato e' una risorsa esclusiva del reveal.
+		// Non passa dal catalogo scenari, cosi' la stanza parte sempre da
+		// "climbing" e non puo' cadere sul background di un altro boss.
+		bool trentorRevealed = trentorBossPresentationActive
+			|| (debugForceFirstRoomTrentor
+				&& cpuCards != null
+				&& cpuCards.Any(card => card != null && IsTrentorBossProxy(card)));
+		if (trentorRevealed)
+		{
+			Sprite trentorBackground = Resources.Load<Sprite>("Backgrounds/bg_trentor");
+			if ((Object)(object)trentorBackground != (Object)null)
+				return trentorBackground;
+		}
+
+		// Le scene debug dei boss partono dalla configurazione stanza predefinita e
+		// quindi non hanno ancora applicato lo ScenarioDefinition di campagna.
+		// Bragus deve comunque usare subito il suo background dedicato.
+		bool bragusRoom = bragusBossPresentationActive;
+		if (bragusRoom && (Object)(object)scenarioCatalog != (Object)null)
+		{
+			ScenarioDefinition bragusScenario = scenarioCatalog.Select(
+				RoomType.Boss,
+				RoomDifficulty.Hard,
+				BragusBossCardId,
+				"bragus");
+			if ((Object)(object)bragusScenario != (Object)null)
+			{
+				if (Screen.width > Screen.height && (Object)(object)bragusScenario.BackgroundLandscape != (Object)null)
+					return bragusScenario.BackgroundLandscape;
+				if ((Object)(object)bragusScenario.Background != (Object)null)
+					return bragusScenario.Background;
+			}
+		}
+
 		if ((Object)(object)currentScenario == (Object)null)
 		{
 			return Resources.Load<Sprite>("Backgrounds/Background_terrain");
@@ -85,6 +129,57 @@ public sealed partial class BattleBoardController
 		}
 	}
 
+	private void TransitionToScenarioBackground()
+	{
+		if (scenarioBackgroundTransitionRoutine != null)
+			((MonoBehaviour)this).StopCoroutine(scenarioBackgroundTransitionRoutine);
+		scenarioBackgroundTransitionRoutine = ((MonoBehaviour)this).StartCoroutine(
+			TransitionToScenarioBackgroundRoutine());
+	}
+
+	private IEnumerator TransitionToScenarioBackgroundRoutine()
+	{
+		const float fadeOutDuration = 0.22f;
+		const float fadeInDuration = 0.38f;
+		float elapsed = 0f;
+		while (elapsed < fadeOutDuration)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			SetScenarioBackgroundAlpha(1f - Mathf.SmoothStep(0f, 1f, elapsed / fadeOutDuration));
+			yield return null;
+		}
+
+		SetScenarioBackgroundAlpha(0f);
+		RefreshScenarioBackground();
+
+		elapsed = 0f;
+		while (elapsed < fadeInDuration)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			SetScenarioBackgroundAlpha(Mathf.SmoothStep(0f, 1f, elapsed / fadeInDuration));
+			yield return null;
+		}
+
+		SetScenarioBackgroundAlpha(1f);
+		scenarioBackgroundTransitionRoutine = null;
+	}
+
+	private void SetScenarioBackgroundAlpha(float alpha)
+	{
+		if ((Object)(object)backgroundFillImage != (Object)null)
+		{
+			Color color = backgroundFillImage.color;
+			color.a = alpha;
+			backgroundFillImage.color = color;
+		}
+		if ((Object)(object)terrainImage != (Object)null)
+		{
+			Color color = terrainImage.color;
+			color.a = alpha;
+			terrainImage.color = color;
+		}
+	}
+
 	private bool ApplyScenario(ScenarioDefinition scenario, string displayOverride)
 	{
 		if (!ApplyScenario(scenario))
@@ -101,6 +196,15 @@ public sealed partial class BattleBoardController
 
 	private bool LoadCampaignRoomScenario()
 	{
+		// La scena debug Trentor non deve ereditare pendingScenarioId/campaignScenarioId
+		// da una sessione persistente (per esempio "fog" dopo Bragus).
+		if (debugForceFirstRoomTrentor)
+			return LoadScenario(
+				RoomType.Boss,
+				RoomDifficulty.Hard,
+				TrentorBossCardId,
+				"climbing");
+
 		if (currentRoomType == RoomType.Monster)
 		{
 			string activeScenarioId = ActiveCampaignScenarioId();
@@ -494,9 +598,9 @@ public sealed partial class BattleBoardController
 			currentScenarioDisplayOverride = DescribeRoomRoll(new CampaignRoomRoll(currentRoomType, currentMonsterTier, pendingScenarioId, pendingRoomDifficulty));
 			AppendLog("SCENARIO - fallback nome stanza: scenario non trovato o non valido.");
 		}
+		ActivateMinibossForCurrentRoom();
 		RefreshPlayerHud();
 		PlayCurrentRoomEnterSfx();
-		ActivateMinibossForCurrentRoom();
 		if (currentRoomType != RoomType.Monster && currentRoomType != RoomType.Boss)
 		{
 			((MonoBehaviour)this).StartCoroutine(EnterNonCombatRoom(currentRoomType));

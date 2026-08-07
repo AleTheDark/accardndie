@@ -51,6 +51,10 @@ public sealed partial class BattleBoardController
 
 	private AudioClip apocalypticMonsterRoomEnterSfx;
 
+	private AudioClip hubNightSoundtrack;
+
+	private AudioClip hubDaySoundtrack;
+
 	private AudioClip bossBragusSoundtrack;
 
 	private AudioClip bossMedusaSoundtrack;
@@ -64,6 +68,8 @@ public sealed partial class BattleBoardController
 	private AudioClip bossTrentorJoinBattlefieldSfx;
 
 	private AudioClip bossTrentorAttackSfx;
+
+	private AudioClip[] bossTrentorTakeDamageSfx;
 
 	private AudioClip[] bossBragusAttackSfx;
 
@@ -101,6 +107,8 @@ public sealed partial class BattleBoardController
 		accessibleMonsterRoomEnterSfx = LoadSfx("monster_accessible_room");
 		normalMonsterRoomEnterSfx = LoadSfx("monster_normal_room");
 		apocalypticMonsterRoomEnterSfx = LoadSfx("monster_apocalyptic_room");
+		hubNightSoundtrack = LoadSfx("hub_night");
+		hubDaySoundtrack = LoadSfx("hub_day") ?? hubNightSoundtrack;
 		bossBragusSoundtrack = LoadSfx("boss_bragus_soundtrack");
 		bossMedusaSoundtrack = LoadSfx("boss_medusa_soundtrack");
 		bossPalantirSoundtrack = LoadSfx("boss_palantir_soundtrack");
@@ -108,6 +116,7 @@ public sealed partial class BattleBoardController
 		bossMedusaDeathSfx = LoadSfx("boss_medusa_death");
 		bossTrentorJoinBattlefieldSfx = LoadSfx("boss_trentor_join_battlefield");
 		bossTrentorAttackSfx = LoadSfx("boss_trentor_attack");
+		bossTrentorTakeDamageSfx = LoadSfxSet("boss_trentor_takedamage", 3);
 		bossBragusAttackSfx = LoadSfxSet("boss_bragus_attack", 3);
 		bossBragusAttackHitSfx = LoadSfx("boss_bragus_attack_hit");
 		bossBragusTakeDamageSfx = LoadSfxSet("boss_bragus_takedamage", 3);
@@ -436,6 +445,11 @@ public sealed partial class BattleBoardController
 		PlaySfx(bossTrentorAttackSfx);
 	}
 
+	private void PlayTrentorTakeDamageSfx()
+	{
+		PlayRandomSfx(bossTrentorTakeDamageSfx);
+	}
+
 	private void PlayBragusAttackSfx()
 	{
 		PlayRandomSfx(bossBragusAttackSfx);
@@ -513,6 +527,12 @@ public sealed partial class BattleBoardController
 			RoomDifficulty.Hard => apocalypticMonsterRoomEnterSfx,
 			_ => normalMonsterRoomEnterSfx
 		});
+	}
+
+	private void PlayCurrentHubMusic()
+	{
+		AudioClip clip = IsCurrentHubNight() ? hubNightSoundtrack : hubDaySoundtrack;
+		PlayMusic(clip ?? hubNightSoundtrack);
 	}
 
 	private bool IsMedusaMusicRoom()

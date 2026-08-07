@@ -44,6 +44,14 @@ public sealed class GoogleOAuthBroker
     /// </summary>
     public const string PurposeDeletion = "deletion";
 
+    /// <summary>
+    /// Come <see cref="PurposeDeletion"/>, ma per la pagina delle statistiche:
+    /// il callback apre una sessione web e rimanda a /statistiche. Ha un purpose
+    /// suo e non riusa quello della cancellazione perche' finire sulla pagina
+    /// sbagliata, fra queste due, non e' un dettaglio.
+    /// </summary>
+    public const string PurposeStats = "stats";
+
     /// <summary>Esito del callback: per il flusso app si mostra solo il messaggio,
     /// per i flussi browser il chiamante prosegue usando l'ID token.</summary>
     public sealed record CallbackOutcome(string Purpose, string Message, bool Ok, string IdToken);

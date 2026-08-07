@@ -420,6 +420,32 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void MageAbility_PenaltySurvivesImpossibleAttack()
+        {
+            var engine = BattleReadyEngine(
+                UniformLoadout("p0", HeroClass.Mage, 1),
+                UniformLoadout("p1", HeroClass.Warrior, 20),
+                out _);
+
+            engine.UseAbility(0, 1, 0);
+            Assert.That(engine.BoardOf(1)[0].PendingVigorStepPenalty, Is.EqualTo(1));
+
+            var attack = engine.Attack(0, 0).OfType<AttackResolvedEvent>().Single(e => !e.IsCounter);
+
+            Assert.That(attack.Certainty, Is.EqualTo(CombatCertainty.Impossible));
+            Assert.That(engine.BoardOf(1)[0].PendingVigorStepPenalty, Is.EqualTo(1),
+                "senza confronto il malus al dado Vigore deve restare attivo");
+        }
+
+        [Test]
+        public void MageAbility_StackedPenaltyLowersD6ToD3AndStopsAtMinimum()
+        {
+            Assert.That(PvpVigorScale.StepsToMinimum(6), Is.EqualTo(2));
+            Assert.That(PvpVigorScale.LowerBySteps(6, 2), Is.EqualTo(3));
+            Assert.That(PvpVigorScale.LowerBySteps(6, 3), Is.EqualTo(3));
+        }
+
+        [Test]
         public void BarbarianFury_TriggersOnFailedKillAndBoostsDefense()
         {
             var loadout0 = UniformLoadout("p0", HeroClass.Barbarian, 5);

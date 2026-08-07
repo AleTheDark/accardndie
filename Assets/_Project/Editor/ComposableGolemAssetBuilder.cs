@@ -43,11 +43,11 @@ namespace AccardND.Editor
             Material ironHot = SaveMaterial("MAT_Golem_Iron_HotEdge", new Color(1f, 0.52f, 0.18f, 1f), 0.18f, 0.68f, false, new Color(1f, 0.34f, 0.05f, 1f), 1.9f);
             Material spark = SaveMaterial("MAT_Golem_Hit_Sparks", new Color(1f, 0.76f, 0.24f, 1f), 0f, 0.72f, false, new Color(1f, 0.55f, 0.1f, 1f), 2.4f);
 
-            GameObject crystalOrbit = BuildCrystalOrbit(crystalMesh, shardMesh, ringMesh, crystal, crystalCore);
+            GameObject crystalOrbit = BuildOrbitRelic("GolemOrbit_Crystal", ironChunkMesh, shardMesh, ringMesh, crystal, crystalCore);
             SavePrefab(crystalOrbit, "GolemOrbit_Crystal");
-            GameObject glassOrbit = BuildGlassOrbit(glassPaneMesh, ringMesh, glass, glassEdge);
+            GameObject glassOrbit = BuildOrbitRelic("GolemOrbit_Glass", ironChunkMesh, shardMesh, ringMesh, glass, glassEdge);
             SavePrefab(glassOrbit, "GolemOrbit_Glass");
-            GameObject ironOrbit = BuildIronOrbit(ironChunkMesh, ringMesh, iron, ironHot);
+            GameObject ironOrbit = BuildOrbitRelic("GolemOrbit_Iron", ironChunkMesh, shardMesh, ringMesh, iron, ironHot);
             SavePrefab(ironOrbit, "GolemOrbit_Iron");
 
             SavePrefab(BuildCrystalHit(shardMesh, crystal, crystalCore), "GolemHit_Crystal_Shatter");
@@ -66,46 +66,38 @@ namespace AccardND.Editor
                 RebuildAll();
         }
 
-        private static GameObject BuildCrystalOrbit(Mesh crystalMesh, Mesh shardMesh, Mesh ringMesh, Material crystal, Material core)
+        private static GameObject BuildOrbitRelic(string rootName, Mesh bodyMesh, Mesh runeMesh, Mesh ringMesh, Material body, Material magic)
         {
-            GameObject root = NewRoot("GolemOrbit_Crystal");
-            AddMesh(root.transform, "Crystal Core", crystalMesh, core, Vector3.zero, Quaternion.Euler(0f, 18f, 0f), new Vector3(0.42f, 0.72f, 0.42f));
-            AddMesh(root.transform, "Inner Orbit Halo", ringMesh, crystal, Vector3.zero, Quaternion.Euler(90f, 0f, 0f), Vector3.one);
-            for (int i = 0; i < 5; i++)
+            GameObject root = NewRoot(rootName);
+
+            // Tutte le forme condividono la stessa silhouette: un sigillo runico corazzato.
+            // Cambiano esclusivamente i materiali, cosi il cambio forma resta leggibile
+            // senza trasformare i tre oggetti orbitanti in tre modelli scollegati.
+            AddMesh(root.transform, "Relic Armored Core", bodyMesh, body, Vector3.zero,
+                Quaternion.Euler(8f, 45f, 6f), new Vector3(0.56f, 0.68f, 0.56f));
+            AddMesh(root.transform, "Outer Runic Halo", ringMesh, magic, Vector3.zero,
+                Quaternion.Euler(90f, 0f, 0f), new Vector3(1.08f, 1.08f, 1.08f));
+            AddMesh(root.transform, "Tilted Arcane Halo", ringMesh, body, Vector3.zero,
+                Quaternion.Euler(63f, 18f, 0f), new Vector3(0.86f, 0.86f, 0.86f));
+
+            AddPrimitive(root.transform, "Arcane Heart", PrimitiveType.Sphere, magic,
+                new Vector3(0f, 0.03f, -0.36f), Quaternion.identity, new Vector3(0.2f, 0.2f, 0.12f));
+
+            for (int i = 0; i < 4; i++)
             {
-                float angle = i * 72f;
-                Vector3 position = Quaternion.Euler(0f, angle, 0f) * new Vector3(0f, 0.03f, 0.48f);
-                AddMesh(root.transform, "Floating Crystal Shard " + (i + 1), shardMesh, crystal, position, Quaternion.Euler(18f, angle + 20f, 35f), new Vector3(0.16f, 0.28f, 0.16f));
+                float angle = 45f + i * 90f;
+                Vector3 position = Quaternion.Euler(0f, angle, 0f) * new Vector3(0f, 0.02f, 0.58f);
+                AddMesh(root.transform, "Runic Crown " + (i + 1), runeMesh, magic, position,
+                    Quaternion.Euler(72f, angle, 0f), new Vector3(0.11f, 0.24f, 0.11f));
             }
 
-            return root;
-        }
-
-        private static GameObject BuildGlassOrbit(Mesh paneMesh, Mesh ringMesh, Material glass, Material edge)
-        {
-            GameObject root = NewRoot("GolemOrbit_Glass");
-            for (int i = 0; i < 6; i++)
-            {
-                float angle = i * 60f;
-                Vector3 position = Quaternion.Euler(0f, angle, 0f) * new Vector3(0f, 0.02f, 0.34f);
-                AddMesh(root.transform, "Glass Pane " + (i + 1), paneMesh, glass, position, Quaternion.Euler(8f, angle + 28f, i % 2 == 0 ? 8f : -11f), new Vector3(0.3f, 0.48f, 0.3f));
-            }
-
-            AddMesh(root.transform, "Thin Glass Orbit", ringMesh, edge, Vector3.zero, Quaternion.Euler(90f, 0f, 0f), new Vector3(0.92f, 0.92f, 0.92f));
-            AddPrimitive(root.transform, "Glass Refraction Pearl", PrimitiveType.Sphere, edge, new Vector3(0f, 0.18f, 0f), Quaternion.identity, new Vector3(0.18f, 0.18f, 0.18f));
-            return root;
-        }
-
-        private static GameObject BuildIronOrbit(Mesh chunkMesh, Mesh ringMesh, Material iron, Material hot)
-        {
-            GameObject root = NewRoot("GolemOrbit_Iron");
-            AddMesh(root.transform, "Iron Core", chunkMesh, iron, Vector3.zero, Quaternion.Euler(10f, 28f, 4f), new Vector3(0.62f, 0.46f, 0.52f));
-            AddMesh(root.transform, "Forged Orbit Band", ringMesh, iron, Vector3.zero, Quaternion.Euler(90f, 0f, 0f), new Vector3(1.04f, 1.04f, 1.04f));
             for (int i = 0; i < 8; i++)
             {
                 float angle = i * 45f;
-                Vector3 position = Quaternion.Euler(0f, angle, 0f) * new Vector3(0f, 0.02f, 0.48f);
-                AddPrimitive(root.transform, "Iron Rivet " + (i + 1), PrimitiveType.Sphere, i % 3 == 0 ? hot : iron, position, Quaternion.identity, new Vector3(0.08f, 0.08f, 0.08f));
+                Vector3 position = Quaternion.Euler(0f, angle, 0f) * new Vector3(0f, -0.02f, 0.48f);
+                AddPrimitive(root.transform, "Forged Rune " + (i + 1), PrimitiveType.Cube,
+                    i % 2 == 0 ? magic : body, position, Quaternion.Euler(0f, angle, 45f),
+                    new Vector3(0.055f, 0.055f, 0.055f));
             }
 
             return root;

@@ -12,6 +12,7 @@ namespace AccardND.Network
         Task<SinglePlayerProgressSave> PurchaseUnlockAsync(SinglePlayerUnlockType type, string id);
         Task<SinglePlayerProgressSave> PurchaseHardcoreAsync();
         Task<SinglePlayerProgressSave> ClearChapterAsync(string bossId);
+        Task<SinglePlayerProgressSave> ChooseClassAsync(string classId);
         Task<SanctuaryData> GetSanctuaryAsync();
         Task<SanctuaryData> BuySanctuaryItemAsync(string itemId, string offerId = null);
         Task<SanctuaryData> SetSanctuaryBagAsync(string[] itemIds);
@@ -19,9 +20,11 @@ namespace AccardND.Network
         Task<TavernData> ClaimTavernQuestAsync(string questId);
         Task<TavernData> ClaimTavernBonusAsync();
         Task<SinglePlayerRewardOutcome> ClaimTutorialRewardAsync(string tutorialRunId);
+        Task NotifyRunStartedAsync(string runId, string mode, string chapterId, string stageId);
         Task<SinglePlayerRewardOutcome> ClaimDeathRewardAsync(DeathRewardSummary summary);
         Task<SinglePlayerRewardOutcome> ClaimAdMultiplierAsync(string rewardClaimId, string adImpressionId);
         Task<SinglePlayerRewardOutcome> ClaimLevelRewardsAsync();
+        Task<SinglePlayerPendingAdRewardsData> GetPendingAdRewardsAsync();
     }
 
     /// <summary>Esito autoritativo di una reward: nuovo stato, id reward (per l'ad) e miele accreditato.</summary>
@@ -169,6 +172,29 @@ namespace AccardND.Network
             return ToOutcome(result);
         }
 
+        /// <summary>
+        /// Annuncia l'inizio di una run: il server apre la riga dello storico che la death
+        /// reward chiudera'. Non e' persistente di proposito - un inizio rispedito ore dopo
+        /// racconterebbe una run cominciata quando invece era gia' finita - e non fa parte
+        /// della progressione: se il server non risponde, la run si gioca lo stesso.
+        /// </summary>
+        public async Task NotifyRunStartedAsync(string runId, string mode, string chapterId, string stageId)
+        {
+            Envelope envelope = await RequestAsync(
+                MessageTypes.SinglePlayerRunStarted,
+                new SinglePlayerRunStartRequest
+                {
+                    runId = runId,
+                    mode = mode,
+                    chapterId = chapterId,
+                    stageId = stageId
+                },
+                MessageTypes.SinglePlayerRunStartedAck,
+                persistent: false);
+
+            ThrowIfError(envelope, "Avvio run non registrato.");
+        }
+
         public async Task<SinglePlayerRewardOutcome> ClaimDeathRewardAsync(DeathRewardSummary summary)
         {
             SinglePlayerDeathRewardRequest request = CreateDeathRewardRequest(summary);
@@ -177,6 +203,15 @@ namespace AccardND.Network
                 request,
                 persistent: true);
             return ToOutcome(result);
+        }
+
+        public async Task<SinglePlayerProgressSave> ChooseClassAsync(string classId)
+        {
+            SinglePlayerProgressData data = await RequestProgressAsync(
+                MessageTypes.SinglePlayerChooseClass,
+                new SinglePlayerChooseClassRequest { classId = classId },
+                persistent: true);
+            return ToSave(data);
         }
 
         public async Task<SinglePlayerRewardOutcome> ClaimLevelRewardsAsync()
@@ -205,6 +240,28 @@ namespace AccardND.Network
                 owner,
                 MessageTypes.SinglePlayerClaimDeathReward,
                 MessageTypes.SinglePlayerRewardResult,
+                JsonUtility.ToJson(request));
+            return true;
+        }
+
+        /// <summary>
+        /// Salva il completamento di un capitolo quando il client remoto non puo' essere
+        /// creato. Il replay usera' lo stesso endpoint persistente del percorso online.
+        /// </summary>
+        public static bool QueueChapterClearForReplay(
+            string bossId,
+            string playerId = null,
+            PersistentMutationOutbox persistentOutbox = null)
+        {
+            string owner = playerId ?? AccountServerSession.PlayerId;
+            if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(bossId))
+                return false;
+
+            var request = new SinglePlayerClearChapterRequest { bossId = bossId };
+            (persistentOutbox ?? new PersistentMutationOutbox()).Add(
+                owner,
+                MessageTypes.SinglePlayerClearChapter,
+                MessageTypes.SinglePlayerProgressData,
                 JsonUtility.ToJson(request));
             return true;
         }
@@ -239,6 +296,24 @@ namespace AccardND.Network
                 },
                 persistent: true);
             return ToOutcome(result);
+        }
+
+        /// <summary>
+        /// Le reward gia' concesse che aspettano ancora il video del x3. Le decide il server:
+        /// il client le riceve e le ripropone nel profilo, cosi' una disconnessione a fine
+        /// run non brucia il moltiplicatore.
+        /// </summary>
+        public async Task<SinglePlayerPendingAdRewardsData> GetPendingAdRewardsAsync()
+        {
+            Envelope envelope = await RequestAsync(
+                MessageTypes.SinglePlayerPendingAdRewardsGet,
+                null,
+                MessageTypes.SinglePlayerPendingAdRewardsData,
+                persistent: false);
+
+            ThrowIfError(envelope, "Richiesta ricompense in sospeso rifiutata.");
+            return PvpServerClient.ParsePayload<SinglePlayerPendingAdRewardsData>(envelope)
+                ?? new SinglePlayerPendingAdRewardsData();
         }
 
         /// <summary>
@@ -356,6 +431,8 @@ namespace AccardND.Network
                     JsonUtility.FromJson<SinglePlayerPurchaseUnlockRequest>(mutation.payloadJson),
                 MessageTypes.SinglePlayerClearChapter =>
                     JsonUtility.FromJson<SinglePlayerClearChapterRequest>(mutation.payloadJson),
+                MessageTypes.SinglePlayerChooseClass =>
+                    JsonUtility.FromJson<SinglePlayerChooseClassRequest>(mutation.payloadJson),
                 MessageTypes.SanctuaryBuyItem =>
                     JsonUtility.FromJson<SanctuaryBuyItemRequest>(mutation.payloadJson),
                 MessageTypes.TavernClaimQuest =>
@@ -441,6 +518,7 @@ namespace AccardND.Network
                 unlockedChapters = ToList(data.unlockedChapters),
                 unlockedStages = ToList(data.unlockedStages),
                 unlockedClasses = ToList(data.unlockedClasses),
+                pendingClassChoices = ToList(data.pendingClassChoices),
                 unlockedScenarios = ToList(data.unlockedScenarios),
                 unlockedSecondAbilities = ToList(data.unlockedSecondAbilities),
                 clearedChapters = ToList(data.clearedChapters),

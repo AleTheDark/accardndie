@@ -426,6 +426,8 @@ public sealed partial class BattleBoardController
 				logPanel.SetActive(false);
 			}
 			RefreshSfxOptionsUi();
+			RefreshMusicOptionsUi();
+			RefreshLanguageOptionsUi();
 			RefreshPrivacyOptionsButton();
 		}
 	}
@@ -454,20 +456,35 @@ public sealed partial class BattleBoardController
 		SetOptionsPanelVisible(false);
 	}
 
+	/// <summary>
+	/// In arena non si "torna al menu": si molla la partita, e mollare una partita
+	/// PvP è una resa. Stesso bottone, significato diverso.
+	/// </summary>
+	private void RefreshOptionsMainMenuButton()
+	{
+		if ((Object)(object)optionsMainMenuButton == (Object)null)
+		{
+			return;
+		}
+		bool surrender = IsPvpMatchInProgress;
+		optionsMainMenuButton.interactable = surrender || HasActiveCampaignSession();
+		if ((Object)(object)optionsMainMenuButtonText != (Object)null)
+		{
+			optionsMainMenuButtonText.text = surrender
+				? GameText.GetLocalizedFallback(GameTextKeys.Options.Surrender, "ARRENDITI", "SURRENDER")
+				: GameText.GetLocalizedFallback(GameTextKeys.Options.MainMenu, "MENU", "MENU");
+		}
+	}
+
 	private void SetOptionsPanelVisible(bool visible)
 	{
-		if (visible && (Object)(object)optionsMainMenuButton != (Object)null)
+		if (visible)
 		{
-			// In arena non si "torna al menu": si molla la partita, e mollare una
-			// partita PvP è una resa. Stesso bottone, significato diverso.
-			bool surrender = IsPvpMatchInProgress;
-			optionsMainMenuButton.interactable = surrender || HasActiveCampaignSession();
-			if ((Object)(object)optionsMainMenuButtonText != (Object)null)
-			{
-				optionsMainMenuButtonText.text = surrender
-					? GameText.GetLocalizedFallback(GameTextKeys.Options.Surrender, "ARRENDITI", "SURRENDER")
-					: GameText.GetLocalizedFallback(GameTextKeys.Options.MainMenu, "MENU", "MENU");
-			}
+			RefreshOptionsMainMenuButton();
+		}
+		else
+		{
+			CloseLanguageDropdown();
 		}
 		if ((Object)(object)optionsBackdropPanel != (Object)null)
 		{
@@ -530,29 +547,28 @@ public sealed partial class BattleBoardController
 		StylePanel(dialog);
 		SetRect(dialog.rectTransform, new Vector2(0.18f, 0.34f), new Vector2(0.82f, 0.66f));
 
-		Text title = CreateText("Return To Menu Title", ((Component)dialog).transform, font, 29, (FontStyle)1, (TextAnchor)4);
-		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(title);
+		Text title = CreateText("Return To Menu Title", ((Component)dialog).transform, AccardND.Battlefield.MmoUiTheme.LoreFont, 40, (FontStyle)0, (TextAnchor)4);
 		title.text = GameText.Get(GameTextKeys.Options.ReturnToMenuTitle);
 		title.color = new Color(0.95f, 0.79f, 0.34f);
 		SetRect(title.rectTransform, new Vector2(0.06f, 0.68f), new Vector2(0.94f, 0.9f));
 		returnToMenuTitleText = title;
 
-		Text body = CreateText("Return To Menu Body", ((Component)dialog).transform, font, 20, (FontStyle)0, (TextAnchor)4);
+		Text body = CreateText("Return To Menu Body", ((Component)dialog).transform, font, 30, (FontStyle)0, (TextAnchor)4);
 		body.text = GameText.Get(GameTextKeys.Options.ReturnToMenuBody);
 		returnToMenuBodyText = body;
 		body.color = new Color(0.86f, 0.92f, 0.94f);
 		body.horizontalOverflow = HorizontalWrapMode.Wrap;
 		body.verticalOverflow = VerticalWrapMode.Truncate;
-		body.resizeTextForBestFit = true;
-		body.resizeTextMinSize = 13;
-		body.resizeTextMaxSize = 20;
+		body.resizeTextForBestFit = false;
 		SetRect(body.rectTransform, new Vector2(0.08f, 0.36f), new Vector2(0.92f, 0.66f));
 
 		Button cancelButton = CreateButton("Cancel Return To Menu", ((Component)dialog).transform, font, GameText.Get(GameTextKeys.Common.Cancel));
+		((Component)cancelButton).GetComponentInChildren<Text>().fontSize = 25;
 		((UnityEvent)cancelButton.onClick).AddListener(new UnityAction(HideReturnToMenuConfirmation));
 		SetRect((RectTransform)((Component)cancelButton).transform, new Vector2(0.08f, 0.09f), new Vector2(0.46f, 0.28f));
 
 		Button confirmButton = CreateButton("Confirm Return To Menu", ((Component)dialog).transform, font, GameText.Get(GameTextKeys.Common.Exit));
+		((Component)confirmButton).GetComponentInChildren<Text>().fontSize = 25;
 		((UnityEvent)confirmButton.onClick).AddListener(new UnityAction(ConfirmReturnToMainMenu));
 		SetRect((RectTransform)((Component)confirmButton).transform, new Vector2(0.54f, 0.09f), new Vector2(0.92f, 0.28f));
 		returnToMenuConfirmButtonText = ((Component)confirmButton).GetComponentInChildren<Text>();

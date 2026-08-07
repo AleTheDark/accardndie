@@ -62,16 +62,16 @@ public sealed partial class BattleBoardController
 		text.rectTransform.offsetMin = new Vector2(0f, -29f);
 		text.rectTransform.offsetMax = new Vector2(0f, -29f);
 
-		Image experienceIcon = CreateImage("Merchant Experience Icon", ((Component)image).transform, Color.white);
-		experienceIcon.sprite = LoadSpriteResource("UI/Common/merchant_experience_icon");
-		experienceIcon.preserveAspect = true;
-		experienceIcon.raycastTarget = false;
-		SetRect(experienceIcon.rectTransform, new Vector2(0.065f, 0.795f), new Vector2(0.19f, 0.9f));
+		Image goldIcon = CreateImage("Merchant Gold Icon", ((Component)image).transform, Color.white);
+		goldIcon.sprite = LoadSpriteResource("UI/Common/gold_coins");
+		goldIcon.preserveAspect = true;
+		goldIcon.raycastTarget = false;
+		SetRect(goldIcon.rectTransform, new Vector2(0.27f, 0.81f), new Vector2(0.35f, 0.895f));
 
-		merchantStatusText = CreateText("Merchant Status", ((Component)image).transform, font, 22, FontStyle.Normal, TextAnchor.MiddleLeft);
+		merchantStatusText = CreateText("Merchant Status", ((Component)image).transform, font, 22, FontStyle.Normal, TextAnchor.MiddleCenter);
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(merchantStatusText);
 		merchantStatusText.color = new Color(0.86f, 0.94f, 0.96f);
-		SetRect(merchantStatusText.rectTransform, new Vector2(0.18f, 0.805f), new Vector2(0.52f, 0.89f));
+		SetRect(merchantStatusText.rectTransform, new Vector2(0.35f, 0.81f), new Vector2(0.73f, 0.895f));
 		Button button = CreateImageButton("Close Merchant", ((Component)image).transform, font, cancelActionSprite, string.Empty);
 		((UnityEvent)button.onClick).AddListener(new UnityAction(CloseMerchantPanel));
 		SetRect((RectTransform)((Component)button).transform, new Vector2(0.875f, 0.905f), new Vector2(0.955f, 0.975f));
@@ -91,7 +91,7 @@ public sealed partial class BattleBoardController
 			(RectTransform)((Component)merchantCardsTabButton).transform,
 			new Color(0.48f, 0.68f, 0.16f, 1f));
 		merchantCardsTabVfx.SetSweepScale(new Vector3(0.3167f, 1f, 1f));
-		SetRect((RectTransform)((Component)merchantCardsTabButton).transform, new Vector2(0.08f, 0.715f), new Vector2(0.5f, 0.79f));
+		SetRect((RectTransform)((Component)merchantCardsTabButton).transform, new Vector2(0.08f, 0.735f), new Vector2(0.5f, 0.805f));
 		merchantItemsTabButton = CreateButton("Merchant Tab Items", ((Component)image).transform, font, "OGGETTI");
 		((UnityEvent)merchantItemsTabButton.onClick).AddListener((UnityAction)delegate
 		{
@@ -107,7 +107,7 @@ public sealed partial class BattleBoardController
 			(RectTransform)((Component)merchantItemsTabButton).transform,
 			new Color(0.48f, 0.68f, 0.16f, 1f));
 		merchantItemsTabVfx.SetSweepScale(new Vector3(0.3167f, 1f, 1f));
-		SetRect((RectTransform)((Component)merchantItemsTabButton).transform, new Vector2(0.5f, 0.715f), new Vector2(0.92f, 0.79f));
+		SetRect((RectTransform)((Component)merchantItemsTabButton).transform, new Vector2(0.5f, 0.735f), new Vector2(0.92f, 0.805f));
 
 		merchantShelfRoot = new GameObject("Merchant Shelf", new Type[2]
 		{
@@ -115,7 +115,7 @@ public sealed partial class BattleBoardController
 			typeof(HorizontalLayoutGroup)
 		}).GetComponent<RectTransform>();
 		((Transform)merchantShelfRoot).SetParent(((Component)image).transform, false);
-		SetRect(merchantShelfRoot, new Vector2(0.035f, 0.405f), new Vector2(0.965f, 0.655f));
+		SetRect(merchantShelfRoot, new Vector2(0.035f, 0.425f), new Vector2(0.965f, 0.69f));
 		HorizontalLayoutGroup shelfLayout = ((Component)merchantShelfRoot).GetComponent<HorizontalLayoutGroup>();
 		shelfLayout.spacing = 18f;
 		shelfLayout.padding = new RectOffset(6, 6, 4, 4);
@@ -140,11 +140,19 @@ public sealed partial class BattleBoardController
 		SetRect(merchantSellText.rectTransform, new Vector2(0.085f, 0.325f), new Vector2(0.49f, 0.4f));
 		merchantSellText.rectTransform.offsetMin = new Vector2(12f, 4f);
 		merchantSellText.rectTransform.offsetMax = new Vector2(-10f, -4f);
-		merchantRecoverButton = CreateButton("Merchant Recover Button", ((Component)image).transform, font, "RECUPERA");
+		merchantRecoverButton = CreateButton(
+			"Merchant Recover Button",
+			((Component)image).transform,
+			font,
+			GameText.GetOrFallbackSilent(GameTextKeys.Merchant.Recover, "RECUPERA"));
 		((UnityEvent)merchantRecoverButton.onClick).AddListener(new UnityAction(RecoverSelectedMerchantCard));
 		ApplyMerchantCampaignCta(merchantRecoverButton, "UI/CampaignRestyle/campaign_cta_olive");
 		SetRect((RectTransform)((Component)merchantRecoverButton).transform, new Vector2(0.5f, 0.325f), new Vector2(0.92f, 0.4f));
-		merchantSellButton = CreateButton("Merchant Sell Button", ((Component)image).transform, font, "VENDI");
+		merchantSellButton = CreateButton(
+			"Merchant Sell Button",
+			((Component)image).transform,
+			font,
+			GameText.GetOrFallbackSilent(GameTextKeys.Merchant.Sell, "VENDI"));
 		((UnityEvent)merchantSellButton.onClick).AddListener(new UnityAction(SellSelectedMerchantCard));
 		ApplyMerchantCampaignCta(merchantSellButton, "UI/CampaignRestyle/campaign_cta_blue");
 		SetRect((RectTransform)((Component)merchantSellButton).transform, new Vector2(0.5f, 0.325f), new Vector2(0.92f, 0.4f));
@@ -445,7 +453,10 @@ public sealed partial class BattleBoardController
 		Text price = CreateText("Offer Price", ((Component)slot).transform, font, 18, FontStyle.Normal, TextAnchor.MiddleCenter);
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(price);
 		price.color = new Color(0.92f, 0.82f, 0.64f);
-		price.text = offer.Cost + " EXP";
+		price.text = GameText.GetOrFallbackSilent(
+			GameTextKeys.Merchant.GoldPrice,
+			"{0} ORO",
+			EffectiveMerchantCost(offer.Cost));
 		SetRect(price.rectTransform, new Vector2(0.08f, 0.17f), new Vector2(0.92f, 0.3f));
 		Button buy = CreateButton("Merchant Offer Buy", ((Component)slot).transform, font, MerchantOfferButtonLabel(offer.Sold, locked, IsMerchantDeckFull()));
 		ApplyMerchantCampaignCta(buy, "UI/CampaignRestyle/campaign_cta_blue");
@@ -486,7 +497,10 @@ public sealed partial class BattleBoardController
 		Text price = CreateText("Offer Price", ((Component)slot).transform, font, 18, FontStyle.Normal, TextAnchor.MiddleCenter);
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(price);
 		price.color = new Color(0.92f, 0.82f, 0.64f);
-		price.text = offer.Cost + " EXP";
+		price.text = GameText.GetOrFallbackSilent(
+			GameTextKeys.Merchant.GoldPrice,
+			"{0} ORO",
+			EffectiveMerchantCost(offer.Cost));
 		SetRect(price.rectTransform, new Vector2(0.08f, 0.17f), new Vector2(0.92f, 0.3f));
 		Button buy = CreateButton("Merchant Offer Buy", ((Component)slot).transform, font, MerchantOfferButtonLabel(offer.Sold, locked, deckFull: false));
 		ApplyMerchantCampaignCta(buy, "UI/CampaignRestyle/campaign_cta_blue");

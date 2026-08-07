@@ -49,6 +49,31 @@ namespace AccardND.Ads
         public static string ActiveProviderId => provider?.ProviderId ?? "nessuno";
 
         /// <summary>
+        /// Su questo canale una ricompensa dietro un annuncio si concede anche quando
+        /// l'annuncio non c'e'. E' vero solo sul web, ed e' una misura temporanea: finche'
+        /// AdSense non ha approvato il sito non arriva nessun annuncio, e un cancello
+        /// pubblicitario diventa una porta chiusa e basta - il miele delle quest, che e'
+        /// l'unica fonte del gioco, sarebbe irraggiungibile per tutti.
+        ///
+        /// Resta comunque vero anche dopo l'approvazione che sul web un blocco pubblicita'
+        /// e' normale, quindi questa non e' una riga che si toglie a cuor leggero: toglierla
+        /// significa accettare di perdere i giocatori che ne hanno uno.
+        ///
+        /// Quando si decide di rimuoverla si tocca solo questo punto: nessun altro file
+        /// nomina la piattaforma, e i punti di chiamata continuano a chiedere
+        /// <see cref="AdResult.Grants"/> senza sapere perche' la risposta e' si'.
+        ///
+        /// ACCARDND_WAIVE_ADS lo forza ovunque: serve a provare il condono in editor, dove
+        /// altrimenti risponderebbe la pubblicita' finta e non si vedrebbe mai questo ramo.
+        /// </summary>
+        public static bool RewardsWaivedWithoutAds =>
+#if ACCARDND_WAIVE_ADS || (UNITY_WEBGL && !UNITY_EDITOR)
+            true;
+#else
+            false;
+#endif
+
+        /// <summary>
         /// Il provider e' stato preparato con successo. Falso puo' voler dire "non ancora"
         /// oppure "non ci riesce": la differenza sta nelle righe di <see cref="RecentLog"/>.
         /// </summary>
@@ -73,6 +98,12 @@ namespace AccardND.Ads
         /// </summary>
         public static bool IsReady(AdPlacement placement)
         {
+            // Dove la ricompensa si concede comunque, il bottone deve comparire comunque:
+            // e' costruito su questa risposta, e senza di essa non ci sarebbe niente da
+            // premere e nessun modo di riscuotere.
+            if (RewardsWaivedWithoutAds)
+                return true;
+
             if (provider == null || initialization == null || !initialization.IsCompleted)
                 return false;
             if (!AdPolicy.Allows(AdPlacements.FormatOf(placement), out _))
@@ -147,17 +178,24 @@ namespace AccardND.Ads
 
         /// <summary>
         /// Mostra un annuncio e restituisce com'e' andata. Non lancia mai: al punto di
-        /// chiamata si legge <see cref="AdResult.Watched"/> per decidere se pagare, e
+        /// chiamata si legge <see cref="AdResult.Grants"/> per decidere se pagare, e
         /// <see cref="AdResult.Unavailable"/> per distinguere "la rete non ha annunci" da
         /// "l'ha chiuso a meta'", che al giocatore vanno spiegati in modo diverso.
+        ///
+        /// La domanda giusta e' <see cref="AdResult.Grants"/> e non
+        /// <see cref="AdResult.Watched"/>: dove vale <see cref="RewardsWaivedWithoutAds"/> le
+        /// due risposte si separano, perche' la ricompensa spetta anche senza annuncio.
+        /// <see cref="AdResult.Watched"/> resta la domanda su quante pubblicita' sono state
+        /// davvero guardate, che e' un'altra cosa e serve ai tetti di frequenza.
         ///
         /// <paramref name="asGate"/> dice che l'annuncio sta davanti a una ricompensa e non
         /// la accompagna. Cambia due cose: si aspetta il caricamento invece di rinunciare
         /// subito (il giocatore ha premuto sapendo che arriva una pubblicita', e dirgli di no
         /// mentre l'annuncio sta arrivando gli costerebbe la ricompensa), e non si applicano
         /// le regole di frequenza, che esistono per difenderlo dagli annunci che non ha
-        /// chiesto. Sopra, chi ha aperto il cancello paga solo su <see cref="AdResult.Watched"/>:
-        /// niente pubblicita' vuol dire niente riscossione, e la ricompensa resta li'.
+        /// chiesto. Sopra, chi ha aperto il cancello paga solo su <see cref="AdResult.Grants"/>:
+        /// dove non c'e' condono, niente pubblicita' vuol dire niente riscossione e la
+        /// ricompensa resta li'.
         ///
         /// Su un cancello fatto con un interstitial "guardato" resta pero' una parola del
         /// client: gli interstitial non hanno SSV, quindi il server non puo' verificare
@@ -189,7 +227,7 @@ namespace AccardND.Ads
             }
 
             if (!await EnsureProviderAsync())
-                return AdResult.Of(AdOutcome.NoFill);
+                return Unavailable(AdOutcome.NoFill, key);
 
             // Davanti a un cancello si aspetta il caricamento (ci pensa il provider, con la sua
             // scadenza): il giocatore ha premuto sapendo che arriva una pubblicita', e
@@ -201,7 +239,7 @@ namespace AccardND.Ads
                 // automatico se un Warm e' stato dimenticato o se l'annuncio e' scaduto.
                 Write($"{key}: nessun annuncio pronto da {provider.ProviderId}.");
                 Warm(placement);
-                return AdResult.Of(AdOutcome.NoFill);
+                return Unavailable(AdOutcome.NoFill, key);
             }
 
             showing = true;
@@ -225,7 +263,30 @@ namespace AccardND.Ads
             if (result.Watched)
                 AdPolicy.RecordShown(format);
             Write($"{key}: {result.Outcome}.");
-            return result;
+
+            // Un guasto della rete, o niente da mostrare: dove le ricompense sono condonate
+            // il giocatore non deve pagarne il prezzo. Un annuncio chiuso a meta' invece
+            // resta un no, perche' li' una pubblicita' c'era davvero ed e' stata rifiutata.
+            return result.Unavailable ? Unavailable(result.Outcome, key) : result;
+        }
+
+        /// <summary>
+        /// Come si risponde quando l'annuncio non c'e'. Di norma si dice com'e' andata e chi
+        /// ha chiesto non incassa; dove vale <see cref="RewardsWaivedWithoutAds"/> si condona
+        /// e la ricompensa spetta lo stesso.
+        ///
+        /// L'identificativo del condono e' marcato: il server rifiuta una richiesta senza
+        /// identificativo, quindi qualcosa va mandato comunque, e mandare un id che sembri
+        /// un'impressione vera sporcherebbe gli unici dati che dicono quanta pubblicita' e'
+        /// stata davvero guardata. E' anche il modo per contarli, i condoni.
+        /// </summary>
+        private static AdResult Unavailable(AdOutcome outcome, string key)
+        {
+            if (!RewardsWaivedWithoutAds)
+                return AdResult.Of(outcome);
+
+            Write($"{key}: nessun annuncio ({outcome}), ricompensa concessa lo stesso.");
+            return new AdResult(AdOutcome.Waived, "waived-" + Guid.NewGuid().ToString("N"));
         }
 
         /// <summary>

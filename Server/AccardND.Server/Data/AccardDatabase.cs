@@ -292,9 +292,12 @@ public sealed class AccardDatabase
             CREATE INDEX IF NOT EXISTS ix_login_events_time ON login_events(occurred_at);
             CREATE INDEX IF NOT EXISTS ix_login_events_player ON login_events(player_id);
 
-            -- Storico run di campagna (single player): una riga per ogni run conclusa
-            -- (morte). Persistita dal sommario che il client invia con la death reward.
-            -- client_run_ref = runId lato client, per collegare la riga al reward claim.
+            -- Storico run di campagna (single player): una riga per run. La riga nasce
+            -- all'avvio della run (started_at, ended_at NULL) e viene chiusa dal sommario
+            -- che il client invia con la death reward. Le righe rimaste senza ended_at
+            -- sono le run abbandonate: senza di loro il pannello vedrebbe solo chi muore
+            -- o vince, e chi chiude il gioco a meta' sparirebbe dalle statistiche.
+            -- client_run_ref = runId lato client: lega inizio, fine e reward claim.
             CREATE TABLE IF NOT EXISTS campaign_runs (
                 run_id           INTEGER PRIMARY KEY AUTOINCREMENT,
                 player_id        TEXT NOT NULL,
@@ -308,7 +311,8 @@ public sealed class AccardDatabase
                 minibosses_defeated INTEGER NOT NULL DEFAULT 0,
                 defeated_boss_ids TEXT,          -- id boss/miniboss sconfitti, separati da virgola
                 honey_reward     INTEGER NOT NULL DEFAULT 0,
-                ended_at         TEXT NOT NULL
+                started_at       TEXT,           -- NULL sulle run precedenti al tracciamento dell'avvio
+                ended_at         TEXT            -- NULL finche' la run e' in corso o abbandonata
             );
             -- Contatori cumulativi di campagna (single player). Aggregano quello che le righe
             -- di campaign_runs raccontano una per una, cosi' i requisiti del Santuario si
@@ -375,8 +379,8 @@ public sealed class AccardDatabase
                 FOREIGN KEY (player_id) REFERENCES accounts(player_id)
             );
 
-            CREATE INDEX IF NOT EXISTS ix_campaign_runs_time ON campaign_runs(ended_at);
-            CREATE INDEX IF NOT EXISTS ix_campaign_runs_player ON campaign_runs(player_id);
+            -- Gli indici di campaign_runs li crea MigrateCampaignRuns: la tabella puo'
+            -- essere ricostruita dalla migrazione, e una DROP TABLE si porta via gli indici.
 
             -- Risposte gia' date alle richieste che mutano lo stato, per (giocatore, requestId).
             -- Serve ai rinvii dopo una caduta di rete: la seconda copia della richiesta
@@ -413,6 +417,7 @@ public sealed class AccardDatabase
         AddColumnIfMissing(connection, "single_player_reward_claims", "base_account_experience", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "campaign_runs", "minibosses_defeated", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "campaign_runs", "defeated_boss_ids", "TEXT");
+        MigrateCampaignRuns(connection);
         // Come si e' autenticato l'account esterno: 'google', 'google-play-games',
         // 'anonymous'... NULL sulle righe create prima di questa colonna, si
         // popola al primo login successivo.
@@ -422,6 +427,75 @@ public sealed class AccardDatabase
         // account Play Games una mail non l'hanno mai esposta): si popola al primo
         // login Google successivo.
         AddColumnIfMissing(connection, "external_identities", "email", "TEXT");
+    }
+
+    /// <summary>
+    /// Porta <c>campaign_runs</c> alla forma "una riga per run": aggiunge <c>started_at</c> e
+    /// rende <c>ended_at</c> nullable, perche' una run aperta non ha ancora una fine e il
+    /// sentinella (stringa vuota, data finta) inquinerebbe ogni query sullo storico.
+    /// SQLite non sa togliere un NOT NULL con ALTER TABLE: serve la ricostruzione.
+    /// Gli indici si creano qui perche' la DROP TABLE se li porta via.
+    /// </summary>
+    private static void MigrateCampaignRuns(SqliteConnection connection)
+    {
+        AddColumnIfMissing(connection, "campaign_runs", "started_at", "TEXT");
+
+        if (IsColumnNotNull(connection, "campaign_runs", "ended_at"))
+        {
+            using SqliteCommand rebuild = connection.CreateCommand();
+            rebuild.CommandText = @"
+                BEGIN;
+                CREATE TABLE campaign_runs_new (
+                    run_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    player_id        TEXT NOT NULL,
+                    client_run_ref   TEXT,
+                    mode             TEXT,
+                    chapter_id       TEXT,
+                    stage_id         TEXT,
+                    rooms_cleared    INTEGER NOT NULL DEFAULT 0,
+                    enemies_defeated INTEGER NOT NULL DEFAULT 0,
+                    bosses_defeated  INTEGER NOT NULL DEFAULT 0,
+                    minibosses_defeated INTEGER NOT NULL DEFAULT 0,
+                    defeated_boss_ids TEXT,
+                    honey_reward     INTEGER NOT NULL DEFAULT 0,
+                    started_at       TEXT,
+                    ended_at         TEXT
+                );
+                INSERT INTO campaign_runs_new
+                    (run_id, player_id, client_run_ref, mode, chapter_id, stage_id,
+                     rooms_cleared, enemies_defeated, bosses_defeated, minibosses_defeated,
+                     defeated_boss_ids, honey_reward, started_at, ended_at)
+                SELECT run_id, player_id, client_run_ref, mode, chapter_id, stage_id,
+                       rooms_cleared, enemies_defeated, bosses_defeated, minibosses_defeated,
+                       defeated_boss_ids, honey_reward, started_at, ended_at
+                FROM campaign_runs;
+                DROP TABLE campaign_runs;
+                ALTER TABLE campaign_runs_new RENAME TO campaign_runs;
+                COMMIT;";
+            rebuild.ExecuteNonQuery();
+        }
+
+        using SqliteCommand indexes = connection.CreateCommand();
+        indexes.CommandText = @"
+            CREATE INDEX IF NOT EXISTS ix_campaign_runs_time ON campaign_runs(ended_at);
+            CREATE INDEX IF NOT EXISTS ix_campaign_runs_start ON campaign_runs(started_at);
+            CREATE INDEX IF NOT EXISTS ix_campaign_runs_player ON campaign_runs(player_id);
+            -- La chiusura della run cerca la riga aperta per (giocatore, runId del client).
+            CREATE INDEX IF NOT EXISTS ix_campaign_runs_ref ON campaign_runs(player_id, client_run_ref);";
+        indexes.ExecuteNonQuery();
+    }
+
+    private static bool IsColumnNotNull(SqliteConnection connection, string tableName, string columnName)
+    {
+        using SqliteCommand check = connection.CreateCommand();
+        check.CommandText = $"PRAGMA table_info({tableName})";
+        using SqliteDataReader reader = check.ExecuteReader();
+        while (reader.Read())
+        {
+            if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
+                return reader.GetInt32(3) != 0;
+        }
+        return false;
     }
 
     private static void AddColumnIfMissing(

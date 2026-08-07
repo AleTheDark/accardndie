@@ -1213,6 +1213,7 @@ public sealed partial class BattleBoardController
 		{
 			ConfirmStartTutorialAdventureStage();
 			ReturnToStart(showModeSelection: false);
+			SetAccountHubHudActive(true);
 			ShowAdventureChapterSelection();
 		}
 	}

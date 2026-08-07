@@ -7,7 +7,7 @@ namespace AccardND.EditorTools
 {
     public static class TrentorBossDebugSceneBuilder
     {
-        public const string ScenePath = "Assets/Scenes/TrentorBossDebug.unity";
+        public const string ScenePath = "Assets/Scenes/TrentorBossForcedDebug.unity";
 
         [InitializeOnLoadMethod]
         private static void CreateOnceAfterImport()
@@ -22,7 +22,7 @@ namespace AccardND.EditorTools
             Scene previous = SceneManager.GetActiveScene();
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
             SceneManager.SetActiveScene(scene);
-            GameObject root = new("Trentor Boss Debug");
+            GameObject root = new("Trentor Boss Forced Debug");
             Undo.RegisterCreatedObjectUndo(root, "Create Trentor boss debug scene");
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);

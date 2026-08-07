@@ -50,7 +50,7 @@ public sealed partial class BattleBoardController
 			"Enemy Mana Rune Value",
 			((Component)enemyManaRuneImage).transform,
 			font,
-			34,
+			46,
 			(FontStyle)1,
 			(TextAnchor)4);
 		enemyManaRuneText.color = Color.white;
@@ -228,13 +228,18 @@ public sealed partial class BattleBoardController
 
 		Outline outline = ((Component)label).gameObject.AddComponent<Outline>();
 		outline.effectColor = new Color(0.12f, 0.01f, 0.01f, 0.95f);
-		outline.effectDistance = new Vector2(1.8f, -1.8f);
+		outline.effectDistance = new Vector2(3f, -3f);
 		outline.useGraphicAlpha = true;
+
+		Shadow shadow = ((Component)label).gameObject.AddComponent<Shadow>();
+		shadow.effectColor = new Color(0.02f, 0f, 0f, 0.82f);
+		shadow.effectDistance = new Vector2(4.5f, -4.5f);
+		shadow.useGraphicAlpha = true;
 
 		RectTransform rect = label.rectTransform;
 		rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
 		rect.pivot = new Vector2(0.5f, 1f);
-		rect.sizeDelta = new Vector2(140f, 46f);
+		rect.sizeDelta = new Vector2(180f, 64f);
 
 		float lane = (enemyManaDeltaCalloutIndex++ % 3) * 12f;
 		float x = 105f + lane;

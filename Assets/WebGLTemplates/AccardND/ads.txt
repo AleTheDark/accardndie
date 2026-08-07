@@ -7,6 +7,10 @@
 # Va servito su https://accardndie.com/ads.txt, cioe' nella radice del sito. E' cosa
 # diversa da app-ads.txt, che riguarda l'app Android su Play.
 #
-# DA COMPILARE: sostituire pub-0000000000000000 con il publisher id AdSense, lo stesso
-# che sta in ACCARDND_ADSENSE_CLIENT_ID dentro index.html ma senza il prefisso "ca-".
-google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
+# Il publisher id e' lo stesso di ACCARDND_ADSENSE_CLIENT_ID in index.html, ma senza il
+# prefisso "ca-", ed e' anche il numero prima della tilde nell'app id AdMob
+# (AdUnits.AndroidAppId): AdMob e AdSense condividono lo stesso account.
+#
+# Questa riga vale anche come metodo di verifica della proprieta' del sito, se in AdSense
+# si sceglie "Snippet ads.txt" invece dello snippet nel <head>.
+google.com, pub-3580486749764055, DIRECT, f08c47fec0942fa0

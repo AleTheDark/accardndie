@@ -865,11 +865,12 @@ namespace AccardND.PvpUi
 			}
 
 			// L'EXP di base della partita e' gia' accreditata: il x3 e' l'extra che paga la
-			// pubblicita'. Video non visto, niente moltiplicatore e niente chiamata al server.
+			// pubblicita'. Video chiuso a meta', niente moltiplicatore e niente chiamata al
+			// server; rete assente, il x3 e' condonato (la regola sta in AdService).
 			AccardND.Ads.AdResult ad = await AccardND.Ads.AdService.ShowAsync(
 				AccardND.Ads.AdPlacement.PvpExperienceTriple,
 				AccardND.Ads.AdRewardContext.ForClaim(result.accountExperienceRewardClaimId));
-			if (!ad.Watched)
+			if (!ad.Grants)
 			{
 				completed?.Invoke(false);
 				return;

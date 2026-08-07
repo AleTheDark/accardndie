@@ -18,6 +18,10 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	private readonly Dictionary<BattleCardState, int> combatStrengthPresentationStarts = new Dictionary<BattleCardState, int>();
+	private readonly Dictionary<BattleCardState, int> combatStrengthPresentationTotals = new Dictionary<BattleCardState, int>();
+	private readonly Dictionary<BattleCardState, float> combatStrengthPresentationScales = new Dictionary<BattleCardState, float>();
+
 	private void StartBattle()
 	{
 		SetCombatChromeVisible(visible: true);
@@ -181,6 +185,21 @@ public sealed partial class BattleBoardController
 	private static bool HasVigorReroll(VigorRollResult roll)
 	{
 		return roll.FirstRollBeforeReroll > 0 || (roll.HasSecondRoll && roll.SecondRollBeforeReroll > 0);
+	}
+
+	private void SynchronizedCombatResultHolds(
+		VigorRollResult attackerRoll,
+		VigorRollResult defenderRoll,
+		float baseResultHold,
+		out float attackerResultHold,
+		out float defenderResultHold)
+	{
+		float rollDuration = configuration.Animation.DiceRollDuration;
+		float attackerDuration = PrototypeCardView.VigorRollPresentationDuration(attackerRoll, rollDuration, baseResultHold);
+		float defenderDuration = PrototypeCardView.VigorRollPresentationDuration(defenderRoll, rollDuration, baseResultHold);
+		float synchronizedDuration = Mathf.Max(attackerDuration, defenderDuration);
+		attackerResultHold = baseResultHold + Mathf.Max(0f, synchronizedDuration - attackerDuration);
+		defenderResultHold = baseResultHold + Mathf.Max(0f, synchronizedDuration - defenderDuration);
 	}
 
 	private void BeginCurrentTurn()
@@ -352,15 +371,13 @@ public sealed partial class BattleBoardController
 			yield return battleAnimationPlayer.PlayTargetLine(attacker.View, defender.View, AttackTargetLineColor);
 		if (certainty == CombatCertainty.Impossible)
 		{
-			ConsumeVigorPenalties(attacker, defender);
 			UpdatePostAttackClassState(attacker, defeatedTarget: false);
-			yield return ShowAutomaticOutcome(guaranteedKill: false);
 			AppendLog(FormatImpossibleAttackDetailed(attacker, defender, attackerDieSides, defenderDieSides, modifiers) + GameText.Get(GameTextKeys.Combat.PlayerTurnSkippedSuffix));
 			SetBattlefieldMessage(GameText.Get(GameTextKeys.Combat.ImpossiblePlayerAttack));
 			selectedPlayerIndex = -1;
 			attacker.View.SetSelected(selected: false);
 			yield return WaitForCardInspectionPause(configuration.Animation.TurnResultPause);
-			FinishTurn();
+			FinishTurn(skipped: true);
 			yield break;
 		}
 		if (battleCardState != null)
@@ -377,7 +394,6 @@ public sealed partial class BattleBoardController
 			ConsumeArmedAttackAbility(attacker, modifiers);
 			((Component)abilityButton).gameObject.SetActive(false);
 			((Component)attachmentButton).gameObject.SetActive(false);
-			yield return ShowAutomaticOutcome(guaranteedKill: true);
 			PlayResolvedAttackSfx(attacker, hit: true, modifiers.SumAttackerVigor);
 			yield return PlayHunterRangedAttackIfNeeded(attacker, defender, 6, modifiers.SumAttackerVigor);
 			if (hunterMarkUsed)
@@ -391,7 +407,6 @@ public sealed partial class BattleBoardController
 			PlayDeathCardSfx();
 			yield return PlayTimelineAwareDefeatAnimation(defender, attacker.Card.HeroClass);
 			yield return ReturnDuelSurvivors(attacker, defender);
-			SetMessage(GameText.Format(GameTextKeys.Combat.GuaranteedKill, attacker.Card.Name, defender.Card.Name));
 			selectedPlayerIndex = -1;
 			attacker.View.SetSelected(selected: false);
 			yield return WaitForCardInspectionPause(configuration.Animation.TurnResultPause);
@@ -406,9 +421,23 @@ public sealed partial class BattleBoardController
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		bool holdDiceForTutorial = adventureScriptedTutorialActive && adventureScriptedTutorialStep == 5;
 		float diceResultHold = holdDiceForTutorial ? 999f : configuration.Animation.DiceResultHold;
+		SynchronizedCombatResultHolds(result.AttackerRoll, result.DefenderRoll, diceResultHold,
+			out float attackerResultHold, out float defenderResultHold);
 		PlayRollingDiceSfx();
-		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, TrackDiceRoll(result.AttackerRoll), "ATTACCO", configuration.Animation.DiceRollDuration, diceResultHold);
-		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(result.DefenderRoll), "DIFESA", configuration.Animation.DiceRollDuration, diceResultHold);
+		attacker.View.PlayVigorRoll(
+			diceCatalog,
+			attackerDieSides,
+			TrackDiceRoll(result.AttackerRoll),
+			GameText.GetOrFallbackSilent(GameTextKeys.Combat.RollAttack, "ATTACCO"),
+			configuration.Animation.DiceRollDuration,
+			attackerResultHold);
+		defender.View.PlayVigorRoll(
+			diceCatalog,
+			defenderDieSides,
+			TrackDiceRoll(result.DefenderRoll),
+			GameText.GetOrFallbackSilent(GameTextKeys.Combat.RollDefense, "DIFESA"),
+			configuration.Animation.DiceRollDuration,
+			defenderResultHold);
 		yield return WaitForCardInspectionPause(holdDiceForTutorial
 			? CombatRollResultRevealDuration(result.AttackerRoll, result.DefenderRoll)
 			: CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
@@ -534,13 +563,11 @@ public sealed partial class BattleBoardController
 		}
 		if (certainty == CombatCertainty.Impossible)
 		{
-			ConsumeVigorPenalties(attacker, defender);
 			UpdatePostAttackClassState(attacker, defeatedTarget: false);
-			yield return ShowAutomaticOutcome(guaranteedKill: false);
 			AppendLog(FormatImpossibleAttackDetailed(attacker, defender, attackerDieSides, defenderDieSides, modifiers) + GameText.Get(GameTextKeys.Combat.CpuTurnSkippedSuffix));
 			SetBattlefieldMessage(GameText.Get(GameTextKeys.Combat.ImpossibleCpuAttack));
 			yield return WaitForCardInspectionPause(configuration.Animation.TurnResultPause);
-			FinishTurn();
+			FinishTurn(skipped: true);
 			yield break;
 		}
 		// La protezione viene consumata solo quando l'attacco viene davvero risolto.
@@ -558,7 +585,6 @@ public sealed partial class BattleBoardController
 		if (certainty == CombatCertainty.Guaranteed)
 		{
 			ConsumeArmedAttackAbility(attacker, modifiers);
-			yield return ShowAutomaticOutcome(guaranteedKill: true);
 			PlayResolvedAttackSfx(attacker, hit: true, modifiers.SumAttackerVigor);
 			yield return PlayHunterRangedAttackIfNeeded(attacker, defender, 6, modifiers.SumAttackerVigor);
 			if (hunterMarkUsed)
@@ -575,7 +601,6 @@ public sealed partial class BattleBoardController
 				yield return PlayTimelineAwareDefeatAnimation(defender, attacker.Card.HeroClass);
 			}
 			yield return ReturnDuelSurvivors(attacker, defender);
-			SetMessage(GameText.Format(GameTextKeys.Combat.GuaranteedKill, attacker.Card.Name, defender.Card.Name));
 			yield return WaitForCardInspectionPause(configuration.Animation.TurnResultPause);
 			FinishTurn();
 			yield break;
@@ -584,9 +609,23 @@ public sealed partial class BattleBoardController
 		result = ScriptAdventureTutorialCombatResult(attacker, defender, result);
 		ConsumeArmedAttackAbility(attacker, modifiers);
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
+		SynchronizedCombatResultHolds(result.AttackerRoll, result.DefenderRoll, configuration.Animation.DiceResultHold,
+			out float attackerResultHold, out float defenderResultHold);
 		PlayRollingDiceSfx();
-		attacker.View.PlayVigorRoll(diceCatalog, attackerDieSides, TrackDiceRoll(result.AttackerRoll), "ATTACCO CPU", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(result.DefenderRoll), "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+		attacker.View.PlayVigorRoll(
+			diceCatalog,
+			attackerDieSides,
+			TrackDiceRoll(result.AttackerRoll),
+			GameText.GetOrFallbackSilent(GameTextKeys.Combat.RollCpuAttack, "ATTACCO CPU"),
+			configuration.Animation.DiceRollDuration,
+			attackerResultHold);
+		defender.View.PlayVigorRoll(
+			diceCatalog,
+			defenderDieSides,
+			TrackDiceRoll(result.DefenderRoll),
+			GameText.GetOrFallbackSilent(GameTextKeys.Combat.RollYourDefense, "TUA DIFESA"),
+			configuration.Animation.DiceRollDuration,
+			defenderResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(result.AttackerRoll, result.DefenderRoll));
 		RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
 		yield return ShowCombatResult(result, attacker, defender);
@@ -812,6 +851,7 @@ public sealed partial class BattleBoardController
 		PlayResolvedAttackSfx(attacker, trentorResult.Damage > 0, modifiers.SumAttackerVigor);
 		if (trentorResult.Damage > 0)
 		{
+			PlayTrentorTakeDamageSfx();
 			yield return PlayHunterRangedAttackIfNeeded(attacker, trentorProxy, result.AttackerTotal - result.DefenderTotal, result.AttackerRoll.SelectionMode == VigorSelectionMode.Sum);
 			trentorProxy.MarkedTarget = attacker;
 			if ((Object)(object)battleAnimationPlayer != (Object)null)
@@ -1136,6 +1176,7 @@ public sealed partial class BattleBoardController
 				yield return PlayTimelineAwareDefeatAnimation(defender, golemProxy.Card.HeroClass);
 			}
 		}
+		yield return RestoreCombatStrengthPresentation(golemProxy, defender);
 		ConsumeVigorPenalties(golemProxy, defender);
 		string protectionText = defender != originalTarget ?$" {defender.Card.Name} ha protetto {originalTarget.Card.Name}." : string.Empty;
 		SetMessage(golemResult.TargetIsDefeated
@@ -1307,6 +1348,7 @@ public sealed partial class BattleBoardController
 				yield return PlayTimelineAwareDefeatAnimation(defender, trentorProxy.Card.HeroClass);
 			}
 		}
+		yield return RestoreCombatStrengthPresentation(trentorProxy, defender);
 		string protectionText = defender != originalTarget ?$" {defender.Card.Name} ha protetto {originalTarget.Card.Name}." : string.Empty;
 		string rootsText = trentorResult.RootsApplied && !trentorResult.TargetIsDefeated ? " Rampicanti Avvolgenti: prossimo Vigore difensivo -1 step." : string.Empty;
 		string markText = trentorResult.MarkedTargetBonus ? $" Predatore Rampicante: +{TrentorBoss.MarkedTargetAttackBonus} sul bersaglio marcato." : string.Empty;
@@ -1402,6 +1444,7 @@ public sealed partial class BattleBoardController
 				yield return PlayTimelineAwareDefeatAnimation(defender, palatirProxy.Card.HeroClass);
 			}
 		}
+		yield return RestoreCombatStrengthPresentation(palatirProxy, defender);
 		string protectionText = defender != originalTarget ?$" {defender.Card.Name} ha protetto {originalTarget.Card.Name}." : string.Empty;
 		SetMessage(palatirResult.TargetIsDefeated
 			?$"PALATIR: {defender.Card.Name} viene dissolto dalla cometa." + protectionText
@@ -1604,8 +1647,26 @@ public sealed partial class BattleBoardController
 	private IEnumerator MoveDuelToCenter(BattleCardState attacker, BattleCardState defender)
 	{
 		SetMessagePanelHiddenForDuel(hidden: true);
-		Vector3 worldPosition = DuelWorldPoint(attacker, attacker: true);
-		Vector3 worldPosition2 = DuelWorldPoint(defender, attacker: false);
+		bool attackerIsBackdropBoss = IsBragusBossProxy(attacker) || IsTrentorBossProxy(attacker);
+		bool defenderIsBackdropBoss = IsBragusBossProxy(defender) || IsTrentorBossProxy(defender);
+		bool backdropBossDuel = attackerIsBackdropBoss || defenderIsBackdropBoss;
+		Vector3 worldPosition = backdropBossDuel
+			? BackdropBossDuelWorldPoint(attackerIsBackdropBoss)
+			: DuelWorldPoint(attacker, attacker: true);
+		Vector3 worldPosition2 = backdropBossDuel
+			? BackdropBossDuelWorldPoint(defenderIsBackdropBoss)
+			: DuelWorldPoint(defender, attacker: false);
+
+		if (backdropBossDuel)
+		{
+			((MonoBehaviour)this).StartCoroutine(attacker.View.MoveToDuelPoint(
+				worldPosition, 0.34f, attackerIsBackdropBoss ? 0.58f : 1.08f));
+			((MonoBehaviour)this).StartCoroutine(defender.View.MoveToDuelPoint(
+				worldPosition2, 0.34f, defenderIsBackdropBoss ? 0.58f : 1.08f));
+			yield return WaitForCardInspectionPause(0.37f);
+			yield break;
+		}
+
 		if ((Object)(object)battleAnimationPlayer != (Object)null)
 		{
 			yield return battleAnimationPlayer.MoveToDuelPoints(attacker.View, defender.View, worldPosition, worldPosition2);
@@ -1750,13 +1811,18 @@ public sealed partial class BattleBoardController
 
 	private IEnumerator PlayHunterMissIfNeeded(BattleCardState attacker, BattleCardState defender = null)
 	{
-		if ((!UsesHunterRangedAttack(attacker) && !UsesWarriorSwordAttack(attacker) && !UsesPaladinShieldAttack(attacker) && !UsesMageArcaneAttack(attacker) && !UsesPriestSacredAttack(attacker) && !UsesRogueDaggerAttack(attacker) && !UsesNecromancerSoulAttack(attacker))
+		if ((!UsesHunterRangedAttack(attacker) && !UsesAssassinShadowAttack(attacker) && !UsesWarriorSwordAttack(attacker) && !UsesPaladinShieldAttack(attacker) && !UsesMageArcaneAttack(attacker) && !UsesPriestSacredAttack(attacker) && !UsesRogueDaggerAttack(attacker) && !UsesNecromancerSoulAttack(attacker))
 			|| attacker.View == null)
 			yield break;
 
 		if ((Object)(object)battleAnimationPlayer != (Object)null)
 		{
-			if (UsesWarriorSwordAttack(attacker))
+			if (UsesAssassinShadowAttack(attacker))
+			{
+				if (defender != null && defender.View != null)
+					yield return battleAnimationPlayer.PlayAssassinShadowStrikeBlocked(attacker.View, defender.View);
+			}
+			else if (UsesWarriorSwordAttack(attacker))
 			{
 				if (defender != null && defender.View != null)
 					yield return battleAnimationPlayer.PlayWarriorSwordBlocked(attacker.View, defender.View);
@@ -1824,6 +1890,9 @@ public sealed partial class BattleBoardController
 				yield return WaitForCardInspectionPause(0.28f);
 			}
 		}
+		attacker?.View?.ReapplyCombatStrengthScale();
+		defender?.View?.ReapplyCombatStrengthScale();
+		yield return RestoreCombatStrengthPresentation(attacker, defender);
 		SetMessagePanelHiddenForDuel(hidden: false);
 	}
 
@@ -2046,6 +2115,19 @@ public sealed partial class BattleBoardController
 		return 3;
 	}
 
+	private static int StackMageVigorPenalty(int currentSteps, int baseDieSides)
+	{
+		int maximumSteps = 0;
+		int dieSides = baseDieSides;
+		while (dieSides > 3)
+		{
+			dieSides = LowerVigorDie(dieSides);
+			maximumSteps++;
+		}
+
+		return Math.Min(Math.Max(0, currentSteps) + 1, maximumSteps);
+	}
+
 	private int EffectiveDefenseVigorDieSides(BattleCardState card, int baseDieSides)
 	{
 		int num = EffectiveVigorDieSides(card, baseDieSides);
@@ -2144,6 +2226,7 @@ public sealed partial class BattleBoardController
 			PlayDeathCardSfx();
 			yield return PlayTimelineAwareDefeatAnimation(target, paladin.Card.HeroClass);
 		}
+		yield return RestoreCombatStrengthPresentation(paladin, target);
 		ConsumeVigorPenalties(paladin, target);
 	}
 
@@ -2256,6 +2339,7 @@ public sealed partial class BattleBoardController
 		card.PendingAttackBonusKind = PendingAttackBonusKind.Fury;
 		card.View.SetStrengthValue(DisplayStrength(card));
 		RefreshPersistentStatus(card);
+		card.View.PlayAbilityActionCallout();
 		PlayBarbarianFurySfx();
 		if ((Object)(object)card.View != (Object)null
 			&& (Object)(object)battleAnimationPlayer != (Object)null)
@@ -2551,6 +2635,9 @@ public sealed partial class BattleBoardController
 		case HeroClass.Paladin:
 			activeAbilityUser = battleCardState;
 			abilityTargetMode = AbilityTargetMode.PaladinAlly;
+			// Il bottone abilita' vive sulla carta attiva: evita che lo stesso click
+			// venga interpretato anche come selezione automatica del Paladino.
+			suppressPaladinTargetSelectionUntilFrame = Time.frameCount + 1;
 			SetMessage(GameText.Format(GameTextKeys.Combat.PaladinTargetPrompt, battleCardState.Card.Name));
 			break;
 		case HeroClass.Hunter:
@@ -2631,7 +2718,8 @@ public sealed partial class BattleBoardController
 		BattleCardState activeCard = turnOrder[currentTurnIndex];
 		// Niente controllo su AbilityUsedThisTurn: saltare dopo un'abilita' e' permesso
 		// apposta, altrimenti a 0 mana la pedina resterebbe senza nessuna azione legale.
-		if (activeCard == null || activeCard.Eliminated || !activeCard.BelongsToPlayer)
+		if (activeCard == null || activeCard.Eliminated || !activeCard.BelongsToPlayer
+			|| IsBragusPlayerActionLockActive())
 		{
 			return;
 		}
@@ -2674,12 +2762,14 @@ public sealed partial class BattleBoardController
 
 	private bool IsBragusEquipmentLockActive(bool blockedSideBelongsToPlayer)
 	{
-		if (activeBragusBoss == null || activeBragusBoss.IsDefeated)
-		{
-			return false;
-		}
-		return cpuCards.Any((BattleCardState card) => IsBragusBossProxy(card) && !card.Eliminated)
-			&& blockedSideBelongsToPlayer;
+		return blockedSideBelongsToPlayer && IsBragusPlayerActionLockActive();
+	}
+
+	private bool IsBragusPlayerActionLockActive()
+	{
+		return activeBragusBoss != null
+			&& !activeBragusBoss.IsDefeated
+			&& cpuCards.Any((BattleCardState card) => IsBragusBossProxy(card) && !card.Eliminated);
 	}
 
 	private bool CanCpuUseAdvancedActions(BattleCardState card)
@@ -2952,7 +3042,9 @@ public sealed partial class BattleBoardController
 		int num = 1;
 		int baseDieSides = runProgress != null ? runProgress.PlayerVigorDieSides : configuration.Gameplay.VigorDieSides;
 		int startDieSides = EffectiveVigorDieSides(battleCardState, baseDieSides);
-		battleCardState.PendingVigorStepPenalty = Math.Max(battleCardState.PendingVigorStepPenalty, num);
+		battleCardState.PendingVigorStepPenalty = StackMageVigorPenalty(
+			battleCardState.PendingVigorStepPenalty,
+			baseDieSides);
 		int endDieSides = EffectiveVigorDieSides(battleCardState, baseDieSides);
 		MarkAbilityUsed(card);
 		RefreshPersistentStatus(battleCardState);
@@ -3179,17 +3271,6 @@ public sealed partial class BattleBoardController
 			else
 			{
 				draftViews[pendingDeploymentIndex].ShowConfirmInfoActions(confirmActionSprite, infoActionSprite, new UnityAction(ConfirmPendingDeployment), new UnityAction(ShowPendingDeploymentInspection));
-				for (int i = 0; i < draftViews.Count; i++)
-				{
-					if (i != pendingDeploymentIndex && !selectedDraftCards.Contains(i))
-					{
-						int capturedIndex = i;
-						draftViews[i].ShowCardClickAction((UnityAction)delegate
-						{
-							ToggleDraftCard(capturedIndex);
-						});
-					}
-				}
 			}
 		}
 		else if (pendingAbilityUser != null)
@@ -3226,7 +3307,7 @@ public sealed partial class BattleBoardController
 			// Lo skip resta sempre disponibile: e' l'uscita di sicurezza da uno stallo in cui
 		// hai usato un'abilita', sei a 0 mana e non puoi nemmeno attaccare. Il prezzo di
 		// quell'uscita e' il recupero azzerato, gestito in FinishCampaignManaActivation.
-		bool skipAvailable = true;
+			bool skipAvailable = !IsBragusPlayerActionLockActive();
 			bool tutorialRestrictsActions = adventureScriptedTutorialActive && adventureScriptedTutorialStep == 5;
 			if (skipAvailable && !tutorialRestrictsActions)
 			{
@@ -3242,12 +3323,18 @@ public sealed partial class BattleBoardController
 					flag ? PrimaryManaBadge(battleCardState2) : null,
 					SkipManaBadge(battleCardState2),
 					supremeAvailable ? SupremeManaBadge(battleCardState2) : null);
+				battleCardState2.View.SetAbilityActionInteractable(
+					!flag || IsCampaignPrimaryAffordable(battleCardState2));
+				battleCardState2.View.SetSupremeActionInteractable(
+					!supremeAvailable || IsCampaignSupremeAffordable(battleCardState2));
 			}
 			else if (flag && flag2)
 			{
 				if (adventureScriptedTutorialActive && adventureScriptedTutorialStep == 5)
 				{
-					battleCardState2.View.ShowClassAction(GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack));
+					battleCardState2.View.ShowClassAction(
+						GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack),
+						AttackManaBadge(battleCardState2));
 				}
 				else
 				{
@@ -3258,16 +3345,25 @@ public sealed partial class BattleBoardController
 			{
 				if (adventureScriptedTutorialActive && adventureScriptedTutorialStep == 5)
 				{
-					battleCardState2.View.ShowClassAction(GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack));
+					battleCardState2.View.ShowClassAction(
+						GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack),
+						AttackManaBadge(battleCardState2));
 				}
 				else
 				{
-					battleCardState2.View.ShowDualActions(GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack), flag ?GetAbilityButtonSprite() : GetAttachmentButtonSprite(), flag ?new UnityAction(ActivateCurrentAbility) : new UnityAction(ActivateCurrentAttachment));
+					battleCardState2.View.ShowDualActions(
+						GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack),
+						flag ? GetAbilityButtonSprite() : GetAttachmentButtonSprite(),
+						flag ? new UnityAction(ActivateCurrentAbility) : new UnityAction(ActivateCurrentAttachment),
+						AttackManaBadge(battleCardState2),
+						flag ? PrimaryManaBadge(battleCardState2) : null);
 				}
 			}
 			else
 			{
-				battleCardState2.View.ShowClassAction(GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack));
+				battleCardState2.View.ShowClassAction(
+					GetAttackButtonSprite(), new UnityAction(ActivateCurrentAttack),
+					AttackManaBadge(battleCardState2));
 			}
 		}
 	}
@@ -3399,22 +3495,26 @@ public sealed partial class BattleBoardController
 
 	private IEnumerator ShowCombatResult(CombatResult result, BattleCardState attacker, BattleCardState defender)
 	{
-		int attackerStart = attacker?.Card?.Strength ?? 0;
-		int defenderStart = defender?.Card?.Strength ?? 0;
-		int attackerDelta = result.AttackerTotal - attackerStart;
-		int defenderDelta = result.DefenderTotal - defenderStart;
-		combatScoreText.text = $"{attackerStart}  VS  {defenderStart}";
-		if ((Object)(object)combatDiceText != (Object)null)
+		int attackerStart = attacker != null ? DisplayStrength(attacker) : 0;
+		int defenderStart = defender != null ? DisplayStrength(defender) : 0;
+		PrototypeCardView attackerView = attacker?.View;
+		PrototypeCardView defenderView = defender?.View;
+		if (attacker != null)
 		{
-			combatDiceText.text = $"+{attackerDelta}  VS  +{defenderDelta}";
-			combatDiceText.color = new Color(0.72f, 0.9f, 1f, 1f);
-			((Component)combatDiceText).gameObject.SetActive(true);
+			combatStrengthPresentationStarts[attacker] = attackerStart;
+			combatStrengthPresentationTotals[attacker] = result.AttackerTotal;
+			combatStrengthPresentationScales[attacker] = 1f + Mathf.Max(0, result.AttackerRoll.SelectedRoll) * 0.02f;
 		}
-		combatOutcomeText.text = string.Empty;
-		combatOutcomeText.color = Color.white;
-		combatResultRoot.SetActive(true);
-
-		yield return WaitForCardInspectionPause(0.28f);
+		if (defender != null)
+		{
+			combatStrengthPresentationStarts[defender] = defenderStart;
+			combatStrengthPresentationTotals[defender] = result.DefenderTotal;
+			combatStrengthPresentationScales[defender] = 1f + Mathf.Max(0, result.DefenderRoll.SelectedRoll) * 0.02f;
+		}
+		if ((Object)(object)combatResultRoot != (Object)null)
+			combatResultRoot.SetActive(false);
+		attackerView?.BeginCombatStrengthPresentation(attackerStart);
+		defenderView?.BeginCombatStrengthPresentation(defenderStart);
 
 		float duration = Mathf.Clamp(configuration.Animation.CombatResultHold * 0.38f, 0.42f, 0.78f);
 		float elapsed = 0f;
@@ -3425,33 +3525,87 @@ public sealed partial class BattleBoardController
 			float eased = 1f - Mathf.Pow(1f - t, 3f);
 			int attackerValue = Mathf.RoundToInt(Mathf.Lerp(attackerStart, result.AttackerTotal, eased));
 			int defenderValue = Mathf.RoundToInt(Mathf.Lerp(defenderStart, result.DefenderTotal, eased));
-			combatScoreText.text = $"{attackerValue}  VS  {defenderValue}";
-			if ((Object)(object)combatDiceText != (Object)null)
-			{
-				Color diceColor = combatDiceText.color;
-				diceColor.a = 1f - eased;
-				combatDiceText.color = diceColor;
-			}
+			attackerView?.SetCombatStrengthValue(attackerValue);
+			defenderView?.SetCombatStrengthValue(defenderValue);
+			if (attacker != null && combatStrengthPresentationScales.TryGetValue(attacker, out float attackerScale))
+				attackerView?.SetCombatStrengthScale(Mathf.Lerp(1f, attackerScale, eased));
+			if (defender != null && combatStrengthPresentationScales.TryGetValue(defender, out float defenderScale))
+				defenderView?.SetCombatStrengthScale(Mathf.Lerp(1f, defenderScale, eased));
 			yield return null;
 		}
 
-		if ((Object)(object)combatDiceText != (Object)null)
-		{
-			((Component)combatDiceText).gameObject.SetActive(false);
-		}
-		combatScoreText.text = $"{result.AttackerTotal}  VS  {result.DefenderTotal}";
-		bool overkill = result.DefenderIsDefeated && result.AttackerTotal >= result.DefenderTotal * 2;
-		combatOutcomeText.text = overkill ? "OVERKILL" : (result.DefenderIsDefeated ? "COLPO A SEGNO" : "DIFESA RIUSCITA");
-		combatOutcomeText.color = overkill
-			? new Color(1f, 0.25f, 0.18f)
-			: (result.DefenderIsDefeated ? new Color(0.3f, 1f, 0.5f) : new Color(1f, 0.72f, 0.25f));
+		Color winnerColor = new Color(0.3f, 1f, 0.5f, 1f);
+		Color loserColor = new Color(1f, 0.25f, 0.18f, 1f);
+		Color tieColor = new Color(1f, 0.72f, 0.25f, 1f);
+		attackerView?.SetStrengthColor(result.AttackerTotal > result.DefenderTotal ? winnerColor :
+			(result.AttackerTotal < result.DefenderTotal ? loserColor : tieColor));
+		defenderView?.SetStrengthColor(result.DefenderTotal > result.AttackerTotal ? winnerColor :
+			(result.DefenderTotal < result.AttackerTotal ? loserColor : tieColor));
 
 		yield return WaitForCardInspectionPause(Mathf.Max(0.35f, configuration.Animation.CombatResultHold * 0.42f) + 0.2f);
-		combatResultRoot.SetActive(false);
 		if (!result.DefenderIsDefeated)
 		{
 			RegisterCampaignParryMana(defender);
 		}
+	}
+
+	private IEnumerator RestoreCombatStrengthPresentation(BattleCardState attacker, BattleCardState defender)
+	{
+		int attackerStart = attacker != null && combatStrengthPresentationStarts.TryGetValue(attacker, out int savedAttacker)
+			? savedAttacker : (attacker != null ? DisplayStrength(attacker) : 0);
+		int defenderStart = defender != null && combatStrengthPresentationStarts.TryGetValue(defender, out int savedDefender)
+			? savedDefender : (defender != null ? DisplayStrength(defender) : 0);
+		int attackerCurrent = attacker != null && combatStrengthPresentationTotals.TryGetValue(attacker, out int savedAttackerTotal)
+			? savedAttackerTotal : attackerStart;
+		int defenderCurrent = defender != null && combatStrengthPresentationTotals.TryGetValue(defender, out int savedDefenderTotal)
+			? savedDefenderTotal : defenderStart;
+		float attackerScale = attacker != null && combatStrengthPresentationScales.TryGetValue(attacker, out float savedAttackerScale)
+			? savedAttackerScale : 1f;
+		float defenderScale = defender != null && combatStrengthPresentationScales.TryGetValue(defender, out float savedDefenderScale)
+			? savedDefenderScale : 1f;
+
+		float duration = Mathf.Clamp(configuration.Animation.CombatResultHold * 0.38f, 0.42f, 0.78f);
+		float elapsed = 0f;
+		while (elapsed < duration)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			float eased = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
+			attacker?.View?.SetCombatStrengthValue(Mathf.RoundToInt(Mathf.Lerp(attackerCurrent, attackerStart, eased)));
+			defender?.View?.SetCombatStrengthValue(Mathf.RoundToInt(Mathf.Lerp(defenderCurrent, defenderStart, eased)));
+			attacker?.View?.SetCombatStrengthScale(Mathf.Lerp(attackerScale, 1f, eased));
+			defender?.View?.SetCombatStrengthScale(Mathf.Lerp(defenderScale, 1f, eased));
+			yield return null;
+		}
+
+		attacker?.View?.EndCombatStrengthPresentation(attackerStart);
+		defender?.View?.EndCombatStrengthPresentation(defenderStart);
+		attacker?.View?.SetStrengthColor(Color.white);
+		defender?.View?.SetStrengthColor(Color.white);
+		attacker?.View?.SetCombatStrengthScale(1f);
+		defender?.View?.SetCombatStrengthScale(1f);
+		if (attacker != null)
+		{
+			combatStrengthPresentationStarts.Remove(attacker);
+			combatStrengthPresentationTotals.Remove(attacker);
+			combatStrengthPresentationScales.Remove(attacker);
+		}
+		if (defender != null)
+		{
+			combatStrengthPresentationStarts.Remove(defender);
+			combatStrengthPresentationTotals.Remove(defender);
+			combatStrengthPresentationScales.Remove(defender);
+		}
+	}
+
+	private Vector3 BackdropBossDuelWorldPoint(bool isBackdropBoss)
+	{
+		RectTransform root = (Object)(object)safeAreaRoot != (Object)null ? safeAreaRoot : canvasRect;
+		Rect rect = root.rect;
+		Vector3 localPoint = new Vector3(
+			rect.center.x,
+			Mathf.Lerp(rect.yMin, rect.yMax, isBackdropBoss ? 0.84f : 0.30f),
+			0f);
+		return ((Transform)root).TransformPoint(localPoint);
 	}
 
 	private IEnumerator ShowAutomaticOutcome(bool guaranteedKill)

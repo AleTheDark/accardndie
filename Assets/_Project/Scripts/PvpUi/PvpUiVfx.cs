@@ -70,6 +70,17 @@ namespace AccardND.PvpUi
         {
             tint = color;
             intensity = Mathf.Clamp01(strength);
+
+            // Build crea l'Image bianca. Applicare subito la tinta evita il flash bianco
+            // prima che Update animi il Pulse aggiunto o clonato a runtime.
+            if (pulse != null)
+            {
+                Color glowColor = tint;
+                glowColor.a = (style == VfxStyle.PulseButton ? 0.12f : 0.08f) * intensity;
+                pulse.color = glowColor;
+                if (style == VfxStyle.PulseButton)
+                    pulse.rectTransform.localScale = Vector3.one * 0.96f;
+            }
         }
 
         public void SetSweepScale(Vector3 scale)

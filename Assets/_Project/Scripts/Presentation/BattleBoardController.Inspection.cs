@@ -5,6 +5,7 @@ using System.Linq;
 using AccardND.GameCore;
 using AccardND.GameCore.Mana;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -33,6 +34,17 @@ public sealed partial class BattleBoardController
 
 	private void ShowCardInspection(CardDefinition definition, BattleCardState state)
 	{
+		// Inspection and target selection must never compete for the same card click.
+		// Keep this guard here too: some UI callbacks call this method directly and
+		// may survive an interaction refresh.
+		if (attackTargetingActive
+			|| abilityTargetMode != AbilityTargetMode.None
+			|| pendingAbilityUser != null
+			|| activeAttachmentSource != null)
+		{
+			return;
+		}
+
 		if (!((Object)(object)definition == (Object)null) && !((Object)(object)cardInspectionPanel == (Object)null) && !((Object)(object)cardInspectionSlot == (Object)null))
 		{
 			if ((Object)(object)inspectedCardView != (Object)null)
@@ -92,8 +104,10 @@ public sealed partial class BattleBoardController
 			familyText = "Famiglia: " + CardRulesGlossary.ClassFamilyName(classFamily);
 			classText = "Classe: " + CardRulesGlossary.HeroClassName(definition.HeroClass);
 			advantageText = "Vantaggio contro " + CardRulesGlossary.ClassFamilyName(StrongAgainst(classFamily));
-			ClassFamily weakAgainst = IsBragusInspectionCard(definition) ? ClassFamily.Cunning : WeakAgainst(classFamily);
-			disadvantageText = "Svantaggio contro " + CardRulesGlossary.ClassFamilyName(weakAgainst);
+			disadvantageText = GameText.GetOrFallbackSilent(
+				GameTextKeys.Combat.DisadvantageAgainst,
+				"Svantaggio contro {0}",
+				CardRulesGlossary.ClassFamilyName(WeakAgainst(classFamily)));
 			familyAuraLabel = AuraInspectionLabel(familyAura);
 			familyAuraDescription = FamilyAuraSummary(classFamily);
 			classAuraLabel = AuraInspectionLabel(classAura);
@@ -160,12 +174,6 @@ public sealed partial class BattleBoardController
 	{
 		return (Object)(object)definition != (Object)null
 			&& definition.Category == CardCategory.Boss;
-	}
-
-	private static bool IsBragusInspectionCard(CardDefinition definition)
-	{
-		return (Object)(object)definition != (Object)null
-			&& string.Equals(definition.Id, BragusBossCardId, StringComparison.OrdinalIgnoreCase);
 	}
 
 	private string CardAbilitySummary(CardDefinition definition)
@@ -441,7 +449,7 @@ public sealed partial class BattleBoardController
 		}
 		if (state.PendingVigorStepPenalty > 0)
 		{
-			list.Add(new InspectionStatusDetail($"DADO -{state.PendingVigorStepPenalty}", "Il dado Vigore scende di taglia nel prossimo confronto.", new Color(0.55f, 0.8f, 1f)));
+			list.Add(new InspectionStatusDetail($"DADO -{state.PendingVigorStepPenalty}", "Il dado Vigore scende di tante taglie quanti sono i marchi, fino a D3, nel prossimo confronto.", new Color(0.55f, 0.8f, 1f)));
 		}
 		if (state.PermanentCombatBonus > 0)
 		{

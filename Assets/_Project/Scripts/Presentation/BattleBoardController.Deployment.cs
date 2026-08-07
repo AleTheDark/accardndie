@@ -114,9 +114,20 @@ public sealed partial class BattleBoardController
 			PrototypeCardView prototypeCardView = PrototypeCardView.Create((Transform)(object)playerHandRow, draftCandidates[num], configuration);
 			((UnityEvent)prototypeCardView.Button.onClick).AddListener((UnityAction)delegate
 			{
+				if (DeploymentHandSwipeSelector.ShouldSuppressClick(prototypeCardView.Button))
+				{
+					return;
+				}
+				// Durante lo schieramento la mano e' swipe-only: un click o un
+				// rilascio sotto la meta' dello schermo non seleziona nulla.
+				if (deploymentDraftActive)
+				{
+					return;
+				}
 				ToggleDraftCard(capturedIndex);
 			});
 			prototypeCardView.ClearDragHandlers();
+			ConfigureCampaignDeploymentHandSwipe(prototypeCardView, capturedIndex);
 			prototypeCardView.SetInteractable(campaignDeck == null || currentRoomType != RoomType.Monster);
 			prototypeCardView.SetAlpha(0f);
 			draftViews.Add(prototypeCardView);
@@ -678,21 +689,73 @@ public sealed partial class BattleBoardController
 		selectedCpuDeploymentCards.Add(cardDefinition);
 		selectedCpuDeploymentInitiatives.Add(token.Initiative);
 		cpuDeploymentHand.Remove(cardDefinition);
-		PrototypeCardView prototypeCardView = PrototypeCardView.CreateBattlefieldPreview((Transform)(object)cpuRow, cardDefinition, configuration);
-		MakeDeploymentPreviewInspectable(prototypeCardView, cardDefinition);
-		cpuDeploymentPreviewViews.Add(prototypeCardView);
+		bool deployingBragus = IsBragusBossDefinition(cardDefinition);
+		bool deployingTrentor = IsTrentorBossDefinition(cardDefinition);
+		bool deployingComposableGolem = IsComposableGolemDefinition(cardDefinition);
+		bool deployingBackdropBoss = deployingBragus || deployingTrentor;
+		bool backdropBossDeploysLast = deployingBackdropBoss
+			&& currentDeploymentIndex + 1 >= deploymentOrder.Count;
+		PrototypeCardView prototypeCardView = null;
+		if (deployingBackdropBoss)
+		{
+			// I boss integrati nello scenario non entrano come carta: la loro
+			// apparizione coincide con il cambio di background.
+			// La proxy invisibile necessaria al combattimento viene creata dopo il deployment.
+		}
+		else
+		{
+			prototypeCardView = PrototypeCardView.CreateBattlefieldPreview((Transform)(object)cpuRow, cardDefinition, configuration);
+			MakeDeploymentPreviewInspectable(prototypeCardView, cardDefinition);
+			cpuDeploymentPreviewViews.Add(prototypeCardView);
+		}
 		AppendLog($"SCHIERAMENTO CPU - {cardDefinition.DisplayName}, iniziativa {token.Initiative}");
 		ApplyResponsiveLayout();
+		if (deployingComposableGolem)
+		{
+			// Il Golem e' una pedina 3D, non un boss dipinto nel fondale.
+			// Ripristina sempre lo scenario corrente anche se una precedente sessione
+			// aveva lasciato attiva la presentazione di Bragus o Trentor.
+			bragusBossPresentationActive = false;
+			trentorBossPresentationActive = false;
+			RefreshScenarioBackground();
+		}
+		if (deployingBackdropBoss)
+		{
+			bragusBossPresentationActive = deployingBragus;
+			trentorBossPresentationActive = deployingTrentor;
+			if (!backdropBossDeploysLast)
+				TransitionToScenarioBackground();
+			if (deployingBragus)
+				PlayMusic(bossBragusSoundtrack);
+		}
 		Canvas.ForceUpdateCanvases();
 		PlayPawnEnteringBattlefieldSfx(cardDefinition);
-		prototypeCardView.PlayRevealAnimation(configuration.Animation.CpuCardRevealDuration);
-		yield return WaitForCardInspectionPause(Mathf.Min(configuration.Animation.CpuCardRevealDuration, 0.35f));
+		if (prototypeCardView != null)
+		{
+			prototypeCardView.PlayRevealAnimation(configuration.Animation.CpuCardRevealDuration);
+			yield return WaitForCardInspectionPause(Mathf.Min(configuration.Animation.CpuCardRevealDuration, 0.35f));
+		}
 		currentDeploymentIndex++;
 		if (currentDeploymentIndex >= deploymentOrder.Count)
 		{
 			SetMessage("Schieramento completato: inizia il combattimento.");
 		}
 		ProcessNextDeploymentToken();
+		if (backdropBossDeploysLast)
+			((MonoBehaviour)this).StartCoroutine(TransitionToBackdropBossBackgroundAfterPawnLayout());
+	}
+
+	private IEnumerator TransitionToBackdropBossBackgroundAfterPawnLayout()
+	{
+		// Se il boss chiude lo schieramento, il layout di battaglia sposta la fila
+		// del giocatore. Aspettiamo che finisca prima di avviare il cambio scenario:
+		// le due animazioni nello stesso frame causavano flicker sulle pedine.
+		while (playerBattlefieldRowTransitionCoroutine != null)
+			yield return null;
+
+		// Separa anche i due commit grafici su frame distinti.
+		yield return null;
+		TransitionToScenarioBackground();
 	}
 
 	private IEnumerator ContinueDeploymentAfterDelay(float delay)

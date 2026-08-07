@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using AccardND.GameCore;
 using AccardND.GameData;
 using AccardND.Localization;
 using UnityEngine;
@@ -18,6 +19,7 @@ public sealed partial class BattleBoardController
 	private const int MerchantItemOffers = 3;
 
 	private const int MerchantDeckLimit = 12;
+	private int merchantPurchasesThisVisit;
 
 	private sealed class MerchantCardOffer
 	{
@@ -87,6 +89,7 @@ public sealed partial class BattleBoardController
 		merchantVisibleBranch = MerchantBranch.Cards;
 		merchantShowingGraveyard = false;
 		merchantStockRoomKey = -1;
+		merchantPurchasesThisVisit = 0;
 	}
 
 	private void EnsureMerchantStock()
@@ -156,6 +159,7 @@ public sealed partial class BattleBoardController
 
 	private void RefreshMerchantPanel()
 	{
+		RefreshBagGoldCounter();
 		if ((Object)(object)merchantPanel == (Object)null)
 		{
 			return;
@@ -163,8 +167,10 @@ public sealed partial class BattleBoardController
 		EnsureMerchantStock();
 		if ((Object)(object)merchantStatusText != (Object)null)
 		{
-			merchantStatusText.text =
-				$"EXP DISPONIBILE\n<size=30>{runProgress.AvailableExperience}</size>";
+			merchantStatusText.text = GameText.GetOrFallbackSilent(
+				GameTextKeys.Merchant.GoldAvailable,
+				"ORO DISPONIBILE  <size=30>{0}</size>",
+				runProgress.Gold);
 		}
 		RefreshMerchantBranchTabs();
 		RefreshMerchantShelf();
@@ -350,13 +356,14 @@ public sealed partial class BattleBoardController
 			RefreshMerchantPanel();
 			return;
 		}
-		if (runProgress.AvailableExperience < offer.Cost)
+		int cost = EffectiveMerchantCost(offer.Cost);
+		if (runProgress.Gold < cost)
 		{
 			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.InsufficientExperience,
-				"MERCATO: servono {0} EXP, disponibili {1}.",
-				offer.Cost,
-				runProgress.AvailableExperience));
+				GameTextKeys.Merchant.InsufficientGold,
+				"MERCATO: servono {0} oro, disponibili {1}.",
+				cost,
+				runProgress.Gold));
 			RefreshMerchantPanel();
 			return;
 		}
@@ -368,7 +375,7 @@ public sealed partial class BattleBoardController
 			ShowMerchantBranchConfirmPopup(
 				MerchantBranch.Cards,
 				purchaseName,
-				offer.Cost,
+				cost,
 				() => BuyMerchantCardOffer(offer, branchLockConfirmed: true));
 			return;
 		}
@@ -387,32 +394,45 @@ public sealed partial class BattleBoardController
 			}
 			definition = pool[random.NextInclusive(0, pool.Count - 1)];
 		}
-		if (!runProgress.TrySpendExperience(offer.Cost))
+		if (!runProgress.TrySpendGold(cost))
 		{
 			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.InsufficientExperience,
-				"MERCATO: servono {0} EXP, disponibili {1}.",
-				offer.Cost,
-				runProgress.AvailableExperience));
+				GameTextKeys.Merchant.InsufficientGold,
+				"MERCATO: servono {0} oro, disponibili {1}.",
+				cost,
+				runProgress.Gold));
 			RefreshMerchantPanel();
 			return;
 		}
 		if (!TryAddCardToPlayerCollection(definition))
 		{
-			runProgress.AddSpendableExperience(offer.Cost);
+			runProgress.AddGold(cost);
 			SetMessage("MERCATO: questa carta e' gia' nel mazzo.");
 			RefreshMerchantPanel();
 			return;
 		}
-		// La carta ignota resta acquistabile: e' un pozzo senza fondo limitato solo da EXP e
+		// La carta ignota resta acquistabile: e' un pozzo senza fondo limitato solo da oro e
 		// dal tetto del mazzo. Le offerte scoperte invece sono pezzi unici.
 		offer.Sold = !offer.Mystery;
+		merchantPurchasesThisVisit++;
 		merchantLockedBranch = MerchantBranch.Cards;
 		string displayName = CardDisplayNames.MarketName(definition);
-		AppendLog($"ACQUISTO - {displayName}, -{offer.Cost} EXP.");
+		AppendLog(GameText.GetOrFallbackSilent(
+			GameTextKeys.Merchant.CardPurchaseLog,
+			"ACQUISTO - {0}, -{1} oro (tassa di carovana inclusa).",
+			displayName,
+			cost));
 		PlayBuyCardSfx();
-		string mystery = offer.Mystery ? "CARTA IGNOTA: " : "ACQUISTO: ";
-		SetMessage($"{mystery}{displayName} entra nel mazzo per {offer.Cost} EXP. EXP disponibile: {runProgress.AvailableExperience}.");
+		string mystery = offer.Mystery
+			? GameText.GetOrFallbackSilent(GameTextKeys.Merchant.MysteryPurchasePrefix, "CARTA IGNOTA: ")
+			: GameText.GetOrFallbackSilent(GameTextKeys.Merchant.PurchasePrefix, "ACQUISTO: ");
+		SetMessage(GameText.GetOrFallbackSilent(
+			GameTextKeys.Merchant.CardPurchased,
+			"{0}{1} entra nel mazzo per {2} oro. Oro disponibile: {3}.",
+			mystery,
+			displayName,
+			cost,
+			runProgress.Gold));
 		RefreshMerchantPanel();
 	}
 
@@ -441,13 +461,14 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
-		if (runProgress.AvailableExperience < offer.Cost)
+		int cost = EffectiveMerchantCost(offer.Cost);
+		if (runProgress.Gold < cost)
 		{
 			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.InsufficientExperience,
-				"MERCATO: servono {0} EXP, disponibili {1}.",
-				offer.Cost,
-				runProgress.AvailableExperience));
+				GameTextKeys.Merchant.InsufficientGold,
+				"MERCATO: servono {0} oro, disponibili {1}.",
+				cost,
+				runProgress.Gold));
 			RefreshMerchantPanel();
 			return;
 		}
@@ -456,27 +477,37 @@ public sealed partial class BattleBoardController
 			ShowMerchantBranchConfirmPopup(
 				MerchantBranch.Items,
 				CampaignConsumableName(offer.ItemType),
-				offer.Cost,
+				cost,
 				() => BuyMerchantItemOffer(offer, branchLockConfirmed: true));
 			return;
 		}
-		if (!runProgress.TrySpendExperience(offer.Cost))
+		if (!runProgress.TrySpendGold(cost))
 		{
 			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.InsufficientExperience,
-				"MERCATO: servono {0} EXP, disponibili {1}.",
-				offer.Cost,
-				runProgress.AvailableExperience));
+				GameTextKeys.Merchant.InsufficientGold,
+				"MERCATO: servono {0} oro, disponibili {1}.",
+				cost,
+				runProgress.Gold));
 			RefreshMerchantPanel();
 			return;
 		}
 		campaignConsumables.Add(offer.ItemType);
 		offer.Sold = true;
+		merchantPurchasesThisVisit++;
 		merchantLockedBranch = MerchantBranch.Items;
 		string itemName = CampaignConsumableName(offer.ItemType);
-		AppendLog($"ACQUISTO OGGETTO - {itemName}, -{offer.Cost} EXP.");
+		AppendLog(GameText.GetOrFallbackSilent(
+			GameTextKeys.Merchant.ItemPurchaseLog,
+			"ACQUISTO OGGETTO - {0}, -{1} oro (tassa di carovana inclusa).",
+			itemName,
+			cost));
 		PlayBuyCardSfx();
-		SetMessage($"ACQUISTO: {itemName} entra nella borsa per {offer.Cost} EXP. EXP disponibile: {runProgress.AvailableExperience}.");
+		SetMessage(GameText.GetOrFallbackSilent(
+			GameTextKeys.Merchant.ItemPurchased,
+			"ACQUISTO: {0} entra nella borsa per {1} oro. Oro disponibile: {2}.",
+			itemName,
+			cost,
+			runProgress.Gold));
 		RefreshMerchantPanel();
 	}
 
@@ -501,7 +532,7 @@ public sealed partial class BattleBoardController
 			chosenName);
 		merchantBranchConfirmBodyText.text = GameText.GetOrFallbackSilent(
 			GameTextKeys.Merchant.BranchConfirmBody,
-			"Stai per acquistare {0} per {1} EXP. Questo primo acquisto chiuderà il banco {2} fino alla prossima stanza Mercato.\n\nVuoi procedere?",
+			"Stai per acquistare {0} per {1} oro. Questo primo acquisto chiuderà il banco {2} fino alla prossima stanza Mercato.\n\nVuoi procedere?",
 			purchaseName,
 			cost,
 			closedName);
@@ -560,8 +591,11 @@ public sealed partial class BattleBoardController
 			if ((Object)(object)sellLabel != (Object)null)
 			{
 				sellLabel.text = hasSelection
-					? $"VENDI  +{SellValueFor(selectedMerchantSaleCard.Definition)} EXP"
-					: "SELEZIONA CARTA";
+					? GameText.GetOrFallbackSilent(
+						GameTextKeys.Merchant.SellForGold,
+						"VENDI  +{0} ORO",
+						SellValueFor(selectedMerchantSaleCard.Definition))
+					: GameText.GetOrFallbackSilent(GameTextKeys.Merchant.SelectCard, "SELEZIONA CARTA");
 			}
 		}
 		if ((Object)(object)merchantRecoverButton != (Object)null)
@@ -572,8 +606,11 @@ public sealed partial class BattleBoardController
 			if ((Object)(object)recoverLabel != (Object)null)
 			{
 				recoverLabel.text = hasSelection
-					? $"RECUPERA  -{RecoveryCostFor(selectedMerchantSaleCard.Definition)} EXP"
-					: "SELEZIONA CARTA";
+					? GameText.GetOrFallbackSilent(
+						GameTextKeys.Merchant.RecoverForGold,
+						"RECUPERA  -{0} ORO",
+						RecoveryCostFor(selectedMerchantSaleCard.Definition))
+					: GameText.GetOrFallbackSilent(GameTextKeys.Merchant.SelectCard, "SELEZIONA CARTA");
 			}
 		}
 	}
@@ -771,17 +808,20 @@ public sealed partial class BattleBoardController
 		}
 		RemoveCardDefinitionFromList(playerReserve, definition);
 		RemoveCardDefinitionFromList(initialPlayerReserve, definition);
-		int num2 = runProgress.AddExperience(num);
+		runProgress.AddGold(num);
 		selectedMerchantSaleCard = null;
 		PlayBuyCardSfx();
 		string displayName = CardDisplayNames.MarketName(definition);
-		AppendLog($"VENDITA - {displayName}, +{num} EXP.");
-		string text = ((num2 > 0) ?$" LEVEL UP: livello {runProgress.PlayerLevel}, D{runProgress.PlayerVigorDieSides}!" : string.Empty);
-		SetMessage($"VENDUTA: {displayName}. Ottieni {num} EXP." + text);
-		if (num2 > 0)
-		{
-			ShowLevelUpVigorHint();
-		}
+		AppendLog(GameText.GetOrFallbackSilent(
+			GameTextKeys.Merchant.SoldLog,
+			"VENDITA - {0}, +{1} oro.",
+			displayName,
+			num));
+		SetMessage(GameText.GetOrFallbackSilent(
+			GameTextKeys.Merchant.Sold,
+			"VENDUTA: {0}. Ottieni {1} oro.",
+			displayName,
+			num));
 		RefreshMerchantPanel();
 	}
 
@@ -801,25 +841,34 @@ public sealed partial class BattleBoardController
 		CardDefinition definition = selectedMerchantSaleCard.Definition;
 		int num = RecoveryCostFor(definition);
 		string displayName = CardDisplayNames.MarketName(definition);
-		if (!runProgress.TrySpendExperience(num))
+		if (!runProgress.TrySpendGold(num))
 		{
 			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.RecoverInsufficientExperience,
-				"MERCATO: servono {0} EXP per recuperare {1}, disponibili {2}.",
+				GameTextKeys.Merchant.RecoverInsufficientGold,
+				"MERCATO: servono {0} oro per recuperare {1}, disponibili {2}.",
 				num,
 				displayName,
-				runProgress.AvailableExperience));
+				runProgress.Gold));
 			RefreshMerchantPanel();
 		}
 		else if (!campaignDeck.RecoverFromGraveyard(selectedMerchantSaleCard))
 		{
+			runProgress.AddGold(num);
 			SetMessage("MERCATO: questa carta non puo' essere recuperata adesso.");
 			RefreshMerchantPanel();
 		}
 		else
 		{
-			AppendLog($"RECUPERO MERCATO - {displayName} torna nel mazzo, -{num} EXP.");
-			SetMessage($"RECUPERATA: {displayName} torna nel mazzo per {num} EXP. Ora puoi venderla o tenerla.");
+			AppendLog(GameText.GetOrFallbackSilent(
+				GameTextKeys.Merchant.RecoveredLog,
+				"RECUPERO MERCATO - {0} torna nel mazzo, -{1} oro.",
+				displayName,
+				num));
+			SetMessage(GameText.GetOrFallbackSilent(
+				GameTextKeys.Merchant.Recovered,
+				"RECUPERATA: {0} torna nel mazzo per {1} oro. Ora puoi venderla o tenerla.",
+				displayName,
+				num));
 			RefreshMerchantPanel();
 		}
 	}
@@ -840,14 +889,13 @@ public sealed partial class BattleBoardController
 	// una carta da 10 costerebbe quanto una da 1.
 	private int MerchantCardCostFor(CardDefinition definition)
 	{
-		ProgressionConfiguration progression = configuration.Progression;
 		int strength = ((Object)(object)definition != (Object)null) ? definition.Strength : 0;
-		return Math.Max(1, progression.MerchantCardBaseCost + strength * progression.MerchantCardCostPerStrength);
+		return MerchantEconomy.CardCost(strength, runProgress?.RoomsCleared ?? 0);
 	}
 
-	private static int MerchantItemCostFor(CampaignConsumableType itemType)
+	private int MerchantItemCostFor(CampaignConsumableType itemType)
 	{
-		return itemType switch
+		int baseCost = itemType switch
 		{
 			CampaignConsumableType.Detector => 12,
 			CampaignConsumableType.Defrost => 15,
@@ -857,6 +905,7 @@ public sealed partial class BattleBoardController
 			CampaignConsumableType.SecondChance => 26,
 			_ => 18,
 		};
+		return MerchantEconomy.ScaleByRoom(baseCost, runProgress?.RoomsCleared ?? 0);
 	}
 
 	private static void RemoveCardDefinitionFromList(List<CardDefinition> cards, CardDefinition definition)
@@ -880,13 +929,25 @@ public sealed partial class BattleBoardController
 		return Math.Max(3, definition.Strength * 2);
 	}
 
-	private static int RecoveryCostFor(CardDefinition definition)
+	private int RecoveryCostFor(CardDefinition definition)
 	{
 		if (!((Object)(object)definition != (Object)null))
 		{
 			return 0;
 		}
-		return Math.Max(3, definition.Strength);
+		return MerchantEconomy.RecoveryCost(definition.Strength, runProgress?.RoomsCleared ?? 0);
+	}
+
+	private int EffectiveMerchantCost(int baseCost) =>
+		MerchantEconomy.ApplyCaravanTax(baseCost, merchantPurchasesThisVisit);
+
+	private void RefreshBagGoldCounter()
+	{
+		if ((Object)(object)implementationArchiveGoldText != (Object)null)
+			implementationArchiveGoldText.text = GameText.GetOrFallbackSilent(
+				GameTextKeys.Merchant.GoldCounter,
+				"ORO {0}",
+				Math.Max(0, runProgress?.Gold ?? 0));
 	}
 }
 }

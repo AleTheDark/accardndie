@@ -77,12 +77,32 @@ public sealed partial class BattleBoardController
 			&& ((Component)messagePanelRect).gameObject.activeSelf;
 		bool visible = turnCoinShouldBeVisible
 			&& !turnCoinSuppressed
+			&& !IsBackdropBossTurnCoinSuppressed()
 			&& !adventureScriptedTutorialActive
 			&& !messagePanelVisible;
 		if (((Component)turnCoinImage).gameObject.activeSelf != visible)
 		{
 			((Component)turnCoinImage).gameObject.SetActive(visible);
 		}
+	}
+
+	private bool IsBackdropBossTurnCoinSuppressed()
+	{
+		return debugForceFirstRoomBragus
+			|| debugForceFirstRoomTrentor
+			|| bragusBossPresentationActive
+			|| trentorBossPresentationActive
+			|| activeBragusBoss != null
+			|| activeTrentorBoss != null
+			|| ((Object)(object)currentScenario != (Object)null
+				&& (string.Equals(
+						currentScenario.BossId,
+						BragusBossCardId,
+						System.StringComparison.OrdinalIgnoreCase)
+					|| string.Equals(
+						currentScenario.BossId,
+						TrentorBossCardId,
+						System.StringComparison.OrdinalIgnoreCase)));
 	}
 
 	private void SetTurnCoinSuppressed(bool suppressed)

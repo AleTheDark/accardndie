@@ -12,6 +12,12 @@
  *
  * La cache e' versionata con ?v=<Product Version> passato in fase di register:
  * alzando la Product Version in Unity, la vecchia cache viene ripulita in activate.
+ *
+ * SCOPE: il file e' servito da /game/sw.js, quindi controlla soltanto /game/**.
+ * Le pagine del sito (homepage, guida, statistiche) restano fuori dal Service
+ * Worker ed e' voluto: sono HTML leggero che deve poter cambiare senza dipendere
+ * da una cache offline. In radice c'e' un /sw.js diverso, che serve solo a
+ * disinstallare il Service Worker che stava li' quando il gioco era in radice.
  */
 
 var VERSION = new URL(self.location).searchParams.get('v') || 'dev';

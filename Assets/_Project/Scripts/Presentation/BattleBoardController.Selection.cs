@@ -26,6 +26,14 @@ public sealed partial class BattleBoardController
 			return null;
 		}
 		PrototypeCardView prototypeCardView = PrototypeCardView.CreateBattlefieldPreview((Transform)(object)row, definition, configuration);
+		if (!belongsToPlayer && IsBragusBossDefinition(definition))
+		{
+			prototypeCardView.ConfigureBragusBackdropPresentation();
+		}
+		else if (!belongsToPlayer && IsTrentorBossDefinition(definition))
+		{
+			prototypeCardView.ConfigureTrentorBackdropPresentation();
+		}
 		BattleCardState state = new BattleCardState(definition, prototypeCardView, belongsToPlayer, campaignCard);
 		if (belongsToPlayer)
 		{
@@ -56,11 +64,13 @@ public sealed partial class BattleBoardController
 			activeTrentorBoss ??= new TrentorBoss(random);
 			PlayTrentorJoinBattlefieldSfx();
 			RefreshTrentorBossPawn(state);
+			ActivateTrentorBossRoomPresentation(state);
 		}
 		if (!belongsToPlayer && IsBragusBossDefinition(definition))
 		{
 			activeBragusBoss ??= new BragusBoss(random);
 			RefreshBragusBossPawn(state);
+			ActivateBragusBossRoomPresentation(state);
 		}
 		if (!belongsToPlayer && IsPalatirBossDefinition(definition))
 		{
@@ -68,6 +78,65 @@ public sealed partial class BattleBoardController
 			RefreshPalatirBossPawn(state);
 		}
 		return state;
+	}
+
+	private void ActivateTrentorBossRoomPresentation(BattleCardState trentor)
+	{
+		trentorBossPresentationActive = true;
+		RefreshScenarioBackground();
+
+		if (cpuHud != null && (Object)(object)cpuHud.Rect != (Object)null)
+			((Component)cpuHud.Rect).gameObject.SetActive(false);
+
+		if (trentor != null && (Object)(object)trentor.View != (Object)null
+			&& (Object)(object)safeAreaRoot != (Object)null)
+		{
+			trentor.View.MoveHealthBarToScreen(
+				safeAreaRoot,
+				new Vector2(0.075f, 0.947f),
+				new Vector2(0.925f, 0.982f));
+			UpdateTrentorBossHealthBar(trentor);
+		}
+
+		if ((Object)(object)enemyManaRuneImage != (Object)null)
+		{
+			RectTransform enemyRuneRect = enemyManaRuneImage.rectTransform;
+			enemyRuneRect.anchorMin = enemyRuneRect.anchorMax = new Vector2(0f, 1f);
+			enemyRuneRect.pivot = new Vector2(0f, 1f);
+			enemyRuneRect.anchoredPosition = new Vector2(23f, -100f);
+			enemyRuneRect.sizeDelta = new Vector2(83f, 83f);
+			enemyRuneRect.localScale = new Vector3(2f, 2f, 2f);
+		}
+	}
+
+	private void ActivateBragusBossRoomPresentation(BattleCardState bragus)
+	{
+		bragusBossPresentationActive = true;
+		RefreshScenarioBackground();
+
+		if (cpuHud != null && (Object)(object)cpuHud.Rect != (Object)null)
+			((Component)cpuHud.Rect).gameObject.SetActive(false);
+
+		if (bragus != null && (Object)(object)bragus.View != (Object)null
+			&& (Object)(object)safeAreaRoot != (Object)null)
+		{
+			// Occupa esattamente la fascia superiore precedentemente usata dal CPU HUD.
+			bragus.View.MoveHealthBarToScreen(
+				safeAreaRoot,
+				new Vector2(0.075f, 0.947f),
+				new Vector2(0.925f, 0.982f));
+			UpdateBragusBossHealthBar(bragus);
+		}
+
+		if ((Object)(object)enemyManaRuneImage != (Object)null)
+		{
+			RectTransform enemyRuneRect = enemyManaRuneImage.rectTransform;
+			enemyRuneRect.anchorMin = enemyRuneRect.anchorMax = new Vector2(0f, 1f);
+			enemyRuneRect.pivot = new Vector2(0f, 1f);
+			enemyRuneRect.anchoredPosition = new Vector2(23f, -100f);
+			enemyRuneRect.sizeDelta = new Vector2(83f, 83f);
+			enemyRuneRect.localScale = new Vector3(2f, 2f, 2f);
+		}
 	}
 
 	private static bool IsComposableGolemDefinition(CardDefinition definition)
@@ -294,6 +363,10 @@ public sealed partial class BattleBoardController
 
 	private bool CanInspectBattleCard(BattleCardState state)
 	{
+		if (Time.frameCount <= suppressCardInspectionUntilFrame)
+		{
+			return false;
+		}
 		if (state != null && !draftActive && !deploymentDraftActive && !attackTargetingActive && pendingAbilityUser == null && pendingDeploymentIndex < 0 && abilityTargetMode == AbilityTargetMode.None && (Object)(object)cardInspectionPanel != (Object)null)
 		{
 			return !cardInspectionPanel.activeSelf;
@@ -383,7 +456,9 @@ public sealed partial class BattleBoardController
 				? activeComposableGolem.ActiveForm.VigorDieSides
 				: runProgress != null ? runProgress.MasterVigorDieSides : configuration.Gameplay.VigorDieSides;
 			int startDieSides = EffectiveVigorDieSides(battleCardState2, baseDieSides);
-			battleCardState2.PendingVigorStepPenalty = Math.Max(battleCardState2.PendingVigorStepPenalty, num);
+			battleCardState2.PendingVigorStepPenalty = StackMageVigorPenalty(
+				battleCardState2.PendingVigorStepPenalty,
+				baseDieSides);
 			int endDieSides = EffectiveVigorDieSides(battleCardState2, baseDieSides);
 			activeAbilityUser.AbilityArmed = false;
 			MarkAbilityUsed(activeAbilityUser);
@@ -457,6 +532,12 @@ public sealed partial class BattleBoardController
 
 	private void SelectPlayerAbilityTarget(BattleCardState target)
 	{
+		if (abilityTargetMode == AbilityTargetMode.PaladinAlly
+			&& Time.frameCount <= suppressPaladinTargetSelectionUntilFrame)
+		{
+			return;
+		}
+
 		if (inputLocked || target == null)
 		{
 			return;

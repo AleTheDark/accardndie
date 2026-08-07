@@ -182,6 +182,8 @@ namespace AccardND.Battlefield
         private static Sprite rankCrestSprite;
         private static Sprite starSprite;
         private static Sprite radialGlowSprite;
+        private static Sprite solidCircleSprite;
+        private static Sprite caretSprite;
         private static Sprite screenTitlePlaqueSprite;
         private static Sprite screenOuterFrameSprite;
         private static Sprite backButtonSprite;
@@ -459,8 +461,8 @@ namespace AccardND.Battlefield
         }
 
         /// <summary>
-        /// Pannello con doppia cornice dorata bisellata su corpo scuro sfumato.
-        /// 48x48, 9-slice con bordo 14: regge bene da tooltip a pannelli full screen.
+        /// Pannello gotico minimale con doppia cornice brunita, intaglio violaceo
+        /// e piccoli rinforzi angolari. 48x48, 9-slice con bordo 14.
         /// </summary>
         public static Sprite GetPanelSprite()
         {
@@ -468,14 +470,14 @@ namespace AccardND.Battlefield
                 return panelSprite;
 
             const int size = 48;
-            const float radius = 11f;
-            Color baseBottom = new(0.018f, 0.035f, 0.065f);
-            Color baseTop = new(0.055f, 0.115f, 0.165f);
-            Color goldPeak = new(1f, 0.78f, 0.34f);
-            Color goldShadow = new(0.34f, 0.21f, 0.07f);
-            Color bevelLight = new(0.16f, 0.32f, 0.42f);
+            const float radius = 7f;
+            Color baseBottom = new(0.014f, 0.024f, 0.043f);
+            Color baseTop = new(0.043f, 0.073f, 0.105f);
+            Color goldPeak = new(0.84f, 0.61f, 0.25f);
+            Color goldShadow = new(0.25f, 0.13f, 0.045f);
+            Color bevelLight = new(0.12f, 0.22f, 0.29f);
             Color shadowGroove = new(0.006f, 0.014f, 0.026f);
-            Color arcaneLine = new(0.08f, 0.58f, 0.72f, 1f);
+            Color arcaneLine = new(0.42f, 0.2f, 0.7f, 1f);
 
             panelSprite = BakeSprite("Mmo UI Panel", size, size, new Vector4(14f, 14f, 14f, 14f), (x, y, d, xn, yn) =>
             {
@@ -509,10 +511,16 @@ namespace AccardND.Battlefield
                 {
                     color = Color.Lerp(baseBottom, baseTop, yn);
                     if (yn > 0.72f)
-                        color = Color.Lerp(color, PanelBright, (yn - 0.72f) * 0.9f);
-                    float rune = Mathf.Sin((xn * 19f + yn * 11f) * Mathf.PI);
-                    if (rune > 0.985f && d > 12f)
-                        color = Color.Lerp(color, arcaneLine, 0.18f);
+                        color = Color.Lerp(color, PanelBright, (yn - 0.72f) * 0.45f);
+
+                    // Sottili tagli diagonali confinati agli angoli: richiamano
+                    // archi e cuspidi gotiche senza appesantire le zone estensibili.
+                    float cornerX = Mathf.Min(xn, 1f - xn);
+                    float cornerY = Mathf.Min(yn, 1f - yn);
+                    bool inCorner = cornerX < 0.22f && cornerY < 0.22f;
+                    float diagonal = Mathf.Abs(cornerX - cornerY);
+                    if (inCorner && diagonal < 0.025f && d < 13f)
+                        color = Color.Lerp(color, goldPeak, 0.38f);
                 }
                 float alpha = Mathf.Clamp01(d + 0.5f);
                 return new Color(color.r, color.g, color.b, color.a * alpha);
@@ -890,6 +898,44 @@ namespace AccardND.Battlefield
                 return new Color(1f, 1f, 1f, alpha);
             }, 0f);
             return radialGlowSprite;
+        }
+
+        /// <summary>Cerchio pieno bianco, tintabile, con solo il bordo esterno antialias.</summary>
+        public static Sprite GetSolidCircleSprite()
+        {
+            if (solidCircleSprite != null)
+                return solidCircleSprite;
+
+            const int size = 128;
+            solidCircleSprite = BakeSprite("Mmo UI Solid Circle", size, size, Vector4.zero, (x, y, d, xn, yn) =>
+            {
+                float dx = xn - 0.5f;
+                float dy = yn - 0.5f;
+                float radius = Mathf.Sqrt(dx * dx + dy * dy) * 2f;
+                float alpha = Mathf.Clamp01((1f - radius) * size * 0.5f);
+                return new Color(1f, 1f, 1f, alpha);
+            }, 0f);
+            return solidCircleSprite;
+        }
+
+        /// <summary>
+        /// Triangolo verso il basso per i menu a tendina. E' disegnato invece che scritto
+        /// perche' il carattere Unicode manca in parte dei font di sistema su Android e WebGL,
+        /// dove al suo posto comparirebbe un rettangolo vuoto.
+        /// </summary>
+        public static Sprite GetCaretSprite()
+        {
+            if (caretSprite != null)
+                return caretSprite;
+
+            const int size = 64;
+            caretSprite = BakeSprite("Mmo UI Caret", size, size, Vector4.zero, (x, y, d, xn, yn) =>
+            {
+                float halfWidthHere = yn * 0.5f;
+                float alpha = Mathf.Clamp01((halfWidthHere - Mathf.Abs(xn - 0.5f)) * size);
+                return new Color(1f, 1f, 1f, alpha);
+            }, 0f);
+            return caretSprite;
         }
 
         public static void AddPanelGem(RectTransform parent, string name, Vector2 anchor, Vector2 size, Color tint)

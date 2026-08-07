@@ -29,6 +29,11 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
+		// Il selettore swipe/click inoltra il rilascio alla carta sottostante. Le
+		// supreme che si risolvono subito (per esempio Paladino e Barbaro) chiudono
+		// l'overlay prima di quell'inoltro: senza questa guardia lo stesso input
+		// viene quindi interpretato anche come apertura dell'ispezione della carta.
+		suppressCardInspectionUntilFrame = Time.frameCount + 1;
 		BattleCardState card = playerCards[selectedPlayerIndex];
 		if (!TryActivateCampaignSupreme(card))
 		{

@@ -1,4 +1,6 @@
 using System.Net;
+using AccardND.Server.Data;
+using AccardND.Server.Web;
 using Microsoft.AspNetCore.Http;
 
 namespace AccardND.Server.Accounts;
@@ -17,6 +19,9 @@ public static class GoogleAuthEndpoints
     {
         var broker = app.Services.GetRequiredService<GoogleOAuthBroker>();
         var deletion = app.Services.GetRequiredService<AccountDeletionService>();
+        var database = app.Services.GetRequiredService<AccardDatabase>();
+        var googleIdTokens = app.Services.GetRequiredService<GoogleIdTokenReader>();
+        var webSessions = app.Services.GetRequiredService<WebSessionStore>();
 
         app.MapPost("/auth/google/begin", async (HttpContext context) =>
         {
@@ -44,7 +49,8 @@ public static class GoogleAuthEndpoints
         //
         // Il callback e' condiviso da tutti i flussi che passano dal broker (stesso
         // redirect_uri registrato su Google): il purpose dell'esito dice se qui
-        // finisce un login dell'app o la cancellazione account dal web.
+        // finisce un login dell'app, la cancellazione account o la pagina delle
+        // statistiche. L'ID token non lascia mai il server in nessuno dei tre casi.
         app.MapGet("/auth/google/callback", async (HttpContext context) =>
         {
             NoStore(context);
@@ -53,8 +59,17 @@ public static class GoogleAuthEndpoints
                 context.Request.Query["code"],
                 context.Request.Query["error"]);
 
-            if (outcome.Purpose == GoogleOAuthBroker.PurposeDeletion && outcome.IdToken != null)
-                return await AccountDeletionEndpoints.RenderConfirmationAsync(deletion, outcome.IdToken);
+            if (outcome.IdToken != null)
+            {
+                switch (outcome.Purpose)
+                {
+                    case GoogleOAuthBroker.PurposeDeletion:
+                        return await AccountDeletionEndpoints.RenderConfirmationAsync(deletion, outcome.IdToken);
+                    case GoogleOAuthBroker.PurposeStats:
+                        return await StatsPageEndpoints.CompleteLoginAsync(
+                            context, database, googleIdTokens, webSessions, outcome.IdToken);
+                }
+            }
 
             return Results.Content(Page(outcome.Message, outcome.Ok), "text/html; charset=utf-8");
         });

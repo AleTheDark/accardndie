@@ -267,7 +267,11 @@ namespace AccardND.GameCore.Pvp
                 {
                     PvpCardState target = RequireEnemyTarget(player, targetPlayer, targetSlot);
                     int steps = 1;
-                    target.PendingVigorStepPenalty = Math.Max(target.PendingVigorStepPenalty, steps);
+                    int maximumSteps = PvpVigorScale.StepsToMinimum(
+                        rules.VigorDieForRound(MatchRound));
+                    target.PendingVigorStepPenalty = Math.Min(
+                        target.PendingVigorStepPenalty + steps,
+                        maximumSteps);
                     actor.AbilityUsed = true;
                     events.Add(new AbilityUsedEvent(player, actor.Slot, HeroClass.Mage, targetPlayer, targetSlot, steps));
                     break;
@@ -592,7 +596,8 @@ namespace AccardND.GameCore.Pvp
             if (defender.IsUntargetable)
                 defenderAdvantage = true;
 
-            ResolveExchange(attacker, defender, defenderAdvantage, isCounter: false, counterFlatBonus: 0, events);
+            CombatCertainty attackCertainty = ResolveExchange(
+                attacker, defender, defenderAdvantage, isCounter: false, counterFlatBonus: 0, events);
 
             // Aura Paladin: contrattacco immediato se la protezione è scattata e i due sono vivi.
             if (players[enemy].Aura == PvpAuraType.Paladin
@@ -602,7 +607,7 @@ namespace AccardND.GameCore.Pvp
                 ResolveExchange(protectionUser, attacker, defenderAdvantage: false, isCounter: true, counterFlatBonus: 1, events);
             }
 
-            EndTurn(events);
+            EndTurn(events, skipped: attackCertainty == CombatCertainty.Impossible);
             return events;
         }
 
@@ -980,7 +985,7 @@ namespace AccardND.GameCore.Pvp
 
         // --- Risoluzione attacco ---
 
-        private void ResolveExchange(
+        private CombatCertainty ResolveExchange(
             PvpCardState attacker,
             PvpCardState defender,
             bool defenderAdvantage,
@@ -1070,7 +1075,10 @@ namespace AccardND.GameCore.Pvp
                 }
             }
 
-            ConsumeVigorPenalties(attacker, defender);
+            // Il malus del Mago vale per il prossimo confronto: un attacco
+            // impossibile non tira i dadi e quindi non lo consuma.
+            if (certainty != CombatCertainty.Impossible)
+                ConsumeVigorPenalties(attacker, defender);
             if (!isCounter)
                 ApplyPostAttackState(attacker, defender, defenderLostLife, events);
             if (defenderEliminated)
@@ -1106,6 +1114,8 @@ namespace AccardND.GameCore.Pvp
             // accredita il premio soltanto al termine della relativa animazione.
             if (defenderParried)
                 GainParryMana(defender, events);
+
+            return certainty;
         }
 
         private CombatModifiers BuildAttackModifiers(

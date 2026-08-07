@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using AccardND.Presentation;
 using UnityEngine;
 using UnityEngine.Events;
@@ -80,7 +81,6 @@ namespace AccardND.Battlefield
             }
 
             ClassFamily family = HeroClassFamily.Of(definition.HeroClass);
-            ClassFamily weakAgainst = IsBragusBoss(definition) ? ClassFamily.Cunning : WeakAgainst(family);
             var lines = new List<string>
             {
                 $"Potenza: {definition.Strength}",
@@ -88,7 +88,10 @@ namespace AccardND.Battlefield
                 "Classe: " + CardRulesGlossary.HeroClassName(definition.HeroClass),
                 string.Empty,
                 "Vantaggio contro " + CardRulesGlossary.ClassFamilyName(StrongAgainst(family)),
-                "Svantaggio contro " + CardRulesGlossary.ClassFamilyName(weakAgainst),
+                GameText.GetOrFallbackSilent(
+                    GameTextKeys.Combat.DisadvantageAgainst,
+                    "Svantaggio contro {0}",
+                    CardRulesGlossary.ClassFamilyName(WeakAgainst(family))),
             };
 
             if (!isBossOrMiniboss)
@@ -112,9 +115,6 @@ namespace AccardND.Battlefield
 
         private static bool IsBossOrMiniboss(CardDefinition definition) =>
             definition != null && definition.Category == CardCategory.Boss;
-
-        private static bool IsBragusBoss(CardDefinition definition) =>
-            definition != null && string.Equals(definition.Id, "boss-bragus", System.StringComparison.OrdinalIgnoreCase);
 
         private static bool CanBeEquipped(CardDefinition definition) =>
             definition != null && definition.CanEnterCombat && definition.Strength >= 2 && definition.Strength < 5;

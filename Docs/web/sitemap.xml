@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Le pagine del sito, per i crawler.
+     La radice ora e' una homepage vera, con testo: e' lei la pagina di ingresso e ha
+     priorita' 1.0. /game/ e' il canvas WebGL, che per un crawler resta una pagina
+     senza contenuto: sta in mappa perche' e' un indirizzo pubblico, ma con priorita'
+     bassa, e i link alle pagine di contenuto continuano a stare nel suo footer.
+     /statistiche non c'e': e' dietro un accesso Google, quindi non ha niente da
+     indicizzare (la pagina si dichiara noindex per conto suo). -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://accardndie.com/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://accardndie.com/guida.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://accardndie.com/classi.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://accardndie.com/carte.html</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://accardndie.com/game/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://accardndie.com/privacy.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>

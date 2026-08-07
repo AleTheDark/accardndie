@@ -5,6 +5,7 @@ using AccardND.Server.Data;
 using AccardND.Server.Progression;
 using AccardND.Server.Rooms;
 using AccardND.Server.Sessions;
+using AccardND.Server.Web;
 
 // Config alternativa passabile come primo argomento (utile per test e ambienti diversi).
 string configPath = args.Length > 0 && File.Exists(args[0])
@@ -51,8 +52,18 @@ builder.Services.AddSingleton<ClientVersionGate>();
 builder.Services.AddSingleton<MessageRouter>();
 builder.Services.AddSingleton<AdminAuth>();
 builder.Services.AddSingleton<AdminService>();
+builder.Services.AddSingleton<WebSessionStore>();
+builder.Services.AddSingleton<PlayerDossierService>();
 
 WebApplication app = builder.Build();
+
+// Rinumerazione dei capitoli dopo il restyling della campagna. Prima di accettare
+// connessioni: un client che leggesse la progressione a meta' migrazione vedrebbe capitoli
+// completati che non ha giocato. E' idempotente, quindi ai riavvii successivi non fa nulla.
+ChapterRemapMigration.RunIfNeeded(
+    app.Services.GetRequiredService<AccardDatabase>(),
+    app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("ChapterRemap"));
+
 // Ping di keep-alive ogni 30s: tiene vive le connessioni idle (turni lunghi)
 // sotto il timeout dei proxy davanti al server, es. Cloudflare. Il browser
 // risponde automaticamente al PING, quindi vale anche per i client WebGL/PWA.
@@ -73,6 +84,12 @@ app.MapGoogleAuthEndpoints();
 // dal web, senza installare il gioco. L'URL da dichiarare in "Sicurezza dei dati"
 // e' https://<dominio>/account/delete.
 app.MapAccountDeletionEndpoints();
+
+// Pagina delle statistiche su https://<dominio>/statistiche: si accede con lo
+// stesso account Google del gioco e si legge, in sola lettura, tutto quello che
+// il server sa di quel profilo. Il resto del sito e' HTML statico servito da
+// nginx; questa deve stare qui perche' i numeri vengono dal database.
+app.MapStatsPageEndpoints();
 
 app.Map("/ws", async context =>
 {

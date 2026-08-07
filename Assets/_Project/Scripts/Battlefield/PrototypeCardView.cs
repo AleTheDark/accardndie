@@ -9,6 +9,7 @@ using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace AccardND.Presentation
@@ -20,6 +21,50 @@ namespace AccardND.Presentation
         private static readonly Dictionary<string, Sprite> statusIconCache = new();
         private static GameObject diceWindowPrefab;
         private static Sprite runtimeAuraSprite;
+        private static Sprite bragusContourAuraSprite;
+        private static Sprite trentorContourAuraSprite;
+        private static readonly Vector2[] BragusAuraContour =
+        {
+            new(0.065f, 0.115f), new(0.105f, 0.155f), new(0.145f, 0.17f),
+            new(0.19f, 0.145f), new(0.24f, 0.11f), new(0.34f, 0.09f),
+            new(0.49f, 0.09f), new(0.62f, 0.10f), new(0.665f, 0.155f),
+            new(0.72f, 0.17f), new(0.755f, 0.22f), new(0.74f, 0.285f),
+            new(0.69f, 0.31f), new(0.72f, 0.345f), new(0.82f, 0.345f),
+            new(0.92f, 0.355f), new(0.965f, 0.39f), new(0.97f, 0.50f),
+            new(0.955f, 0.62f), new(0.935f, 0.70f), new(0.90f, 0.76f),
+            new(0.84f, 0.80f), new(0.78f, 0.835f), new(0.72f, 0.86f),
+            new(0.66f, 0.885f), new(0.60f, 0.91f), new(0.55f, 0.945f),
+            new(0.505f, 0.98f), new(0.46f, 0.97f), new(0.415f, 0.945f),
+            new(0.385f, 0.91f), new(0.34f, 0.875f), new(0.29f, 0.835f),
+            new(0.235f, 0.795f), new(0.19f, 0.76f), new(0.145f, 0.72f),
+            new(0.105f, 0.675f), new(0.075f, 0.625f), new(0.07f, 0.565f),
+            new(0.105f, 0.53f), new(0.155f, 0.505f), new(0.145f, 0.475f),
+            new(0.09f, 0.455f), new(0.065f, 0.405f), new(0.07f, 0.345f),
+            new(0.115f, 0.285f), new(0.095f, 0.245f), new(0.055f, 0.22f),
+            new(0.04f, 0.18f)
+        };
+        private static readonly Vector2[] TrentorAuraContour =
+        {
+            // Base e fianco destro del busto.
+            new(0.50f, 0.035f), new(0.66f, 0.075f), new(0.77f, 0.12f),
+            new(0.85f, 0.21f), new(0.88f, 0.32f), new(0.85f, 0.43f),
+            new(0.78f, 0.50f), new(0.70f, 0.56f),
+
+            // Rientro del collo e chioma frastagliata destra.
+            new(0.73f, 0.64f), new(0.80f, 0.69f), new(0.73f, 0.73f),
+            new(0.82f, 0.77f), new(0.74f, 0.81f), new(0.78f, 0.86f),
+            new(0.67f, 0.89f), new(0.68f, 0.95f), new(0.57f, 0.96f),
+            new(0.54f, 0.995f), new(0.46f, 0.995f), new(0.43f, 0.96f),
+
+            // Chioma frastagliata sinistra e rientro del collo.
+            new(0.32f, 0.95f), new(0.33f, 0.89f), new(0.22f, 0.86f),
+            new(0.26f, 0.81f), new(0.18f, 0.77f), new(0.27f, 0.73f),
+            new(0.20f, 0.69f), new(0.27f, 0.64f), new(0.30f, 0.56f),
+
+            // Fianco sinistro e ritorno alla base.
+            new(0.22f, 0.50f), new(0.15f, 0.43f), new(0.12f, 0.32f),
+            new(0.15f, 0.21f), new(0.23f, 0.12f), new(0.34f, 0.075f)
+        };
         private static Sprite runtimeSparkleSprite;
         private static Sprite petrifiedOverlaySprite;
         private static Sprite petrifiedFragmentSprite;
@@ -91,16 +136,22 @@ namespace AccardND.Presentation
         private RectTransform selectedAuraRect;
         private Image selectedAuraImage;
         private readonly List<Image> selectedSparkles = new();
+        private Color selectedAuraColor = SelectedAuraGold;
         private readonly List<Image> defeatEffectImages = new();
         private readonly List<Transform> defeatEffectLayerAnchors = new();
         private Text statusLabel;
         private RectTransform statusIconRoot;
+        private bool bragusBackdropPresentation;
+        private bool trentorBackdropPresentation;
+        private Image battlePreviewImage;
         private readonly List<GameObject> statusIconViews = new();
         private Image petrifiedOverlayImage;
         private GameObject healthBarRoot;
-        private Image healthBarFill;
-        private Image healthBarGlow;
-        private Image healthBarTopShine;
+        private ArcaneExperienceFillGraphic healthBarFill;
+        private Coroutine healthBarFillRoutine;
+        private float healthBarDisplayedNormalized = -1f;
+        private float healthBarTargetNormalized = -1f;
+        private bool healthBarInitialized;
         private Text healthBarText;
         private GameObject lifeIconsRoot;
         private Image leftLifeIcon;
@@ -149,6 +200,7 @@ namespace AccardND.Presentation
         private RectTransform actionOverlayRoot;
         private RectTransform attackActionRect;
         private RectTransform abilityActionRect;
+        private RectTransform supremeActionRect;
         private GameConfiguration configuration;
         private Vector3 initialScale;
         private Color turnAuraColor;
@@ -176,6 +228,7 @@ namespace AccardND.Presentation
         private Coroutine pendingDragEndRoutine;
         private bool selectedVisual;
         private Coroutine selectionScaleCoroutine;
+        private Coroutine actionOverlayRevealCoroutine;
         private GameObject defeatCrackOverlay;
         private RectTransform composableGolemOrbitRoot;
         private RawImage composableGolemOrbitRenderImage;
@@ -184,9 +237,9 @@ namespace AccardND.Presentation
         private Transform composableGolemOrbit3DRoot;
         private Camera composableGolemOrbitCamera;
         private readonly Dictionary<ComposableGolemForm, Image> composableGolemOrbitImages = new();
-        private readonly Dictionary<ComposableGolemForm, Transform> composableGolemOrbitStones = new();
-        private readonly Dictionary<ComposableGolemForm, Vector3> composableGolemOrbitStonePositions = new();
-        private readonly Dictionary<ComposableGolemForm, Vector3> composableGolemOrbitStoneScales = new();
+        private readonly Dictionary<ComposableGolemForm, List<Transform>> composableGolemOrbitStones = new();
+        private readonly Dictionary<Transform, Vector3> composableGolemOrbitStonePositions = new();
+        private readonly Dictionary<Transform, Vector3> composableGolemOrbitStoneScales = new();
         private ComposableGolemForm composableGolemActiveForm = ComposableGolemForm.Iron;
         private RectTransform palatirShieldOrbitRoot;
         private readonly Dictionary<ClassFamily, Image> palatirShieldImages = new();
@@ -196,6 +249,8 @@ namespace AccardND.Presentation
         public Button Button { get; private set; }
         public HeroClass HeroClass => cardHeroClass;
         public bool IsDragging => dragging;
+        public bool IsBragusBackdropPresentation => bragusBackdropPresentation;
+        public bool IsBackdropBossPresentation => bragusBackdropPresentation || trentorBackdropPresentation;
 
         private void Update()
         {
@@ -208,17 +263,27 @@ namespace AccardND.Presentation
             if (composableGolemOrbit3DRoot != null && composableGolemOrbitStones.Count > 0)
             {
                 composableGolemOrbit3DRoot.localRotation = Quaternion.Euler(0f, -Time.unscaledTime * 42f, 0f);
-                foreach (KeyValuePair<ComposableGolemForm, Transform> pair in composableGolemOrbitStones)
+                foreach (KeyValuePair<ComposableGolemForm, List<Transform>> pair in composableGolemOrbitStones)
                 {
-                    Transform stone = pair.Value;
-                    if (stone == null)
+                    if (pair.Key != composableGolemActiveForm || pair.Value == null)
                         continue;
 
-                    bool active = pair.Key == composableGolemActiveForm;
-                    float pulse = active ? 1f + Mathf.Sin(Time.unscaledTime * 7f) * 0.08f : 1f;
-                    stone.localRotation = Quaternion.Euler(0f, Time.unscaledTime * (active ? 150f : 82f), Time.unscaledTime * (active ? 52f : 28f));
-                    stone.localPosition = composableGolemOrbitStonePositions[pair.Key] + new Vector3(0f, Mathf.Sin(Time.unscaledTime * (active ? 5.2f : 2.6f) + (int)pair.Key) * (active ? 0.045f : 0.018f), 0f);
-                    stone.localScale = composableGolemOrbitStoneScales[pair.Key] * (active ? 1.18f * pulse : 0.92f);
+                    for (int i = 0; i < pair.Value.Count; i++)
+                    {
+                        Transform stone = pair.Value[i];
+                        if (stone == null)
+                            continue;
+
+                        float phase = i * 2.0944f;
+                        float pulse = 1f + Mathf.Sin(Time.unscaledTime * 7f + phase) * 0.055f;
+                        stone.localRotation = Quaternion.Euler(
+                            12f + Mathf.Sin(Time.unscaledTime * 1.8f + phase) * 8f,
+                            Time.unscaledTime * 135f + i * 120f,
+                            Time.unscaledTime * 38f + i * 18f);
+                        stone.localPosition = composableGolemOrbitStonePositions[stone]
+                            + new Vector3(0f, Mathf.Sin(Time.unscaledTime * 4.2f + phase) * 0.035f, 0f);
+                        stone.localScale = composableGolemOrbitStoneScales[stone] * pulse;
+                    }
                 }
                 return;
             }
@@ -243,6 +308,8 @@ namespace AccardND.Presentation
 
         private void OnDestroy()
         {
+            if (healthBarRoot != null && healthBarRoot.transform.parent != transform)
+                Destroy(healthBarRoot);
             if (diceRootDetachedToScreen && diceRoot != null)
                 Destroy(diceRoot);
             if (composableGolemOrbitScene != null)
@@ -380,7 +447,11 @@ namespace AccardND.Presentation
             art.preserveAspect = framedArtwork == resolvedArtwork;
             Stretch(art.rectTransform);
 
-            if (!isPalatir)
+            if (isPalatir)
+            {
+                ApplyCardOutlineShadow(art);
+            }
+            else
             {
                 Image holder = CreateImage("Class Holder", transform, Color.white);
                 defeatEffectImages.Add(holder);
@@ -389,6 +460,7 @@ namespace AccardND.Presentation
                 holder.preserveAspect = true;
                 Stretch(holder.rectTransform);
                 holder.rectTransform.localScale = Vector3.one * BorderVisualScale(definition.HeroClass);
+                ApplyCardOutlineShadow(holder);
             }
 
             Font font = AccardND.Battlefield.MmoUiTheme.BodyFont;
@@ -460,6 +532,22 @@ namespace AccardND.Presentation
             CreateDiceView(font);
         }
 
+        private static void ApplyCardOutlineShadow(Image cardImage)
+        {
+            if (cardImage == null)
+                return;
+
+            Shadow shadow = cardImage.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.36f);
+            shadow.effectDistance = new Vector2(3f, -4.5f);
+            shadow.useGraphicAlpha = true;
+
+            Outline outline = cardImage.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(0f, 0f, 0f, 0.26f);
+            outline.effectDistance = new Vector2(1.6f, -1.6f);
+            outline.useGraphicAlpha = true;
+        }
+
         private void ConfigureBattlefieldPreview(CardDefinition definition, GameConfiguration gameConfiguration)
         {
             configuration = gameConfiguration;
@@ -502,6 +590,7 @@ namespace AccardND.Presentation
             EnsureTurnAura();
 
             Image preview = CreateImage("Battle Preview", transform, Color.white);
+            battlePreviewImage = preview;
             defeatEffectImages.Add(preview);
             defeatEffectLayerAnchors.Add(preview.transform);
             preview.sprite = ResolveBattlePreviewSprite(definition);
@@ -560,8 +649,70 @@ namespace AccardND.Presentation
 
         public void SetStrengthValue(int value)
         {
+            if (strengthText != null && !combatStrengthOverrideActive)
+                strengthText.text = value.ToString();
+        }
+
+        private bool combatStrengthOverrideActive;
+
+        public void BeginCombatStrengthPresentation(int value)
+        {
+            combatStrengthOverrideActive = true;
+            SetCombatStrengthValue(value);
+        }
+
+        public void SetCombatStrengthValue(int value)
+        {
             if (strengthText != null)
                 strengthText.text = value.ToString();
+        }
+
+        public void EndCombatStrengthPresentation(int value)
+        {
+            combatStrengthOverrideActive = false;
+            if (strengthText != null)
+                strengthText.text = value.ToString();
+        }
+
+        public void SetStrengthColor(Color color)
+        {
+            if (strengthText != null)
+                strengthText.color = color;
+        }
+
+        private float combatStrengthScale = 1f;
+        private Vector3 combatStrengthAppliedScale;
+        private bool hasCombatStrengthAppliedScale;
+
+        public void SetCombatStrengthScale(float multiplier)
+        {
+            multiplier = Mathf.Max(0.01f, multiplier);
+            if (rectTransform != null)
+            {
+                rectTransform.localScale *= multiplier / combatStrengthScale;
+                combatStrengthAppliedScale = rectTransform.localScale;
+                hasCombatStrengthAppliedScale = true;
+            }
+            combatStrengthScale = multiplier;
+        }
+
+        public void ReapplyCombatStrengthScale()
+        {
+            if (rectTransform == null || Mathf.Approximately(combatStrengthScale, 1f))
+                return;
+
+            // Il fattore va rimesso solo se qualcuno ha sovrascritto la scala nel
+            // frattempo (il rientro dal duello la riporta alla posa di riposo).
+            // Gli attacchi di classe restano fermi e non passano dal duello: la
+            // scala e' ancora quella che avevamo applicato noi e moltiplicarla di
+            // nuovo la faceva crescere a ogni scontro.
+            if (hasCombatStrengthAppliedScale
+                && (rectTransform.localScale - combatStrengthAppliedScale).sqrMagnitude < 1e-6f)
+                return;
+
+            rectTransform.localScale *= combatStrengthScale;
+            combatStrengthAppliedScale = rectTransform.localScale;
+            hasCombatStrengthAppliedScale = true;
         }
 
         public void SetCompactPreviewStrengthReadability(int fontSize)
@@ -665,9 +816,10 @@ namespace AccardND.Presentation
             composableGolemOrbit3DRoot = new GameObject("Composable Golem Stones Orbit Root").transform;
             composableGolemOrbit3DRoot.SetParent(composableGolemOrbitScene.transform, false);
 
-            CreateComposableGolemOrbitStone(ComposableGolemForm.Iron, iron, new Vector3(0f, 0f, -0.92f), Vector3.one * 0.48f);
-            CreateComposableGolemOrbitStone(ComposableGolemForm.Crystal, crystal, new Vector3(-0.82f, 0f, 0.48f), Vector3.one * 0.36f);
-            CreateComposableGolemOrbitStone(ComposableGolemForm.Glass, glass, new Vector3(0.82f, 0f, 0.48f), Vector3.one * 0.5f);
+            Vector3 sharedRelicScale = Vector3.one * 0.44f;
+            CreateComposableGolemOrbitSet(ComposableGolemForm.Iron, iron, sharedRelicScale);
+            CreateComposableGolemOrbitSet(ComposableGolemForm.Crystal, crystal, sharedRelicScale);
+            CreateComposableGolemOrbitSet(ComposableGolemForm.Glass, glass, sharedRelicScale);
 
             composableGolemOrbitCamera = new GameObject("Composable Golem Stones Camera", typeof(Camera)).GetComponent<Camera>();
             composableGolemOrbitCamera.transform.SetParent(composableGolemOrbitScene.transform, false);
@@ -690,16 +842,27 @@ namespace AccardND.Presentation
             return true;
         }
 
-        private void CreateComposableGolemOrbitStone(ComposableGolemForm form, GameObject prefab, Vector3 position, Vector3 scale)
+        private void CreateComposableGolemOrbitSet(ComposableGolemForm form, GameObject prefab, Vector3 scale)
         {
-            Transform stone = Instantiate(prefab, composableGolemOrbit3DRoot, false).transform;
-            stone.name = form + " Orbit Stone";
-            stone.localPosition = position;
-            stone.localRotation = Quaternion.identity;
-            stone.localScale = scale;
-            composableGolemOrbitStones[form] = stone;
-            composableGolemOrbitStonePositions[form] = position;
-            composableGolemOrbitStoneScales[form] = scale;
+            Vector3[] positions =
+            {
+                new(0f, 0f, -0.92f),
+                new(-0.82f, 0f, 0.48f),
+                new(0.82f, 0f, 0.48f)
+            };
+            List<Transform> stones = new(positions.Length);
+            for (int i = 0; i < positions.Length; i++)
+            {
+                Transform stone = Instantiate(prefab, composableGolemOrbit3DRoot, false).transform;
+                stone.name = form + " Orbit Relic " + (i + 1);
+                stone.localPosition = positions[i];
+                stone.localRotation = Quaternion.Euler(0f, i * 120f, 0f);
+                stone.localScale = scale;
+                stones.Add(stone);
+                composableGolemOrbitStonePositions[stone] = positions[i];
+                composableGolemOrbitStoneScales[stone] = scale;
+            }
+            composableGolemOrbitStones[form] = stones;
         }
 
         private void CreateComposableGolemOrbitImage(ComposableGolemForm form, string spritePath, Vector2 position, Vector2 size, Color fallbackColor)
@@ -722,6 +885,19 @@ namespace AccardND.Presentation
 
         private void RefreshComposableGolemOrbitVisuals()
         {
+            foreach (KeyValuePair<ComposableGolemForm, List<Transform>> pair in composableGolemOrbitStones)
+            {
+                bool active = pair.Key == composableGolemActiveForm;
+                if (pair.Value == null)
+                    continue;
+
+                foreach (Transform stone in pair.Value)
+                {
+                    if (stone != null)
+                        stone.gameObject.SetActive(active);
+                }
+            }
+
             foreach (KeyValuePair<ComposableGolemForm, Image> pair in composableGolemOrbitImages)
             {
                 Image image = pair.Value;
@@ -1012,7 +1188,74 @@ namespace AccardND.Presentation
             selectionOutline.effectColor = draftStyle ?SelectedAuraGold : SelectedBattlefieldGreen;
             if (liftShadow != null && !dragging)
                 liftShadow.enabled = selected;
+            selectedAuraColor = SelectedAuraGold;
             SetSelectedAura(selected && draftStyle);
+        }
+
+        public void ConfigureBragusBackdropPresentation()
+        {
+            bragusBackdropPresentation = true;
+            gameObject.name = "Bragus Background Hit Area";
+
+            // Bragus non e' piu' una pedina: la forza resta consultabile nella carta,
+            // mentre sul campo l'intera gigantografia diventa il bersaglio cliccabile.
+            if (strengthText != null)
+                strengthText.gameObject.SetActive(false);
+
+            // La figura e' gia' parte dello sfondo della stanza: il preview resta
+            // trasparente e funziona soltanto da hit area per click e interazioni.
+            if (battlePreviewImage != null)
+                battlePreviewImage.gameObject.SetActive(false);
+
+            if (targetHintAuraImage != null)
+            {
+                targetHintAuraImage.sprite = GetBragusContourAuraSprite();
+                // La hitbox di Bragus e' piu' stretta della figura dipinta nello sfondo:
+                // il contorno deve uscire lateralmente per includere arma, gomito e spallacci.
+                SetAnchors(targetHintAuraRect, new Vector2(-0.16f, -0.04f), new Vector2(1.16f, 1.14f));
+            }
+
+            if (statusLabel != null)
+                statusLabel.gameObject.SetActive(false);
+
+            if (statusIconRoot != null)
+                SetAnchors(statusIconRoot, new Vector2(0.08f, -0.30f), new Vector2(0.92f, -0.10f));
+        }
+
+        public void ConfigureTrentorBackdropPresentation()
+        {
+            trentorBackdropPresentation = true;
+            gameObject.name = "Trentor Background Hit Area";
+
+            if (strengthText != null)
+                strengthText.gameObject.SetActive(false);
+            if (battlePreviewImage != null)
+                battlePreviewImage.gameObject.SetActive(false);
+
+            if (targetHintAuraImage != null)
+            {
+                targetHintAuraImage.sprite = GetTrentorContourAuraSprite();
+                SetAnchors(targetHintAuraRect, new Vector2(-0.13f, -0.02f), new Vector2(1.13f, 1.18f));
+            }
+
+            if (statusLabel != null)
+                statusLabel.gameObject.SetActive(false);
+            if (statusIconRoot != null)
+                SetAnchors(statusIconRoot, new Vector2(0.08f, -0.30f), new Vector2(0.92f, -0.10f));
+        }
+
+        public void MoveHealthBarToScreen(RectTransform parent, Vector2 minimum, Vector2 maximum)
+        {
+            if (parent == null)
+                return;
+
+            if (healthBarRoot == null)
+                CreateHealthBar(AccardND.Battlefield.MmoUiTheme.BodyFont);
+
+            RectTransform healthRect = (RectTransform)healthBarRoot.transform;
+            healthRect.SetParent(parent, false);
+            SetAnchors(healthRect, minimum, maximum);
+            healthBarRoot.transform.SetAsLastSibling();
         }
 
         public void SetTurnAura(bool active, bool playerOwned)
@@ -1023,7 +1266,12 @@ namespace AccardND.Presentation
                 : new Color(1f, 0.34f, 0.24f, 1f);
 
             if (turnAuraActive == active)
+            {
+                turnAuraRoot.SetActive(active);
+                if (active && turnAuraCoroutine == null)
+                    turnAuraCoroutine = StartCoroutine(AnimateTurnAura());
                 return;
+            }
 
             turnAuraActive = active;
             if (active)
@@ -1384,44 +1632,50 @@ namespace AccardND.Presentation
             selectionScaleCoroutine = null;
         }
 
-        public void ShowClassAction(Sprite icon, UnityAction action)
+        public void ShowClassAction(Sprite icon, UnityAction action, int? manaDelta = null)
         {
             ClearActionOverlay();
             RectTransform root = EnsureActionOverlay();
-            SetActionOverlayBounds(new Vector2(0.03f, 0.94f), new Vector2(0.97f, 1.48f));
+            float edgeBias = ConfigureTurnActionOverlay(1);
             string label = AttackActionText();
-            Button button = CreateIconActionButton("Attack Action", root, icon, label, ActionLabelRed);
+            Button button = CreateIconActionButton(
+                "Attack Action", root, icon, label, ActionLabelRed, manaDelta);
             attackActionRect = button.GetComponent<RectTransform>();
-            SetAnchors(button.GetComponent<RectTransform>(), new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.93f));
+            SetTurnActionSlot(button, 0, 1, edgeBias);
             BindActionCallout(button, action, label, ActionLabelRed);
+            RevealActionOverlayAfterCardSettles();
         }
 
         public void ShowAbilityAction(Sprite icon, UnityAction action)
         {
             ClearActionOverlay();
             RectTransform root = EnsureActionOverlay();
-            SetActionOverlayBounds(new Vector2(0.03f, 0.94f), new Vector2(0.97f, 1.48f));
+            float edgeBias = ConfigureTurnActionOverlay(1);
             string label = AbilityActionText();
             Button button = CreateIconActionButton("Ability Action", root, icon, label, ActionLabelBlue);
             abilityActionRect = button.GetComponent<RectTransform>();
-            SetAnchors(button.GetComponent<RectTransform>(), new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.93f));
+            SetTurnActionSlot(button, 0, 1, edgeBias);
             BindActionCallout(button, action, label, ActionLabelBlue);
+            RevealActionOverlayAfterCardSettles();
         }
 
         public void ShowDualActions(
             Sprite firstIcon,
             UnityAction firstAction,
             Sprite secondIcon,
-            UnityAction secondAction)
+            UnityAction secondAction,
+            int? firstMana = null,
+            int? secondMana = null)
         {
             ClearActionOverlay();
             RectTransform root = EnsureActionOverlay();
-            SetActionOverlayBounds(new Vector2(0.03f, 0.94f), new Vector2(0.97f, 1.48f));
+            float edgeBias = ConfigureTurnActionOverlay(2);
 
             string attackLabel = AttackActionText();
-            Button first = CreateIconActionButton("Attack Action", root, firstIcon, attackLabel, ActionLabelRed);
+            Button first = CreateIconActionButton(
+                "Attack Action", root, firstIcon, attackLabel, ActionLabelRed, firstMana);
             attackActionRect = first.GetComponent<RectTransform>();
-            SetAnchors(first.GetComponent<RectTransform>(), new Vector2(0.02f, 0.03f), new Vector2(0.47f, 0.93f));
+            SetTurnActionSlot(first, 0, 2, edgeBias);
             BindActionCallout(first, firstAction, attackLabel, ActionLabelRed);
 
             string secondLabel = GetActionLabelForSprite(secondIcon);
@@ -1431,10 +1685,12 @@ namespace AccardND.Presentation
                 root,
                 secondIcon,
                 secondLabel,
-                secondLabelColor);
+                secondLabelColor,
+                secondMana);
             abilityActionRect = second.GetComponent<RectTransform>();
-            SetAnchors(second.GetComponent<RectTransform>(), new Vector2(0.53f, 0.03f), new Vector2(0.98f, 0.93f));
+            SetTurnActionSlot(second, 1, 2, edgeBias);
             BindActionCallout(second, secondAction, secondLabel, secondLabelColor);
+            RevealActionOverlayAfterCardSettles();
         }
 
         public void ShowTripleActions(
@@ -1447,7 +1703,7 @@ namespace AccardND.Presentation
         {
             ClearActionOverlay();
             RectTransform root = EnsureActionOverlay();
-            SetActionOverlayBounds(new Vector2(-0.02f, 0.92f), new Vector2(1.02f, 1.54f));
+            float edgeBias = ConfigureTurnActionOverlay(3);
 
             string attackLabel = AttackActionText();
             string abilityLabel = AbilityActionText();
@@ -1455,17 +1711,18 @@ namespace AccardND.Presentation
 
             Button first = CreateIconActionButton("Attack Action", root, firstIcon, attackLabel, ActionLabelRed);
             attackActionRect = first.GetComponent<RectTransform>();
-            SetAnchors(first.GetComponent<RectTransform>(), new Vector2(0.00f, 0.02f), new Vector2(0.34f, 0.72f));
+            SetTurnActionSlot(first, 0, 3, edgeBias);
             BindActionCallout(first, firstAction, attackLabel, ActionLabelRed);
 
             Button second = CreateIconActionButton("Ability Action", root, secondIcon, abilityLabel, ActionLabelBlue);
             abilityActionRect = second.GetComponent<RectTransform>();
-            SetAnchors(second.GetComponent<RectTransform>(), new Vector2(0.33f, 0.26f), new Vector2(0.67f, 0.96f));
+            SetTurnActionSlot(second, 1, 3, edgeBias);
             BindActionCallout(second, secondAction, abilityLabel, ActionLabelBlue);
 
             Button third = CreateIconActionButton("Attachment Action", root, thirdIcon, equipLabel, ActionLabelOrange);
-            SetAnchors(third.GetComponent<RectTransform>(), new Vector2(0.66f, 0.02f), new Vector2(1.00f, 0.72f));
+            SetTurnActionSlot(third, 2, 3, edgeBias);
             BindActionCallout(third, thirdAction, equipLabel, ActionLabelOrange);
+            RevealActionOverlayAfterCardSettles();
         }
 
         public void ShowTurnActions(
@@ -1522,6 +1779,7 @@ namespace AccardND.Presentation
             {
                 string supremeLabel = SupremeActionText();
                 Button supreme = CreateIconActionButton("Supreme Action", root, supremeIcon, supremeLabel, ActionLabelSupreme, supremeMana);
+                supremeActionRect = supreme.GetComponent<RectTransform>();
                 SetTurnActionSlot(supreme, actionIndex++, actionCount, edgeBias);
                 BindActionCallout(supreme, supremeAction, supremeLabel, ActionLabelSupreme);
             }
@@ -1536,17 +1794,75 @@ namespace AccardND.Presentation
             Button skip = CreateIconActionButton("Skip Action", root, skipIcon, skipLabel, ActionLabelPurple, skipMana);
             SetTurnActionSlot(skip, actionIndex, actionCount, edgeBias);
             BindActionCallout(skip, skipAction, skipLabel, ActionLabelPurple);
+            RevealActionOverlayAfterCardSettles();
+        }
+
+        private void RevealActionOverlayAfterCardSettles()
+        {
+            if (actionOverlayRoot == null)
+                return;
+
+            if (actionOverlayRevealCoroutine != null)
+            {
+                StopCoroutine(actionOverlayRevealCoroutine);
+                actionOverlayRevealCoroutine = null;
+            }
+
+            CanvasGroup group = actionOverlayRoot.GetComponent<CanvasGroup>();
+            group.alpha = 1f;
+            group.interactable = true;
+            group.blocksRaycasts = true;
+        }
+
+        private IEnumerator RevealActionOverlayWhenSettled(RectTransform expectedRoot, CanvasGroup group)
+        {
+            const float minimumDelay = 0.12f;
+            const float maximumWait = 1.1f;
+            const int requiredStableFrames = 3;
+            float elapsed = 0f;
+            int stableFrames = 0;
+            Vector3 previousPosition = transform.position;
+            Quaternion previousRotation = transform.rotation;
+            Vector3 previousScale = transform.lossyScale;
+
+            while (elapsed < maximumWait)
+            {
+                yield return null;
+                if (expectedRoot == null || expectedRoot != actionOverlayRoot)
+                {
+                    actionOverlayRevealCoroutine = null;
+                    yield break;
+                }
+
+                elapsed += Time.unscaledDeltaTime;
+                Vector3 currentPosition = transform.position;
+                Quaternion currentRotation = transform.rotation;
+                Vector3 currentScale = transform.lossyScale;
+                bool stable = Vector3.Distance(previousPosition, currentPosition) < 0.35f
+                    && Quaternion.Angle(previousRotation, currentRotation) < 0.2f
+                    && Vector3.Distance(previousScale, currentScale) < 0.002f
+                    && selectionScaleCoroutine == null;
+                stableFrames = stable && elapsed >= minimumDelay ? stableFrames + 1 : 0;
+                previousPosition = currentPosition;
+                previousRotation = currentRotation;
+                previousScale = currentScale;
+
+                if (stableFrames >= requiredStableFrames)
+                    break;
+            }
+
+            if (expectedRoot != null && expectedRoot == actionOverlayRoot && group != null)
+            {
+                group.alpha = 1f;
+                group.interactable = true;
+                group.blocksRaycasts = true;
+            }
+            actionOverlayRevealCoroutine = null;
         }
 
         private float ConfigureTurnActionOverlay(int actionCount)
         {
-            float horizontalOverflow = actionCount >= 5
-                ? 0.34f
-                : actionCount == 4
-                    ? 0.24f
-                    : actionCount == 3
-                        ? 0.10f
-                        : 0f;
+            float horizontalOverflow = TurnActionOverlayHorizontalOverflow(actionCount);
             float minimumX = 0.03f - horizontalOverflow;
             float maximumX = 0.97f + horizontalOverflow;
             if (actionCount <= 3)
@@ -1579,9 +1895,13 @@ namespace AccardND.Presentation
             int safeCount = Mathf.Clamp(count, 1, 5);
             int safeIndex = Mathf.Clamp(index, 0, safeCount - 1);
 
-            float gap = safeCount >= 4 ? 0.018f : 0.025f;
-            float width = (1f - gap * (safeCount - 1)) / safeCount;
-            float minimumX = safeIndex * (width + gap);
+            const float physicalWidth = 0.30f;
+            const float physicalGap = 0.025f;
+            float overlayWidth = TurnActionOverlayWidth(safeCount);
+            float width = physicalWidth / overlayWidth;
+            float gap = physicalGap / overlayWidth;
+            float occupiedWidth = width * safeCount + gap * (safeCount - 1);
+            float minimumX = (1f - occupiedWidth) * 0.5f + safeIndex * (width + gap);
             float verticalLift = CalculateTurnActionVerticalLift(safeIndex, safeCount, 0f);
             SetAnchors(
                 button.GetComponent<RectTransform>(),
@@ -1595,6 +1915,22 @@ namespace AccardND.Presentation
                     button,
                     new Vector2(-0.08f, 0.98f),
                     new Vector2(1.08f, 1.46f));
+        }
+
+        private static float TurnActionOverlayHorizontalOverflow(int actionCount)
+        {
+            return actionCount >= 5
+                ? 0.34f
+                : actionCount == 4
+                    ? 0.24f
+                    : actionCount == 3
+                        ? 0.10f
+                        : 0f;
+        }
+
+        private static float TurnActionOverlayWidth(int actionCount)
+        {
+            return 0.94f + 2f * TurnActionOverlayHorizontalOverflow(actionCount);
         }
 
         private static float CalculateTurnActionVerticalLift(int index, int count, float edgeBias)
@@ -1614,17 +1950,30 @@ namespace AccardND.Presentation
         {
             ClearActionOverlay();
             RectTransform root = EnsureActionOverlay();
-            SetActionOverlayBounds(new Vector2(0.03f, 0.94f), new Vector2(0.97f, 1.48f));
+            float edgeBias = ConfigureTurnActionOverlay(2);
 
             Button confirm = CreateIconActionButton("Confirm Action", root, confirmIcon, "Conferma", ActionLabelGreen);
-            SetAnchors(confirm.GetComponent<RectTransform>(), new Vector2(0.00f, 0.03f), new Vector2(0.43f, 0.93f));
+            SetTurnActionSlot(confirm, 0, 2, edgeBias);
             if (confirmAction != null)
                 confirm.onClick.AddListener(confirmAction);
 
             Button cancel = CreateIconActionButton("Cancel Action", root, cancelIcon, "Cancella", ActionLabelRed);
-            SetAnchors(cancel.GetComponent<RectTransform>(), new Vector2(0.57f, 0.03f), new Vector2(1.00f, 0.93f));
+            SetTurnActionSlot(cancel, 1, 2, edgeBias);
             if (cancelAction != null)
-                cancel.onClick.AddListener(cancelAction);
+            {
+                UnityAction swipeCancelAction = () =>
+                {
+                    cancelAction.Invoke();
+                    StartCoroutine(RestoreDefaultActionAuraNextFrame());
+                };
+                SwipeActionSelector swipeSelector = cancel.gameObject.AddComponent<SwipeActionSelector>();
+                swipeSelector.Configure(this, swipeCancelAction, "Cancella", ActionLabelRed, forwardReleaseToCard: false);
+                cancel.onClick.AddListener(() =>
+                {
+                    if (!SwipeActionSelector.ShouldSuppressClick(cancel))
+                        swipeCancelAction.Invoke();
+                });
+            }
         }
 
         public void ShowConfirmInfoActions(Sprite confirmIcon, Sprite infoIcon, UnityAction confirmAction, UnityAction infoAction)
@@ -1662,15 +2011,48 @@ namespace AccardND.Presentation
         public RectTransform AttackActionRect => attackActionRect;
         public RectTransform AbilityActionRect => abilityActionRect;
 
+        public void SetAbilityActionInteractable(bool interactable)
+        {
+            if (abilityActionRect == null)
+                return;
+
+            Button button = abilityActionRect.GetComponent<Button>();
+            if (button != null)
+                button.interactable = interactable;
+        }
+
+        public void SetSupremeActionInteractable(bool interactable)
+        {
+            if (supremeActionRect == null)
+                return;
+
+            Button button = supremeActionRect.GetComponent<Button>();
+            if (button != null)
+                button.interactable = interactable;
+        }
+
         public void ShowCancelAction(Sprite cancelIcon, UnityAction cancelAction)
         {
             ClearActionOverlay();
             RectTransform root = EnsureActionOverlay();
-            SetActionOverlayBounds(new Vector2(0.03f, 0.94f), new Vector2(0.97f, 1.48f));
+            float edgeBias = ConfigureTurnActionOverlay(1);
             Button cancel = CreateIconActionButton("Cancel Action", root, cancelIcon, "Cancella", ActionLabelRed);
-            SetAnchors(cancel.GetComponent<RectTransform>(), new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.93f));
+            SetTurnActionSlot(cancel, 0, 1, edgeBias);
             if (cancelAction != null)
-                cancel.onClick.AddListener(cancelAction);
+            {
+                UnityAction swipeCancelAction = () =>
+                {
+                    cancelAction.Invoke();
+                    StartCoroutine(RestoreDefaultActionAuraNextFrame());
+                };
+                SwipeActionSelector swipeSelector = cancel.gameObject.AddComponent<SwipeActionSelector>();
+                swipeSelector.Configure(this, swipeCancelAction, "Cancella", ActionLabelRed, forwardReleaseToCard: false);
+                cancel.onClick.AddListener(() =>
+                {
+                    if (!SwipeActionSelector.ShouldSuppressClick(cancel))
+                        swipeCancelAction.Invoke();
+                });
+            }
         }
 
         public void ShowCardClickAction(UnityAction action)
@@ -1689,8 +2071,22 @@ namespace AccardND.Presentation
         {
             attackActionRect = null;
             abilityActionRect = null;
+            supremeActionRect = null;
+            if (actionOverlayRevealCoroutine != null)
+            {
+                StopCoroutine(actionOverlayRevealCoroutine);
+                actionOverlayRevealCoroutine = null;
+            }
             if (actionOverlayRoot == null)
                 return;
+
+            CanvasGroup overlayGroup = actionOverlayRoot.GetComponent<CanvasGroup>();
+            if (overlayGroup != null)
+            {
+                overlayGroup.alpha = 1f;
+                overlayGroup.interactable = true;
+                overlayGroup.blocksRaycasts = true;
+            }
 
             for (int index = actionOverlayRoot.childCount - 1; index >= 0; index--)
                 Destroy(actionOverlayRoot.GetChild(index).gameObject);
@@ -1758,29 +2154,77 @@ namespace AccardND.Presentation
             float normalized = Mathf.Clamp01((float)clampedCurrent / maximum);
             healthBarRoot.SetActive(true);
             healthBarRoot.transform.SetAsLastSibling();
-            float fillRight = Mathf.Lerp(0.085f, 0.915f, normalized);
-            float glowRight = Mathf.Lerp(0.078f, 0.922f, normalized);
             if (healthBarFill != null)
             {
-                healthBarFill.color = fillColor;
-                healthBarFill.rectTransform.anchorMax = new Vector2(fillRight, 0.68f);
+                healthBarFill.SetPalette(
+                    new Color(0.055f, 0.001f, 0.001f, 1f),
+                    new Color(0.42f, 0.006f, 0.004f, 1f),
+                    new Color(0.68f, 0.045f, 0.025f, 1f));
+                if (!healthBarInitialized)
+                {
+                    healthBarInitialized = true;
+                    SetHealthBarFillAmount(0f);
+                    healthBarTargetNormalized = normalized;
+                    healthBarFillRoutine = StartCoroutine(AnimateHealthBarTransition(
+                        normalized,
+                        Mathf.Lerp(0.72f, 1.05f, normalized)));
+                }
+                else if (healthBarFillRoutine != null && Mathf.Approximately(healthBarTargetNormalized, normalized))
+                {
+                    // Refresh ripetuti dello stesso stato non devono troncare l'animazione in corso.
+                }
+                else if (normalized < healthBarDisplayedNormalized)
+                {
+                    if (healthBarFillRoutine != null)
+                        StopCoroutine(healthBarFillRoutine);
+                    healthBarTargetNormalized = normalized;
+                    float distance = Mathf.Abs(healthBarDisplayedNormalized - normalized);
+                    float damageDuration = Mathf.Lerp(0.28f, 0.72f, Mathf.Clamp01(distance * 2.2f));
+                    healthBarFillRoutine = StartCoroutine(AnimateHealthBarTransition(normalized, damageDuration));
+                }
+                else
+                {
+                    if (healthBarFillRoutine != null)
+                    {
+                        StopCoroutine(healthBarFillRoutine);
+                        healthBarFillRoutine = null;
+                    }
+                    healthBarTargetNormalized = normalized;
+                    SetHealthBarFillAmount(normalized);
+                }
             }
-            if (healthBarGlow != null)
-            {
-                Color glow = Color.Lerp(fillColor, AccardND.Battlefield.MmoUiTheme.Arcane, 0.38f);
-                healthBarGlow.color = new Color(glow.r, glow.g, glow.b, 0.34f + normalized * 0.32f);
-                healthBarGlow.rectTransform.anchorMax = new Vector2(glowRight, 0.86f);
-            }
-            if (healthBarTopShine != null)
-                healthBarTopShine.rectTransform.anchorMax = new Vector2(Mathf.Lerp(0.095f, 0.905f, normalized), 0.68f);
             if (healthBarText != null)
-                healthBarText.text = $"HP {clampedCurrent}/{maximum}";
+                healthBarText.text = $"HP {clampedCurrent} / {maximum}";
         }
 
         public void SetHealthBarVisible(bool visible)
         {
             if (healthBarRoot != null)
                 healthBarRoot.SetActive(visible);
+        }
+
+        private void SetHealthBarFillAmount(float normalized)
+        {
+            healthBarDisplayedNormalized = Mathf.Clamp01(normalized);
+            if (healthBarFill != null)
+                healthBarFill.rectTransform.anchorMax = new Vector2(healthBarDisplayedNormalized, 1f);
+        }
+
+        private IEnumerator AnimateHealthBarTransition(float targetNormalized, float duration)
+        {
+            float startNormalized = Mathf.Clamp01(healthBarDisplayedNormalized);
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+                float eased = progress * progress * (3f - 2f * progress);
+                SetHealthBarFillAmount(Mathf.Lerp(startNormalized, targetNormalized, eased));
+                yield return null;
+            }
+
+            SetHealthBarFillAmount(targetNormalized);
+            healthBarFillRoutine = null;
         }
 
         public void PlayComposableGolemHitEffect(ComposableGolemForm form)
@@ -2176,15 +2620,12 @@ namespace AccardND.Presentation
 
         public IEnumerator PlayAttackAnimation()
         {
-            float scale = configuration.Animation.AttackScale;
-            yield return ScaleOverTime(
-                rectTransform.localScale,
-                Vector3.one * scale,
-                configuration.Animation.AttackExpandDuration);
-            yield return ScaleOverTime(
-                Vector3.one * scale,
-                Vector3.one,
-                configuration.Animation.AttackReturnDuration);
+            // Keep the original attack beat without modifying scale: combat size is
+            // now driven exclusively by the rolled Vigor presentation.
+            float duration = Mathf.Max(0f, configuration.Animation.AttackExpandDuration)
+                + Mathf.Max(0f, configuration.Animation.AttackReturnDuration);
+            if (duration > 0f)
+                yield return new WaitForSecondsRealtime(duration);
         }
 
         public IEnumerator MoveToDuelPoint(Vector3 worldPosition, float duration, float scale)
@@ -2560,7 +3001,7 @@ namespace AccardND.Presentation
             }
 
             float elapsed = 0f;
-            float duration = isTile ? 0.72f : 0.95f;
+            float duration = isTile ? 0.54f : 0.71f;
             while (elapsed < duration)
             {
                 elapsed += Time.unscaledDeltaTime;
@@ -2777,7 +3218,7 @@ namespace AccardND.Presentation
             }
 
             float elapsed = 0f;
-            float crackDuration = 0.45f;
+            float crackDuration = 0.34f;
             Vector3 cardOriginalScale = rectTransform.localScale;
             Vector3 tileOriginalScale = timelineTile != null ? timelineTile.transform.localScale : Vector3.one;
 
@@ -2826,7 +3267,7 @@ namespace AccardND.Presentation
 
             // Animate beautiful dissolve erosion in parallel with burst shatter particles!
             float dissolveElapsed = 0f;
-            float dissolveDuration = 0.75f;
+            float dissolveDuration = 0.56f;
 
             Coroutine cardShatter = StartCoroutine(AnimateShatterParticles(rectTransform, ashShardColor, deathBurstColor));
 
@@ -2913,7 +3354,7 @@ namespace AccardND.Presentation
                 skulls.Add((skull, skullRect, angle, wavePhase, distanceBias, amplitude, spin));
             }
 
-            const float duration = 1.18f;
+            const float duration = 0.89f;
             float elapsed = 0f;
             while (elapsed < duration)
             {
@@ -3006,7 +3447,7 @@ namespace AccardND.Presentation
                 sparks.Add((spark, sparkRect, phase, UnityEngine.Random.Range(0.64f, 1.2f), size));
             }
 
-            const float duration = 1.72f;
+            const float duration = 1.29f;
             float elapsed = 0f;
             while (elapsed < duration)
             {
@@ -3146,44 +3587,46 @@ namespace AccardND.Presentation
                 typeof(Image));
             healthBarRoot.transform.SetParent(transform, false);
             RectTransform rootRect = (RectTransform)healthBarRoot.transform;
-            SetAnchors(rootRect, new Vector2(0.035f, 1.015f), new Vector2(0.965f, 1.215f));
+            SetAnchors(
+                rootRect,
+                IsBackdropBossPresentation ? new Vector2(-0.12f, -0.10f) : new Vector2(-0.16f, 1.015f),
+                IsBackdropBossPresentation ? new Vector2(1.12f, 0.08f) : new Vector2(1.16f, 1.215f));
 
             Image background = healthBarRoot.GetComponent<Image>();
-            background.sprite = GetBossHealthFrameSprite();
+            background.sprite = AccardND.Battlefield.MmoUiTheme.GetPanelSprite();
             background.type = Image.Type.Sliced;
             background.color = Color.white;
             background.raycastTarget = false;
 
-            Image trough = CreateImage("Health Trough", healthBarRoot.transform, new Color(0.012f, 0.019f, 0.032f, 0.96f));
-            trough.sprite = AccardND.Battlefield.MmoUiTheme.GetSoftPanelSprite();
-            trough.type = Image.Type.Sliced;
-            SetAnchors(trough.rectTransform, new Vector2(0.075f, 0.24f), new Vector2(0.925f, 0.75f));
+            Image maskImage = CreateImage("Boss Health Mask", healthBarRoot.transform, Color.white);
+            SetAnchors(maskImage.rectTransform, Vector2.zero, Vector2.one);
+            maskImage.rectTransform.offsetMin = new Vector2(4f, 4f);
+            maskImage.rectTransform.offsetMax = new Vector2(-4f, -4f);
+            maskImage.raycastTarget = false;
+            Mask mask = maskImage.gameObject.AddComponent<Mask>();
+            mask.showMaskGraphic = false;
 
-            healthBarFill = CreateImage("Health Fill", healthBarRoot.transform, new Color(0.78f, 0.06f, 0.06f, 0.98f));
-            healthBarFill.sprite = GetBossHealthFillSprite();
-            healthBarFill.type = Image.Type.Sliced;
-            SetAnchors(healthBarFill.rectTransform, new Vector2(0.085f, 0.31f), new Vector2(0.915f, 0.68f));
+            GameObject fillObject = new GameObject(
+                "Boss Health Fill",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(ArcaneExperienceFillGraphic));
+            fillObject.transform.SetParent(maskImage.transform, false);
+            healthBarFill = fillObject.GetComponent<ArcaneExperienceFillGraphic>();
+            healthBarFill.raycastTarget = false;
+            SetAnchors(healthBarFill.rectTransform, Vector2.zero, Vector2.one);
 
-            healthBarGlow = CreateImage("Health Arcane Glow", healthBarRoot.transform, new Color(0.15f, 0.82f, 0.95f, 0.44f));
-            healthBarGlow.sprite = GetBossHealthGlowSprite();
-            healthBarGlow.type = Image.Type.Sliced;
-            SetAnchors(healthBarGlow.rectTransform, new Vector2(0.078f, 0.18f), new Vector2(0.922f, 0.86f));
-
-            healthBarTopShine = CreateImage("Health Top Shine", healthBarRoot.transform, new Color(1f, 0.92f, 0.72f, 0.28f));
-            healthBarTopShine.sprite = GetBossHealthGlowSprite();
-            healthBarTopShine.type = Image.Type.Sliced;
-            SetAnchors(healthBarTopShine.rectTransform, new Vector2(0.095f, 0.54f), new Vector2(0.905f, 0.68f));
-
-            AccardND.Battlefield.MmoUiTheme.AddPanelGem(rootRect, "Health Left Gem", new Vector2(0.055f, 0.5f), new Vector2(28f, 28f), new Color(0.28f, 0.95f, 1f, 0.95f));
-            AccardND.Battlefield.MmoUiTheme.AddPanelGem(rootRect, "Health Right Gem", new Vector2(0.945f, 0.5f), new Vector2(28f, 28f), new Color(0.28f, 0.95f, 1f, 0.95f));
-
-            healthBarText = CreateText("Health Text", healthBarRoot.transform, font, 17, FontStyle.Bold, TextAnchor.MiddleCenter);
+            healthBarText = CreateText("Health Text", healthBarRoot.transform, font, 22, FontStyle.Bold, TextAnchor.MiddleCenter);
             AccardND.Battlefield.MmoUiTheme.StyleAsTitle(healthBarText);
+            healthBarText.font = AccardND.Battlefield.MmoUiTheme.BodyBoldFont;
+            healthBarText.fontStyle = FontStyle.Normal;
             healthBarText.color = new Color(1f, 0.93f, 0.76f, 1f);
             Outline textOutline = healthBarText.gameObject.AddComponent<Outline>();
             textOutline.effectColor = new Color(0f, 0.006f, 0.014f, 0.95f);
             textOutline.effectDistance = new Vector2(1.7f, -1.7f);
-            SetAnchors(healthBarText.rectTransform, new Vector2(0.15f, 0.18f), new Vector2(0.85f, 0.86f));
+            SetAnchors(healthBarText.rectTransform, Vector2.zero, Vector2.one);
+            healthBarText.rectTransform.offsetMin = new Vector2(2f, 2f);
+            healthBarText.rectTransform.offsetMax = new Vector2(-2f, -2f);
 
             healthBarRoot.transform.SetAsLastSibling();
             healthBarRoot.SetActive(false);
@@ -4439,10 +4882,19 @@ namespace AccardND.Presentation
             targetHintAuraRoot.transform.SetParent(transform, false);
             targetHintAuraRoot.transform.SetAsFirstSibling();
             targetHintAuraRect = (RectTransform)targetHintAuraRoot.transform;
-            SetAnchors(targetHintAuraRect, new Vector2(-0.055f, -0.055f), new Vector2(1.055f, 1.055f));
+            SetAnchors(
+                targetHintAuraRect,
+                bragusBackdropPresentation ? new Vector2(-0.16f, -0.04f)
+                    : trentorBackdropPresentation ? new Vector2(-0.13f, -0.02f)
+                    : new Vector2(-0.055f, -0.055f),
+                bragusBackdropPresentation ? new Vector2(1.16f, 1.14f)
+                    : trentorBackdropPresentation ? new Vector2(1.13f, 1.18f)
+                    : new Vector2(1.055f, 1.055f));
 
             targetHintAuraImage = targetHintAuraRoot.GetComponent<Image>();
-            targetHintAuraImage.sprite = GetAuraSprite();
+            targetHintAuraImage.sprite = bragusBackdropPresentation
+                ? GetBragusContourAuraSprite()
+                : trentorBackdropPresentation ? GetTrentorContourAuraSprite() : GetAuraSprite();
             targetHintAuraImage.raycastTarget = false;
             targetHintAuraRoot.SetActive(false);
         }
@@ -4728,7 +5180,11 @@ namespace AccardND.Presentation
             {
                 float time = Time.unscaledTime;
                 float pulse = 0.5f + 0.5f * Mathf.Sin(time * 5.1f);
-                selectedAuraImage.color = new Color(1f, 0.72f, 0.08f, Mathf.Lerp(0.26f, 0.54f, pulse));
+                selectedAuraImage.color = new Color(
+                    selectedAuraColor.r,
+                    selectedAuraColor.g,
+                    selectedAuraColor.b,
+                    Mathf.Lerp(0.26f, 0.54f, pulse));
                 selectedAuraRect.localScale = Vector3.one * Mathf.Lerp(0.99f, 1.045f, pulse);
 
                 Rect rect = selectedAuraRect.rect;
@@ -4750,7 +5206,7 @@ namespace AccardND.Presentation
                     sparkleRect.localRotation = Quaternion.Euler(0f, 0f, time * 165f + index * 31f);
                     sparkleRect.localScale = Vector3.one * Mathf.Lerp(0.55f, 1.42f, flicker);
 
-                    Color sparkleColor = Color.Lerp(Color.white, SelectedAuraGold, 0.42f);
+                    Color sparkleColor = Color.Lerp(Color.white, selectedAuraColor, 0.42f);
                     sparkleColor.a = Mathf.Lerp(0.18f, 0.98f, flicker);
                     sparkle.color = sparkleColor;
                 }
@@ -4830,9 +5286,13 @@ namespace AccardND.Presentation
                 float time = Time.unscaledTime;
                 float pulse = 0.5f + 0.5f * Mathf.Sin(time * 3.1f);
                 Color aura = targetHintAuraColor;
-                aura.a = Mathf.Lerp(0.24f, 0.48f, pulse);
+                aura.a = IsBackdropBossPresentation
+                    ? Mathf.Lerp(0.22f, 0.40f, pulse)
+                    : Mathf.Lerp(0.24f, 0.48f, pulse);
                 targetHintAuraImage.color = aura;
-                targetHintAuraRect.localScale = Vector3.one * Mathf.Lerp(0.995f, 1.025f, pulse);
+                targetHintAuraRect.localScale = Vector3.one * (IsBackdropBossPresentation
+                    ? Mathf.Lerp(0.998f, 1.008f, pulse)
+                    : Mathf.Lerp(0.995f, 1.025f, pulse));
 
                 yield return null;
             }
@@ -5401,6 +5861,7 @@ namespace AccardND.Presentation
                 typeof(GraphicRaycaster));
             root.transform.SetParent(transform, false);
             actionOverlayRoot = (RectTransform)root.transform;
+            actionOverlayRoot.localScale = new Vector3(1.3f, 1.3f, 1f);
             SetActionOverlayBounds(new Vector2(0.05f, 0.96f), new Vector2(0.95f, 1.42f));
 
             LayoutElement layout = root.GetComponent<LayoutElement>();
@@ -5453,6 +5914,15 @@ namespace AccardND.Presentation
             shadow.effectColor = new Color(0f, 0f, 0f, 0.72f);
             shadow.effectDistance = new Vector2(4f, -4f);
 
+            if (IsPrimaryActionButton(name))
+            {
+                Color glowColor = labelColor ?? Color.white;
+                Outline glow = buttonObject.AddComponent<Outline>();
+                glow.effectColor = new Color(glowColor.r, glowColor.g, glowColor.b, 0.22f);
+                glow.effectDistance = new Vector2(2.5f, -2.5f);
+                glow.useGraphicAlpha = true;
+            }
+
             Button button = buttonObject.GetComponent<Button>();
             button.targetGraphic = image;
             ColorBlock colors = button.colors;
@@ -5470,6 +5940,13 @@ namespace AccardND.Presentation
                     labelColor ?? Color.white);
             return button;
         }
+
+        private static bool IsPrimaryActionButton(string name) =>
+            name == "Attack Action"
+            || name == "Ability Action"
+            || name == "Supreme Action"
+            || name == "Attachment Action"
+            || name == "Skip Action";
 
         private static string FormatActionButtonLabel(string label, int? manaDelta) =>
             manaDelta.HasValue
@@ -5601,12 +6078,121 @@ namespace AccardND.Presentation
             if (button == null || action == null)
                 return;
 
+            Color actionColor = ActionAuraColor(button.gameObject.name, color);
+
+            if (SupportsActionAura(button.gameObject.name))
+            {
+                SwipeActionSelector swipeSelector = button.gameObject.AddComponent<SwipeActionSelector>();
+                swipeSelector.Configure(this, action, label, actionColor);
+            }
+
             button.onClick.AddListener(() =>
             {
+                if (SwipeActionSelector.ShouldSuppressClick(button))
+                    return;
+
                 if (!string.IsNullOrWhiteSpace(label))
                     PlayActionCallout(label, color);
+                bool showActionAura = SupportsActionAura(button.gameObject.name);
+                if (showActionAura)
+                    SetSwipeActionPreview(true, actionColor);
+                else if (button.gameObject.name == "Cancel Action")
+                    SetSwipeActionPreview(false, default);
                 action.Invoke();
+                if (showActionAura)
+                {
+                    bool actionIsArmed = actionOverlayRoot != null
+                        && actionOverlayRoot.Find("Cancel Action") != null;
+                    SetSwipeActionPreview(
+                        actionIsArmed,
+                        actionColor,
+                        restoreTurnAura: !actionIsArmed);
+                }
             });
+        }
+
+        private static bool SupportsActionAura(string buttonName) =>
+            buttonName == "Attack Action"
+            || buttonName == "Ability Action"
+            || buttonName == "Supreme Action"
+            || buttonName == "Attachment Action";
+
+        private static Color ActionAuraColor(string buttonName, Color fallback) => buttonName switch
+        {
+            "Attack Action" => ActionLabelRed,
+            "Ability Action" => ActionLabelBlue,
+            "Supreme Action" => ActionLabelSupreme,
+            "Attachment Action" => ActionLabelOrange,
+            _ => fallback
+        };
+
+        private IEnumerator RestoreDefaultActionAuraNextFrame()
+        {
+            yield return null;
+            SetSwipeActionPreview(false, default);
+            SetTurnAura(true, playerOwned: true);
+        }
+
+        internal void SetSwipeActionPreview(bool active, Color color, bool restoreTurnAura = true)
+        {
+            if (selectionOutline == null)
+                return;
+
+            if (active)
+            {
+                selectedAuraColor = new Color(color.r, color.g, color.b, 1f);
+                if (turnAuraRoot != null)
+                    turnAuraRoot.SetActive(false);
+                selectionOutline.enabled = true;
+                selectionOutline.effectColor = selectedAuraColor;
+                if (liftShadow != null)
+                    liftShadow.enabled = true;
+                SetSelectedAura(true);
+                return;
+            }
+
+            RestoreSelectionVisuals();
+            if (turnAuraRoot != null)
+                turnAuraRoot.SetActive(restoreTurnAura && turnAuraActive);
+        }
+
+        internal void PlaySwipeActionCallout(string label, Color color)
+        {
+            PlayActionCallout(label, color);
+        }
+
+        internal RectTransform CreateSwipePointerGlow(Color color)
+        {
+            Canvas canvas = GetComponentInParent<Canvas>()?.rootCanvas;
+            if (canvas == null)
+                return null;
+
+            var glowObject = new GameObject(
+                "Swipe Action Pointer Glow",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image),
+                typeof(CanvasGroup));
+            glowObject.transform.SetParent(canvas.transform, false);
+            glowObject.transform.SetAsLastSibling();
+
+            RectTransform glowRect = (RectTransform)glowObject.transform;
+            glowRect.anchorMin = new Vector2(0.5f, 0.5f);
+            glowRect.anchorMax = new Vector2(0.5f, 0.5f);
+            glowRect.pivot = new Vector2(0.5f, 0.5f);
+            glowRect.sizeDelta = new Vector2(96f, 96f);
+
+            Image glowImage = glowObject.GetComponent<Image>();
+            glowImage.sprite = GetAuraSprite();
+            glowImage.color = new Color(color.r, color.g, color.b, 0.72f);
+            glowImage.preserveAspect = true;
+            glowImage.raycastTarget = false;
+
+            CanvasGroup group = glowObject.GetComponent<CanvasGroup>();
+            group.interactable = false;
+            group.blocksRaycasts = false;
+            group.ignoreParentGroups = true;
+            return glowRect;
         }
 
         public void PlayAttackActionCallout()
@@ -5899,6 +6485,9 @@ namespace AccardND.Presentation
             {
                 yield return new WaitForSecondsRealtime(0.32f);
 
+				if (cardHeroClass == HeroClass.Rogue)
+					PlayAbilityActionCallout();
+
                 diceCaption.text = NormalizeDiceCaption(caption);
                 float rerollDuration = Mathf.Max(0.45f, rollDuration * 0.66f);
 
@@ -6154,6 +6743,13 @@ namespace AccardND.Presentation
 
             BuildDiceRootAnchorsNearCard(rootCanvas, out Vector2 minimum, out Vector2 maximum);
             SetAnchors(diceRootRect, minimum, maximum);
+            if (IsBackdropBossPresentation)
+            {
+                diceRootRect.anchorMin = new Vector2(0.26f, 0.62f);
+                diceRootRect.anchorMax = new Vector2(0.74f, 0.96f);
+                diceRootRect.offsetMin = new Vector2(0f, -408f);
+                diceRootRect.offsetMax = new Vector2(0f, -408f);
+            }
             ConfigureScreenDiceBounceArea(rootCanvas, diceRootOnLowerScreenHalf);
             diceRootDetachedToScreen = true;
         }
@@ -6196,6 +6792,15 @@ namespace AccardND.Presentation
             out Vector2 minimum,
             out Vector2 maximum)
         {
+            if (IsBackdropBossPresentation)
+            {
+                diceRootOnLowerScreenHalf = false;
+                screenDiceCardCenterX = 0.5f;
+                minimum = new Vector2(0.26f, 0.62f);
+                maximum = new Vector2(0.74f, 0.96f);
+                return;
+            }
+
             Camera camera = rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : rootCanvas.worldCamera;
             Vector3[] corners = new Vector3[4];
             rectTransform.GetWorldCorners(corners);
@@ -6575,9 +7180,11 @@ namespace AccardND.Presentation
 
             if (definition != null && definition.Id == "boss-bragus")
             {
-                Sprite bragusToken = LoadPreviewSprite("BattlePreviews/boss_bragus_token");
-                if (bragusToken != null)
-                    return bragusToken;
+                // La nuova illustrazione e' verticale e contiene l'arena sotto al boss.
+                // In battaglia mostriamo la porzione alta come gigantografia, senza token.
+                Sprite bragusBackdrop = CreateBragusBackdropSprite(definition.Artwork);
+                if (bragusBackdrop != null)
+                    return bragusBackdrop;
             }
 
             if (definition != null && definition.Id == "boss-palatir")
@@ -6836,6 +7443,113 @@ namespace AccardND.Presentation
             return runtimeAuraSprite;
         }
 
+        private static Sprite GetBragusContourAuraSprite()
+        {
+            if (bragusContourAuraSprite != null)
+                return bragusContourAuraSprite;
+
+            const int size = 192;
+            const int glowRadius = 7;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Bragus Contour Aura",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            Color32[] pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float nx = x / (float)(size - 1);
+                    float ny = y / (float)(size - 1);
+                    float edgeDistance = DistanceToBragusAuraContour(new Vector2(nx, ny)) * size;
+                    float glow = edgeDistance <= glowRadius
+                        ? Mathf.Pow(1f - edgeDistance / glowRadius, 1.35f)
+                        : 0f;
+                    pixels[y * size + x] = new Color32(255, 255, 255,
+                        (byte)Mathf.RoundToInt(255f * glow));
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            bragusContourAuraSprite = Sprite.Create(
+                texture,
+                new Rect(0f, 0f, size, size),
+                new Vector2(0.5f, 0.5f),
+                100f);
+            bragusContourAuraSprite.name = "Bragus Contour Aura";
+            bragusContourAuraSprite.hideFlags = HideFlags.HideAndDontSave;
+            return bragusContourAuraSprite;
+        }
+
+        private static Sprite GetTrentorContourAuraSprite()
+        {
+            if (trentorContourAuraSprite != null)
+                return trentorContourAuraSprite;
+
+            const int size = 192;
+            const int glowRadius = 7;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Trentor Contour Aura",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            Color32[] pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float nx = x / (float)(size - 1);
+                    float ny = y / (float)(size - 1);
+                    float edgeDistance = DistanceToAuraContour(
+                        new Vector2(nx, ny), TrentorAuraContour) * size;
+                    float glow = edgeDistance <= glowRadius
+                        ? Mathf.Pow(1f - edgeDistance / glowRadius, 1.35f)
+                        : 0f;
+                    pixels[y * size + x] = new Color32(
+                        255, 255, 255, (byte)Mathf.RoundToInt(255f * glow));
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            trentorContourAuraSprite = Sprite.Create(
+                texture,
+                new Rect(0f, 0f, size, size),
+                new Vector2(0.5f, 0.5f),
+                100f);
+            trentorContourAuraSprite.name = "Trentor Contour Aura";
+            trentorContourAuraSprite.hideFlags = HideFlags.HideAndDontSave;
+            return trentorContourAuraSprite;
+        }
+
+        private static float DistanceToBragusAuraContour(Vector2 point)
+        {
+            return DistanceToAuraContour(point, BragusAuraContour);
+        }
+
+        private static float DistanceToAuraContour(Vector2 point, Vector2[] contour)
+        {
+            float minimum = float.MaxValue;
+            for (int index = 0; index < contour.Length; index++)
+            {
+                Vector2 start = contour[index];
+                Vector2 end = contour[(index + 1) % contour.Length];
+                Vector2 segment = end - start;
+                float lengthSquared = segment.sqrMagnitude;
+                float progress = lengthSquared > 0f
+                    ? Mathf.Clamp01(Vector2.Dot(point - start, segment) / lengthSquared)
+                    : 0f;
+                minimum = Mathf.Min(minimum, Vector2.Distance(point, start + segment * progress));
+            }
+            return minimum;
+        }
+
         private static Sprite GetSparkleSprite()
         {
             if (runtimeSparkleSprite != null)
@@ -6958,6 +7672,31 @@ namespace AccardND.Presentation
             shadow.useGraphicAlpha = true;
         }
 
+        private static Sprite CreateBragusBackdropSprite(Sprite source)
+        {
+            if (source == null)
+                return null;
+
+            string cacheKey = $"bragus-backdrop:{source.GetInstanceID()}";
+            if (croppedArtworkSprites.TryGetValue(cacheKey, out Sprite cached) && cached != null)
+                return cached;
+
+            Rect rect = source.textureRect;
+            float cropHeight = rect.height * 0.57f;
+            Rect crop = new Rect(rect.x, rect.y + rect.height - cropHeight, rect.width, cropHeight);
+            Sprite result = Sprite.Create(
+                source.texture,
+                crop,
+                new Vector2(0.5f, 0.5f),
+                source.pixelsPerUnit,
+                0u,
+                SpriteMeshType.FullRect,
+                Vector4.zero);
+            result.name = source.name + " Bragus Backdrop";
+            croppedArtworkSprites[cacheKey] = result;
+            return result;
+        }
+
         private static Image CreateImage(string name, Transform parent, Color color)
         {
             var gameObject = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -7004,5 +7743,337 @@ namespace AccardND.Presentation
         {
             SetAnchors(rect, Vector2.zero, Vector2.one);
         }
+
+    }
+
+    internal sealed class SwipeActionSelector : MonoBehaviour, IPointerEnterHandler
+    {
+            private static SwipeActionSelector activeSelector;
+            private static int activePointerId = int.MinValue;
+            private static RectTransform pointerGlow;
+            private static Vector2 lastPointerPosition;
+            private static Button lastSwipeButton;
+            private static int lastSwipeCompletionFrame = -1;
+            private static int pointerMissingFrames;
+
+            private PrototypeCardView owner;
+            private UnityAction action;
+            private string actionLabel;
+            private Color previewColor;
+            private bool forwardReleaseToCard = true;
+
+            internal void Configure(
+                PrototypeCardView cardOwner,
+                UnityAction selectedAction,
+                string label,
+                Color color,
+                bool forwardReleaseToCard = true)
+            {
+                owner = cardOwner;
+                action = selectedAction;
+                actionLabel = label;
+                previewColor = color;
+                this.forwardReleaseToCard = forwardReleaseToCard;
+            }
+
+            public void OnPointerEnter(PointerEventData eventData)
+            {
+                Button button = GetComponent<Button>();
+                if (action == null || button == null || !button.interactable || !IsSwipeInProgress(eventData))
+                    return;
+
+                Select(eventData.pointerId);
+            }
+
+            private void Update()
+            {
+                if (activeSelector != this)
+                    return;
+
+                Vector2 pointerPosition = CurrentPointerPosition(activePointerId);
+                UpdatePointerGlow(pointerPosition);
+                if (PointerWasReleased(activePointerId))
+                {
+                    CompleteSwipe(pointerPosition);
+                    return;
+                }
+
+                if (PointerIsPressed(activePointerId))
+                {
+                    pointerMissingFrames = 0;
+                    return;
+                }
+
+                pointerMissingFrames++;
+                if (pointerMissingFrames >= 2)
+                    CompleteSwipe(pointerPosition);
+            }
+
+            private void OnApplicationFocus(bool hasFocus)
+            {
+                if (!hasFocus && activeSelector == this)
+                    CancelSwipe();
+            }
+
+            private void OnDisable()
+            {
+                if (activeSelector == this)
+                    CancelSwipe();
+            }
+
+            private void Select(int pointerId)
+            {
+                if (activeSelector == this)
+                {
+                    activePointerId = pointerId;
+                    return;
+                }
+
+                if (activeSelector != null && activeSelector != this)
+                    activeSelector.owner?.SetSwipeActionPreview(false, default);
+
+                activeSelector = this;
+                activePointerId = pointerId;
+                pointerMissingFrames = 0;
+                if (Pointer.current != null)
+                    lastPointerPosition = Pointer.current.position.ReadValue();
+                owner?.SetSwipeActionPreview(true, previewColor);
+                if (!string.IsNullOrWhiteSpace(actionLabel))
+                    owner?.PlaySwipeActionCallout(actionLabel, previewColor);
+                EnsurePointerGlow();
+                UpdatePointerGlow(CurrentPointerPosition(pointerId));
+                GetComponent<Button>()?.Select();
+            }
+
+            private void CompleteSwipe(Vector2 releasePosition)
+            {
+                PrototypeCardView target = RaycastCard(releasePosition);
+                PrototypeCardView actionOwner = owner;
+                UnityAction selectedAction = action;
+
+                lastSwipeButton = GetComponent<Button>();
+                lastSwipeCompletionFrame = Time.frameCount;
+                activeSelector = null;
+                activePointerId = int.MinValue;
+                pointerMissingFrames = 0;
+                DestroyPointerGlow();
+
+                if (selectedAction == null)
+                    return;
+
+                selectedAction.Invoke();
+
+                if (forwardReleaseToCard && target != null && actionOwner != null && actionOwner.isActiveAndEnabled)
+                {
+                    if (target.Button != null && target.Button.IsActive() && target.Button.interactable)
+                        target.Button.onClick.Invoke();
+                    else
+                        actionOwner.StartCoroutine(ClickTargetNextFrame(target));
+                }
+            }
+
+            internal static bool ShouldSuppressClick(Button button)
+            {
+                if (button == null)
+                    return false;
+
+                return (activeSelector != null && activeSelector.gameObject == button.gameObject)
+                    || (lastSwipeButton == button && Time.frameCount <= lastSwipeCompletionFrame + 1);
+            }
+
+            private static IEnumerator ClickTargetNextFrame(PrototypeCardView target)
+            {
+                yield return null;
+                if (target != null && target.Button != null && target.Button.IsActive() && target.Button.interactable)
+                    target.Button.onClick.Invoke();
+            }
+
+            private static PrototypeCardView RaycastCard(Vector2 screenPosition)
+            {
+                if (EventSystem.current == null)
+                    return null;
+
+                var pointer = new PointerEventData(EventSystem.current) { position = screenPosition };
+                var hits = new List<RaycastResult>();
+                EventSystem.current.RaycastAll(pointer, hits);
+                foreach (RaycastResult hit in hits)
+                {
+                    PrototypeCardView card = hit.gameObject.GetComponentInParent<PrototypeCardView>();
+                    if (card != null)
+                        return card;
+                }
+
+                // Prima che l'azione venga armata, le pedine nemiche non interattive
+                // possono avere blocksRaycasts disabilitato. Lo swipe deve comunque
+                // ricordare la pedina sotto al dito e cliccarla dopo UpdateInteractions.
+                PrototypeCardView[] cards = UnityEngine.Object.FindObjectsByType<PrototypeCardView>(FindObjectsSortMode.None);
+                PrototypeCardView bestMatch = null;
+                float bestArea = float.MaxValue;
+                foreach (PrototypeCardView card in cards)
+                {
+                    if (card == null || !card.isActiveAndEnabled)
+                        continue;
+
+                    Canvas canvas = card.GetComponentInParent<Canvas>();
+                    Camera eventCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+                        ? canvas.worldCamera
+                        : null;
+                    if (!RectTransformUtility.RectangleContainsScreenPoint(card.RectTransform, screenPosition, eventCamera))
+                        continue;
+
+                    Rect rect = card.RectTransform.rect;
+                    float area = Mathf.Abs(rect.width * rect.height);
+                    if (area < bestArea)
+                    {
+                        bestArea = area;
+                        bestMatch = card;
+                    }
+                }
+                if (bestMatch != null)
+                    return bestMatch;
+
+                return null;
+            }
+
+            private static bool IsSwipeInProgress(PointerEventData eventData)
+            {
+                if (eventData == null)
+                    return false;
+
+                float threshold = EventSystem.current != null ? EventSystem.current.pixelDragThreshold : 8f;
+                return eventData.dragging
+                    || Vector2.Distance(eventData.position, eventData.pressPosition) >= threshold;
+            }
+
+            private static bool PointerWasReleased(int pointerId)
+            {
+                Touchscreen touchscreen = Touchscreen.current;
+                if (touchscreen != null && touchscreen.primaryTouch.press.wasReleasedThisFrame)
+                    return true;
+
+                if (Mouse.current != null && Mouse.current.leftButton.wasReleasedThisFrame)
+                    return true;
+
+                if (pointerId < 0)
+                    return Mouse.current != null && Mouse.current.leftButton.wasReleasedThisFrame;
+
+                if (touchscreen == null)
+                    return false;
+
+                foreach (var touch in touchscreen.touches)
+                {
+                    if ((int)touch.touchId.ReadValue() == pointerId)
+                        return touch.press.wasReleasedThisFrame;
+                }
+                return false;
+            }
+
+            private static bool PointerIsPressed(int pointerId)
+            {
+                Touchscreen touchscreen = Touchscreen.current;
+                if (touchscreen != null && touchscreen.primaryTouch.press.isPressed)
+                    return true;
+
+                if (Mouse.current != null && Mouse.current.leftButton.isPressed)
+                    return true;
+
+                if (Pointer.current != null && Pointer.current.press.isPressed)
+                    return true;
+
+                if (pointerId >= 0 && touchscreen != null)
+                {
+                    foreach (var touch in touchscreen.touches)
+                    {
+                        if ((int)touch.touchId.ReadValue() == pointerId)
+                            return touch.press.isPressed;
+                    }
+                }
+                return false;
+            }
+
+            private static Vector2 CurrentPointerPosition(int pointerId)
+            {
+                Touchscreen touchscreen = Touchscreen.current;
+                if (touchscreen != null
+                    && (touchscreen.primaryTouch.press.isPressed
+                        || touchscreen.primaryTouch.press.wasReleasedThisFrame))
+                {
+                    lastPointerPosition = touchscreen.primaryTouch.position.ReadValue();
+                    return lastPointerPosition;
+                }
+
+                if (Mouse.current != null
+                    && (Mouse.current.leftButton.isPressed
+                        || Mouse.current.leftButton.wasReleasedThisFrame))
+                {
+                    lastPointerPosition = Mouse.current.position.ReadValue();
+                    return lastPointerPosition;
+                }
+
+                if (Pointer.current != null)
+                {
+                    lastPointerPosition = Pointer.current.position.ReadValue();
+                    return lastPointerPosition;
+                }
+
+                if (pointerId < 0)
+                    return lastPointerPosition;
+
+                if (touchscreen != null)
+                {
+                    foreach (var touch in touchscreen.touches)
+                    {
+                        if ((int)touch.touchId.ReadValue() == pointerId)
+                            return touch.position.ReadValue();
+                    }
+                }
+
+                return lastPointerPosition;
+            }
+
+            private static void CancelSwipe()
+            {
+                activeSelector?.owner?.SetSwipeActionPreview(false, default);
+                DestroyPointerGlow();
+                activeSelector = null;
+                activePointerId = int.MinValue;
+                pointerMissingFrames = 0;
+            }
+
+            private void EnsurePointerGlow()
+            {
+                if (pointerGlow == null)
+                    pointerGlow = owner?.CreateSwipePointerGlow(previewColor);
+
+                Image image = pointerGlow != null ? pointerGlow.GetComponent<Image>() : null;
+                if (image != null)
+                    image.color = new Color(previewColor.r, previewColor.g, previewColor.b, 0.72f);
+            }
+
+            private static void UpdatePointerGlow(Vector2 screenPosition)
+            {
+                if (pointerGlow == null)
+                    return;
+
+                RectTransform canvasRect = pointerGlow.parent as RectTransform;
+                Canvas canvas = pointerGlow.GetComponentInParent<Canvas>();
+                Camera eventCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay
+                    ? canvas.worldCamera
+                    : null;
+                if (canvasRect != null && RectTransformUtility.ScreenPointToWorldPointInRectangle(
+                        canvasRect, screenPosition, eventCamera, out Vector3 worldPosition))
+                {
+                    pointerGlow.position = worldPosition;
+                    float pulse = 0.92f + 0.12f * Mathf.Sin(Time.unscaledTime * 9f);
+                    pointerGlow.localScale = Vector3.one * pulse;
+                }
+            }
+
+            private static void DestroyPointerGlow()
+            {
+                if (pointerGlow != null)
+                    UnityEngine.Object.Destroy(pointerGlow.gameObject);
+                pointerGlow = null;
+            }
     }
 }

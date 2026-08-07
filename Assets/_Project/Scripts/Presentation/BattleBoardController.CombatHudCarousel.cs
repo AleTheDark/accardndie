@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
+using AccardND.Battlefield;
 using Object = UnityEngine.Object;
 
 namespace AccardND.Presentation
@@ -104,11 +105,16 @@ public sealed partial class BattleBoardController
 			AnimateCombatExperienceFill(fill);
 		}
 
-		if (playerHud != null && (Object)(object)combatVigorImage != (Object)null)
+		if ((Object)(object)combatVigorImage != (Object)null)
 		{
-			combatVigorImage.sprite = playerHud.DiceImage.sprite;
-			combatVigorImage.color = playerHud.DiceImage.color;
-			combatVigorText.text = playerHud.DiceText.text;
+			int vigorSides = pvpPresentationActive && pvpState != null
+				? Mathf.Max(1, pvpState.VigorDieSides)
+				: EffectivePlayerHudVigorDieSides();
+			combatVigorImage.sprite = LoadHudDiceSprite(vigorSides, isPlayer: true);
+			combatVigorImage.color = Color.white;
+			combatVigorImage.enabled = (Object)(object)combatVigorImage.sprite != (Object)null;
+			if ((Object)(object)combatVigorText != (Object)null)
+				combatVigorText.text = $"D{vigorSides}";
 		}
 	}
 
@@ -177,8 +183,21 @@ public sealed partial class BattleBoardController
 		if (center != null)
 			ordered.Add(center);
 
+		// In PvP il turnOrder della campagna non viene popolato: il server resta
+		// autorevole e l'ordine visivo segue l'iniziativa ricevuta nello snapshot.
+		if (pvpPresentationActive && pvpState != null)
+		{
+			foreach (BattleCardState pawn in allPawns
+				.Where(card => !card.Eliminated)
+				.OrderBy(card => card.Initiative))
+			{
+				if (!ordered.Contains(pawn))
+					ordered.Add(pawn);
+			}
+		}
+
 		// Prima vengono le altre pedine vive seguendo l'ordine reale dei turni.
-		if (turnOrder.Count > 0)
+		if (!pvpPresentationActive && turnOrder.Count > 0)
 		{
 			int centerTurnIndex = turnOrder.IndexOf(center);
 			for (int offset = 1; offset <= turnOrder.Count; offset++)
@@ -248,6 +267,24 @@ public sealed partial class BattleBoardController
 
 	private BattleCardState ResolveCarouselCenter(IReadOnlyList<BattleCardState> alive)
 	{
+		if (pvpPresentationActive && pvpState != null)
+		{
+			BattleCardState activeLocalPawn = pvpState.ActivePlayer == pvpState.MyIndex
+				? FindPvpLocalCard(pvpState.ActiveSlot)
+				: null;
+			if (activeLocalPawn != null && !activeLocalPawn.Eliminated)
+				return activeLocalPawn;
+
+			// Durante il turno avversario conserva il centro corrente; in questo modo
+			// le pedine ruotano solo quando cambia davvero la pedina locale attiva.
+			if (carouselCenterCard != null
+				&& !carouselCenterCard.Eliminated
+				&& alive.Contains(carouselCenterCard))
+				return carouselCenterCard;
+
+			return alive.OrderBy(card => card.Initiative).First();
+		}
+
 		if (turnOrder.Count > 0)
 		{
 			for (int offset = 0; offset < turnOrder.Count; offset++)

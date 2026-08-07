@@ -53,6 +53,11 @@ Documento di lavoro per tenere sotto controllo gli scenari speciali, i boss asso
 - Boss: Draktharr
 - Malus: l'abilita del Necromante non funziona.
 - Indizio: "I morti qui non rispondono solo a te."
+- Da chiarire: il capitolo 3 della campagna chiama questo boss **Jurinashor** (id
+  `boss-jurinashor`), mentre qui e nella carta esistente si chiama Draktharr
+  (`boss-drakktharr`). O e' lo stesso boss rinominato - e allora basta rinominare la carta -
+  oppure sono due boss diversi e Jurinashor va disegnato da zero. Finche' non e' deciso, il
+  capitolo 3 resta segnato "in arrivo" e non e' giocabile ne' acquistabile.
 
 ### Illuminata
 
@@ -60,6 +65,10 @@ Documento di lavoro per tenere sotto controllo gli scenari speciali, i boss asso
 - Malus: da definire
 - Indizio: "Nessuna lama resta nascosta sotto questa luce."
 - Note: da definire.
+- Confermato il 2026-08-07: Seraphel e' il boss di Illuminata, Zakhar quello di Spettrale.
+  `ScenarioCatalogBuilder` diceva `zakhar` su lux ed e' stato corretto in `boss-seraphel`;
+  a Spettrale e' stato dato `boss-zakhar`. Nessuno dei due ha ancora carta ne' comportamento,
+  quindi rigenerando il catalogo gli scenari restano senza boss vero.
 
 ### Nebbia
 

@@ -266,6 +266,11 @@ namespace AccardND.Localization
             public const string RollDefenseNamed = "combat.roll.defense_named";
             public const string RollAttackNamed = "combat.roll.attack_named";
             public const string RogueRerollStatus = "combat.status.rogue_reroll";
+            public const string RollAttack = "combat.roll.attack";
+            public const string RollDefense = "combat.roll.defense";
+            public const string RollCpuAttack = "combat.roll.cpu_attack";
+            public const string RollYourDefense = "combat.roll.your_defense";
+            public const string DisadvantageAgainst = "combat.modifier.disadvantage_against";
         }
 
         public static class Options
@@ -276,6 +281,18 @@ namespace AccardND.Localization
             public const string Surrender = "options.surrender";
             public const string SurrenderTitle = "options.surrender.title";
             public const string SurrenderBody = "options.surrender.body";
+            public const string Title = "options.title";
+            public const string SectionAudio = "options.section.audio";
+            public const string SectionLanguage = "options.section.language";
+            public const string SectionGame = "options.section.game";
+            public const string SfxVolume = "options.audio.sfx";
+            public const string MusicVolume = "options.audio.music";
+            public const string LanguageLabel = "options.language.label";
+            public const string LanguageUnavailable = "options.language.unavailable";
+            public const string Log = "options.game.log";
+            public const string AuraCodex = "options.game.aura_codex";
+            public const string Privacy = "options.game.privacy";
+            public const string Logout = "options.logout";
         }
 
         public static class GameLog
@@ -296,14 +313,43 @@ namespace AccardND.Localization
             public const string AdUnavailable = "campaign.message.ad_unavailable";
             public const string AdWatchIncomplete = "campaign.message.ad_watch_incomplete";
             public const string AdMultiplierNotAppliedLog = "campaign.log.ad_multiplier_not_applied";
+            public const string TripleSavedToProfile = "campaign.message.triple_saved_to_profile";
             public const string DeckExhaustedBanner = "campaign.banner.deck_exhausted";
             public const string NotEnoughCards = "campaign.message.not_enough_cards";
             public const string ChapterCompleted = "campaign.chapter.completed";
             public const string ChapterUnlockFirst = "campaign.chapter.unlock_first";
             public const string ChapterUnlocked = "campaign.chapter.unlocked";
-            public const string ChapterHoneyCost = "campaign.chapter.honey_cost";
+            public const string ChapterHoneySanctuary = "campaign.chapter.honey_sanctuary";
+            public const string ChapterComingSoon = "campaign.chapter.coming_soon";
             public const string DefeatFormationBanner = "campaign.banner.defeat_formation";
             public const string DefeatRetreatBanner = "campaign.banner.defeat_retreat";
+            public const string RoomReward = "campaign.message.room_reward";
+            public const string AccountRewardSummary = "campaign.message.account_reward_summary";
+            public const string WatchAdToTriple = "campaign.message.watch_ad_to_triple";
+            public const string TripleQuestion = "campaign.reward.triple_question";
+            public const string TripleQuestionWithAd = "campaign.reward.triple_question_with_ad";
+            public const string RewardReady = "campaign.reward.ready";
+            public const string RewardPopupBody = "campaign.reward.popup_body";
+            public const string Triple = "campaign.action.triple";
+            public const string WatchAdExperience = "campaign.action.watch_ad_experience";
+        }
+
+        public static class Adventure
+        {
+            public const string ClassChoiceTitle = "adventure.class_choice.title";
+            public const string ClassChoiceBody = "adventure.class_choice.body";
+            public const string ClassChoiceFinal = "adventure.class_choice.final";
+            public const string ClassChoiceTestComplete = "adventure.class_choice.test_complete";
+            public const string ClassChoiceUnlocking = "adventure.class_choice.unlocking";
+            public const string ClassChoiceFailed = "adventure.class_choice.failed";
+            public const string ClassChoiceConnectionRequired = "adventure.class_choice.connection_required";
+            public const string ClassUnlockedLog = "adventure.class_choice.unlocked_log";
+            public const string ChapterClearQueuedLog = "adventure.log.chapter_clear_queued";
+            public const string ChapterClearNotRecordedLog = "adventure.log.chapter_clear_not_recorded";
+            public const string TutorialConnectionRequired = "adventure.message.tutorial_connection_required";
+            public const string ChapterLockedMessage = "adventure.message.chapter_locked";
+            public const string ChapterComingSoonMessage = "adventure.message.chapter_coming_soon";
+            public const string HardcoreConnectionRequired = "adventure.message.hardcore_connection_required";
         }
 
         public static class Merchant
@@ -316,6 +362,62 @@ namespace AccardND.Localization
             public const string BranchConfirmTitle = "merchant.branch_confirm.title";
             public const string BranchConfirmBody = "merchant.branch_confirm.body";
             public const string RecoverInsufficientExperience = "merchant.message.recover_insufficient_experience";
+            public const string GoldAvailable = "merchant.status.gold_available";
+            public const string InsufficientGold = "merchant.message.insufficient_gold";
+            public const string Sell = "merchant.action.sell";
+            public const string Recover = "merchant.action.recover";
+            public const string SelectCard = "merchant.action.select_card";
+            public const string SellForGold = "merchant.action.sell_for_gold";
+            public const string RecoverForGold = "merchant.action.recover_for_gold";
+            public const string GoldPrice = "merchant.price.gold";
+            public const string GoldCounter = "merchant.counter.gold";
+            public const string MysteryPurchasePrefix = "merchant.purchase.mystery_prefix";
+            public const string PurchasePrefix = "merchant.purchase.prefix";
+            public const string CardPurchaseLog = "merchant.log.card_purchase";
+            public const string CardPurchased = "merchant.message.card_purchased";
+            public const string ItemPurchaseLog = "merchant.log.item_purchase";
+            public const string ItemPurchased = "merchant.message.item_purchased";
+            public const string SoldLog = "merchant.log.sold";
+            public const string Sold = "merchant.message.sold";
+            public const string RecoverInsufficientGold = "merchant.message.recover_insufficient_gold";
+            public const string RecoveredLog = "merchant.log.recovered";
+            public const string Recovered = "merchant.message.recovered";
+        }
+
+        public static class Profile
+        {
+            public const string TabOverview = "profile.tab.overview";
+            public const string TabStatistics = "profile.tab.statistics";
+            public const string TabAchievements = "profile.tab.achievements";
+            public const string TabMessages = "profile.tab.messages";
+            public const string Loading = "profile.message.loading";
+            public const string NoMessages = "profile.message.none";
+            public const string ExpiresHours = "profile.reward.expires_hours";
+            public const string PendingRewardBody = "profile.reward.pending_body";
+            public const string Triple = "profile.reward.triple";
+            public const string PendingReward = "profile.reward.pending";
+            public const string Campaign = "profile.reward.campaign";
+            public const string CampaignEndRooms = "profile.reward.campaign_end_rooms";
+            public const string CampaignEnd = "profile.reward.campaign_end";
+            public const string Claiming = "profile.reward.claiming";
+            public const string LoadingAd = "profile.reward.loading_ad";
+            public const string ConnectionRequired = "profile.reward.connection_required";
+            public const string AdUnavailable = "profile.reward.ad_unavailable";
+            public const string AdIncomplete = "profile.reward.ad_incomplete";
+            public const string TripleApplied = "profile.reward.triple_applied";
+            public const string PendingLoadFailedLog = "profile.log.pending_load_failed";
+            public const string TripleNotAppliedLog = "profile.log.triple_not_applied";
+            public const string TripleRecoveredLog = "profile.log.triple_recovered";
+            public const string TripleRejectedLog = "profile.log.triple_rejected";
+        }
+
+        public static class Tavern
+        {
+            public const string Claiming = "tavern.reward.claiming";
+            public const string LoadingAd = "tavern.reward.loading_ad";
+            public const string AdUnavailable = "tavern.reward.ad_unavailable";
+            public const string AdIncomplete = "tavern.reward.ad_incomplete";
+            public const string ClaimNotUnlockedLog = "tavern.log.claim_not_unlocked";
         }
 
         public static class Sanctuary
@@ -324,6 +426,8 @@ namespace AccardND.Localization
             public const string AltarClasses = "sanctuary.altar.classes";
             public const string AltarTechniques = "sanctuary.altar.techniques";
             public const string AltarRelics = "sanctuary.altar.relics";
+            public const string AltarChapters = "sanctuary.altar.chapters";
+            public const string ChaptersStatus = "sanctuary.status.chapters";
             public const string Loading = "sanctuary.message.loading";
             public const string Reconnecting = "sanctuary.message.reconnecting";
             public const string Offline = "sanctuary.message.offline";
@@ -335,6 +439,7 @@ namespace AccardND.Localization
             public const string OfferItem = "sanctuary.offer.item";
             public const string OfferSlot = "sanctuary.offer.slot";
             public const string OfferTechnique = "sanctuary.offer.technique";
+            public const string OfferChapter = "sanctuary.offer.chapter";
             public const string OfferClass = "sanctuary.offer.class";
             public const string HoneyAvailable = "sanctuary.offer.honey_available";
             public const string HoneyInsufficientBody = "sanctuary.offer.honey_insufficient_body";
@@ -350,6 +455,7 @@ namespace AccardND.Localization
             public const string DiscoveryClasses = "sanctuary.discovery.classes";
             public const string DiscoveryTechniques = "sanctuary.discovery.techniques";
             public const string DiscoveryRelics = "sanctuary.discovery.relics";
+            public const string DiscoveryChapters = "sanctuary.discovery.chapters";
             public const string CatalogReceivedLog = "sanctuary.log.catalog_received";
             public const string NoConnectionLog = "sanctuary.log.no_connection";
             public const string CatalogFailedLog = "sanctuary.log.catalog_failed";

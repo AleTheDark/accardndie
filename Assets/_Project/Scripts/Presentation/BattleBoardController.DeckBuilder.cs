@@ -31,6 +31,7 @@ public sealed partial class BattleBoardController
 		deckBuilderPanel.SetActive(true);
 		SetAccountHubHudActive(true);
 		SetDeckBuilderAccountHeaderMode(true);
+		SetMerchantInventoryLauncherVisible(false);
 		HideDeckBuilderToast();
 		RefreshDeckBuilderView();
 		AppendLog($"COSTRUZIONE MAZZO - scegli campione, vice campione e completa {configuration.DeckBuilding.DeckSize} carte.");
@@ -479,6 +480,7 @@ public sealed partial class BattleBoardController
 			initialDeckBuilder = null;
 			ResetScenarioRuleState();
 			deckBuilderPanel.SetActive(false);
+			SetMerchantInventoryLauncherVisible(true);
 			DestroyPrototypeViews(deckBuilderCardViews);
 			((Component)campaignZoneRect).gameObject.SetActive(false);
 			SetAccountHubHudActive(false);
@@ -523,14 +525,19 @@ public sealed partial class BattleBoardController
 			progression.RoomsPerMasterLevel,
 			progression.BuildVigorDiceByLevel(startingVigorDieSides));
 
-		if (IsComposableGolemDebugSession)
+		bool bossDebugCombat = IsComposableGolemDebugSession
+			|| debugForceFirstRoomMedusa
+			|| debugForceFirstRoomTrentor
+			|| debugForceFirstRoomBragus
+			|| debugForceFirstRoomPalatir;
+		if (bossDebugCombat)
 		{
 			int debugLevel = Math.Min(MinibossGolemDebugPlayerLevel, progression.MaximumLevel);
 			progress.RestoreProgress(
 				debugLevel,
-				currentExperience: 0,
-				totalExperience: 0,
-				availableExperience: 0,
+				currentExperience: 60,
+				totalExperience: 60,
+				availableExperience: 60,
 				roomsCleared: 0);
 		}
 

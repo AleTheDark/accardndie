@@ -122,12 +122,17 @@ namespace AccardND.Editor
                 "loot" => new(id, "Ricompensa", RoomType.Loot, RoomDifficulty.Any, string.Empty),
                 "unexpected_opportunity" => new(id, "Imprevisto o Opportunità", RoomType.UnexpectedOpportunity, RoomDifficulty.Any, string.Empty),
                 "climbing" => new(id, "Rampicanti", RoomType.Boss, RoomDifficulty.Any, "trentor"),
+                "trentor" => new(id, "Bosco di Trentor", RoomType.Boss, RoomDifficulty.Any, "trentor"),
                 "toxic" => new(id, "Esalazioni Tossiche", RoomType.Boss, RoomDifficulty.Any, "kronn"),
                 "infested" => new(id, "Infestata", RoomType.Boss, RoomDifficulty.Any, "draktharr"),
-                "lux" => new(id, "Illuminata", RoomType.Boss, RoomDifficulty.Any, "zakhar"),
+                "lux" => new(id, "Illuminata", RoomType.Boss, RoomDifficulty.Any, "boss-seraphel"),
                 "cosmic" => new(id, "Cosmica", RoomType.Boss, RoomDifficulty.Any, "boss-palatir"),
                 "fog" => new(id, "Nebbia", RoomType.Boss, RoomDifficulty.Any, "boss-bragus"),
-                "ghost" => new(id, "Spettrale", RoomType.Boss, RoomDifficulty.Any, string.Empty),
+                "bragus" => new(id, "Tana di Bragus", RoomType.Boss, RoomDifficulty.Any, "boss-bragus"),
+                // Zakhar non ha ancora carta ne' comportamento: l'id qui registra a chi
+                // appartiene lo scenario, ma finche' la carta non esiste la stanza cade sul
+                // boss di ripiego.
+                "ghost" => new(id, "Spettrale", RoomType.Boss, RoomDifficulty.Any, "boss-zakhar"),
                 "mirror" => new(id, "Specchi", RoomType.Boss, RoomDifficulty.Any, "boss-medusa"),
                 "rainbow" => new(id, "Arcobaleno", RoomType.Boss, RoomDifficulty.Any, string.Empty),
                 _ => new(id, id.Replace('_', ' '), RoomType.Any, RoomDifficulty.Any, string.Empty)

@@ -18,46 +18,31 @@ public sealed class SinglePlayerProgressService
         "rogue"
     };
 
-    // Boss finale di ogni capitolo. Il client manda solo l'id del boss sconfitto: la mappa
-    // vive qui perche' il completamento capitolo e la concessione del capitolo successivo
-    // devono restare decisioni del server.
-    private static readonly Dictionary<string, string> ChapterByFinalBoss = new()
-    {
-        ["boss-bragus"] = "chapter-1",
-        ["trentor"] = "chapter-2",
-        ["boss-medusa"] = "chapter-3",
-        ["boss-palatir"] = "chapter-4"
-    };
-
-    // Capitolo che si sblocca completando quello precedente. Il capitolo 4 chiude la
-    // campagna, quindi non compare come chiave.
-    private static readonly Dictionary<string, string> NextChapter = new()
-    {
-        ["chapter-1"] = "chapter-2",
-        ["chapter-2"] = "chapter-3",
-        ["chapter-3"] = "chapter-4"
-    };
-
-    // Listino di capitoli e modalita. Classi e tecniche non stanno qui: costo e prove
-    // vivono nel SanctuaryCatalog, che e la sorgente unica per le voci del Santuario.
+    // Listino delle sole modalita. Capitoli, classi e tecniche non stanno qui: costo e
+    // prove vivono nel SanctuaryCatalog, che e la sorgente unica per le voci del Santuario.
     private static readonly Dictionary<(string Type, string Id), int> UnlockCosts = new()
     {
-        [("chapter", "chapter-1")] = 25,
-        [("chapter", "chapter-2")] = 75,
-        [("chapter", "chapter-3")] = 120,
-        [("chapter", "chapter-4")] = 180,
         [("mode", "hardcore")] = 50
     };
 
     // Il tutorial non paga piu' miele: le quest della taverna sono l'unico rubinetto.
     // Regala pero' il primo capitolo, altrimenti il giocatore appena uscito dal tutorial
     // resterebbe fermo un giorno intero prima di poter entrare in campagna.
-    private const string TutorialRewardChapterId = "chapter-1";
+    private const string TutorialRewardChapterId = ChapterCatalog.TutorialChapterId;
     private const int AdMultiplier = 3;
     private const int AccountAdMultiplier = 3;
     private const int AccountExperiencePerLevel = 100;
     private const int HoneyPerAccountLevel = 5;
     private const int DeathRewardExperienceCeiling = 5000;
+
+    // Per quanto un x3 mai riscosso resta in offerta nel profilo. Una finestra serve: senza,
+    // il giocatore che torna dopo mesi si trova una pila di video da guardare e il momento
+    // in cui la ricompensa e' stata guadagnata non significa piu' niente. Una settimana copre
+    // la disconnessione a fine run, che e' il caso per cui l'offerta esiste.
+    private const int PendingAdRewardWindowHours = 168;
+
+    // Quante offerte al massimo il profilo mostra in una volta: sono le piu' recenti.
+    private const int PendingAdRewardLimit = 20;
 
     public SinglePlayerProgressService(AccardDatabase database)
     {
@@ -336,15 +321,35 @@ public sealed class SinglePlayerProgressService
     }
 
     /// <summary>
-    /// Gli slot si comprano in ordine: offrire il quarto prima del terzo farebbe pagare di
-    /// piu' per lo stesso passo.
+    /// Cosa si puo' comprare adesso, a parita' di miele. Slot e capitoli si comprano in
+    /// ordine: il quarto slot prima del terzo farebbe pagare di piu' per lo stesso passo, e
+    /// un capitolo qualsiasi comprato subito renderebbe la campagna una lista invece di un
+    /// percorso.
     /// </summary>
     private static bool IsSanctuaryEntryOfferable(SinglePlayerProgressData progress, SanctuaryCatalog.Entry entry)
     {
+        if (entry.Type == SanctuaryCatalog.TypeChapter)
+        {
+            if (!ChapterCatalog.TryGetById(entry.Id, out ChapterCatalog.Chapter chapter))
+                return false;
+            string prerequisite = ChapterCatalog.PurchasePrerequisiteOf(chapter);
+            return prerequisite == null || IsAlreadyUnlocked(progress, "chapter", prerequisite);
+        }
+
         if (entry.Type != SanctuaryCatalog.TypeSlot || entry.Id != "bag-slot-4")
             return true;
         return IsAlreadyUnlocked(progress, "slot", "bag-slot-3");
     }
+
+    /// <summary>Perche' una voce a catalogo non e' acquistabile, detto al giocatore.</summary>
+    private static string UnavailableReason(SanctuaryCatalog.Entry entry) => entry.Type switch
+    {
+        SanctuaryCatalog.TypeClass => "Classe base: si sblocca completando il tutorial.",
+        SanctuaryCatalog.TypeChapter when entry.HoneyCost <= 0 =>
+            "Primo capitolo: si sblocca completando il tutorial.",
+        SanctuaryCatalog.TypeChapter => "Capitolo in arrivo: il suo boss non e' ancora pronto.",
+        _ => "Non ancora acquistabile."
+    };
 
     public (SinglePlayerProgressData Progress, string ErrorCode, string Error) PurchaseUnlock(
         AccountIdentity identity,
@@ -366,14 +371,11 @@ public sealed class SinglePlayerProgressService
         if (SanctuaryCatalog.TryGetEntry(type, id, out catalogEntry))
         {
             if (!catalogEntry.Available)
-            {
-                return (null, ErrorCodes.InvalidProgressionRequest, catalogEntry.Type == SanctuaryCatalog.TypeClass
-                    ? "Classe base: si sblocca completando il tutorial."
-                    : "Non ancora acquistabile.");
-            }
+                return (null, ErrorCodes.InvalidProgressionRequest, UnavailableReason(catalogEntry));
             cost = catalogEntry.HoneyCost;
         }
-        else if (type == "class" || type == "secondAbility" || type == "slot" || type == "item")
+        else if (type == "class" || type == "secondAbility" || type == "slot" ||
+                 type == "item" || type == "chapter")
         {
             return (null, ErrorCodes.InvalidProgressionRequest, "Voce non presente nel Santuario.");
         }
@@ -398,7 +400,10 @@ public sealed class SinglePlayerProgressService
 
         if (catalogEntry != null && !IsSanctuaryEntryOfferable(current, catalogEntry))
         {
-            return (null, ErrorCodes.InvalidProgressionRequest, "Sblocca prima lo slot precedente.");
+            return (null, ErrorCodes.InvalidProgressionRequest,
+                catalogEntry.Type == SanctuaryCatalog.TypeChapter
+                    ? "Sblocca prima il capitolo precedente."
+                    : "Sblocca prima lo slot precedente.");
         }
 
         // Le prove si valutano sullo stesso snapshot che il client ha visto: senza questo
@@ -442,8 +447,8 @@ public sealed class SinglePlayerProgressService
 
     /// <summary>
     /// Registra il completamento di un capitolo a partire dal boss finale sconfitto e concede
-    /// (senza costo) lo sblocco del capitolo successivo. Idempotente: ripetere la chiamata per
-    /// un capitolo gia' completato non cambia nulla.
+    /// (senza costo) la classe premio del capitolo e l'accesso a quelli successivi. Idempotente:
+    /// ripetere la chiamata per un capitolo gia' completato non cambia nulla.
     /// Nota: il combattimento single player e' client-side, quindi il server non puo' validare
     /// la vittoria; possiede pero' la mappa boss-capitolo e la concessione dello sblocco, che
     /// prima avvenivano solo nella cache locale del client e andavano perse alla sincronizzazione.
@@ -456,16 +461,24 @@ public sealed class SinglePlayerProgressService
         if (string.IsNullOrEmpty(bossId))
             return (null, ErrorCodes.InvalidProgressionRequest, "Boss non valido.");
 
-        if (!ChapterByFinalBoss.TryGetValue(bossId, out string chapterId))
+        if (!ChapterCatalog.TryGetByFinalBoss(bossId, out ChapterCatalog.Chapter chapter))
             return (null, ErrorCodes.InvalidProgressionRequest, "Boss non associato a un capitolo.");
+
+        string chapterId = chapter.Id;
 
         using SqliteConnection connection = database.Open();
         using SqliteTransaction transaction = connection.BeginTransaction();
         EnsureProgressRow(connection, transaction, identity.PlayerId);
 
         GrantUnlock(connection, transaction, identity.PlayerId, "chapterCleared", chapterId);
-        if (NextChapter.TryGetValue(chapterId, out string nextChapterId))
-            GrantUnlock(connection, transaction, identity.PlayerId, "chapter", nextChapterId);
+        foreach (string unlockedChapterId in ChapterCatalog.UnlocksAfterClearing(chapterId))
+            GrantUnlock(connection, transaction, identity.PlayerId, "chapter", unlockedChapterId);
+
+        // La classe premio del capitolo. Resta comprabile al Santuario col miele: chi la
+        // guadagna qui non paga, chi non arriva in fondo al capitolo puo' ancora prenderla
+        // dall'altare. Chi l'aveva gia' comprata non riceve niente e non perde niente.
+        if (!string.IsNullOrEmpty(chapter.RewardClassId))
+            GrantUnlock(connection, transaction, identity.PlayerId, "class", chapter.RewardClassId);
 
         // Il contatore del boss cresce a ogni vittoria, anche su un capitolo gia' completato:
         // i requisiti del Santuario chiedono piu' vittorie sullo stesso boss. E' l'unlock a
@@ -528,6 +541,42 @@ public sealed class SinglePlayerProgressService
     }
 
     /// <summary>
+    /// Apre una run di campagna nello storico. La riga nasce qui e viene chiusa dalla death
+    /// reward: le run che restano senza fine sono quelle abbandonate, ed erano invisibili
+    /// finche' l'unico momento in cui il server sentiva parlare di una run era la morte.
+    /// Idempotente sul runId del client: un rinvio non duplica la riga.
+    /// </summary>
+    public SinglePlayerRunStartAck RecordRunStart(
+        AccountIdentity identity,
+        SinglePlayerRunStartRequest request)
+    {
+        string runId = Normalize(request?.runId);
+        string startedAt = DateTime.UtcNow.ToString("O");
+
+        using SqliteConnection connection = database.Open();
+        using SqliteCommand insert = connection.CreateCommand();
+        // La riga si crea solo se quel runId non e' gia' noto: un secondo avvio con lo
+        // stesso id e' un rinvio, non una run nuova. Senza runId (client vecchio) la
+        // guardia non puo' funzionare e la riga si inserisce comunque.
+        insert.CommandText = @"
+            INSERT INTO campaign_runs
+                (player_id, client_run_ref, mode, chapter_id, stage_id, started_at)
+            SELECT $player, $ref, $mode, $chapter, $stage, $now
+            WHERE $ref IS NULL OR NOT EXISTS (
+                SELECT 1 FROM campaign_runs
+                WHERE player_id = $player AND client_run_ref = $ref)";
+        insert.Parameters.AddWithValue("$player", identity.PlayerId);
+        insert.Parameters.AddWithValue("$ref", NullIfEmpty(runId));
+        insert.Parameters.AddWithValue("$mode", NullIfEmpty(request?.mode));
+        insert.Parameters.AddWithValue("$chapter", NullIfEmpty(request?.chapterId));
+        insert.Parameters.AddWithValue("$stage", NullIfEmpty(request?.stageId));
+        insert.Parameters.AddWithValue("$now", startedAt);
+        insert.ExecuteNonQuery();
+
+        return new SinglePlayerRunStartAck { runId = runId, startedAt = startedAt };
+    }
+
+    /// <summary>
     /// Concede la ricompensa di fine run. La campagna assegna esclusivamente esperienza
     /// account, pari a un decimo dell'esperienza non spesa nella run.
     /// Idempotente per runId: piu chiamate con lo stesso runId non accreditano due volte.
@@ -567,6 +616,86 @@ public sealed class SinglePlayerProgressService
         SinglePlayerProgressData progress = ReadProgress(connection, identity.PlayerId, transaction);
         transaction.Commit();
         return (BuildReward(progress, claimId, baseHoney, baseAccountExperience, levelsGained), null, null);
+    }
+
+    /// <summary>
+    /// Le ricompense gia concesse su cui il moltiplicatore pubblicitario e ancora disponibile.
+    /// Esistono perche a fine run il x3 puo saltare per motivi che non dipendono dal giocatore
+    /// (rete caduta, annuncio non arrivato in tempo): la riga della reward resta a
+    /// moltiplicatore 1 e il profilo la ripropone finche la finestra non scade.
+    ///
+    /// La finestra vale solo qui, in vetrina: <see cref="ClaimAdMultiplier"/> non la
+    /// ricontrolla, perche una reward guadagnata resta del giocatore e un video partito a
+    /// cavallo della scadenza non deve finire nel vuoto.
+    ///
+    /// Solo le reward di campagna ('death'): le partite classificate creano anche loro un
+    /// claim moltiplicabile, ma passano da un'altra ad unit e da un'altra schermata, e
+    /// mostrarle qui vorrebbe dire pagarle sul placement sbagliato.
+    /// </summary>
+    public SinglePlayerPendingAdRewardsData GetPendingAdRewards(AccountIdentity identity)
+    {
+        DateTime now = DateTime.UtcNow;
+        string cutoff = now.AddHours(-PendingAdRewardWindowHours).ToString("O");
+
+        using SqliteConnection connection = database.Open();
+        using SqliteCommand query = connection.CreateCommand();
+        query.CommandText = @"
+            SELECT c.claim_id, c.reward_type, c.base_account_experience, c.created_at,
+                   r.chapter_id, r.rooms_cleared
+            FROM single_player_reward_claims c
+            LEFT JOIN campaign_runs r
+                ON r.player_id = c.player_id AND r.client_run_ref = c.source_ref
+            WHERE c.player_id = $player
+              AND c.reward_type = 'death'
+              AND c.multiplier = 1
+              AND c.ad_impression_id IS NULL
+              AND c.base_account_experience > 0
+              AND c.created_at >= $cutoff
+            ORDER BY c.created_at DESC
+            LIMIT $limit";
+        query.Parameters.AddWithValue("$player", identity.PlayerId);
+        query.Parameters.AddWithValue("$cutoff", cutoff);
+        query.Parameters.AddWithValue("$limit", PendingAdRewardLimit);
+
+        List<SinglePlayerPendingAdRewardData> rewards = new();
+        using SqliteDataReader reader = query.ExecuteReader();
+        while (reader.Read())
+        {
+            string createdAt = reader.GetString(3);
+            int baseAccountExperience = reader.GetInt32(2);
+            rewards.Add(new SinglePlayerPendingAdRewardData
+            {
+                claimId = reader.GetString(0),
+                rewardType = reader.GetString(1),
+                baseAccountExperience = baseAccountExperience,
+                extraAccountExperience = baseAccountExperience * (AccountAdMultiplier - 1),
+                chapterId = reader.IsDBNull(4) ? null : reader.GetString(4),
+                roomsCleared = reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
+                createdAt = createdAt,
+                hoursLeft = HoursLeft(createdAt, now)
+            });
+        }
+
+        return new SinglePlayerPendingAdRewardsData { rewards = rewards.ToArray() };
+    }
+
+    /// <summary>
+    /// Quanto manca alla scadenza dell'offerta, arrotondato all'ora in su: "0 ore" su
+    /// un'offerta ancora valida sarebbe una scadenza annunciata male. Una data illeggibile
+    /// vale come offerta appena nata: meglio un'ora in piu' che togliere il x3 per un
+    /// formato sbagliato.
+    /// </summary>
+    private static int HoursLeft(string createdAt, DateTime now)
+    {
+        if (!DateTime.TryParse(
+                createdAt,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind,
+                out DateTime created))
+            return PendingAdRewardWindowHours;
+
+        double left = PendingAdRewardWindowHours - (now - created.ToUniversalTime()).TotalHours;
+        return Math.Max(1, (int)Math.Ceiling(left));
     }
 
     /// <summary>
@@ -735,7 +864,10 @@ public sealed class SinglePlayerProgressService
     }
 
     /// <summary>
-    /// Registra la run di campagna conclusa (una riga per morte) per lo storico admin.
+    /// Chiude la run di campagna nello storico admin. Se l'avvio era stato registrato
+    /// (<see cref="RecordRunStart"/>) aggiorna quella riga, cosi' inizio e fine restano la
+    /// stessa run e la durata e' leggibile; altrimenti - client vecchio, oppure avvio perso
+    /// perche' offline - la riga nasce qui come prima, senza started_at.
     /// I valori arrivano dal sommario client e vengono normalizzati prima del salvataggio.
     /// </summary>
     private static void RecordCampaignRun(
@@ -745,6 +877,9 @@ public sealed class SinglePlayerProgressService
         SinglePlayerDeathRewardRequest request,
         int honeyReward)
     {
+        if (CloseOpenCampaignRun(connection, transaction, playerId, request, honeyReward))
+            return;
+
         using SqliteCommand insert = connection.CreateCommand();
         insert.Transaction = transaction;
         insert.CommandText = @"
@@ -767,6 +902,52 @@ public sealed class SinglePlayerProgressService
         insert.Parameters.AddWithValue("$honey", honeyReward);
         insert.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
         insert.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Chiude la riga aperta all'avvio della run. Vero se ne ha trovata una: la
+    /// corrispondenza e' il runId del client, e la condizione su <c>ended_at</c> evita che
+    /// una reward rigiocata riscriva una run gia' chiusa.
+    /// </summary>
+    private static bool CloseOpenCampaignRun(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string playerId,
+        SinglePlayerDeathRewardRequest request,
+        int honeyReward)
+    {
+        string runId = Normalize(request?.runId);
+        if (string.IsNullOrEmpty(runId))
+            return false;
+
+        using SqliteCommand update = connection.CreateCommand();
+        update.Transaction = transaction;
+        update.CommandText = @"
+            UPDATE campaign_runs
+            SET mode = COALESCE($mode, mode),
+                chapter_id = COALESCE($chapter, chapter_id),
+                stage_id = COALESCE($stage, stage_id),
+                rooms_cleared = $rooms,
+                enemies_defeated = $enemies,
+                bosses_defeated = $bosses,
+                minibosses_defeated = $minibosses,
+                defeated_boss_ids = $bossIds,
+                honey_reward = $honey,
+                ended_at = $now
+            WHERE player_id = $player AND client_run_ref = $ref AND ended_at IS NULL";
+        update.Parameters.AddWithValue("$player", playerId);
+        update.Parameters.AddWithValue("$ref", runId);
+        update.Parameters.AddWithValue("$mode", NullIfEmpty(request?.mode));
+        update.Parameters.AddWithValue("$chapter", NullIfEmpty(request?.chapterId));
+        update.Parameters.AddWithValue("$stage", NullIfEmpty(request?.stageId));
+        update.Parameters.AddWithValue("$rooms", Math.Max(0, request?.roomsCleared ?? 0));
+        update.Parameters.AddWithValue("$enemies", Math.Max(0, request?.enemiesDefeated ?? 0));
+        update.Parameters.AddWithValue("$bosses", Math.Max(0, request?.bossesDefeated ?? 0));
+        update.Parameters.AddWithValue("$minibosses", Math.Max(0, request?.minibossesDefeated ?? 0));
+        update.Parameters.AddWithValue("$bossIds", JoinBossIds(request?.defeatedBossIds));
+        update.Parameters.AddWithValue("$honey", honeyReward);
+        update.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
+        return update.ExecuteNonQuery() > 0;
     }
 
     private static void GrantHoney(

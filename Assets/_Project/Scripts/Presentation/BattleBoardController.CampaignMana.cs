@@ -333,6 +333,9 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
+		// Lo swipe/click dell'azione puo inoltrare il rilascio alla carta. Quando
+		// l'azione viene rifiutata, impedisce che lo stesso input apra l'ispezione.
+		suppressCardInspectionUntilFrame = Time.frameCount + 1;
 		card.View.PlayActionCallout("NO MANA", NoManaCalloutColor);
 		// Suono e scritta partono insieme: e' l'unico punto da cui passano tutti i
 		// rifiuti per mana, quindi non serve ripeterlo su ogni chiamante.

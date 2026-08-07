@@ -80,6 +80,23 @@ public sealed partial class BattleBoardController
 		title.verticalOverflow = VerticalWrapMode.Truncate;
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(title);
 		SetRect(title.rectTransform, new Vector2(0.14f, 0.9f), new Vector2(0.86f, 0.972f));
+		implementationArchiveGoldText = CreateText(
+			"Bag Gold Counter",
+			((Component)image).transform,
+			font,
+			34,
+			FontStyle.Bold,
+			TextAnchor.MiddleCenter);
+		implementationArchiveGoldText.color = new Color(1f, 0.82f, 0.28f, 1f);
+		implementationArchiveGoldText.raycastTarget = false;
+		implementationArchiveGoldText.resizeTextForBestFit = true;
+		implementationArchiveGoldText.resizeTextMinSize = 18;
+		implementationArchiveGoldText.resizeTextMaxSize = 34;
+		implementationArchiveGoldText.rectTransform.anchorMin = new Vector2(0.035f, 0.9f);
+		implementationArchiveGoldText.rectTransform.anchorMax = new Vector2(0.25f, 0.975f);
+		implementationArchiveGoldText.rectTransform.offsetMin = new Vector2(49f, 0f);
+		implementationArchiveGoldText.rectTransform.offsetMax = new Vector2(49f, 0f);
+		RefreshBagGoldCounter();
 		CreateImplementationZoneSection(((Component)image).transform, font, "CONSUMABILI", new Vector2(0.05f, 0.745f), new Vector2(0.95f, 0.88f), out implementationConsumablesRoot, out implementationConsumablesEmptyText, string.Empty);
 		CreateImplementationZoneSection(((Component)image).transform, font, "CARTE NEL MAZZO", new Vector2(0.05f, 0.505f), new Vector2(0.95f, 0.725f), out implementationDeckRoot, out implementationDeckEmptyText);
 		CreateImplementationZoneSection(((Component)image).transform, font, "CARTE IN COOLDOWN", new Vector2(0.05f, 0.285f), new Vector2(0.95f, 0.485f), out implementationCooldownRoot, out implementationCooldownEmptyText);
@@ -233,6 +250,7 @@ public sealed partial class BattleBoardController
 
 	private void RefreshImplementationArchive()
 	{
+		RefreshBagGoldCounter();
 		ClearImplementationArchiveCards();
 		ClearImplementationConsumables();
 		PopulateImplementationConsumables();
@@ -814,6 +832,7 @@ public sealed partial class BattleBoardController
 			ShowProfile();
 		});
 		modeSelectionProfileButton = button6;
+		CreateProfileHubNotificationBadge(button6, font);
 		Button button7 = CreateHubBannerButton("Hall Of Fame Hub", ((Component)image).transform, font, "UI/CampaignRestyle/campaign_cta_black", "CLASSIFICA");
 		((UnityEvent)button7.onClick).AddListener((UnityAction)delegate
 		{
@@ -1306,14 +1325,96 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
-		CreateAdventureChapterRow("tutorial", "Tutorial", "Primi Passi", 0, singlePlayerProgressService.TutorialCompleted, StartTutorialAdventureStage);
-		CreateAdventureChapterRow("chapter-1", "Capitolo 1 - La Nebbia di Bragus", "Scenario: Nebbia", 25, singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Chapter, "chapter-1"), () => TryOpenAdventureChapter("chapter-1", 25));
-		CreateAdventureChapterRow("chapter-2", "Capitolo 2 - I Rampicanti di Trentor", "Scenario: Rampicanti", 75, singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Chapter, "chapter-2"), () => TryOpenAdventureChapter("chapter-2", 75));
-		CreateAdventureChapterRow("chapter-3", "Capitolo 3 - Gli Specchi di Medusa", "Scenario: Specchi", 120, singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Chapter, "chapter-3"), () => TryOpenAdventureChapter("chapter-3", 120));
-		CreateAdventureChapterRow("chapter-4", "Capitolo 4 - La Cosmica di Palatir", "Scenario: Cosmica", 180, singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Chapter, "chapter-4"), () => TryOpenAdventureChapter("chapter-4", 180));
+		CreateAdventureTutorialRow();
+		foreach (AdventureChapter chapter in AdventureChapterCatalog.All)
+		{
+			string chapterId = chapter.Id;
+			CreateAdventureChapterRow(
+				chapter,
+				singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Chapter, chapterId),
+				() => TryOpenAdventureChapter(chapterId));
+		}
 	}
 
-	private void CreateAdventureChapterRow(string id, string title, string subtitle, int cost, bool unlocked, Action action)
+	/// <summary>
+	/// La riga del tutorial: e' sempre aperta ed e' la porta del primo capitolo, quindi non
+	/// passa dal catalogo dei capitoli.
+	/// </summary>
+	private void CreateAdventureTutorialRow()
+	{
+		bool done = singlePlayerProgressService.TutorialCompleted;
+		string status = done
+			? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterCompleted, "completato")
+			: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterUnlockFirst, "sblocca il primo capitolo");
+
+		CreateAdventureRow(
+			"tutorial",
+			"Tutorial",
+			"Primi Passi",
+			status,
+			available: true,
+			locked: false,
+			LoadSpriteResource("UI/tutorial_chapter"),
+			StartTutorialAdventureStage);
+	}
+
+	private void CreateAdventureChapterRow(AdventureChapter chapter, bool unlocked, Action action)
+	{
+		// Tre stati, non due: aperto, chiuso, e "in arrivo" per i capitoli gia' in campagna
+		// ma senza il loro boss. Mostrare un capitolo in arrivo come semplicemente chiuso
+		// manderebbe il giocatore al Santuario a cercare qualcosa che non e' in vendita.
+		bool available = unlocked && chapter.Playable;
+		string status;
+		if (!chapter.Playable)
+		{
+			status = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterComingSoon, "in arrivo");
+		}
+		else if (IsAdventureChapterCompleted(chapter.Id))
+		{
+			status = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterCompleted, "completato");
+		}
+		else if (unlocked)
+		{
+			status = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterUnlocked, "sbloccato");
+		}
+		else
+		{
+			// Un capitolo chiuso non si apre piu' da qui: si vince o si compra al Santuario.
+			// La riga deve dire dove, altrimenti resta un muro senza porta.
+			status = GameText.GetOrFallbackSilent(
+				GameTextKeys.Campaign.ChapterHoneySanctuary,
+				"al santuario: {0} miele",
+				chapter.HoneyCost);
+		}
+
+		// Il lucchetto solo su cio' che e' davvero chiuso. Un capitolo gia' in mano ma senza
+		// boss non ha uno sfondo da mostrare (lo scenario non e' collegato) e cade sul
+		// pannello di ripiego: il velo scuro e la scritta "in arrivo" bastano a raccontarlo,
+		// mentre un lucchetto direbbe al giocatore che deve ancora ottenerlo.
+		Sprite cover = unlocked
+			? AdventureChapterBackgroundSprite(chapter.Id)
+			: LoadSpriteResource("UI/locked_chapter");
+
+		CreateAdventureRow(
+			chapter.Id,
+			chapter.Title,
+			chapter.ScenarioLabel == null ? "???" : "Scenario: " + chapter.ScenarioLabel,
+			status,
+			available,
+			locked: !unlocked,
+			cover,
+			action);
+	}
+
+	private void CreateAdventureRow(
+		string id,
+		string title,
+		string subtitle,
+		string status,
+		bool available,
+		bool locked,
+		Sprite coverSprite,
+		Action action)
 	{
 		GameObject row = new GameObject("Adventure " + id, new Type[3]
 		{
@@ -1327,71 +1428,38 @@ public sealed partial class BattleBoardController
 		hitTarget.raycastTarget = true;
 		Button button = row.GetComponent<Button>();
 		button.targetGraphic = hitTarget;
-		button.interactable = unlocked || cost == 0 || singlePlayerProgressService.Honey >= cost;
+		// Cliccabile anche da chiuso: il tocco serve a spiegare come si apre. Un bottone
+		// spento non risponde e lascia il giocatore a indovinare.
+		button.interactable = true;
 		((UnityEvent)button.onClick).AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
 			action?.Invoke();
 		});
-		bool useLockedImage = !unlocked && cost > 0;
-		bool completed = id != "tutorial" && IsAdventureChapterCompleted(id);
-		Image cover = CreateImage("Cover", row.transform, AdventureChapterPlaceholderColor(id, unlocked || cost == 0));
+		Image cover = CreateImage("Cover", row.transform, AdventureChapterPlaceholderColor(id, available));
 		cover.raycastTarget = false;
-		if (!unlocked && cost > 0)
+		if ((Object)(object)coverSprite != (Object)null)
 		{
-			cover.sprite = LoadSpriteResource("UI/locked_chapter");
+			cover.sprite = coverSprite;
 			cover.color = Color.white;
 			cover.preserveAspect = false;
 		}
-		else if (id == "tutorial")
-		{
-			Sprite tutorialSprite = LoadSpriteResource("UI/tutorial_chapter");
-			if ((Object)(object)tutorialSprite != (Object)null)
-			{
-				cover.sprite = tutorialSprite;
-				cover.color = Color.white;
-				cover.preserveAspect = false;
-			}
-			else
-			{
-				StylePanel(cover);
-			}
-		}
 		else
 		{
-			Sprite scenarioBackground = AdventureChapterBackgroundSprite(id);
-			if ((Object)(object)scenarioBackground != (Object)null)
-			{
-				cover.sprite = scenarioBackground;
-				cover.color = Color.white;
-				cover.preserveAspect = false;
-			}
-			else
-			{
-				StylePanel(cover);
-			}
+			StylePanel(cover);
 		}
 		GridLayoutGroup chapterGrid = ((Component)adventureChapterListRoot).GetComponent<GridLayoutGroup>();
 		float captionRatio = (Object)(object)chapterGrid != (Object)null && chapterGrid.cellSize.y > 0f
 			? Mathf.Clamp01((chapterGrid.cellSize.y - chapterGrid.cellSize.x) / chapterGrid.cellSize.y)
 			: 0.27f;
 		SetRect(cover.rectTransform, new Vector2(0f, captionRatio), new Vector2(1f, 1f));
-		Image veil = CreateImage("Lock Veil", ((Component)cover).transform, useLockedImage ? new Color(0f, 0f, 0f, 0.12f) : (button.interactable ? new Color(0f, 0f, 0f, 0f) : new Color(0f, 0f, 0f, 0.48f)));
+		// L'immagine del lucchetto e' gia' scura di suo: velarla ancora la renderebbe illeggibile.
+		// Il velo pieno serve invece ai capitoli aperti ma non ancora giocabili.
+		Image veil = CreateImage("Lock Veil", ((Component)cover).transform, locked
+			? new Color(0f, 0f, 0f, 0.12f)
+			: (available ? new Color(0f, 0f, 0f, 0f) : new Color(0f, 0f, 0f, 0.48f)));
 		veil.raycastTarget = false;
 		Stretch(veil.rectTransform);
-		string completedLabel = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterCompleted, "completato");
-		string status = cost == 0
-			? (singlePlayerProgressService.TutorialCompleted
-				? completedLabel
-				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterUnlockFirst, "sblocca il primo capitolo"))
-			: (completed
-				? completedLabel
-				: (unlocked
-					? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterUnlocked, "sbloccato")
-					: GameText.GetOrFallbackSilent(
-						GameTextKeys.Campaign.ChapterHoneyCost,
-						"costo {0} miele",
-						cost)));
 		Text coverText = CreateText("Cover Status", ((Component)cover).transform, AccardND.Battlefield.MmoUiTheme.BodyFont, 20, (FontStyle)1, (TextAnchor)7);
 		coverText.raycastTarget = false;
 		coverText.text = subtitle.ToUpperInvariant() + "\n" + status.ToUpperInvariant();
@@ -1408,7 +1476,7 @@ public sealed partial class BattleBoardController
 		Text titleText = CreateText("Title", row.transform, AccardND.Battlefield.MmoUiTheme.BodyFont, 17, (FontStyle)1, (TextAnchor)1);
 		titleText.raycastTarget = false;
 		titleText.text = title.ToUpperInvariant();
-		titleText.color = button.interactable ? new Color(0.95f, 0.79f, 0.34f) : new Color(0.56f, 0.62f, 0.66f);
+		titleText.color = available ? new Color(0.95f, 0.79f, 0.34f) : new Color(0.56f, 0.62f, 0.66f);
 		titleText.horizontalOverflow = HorizontalWrapMode.Wrap;
 		titleText.verticalOverflow = VerticalWrapMode.Truncate;
 		titleText.resizeTextForBestFit = true;
@@ -1447,15 +1515,22 @@ public sealed partial class BattleBoardController
 			&& singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.ChapterCleared, chapterId);
 	}
 
+	/// <summary>
+	/// Tinta di riserva quando lo sfondo dello scenario non c'e': serve solo a non mostrare
+	/// un riquadro nero, quindi basta che i capitoli vicini non si somiglino.
+	/// </summary>
 	private static Color AdventureChapterPlaceholderColor(string id, bool available)
 	{
 		Color color = id switch
 		{
 			"tutorial" => new Color(0.13f, 0.36f, 0.42f, 1f),
-			"chapter-1" => new Color(0.45f, 0.25f, 0.08f, 1f),
-			"chapter-2" => new Color(0.47f, 0.33f, 0.1f, 1f),
-			"chapter-3" => new Color(0.24f, 0.19f, 0.42f, 1f),
-			"chapter-4" => new Color(0.35f, 0.11f, 0.19f, 1f),
+			"chapter-1" => new Color(0.47f, 0.33f, 0.1f, 1f),
+			"chapter-2" => new Color(0.45f, 0.25f, 0.08f, 1f),
+			"chapter-3" => new Color(0.16f, 0.33f, 0.18f, 1f),
+			"chapter-4" => new Color(0.5f, 0.42f, 0.14f, 1f),
+			"chapter-5" => new Color(0.2f, 0.22f, 0.26f, 1f),
+			"chapter-6" => new Color(0.24f, 0.19f, 0.42f, 1f),
+			"chapter-7" => new Color(0.35f, 0.11f, 0.19f, 1f),
 			_ => new Color(0.08f, 0.14f, 0.18f, 1f)
 		};
 		return available ? color : Color.Lerp(color, new Color(0.02f, 0.025f, 0.03f, 1f), 0.58f);
@@ -1577,6 +1652,7 @@ public sealed partial class BattleBoardController
 		accountHoneyPanelImage.sprite = LoadHoneyPotCurrencySprite();
 		accountHoneyPanelImage.preserveAspect = true;
 		accountHoneyPanelImage.raycastTarget = false;
+		AddHubGraphicOutline(accountHoneyPanelImage);
 		Canvas honeyCanvas = ((Component)accountHoneyPanelImage).gameObject.AddComponent<Canvas>();
 		honeyCanvas.overrideSorting = true;
 		honeyCanvas.sortingOrder = 911;
@@ -1685,6 +1761,7 @@ public sealed partial class BattleBoardController
 		accountHeaderHubButton = CreateImageButton(
 			"Account Header Hub Button", ((Component)accountBannerImage).transform,
 			font, hubButtonSprite, string.Empty);
+		AddHubButtonOutline(accountHeaderHubButton);
 		((UnityEvent)accountHeaderHubButton.onClick).AddListener((UnityAction)delegate
 		{
 			if (IsAccountHubVisible())
@@ -1703,11 +1780,37 @@ public sealed partial class BattleBoardController
 		accountHeaderSettingsButton = CreateImageButton(
 			"Account Header Settings Button", ((Component)accountBannerImage).transform,
 			font, accountHeaderSettingsSprite, string.Empty);
+		AddHubButtonOutline(accountHeaderSettingsButton);
 		((UnityEvent)accountHeaderSettingsButton.onClick).AddListener((UnityAction)delegate
 		{
 			PlayGenericButtonClickSfx();
 			ToggleOptionsPanel();
 		});
+	}
+
+	private static void AddHubButtonOutline(Button button)
+	{
+		if ((Object)(object)button == (Object)null)
+			return;
+
+		AddHubGraphicOutline(button.targetGraphic);
+	}
+
+	private static void AddHubGraphicOutline(Graphic graphic)
+	{
+		if ((Object)(object)graphic == (Object)null)
+			return;
+
+		GameObject graphicObject = ((Component)graphic).gameObject;
+		Outline outline = graphicObject.AddComponent<Outline>();
+		outline.effectColor = new Color(0f, 0f, 0f, 0.95f);
+		outline.effectDistance = new Vector2(2.5f, -2.5f);
+		outline.useGraphicAlpha = true;
+
+		Shadow shadow = graphicObject.AddComponent<Shadow>();
+		shadow.effectColor = new Color(0f, 0f, 0f, 0.78f);
+		shadow.effectDistance = new Vector2(4f, -4f);
+		shadow.useGraphicAlpha = true;
 	}
 
 	private void RefreshAccountBannerLayout(bool landscape)
@@ -1765,7 +1868,7 @@ public sealed partial class BattleBoardController
 		rect.localScale = Vector3.one;
 		rect.localRotation = Quaternion.identity;
 		rect.anchoredPosition = new Vector2(-232.7f, -196.6f);
-		rect.sizeDelta = new Vector2(120f, 120f);
+		rect.sizeDelta = new Vector2(104f, 104f);
 		((Component)accountHoneyPanelImage).transform.SetAsLastSibling();
 		if ((Object)(object)accountHoneyAmountText != (Object)null)
 		{
@@ -1970,6 +2073,7 @@ public sealed partial class BattleBoardController
 		colors.colorMultiplier = 1f;
 		button.colors = colors;
 		AccardND.Battlefield.MmoUiTheme.AddMotion(button);
+		AddHubButtonOutline(button);
 
 		Font labelFont = AccardND.Battlefield.MmoUiTheme.LoreFont;
 		if ((Object)(object)labelFont == (Object)null)
@@ -1994,6 +2098,11 @@ public sealed partial class BattleBoardController
 
 	private static string GetCurrentHubBackgroundResource()
 	{
+		return IsCurrentHubNight() ?"UI/Hub/bg_dark_hub" : "UI/Hub/bg_light_hub";
+	}
+
+	private static bool IsCurrentHubNight()
+	{
 		DateTime now = DateTime.Now;
 		int hour = now.Hour;
 		bool night = hour >= 19 || hour <= 7;
@@ -2001,7 +2110,7 @@ public sealed partial class BattleBoardController
 		{
 			night = false;
 		}
-		return night ?"UI/Hub/bg_dark_hub" : "UI/Hub/bg_light_hub";
+		return night;
 	}
 
 	private void StartTutorial()
@@ -2259,6 +2368,7 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)profilePanel != (Object)null)
 		{
 			profilePanel.SetActive(false);
+			CoolProfileAds();
 		}
 		if ((Object)(object)guidedTutorialPanel != (Object)null)
 		{
@@ -2279,9 +2389,11 @@ public sealed partial class BattleBoardController
 		SetModeSelectionButtonsActive(true);
 		SetModeSelectionButtonsInteractable(true);
 		SetAccountHubHudActive(true);
+		PlayCurrentHubMusic();
 		TryShowLevelUpRewardPopup();
 		RefreshModeSelectionLayout();
 		_ = RefreshTavernNotificationBadgeAsync();
+		_ = LoadPendingAdRewardsAsync();
 		inputLocked = true;
 	}
 
@@ -2316,7 +2428,9 @@ public sealed partial class BattleBoardController
 		}
 		SetModeSelectionButtonsActive(true);
 		SetAccountHubHudActive(true);
+		PlayCurrentHubMusic();
 		_ = RefreshTavernNotificationBadgeAsync();
+		_ = LoadPendingAdRewardsAsync();
 		if ((Object)(object)tutorialAdvanceButton != (Object)null)
 		{
 			((Component)tutorialAdvanceButton).gameObject.SetActive(false);
@@ -2328,6 +2442,10 @@ public sealed partial class BattleBoardController
 		if (debugMerchantScene)
 		{
 			StartMerchantDebugRun();
+		}
+		else if (debugClassChoiceScene)
+		{
+			StartClassChoiceDebug();
 		}
 		else if (debugLootRoomScene)
 		{
@@ -2738,6 +2856,10 @@ public sealed partial class BattleBoardController
 			await RefreshTavernFromServerAsync();
 		else if ((Object)(object)modeSelectionPanel != (Object)null && modeSelectionPanel.activeSelf)
 			await RefreshTavernNotificationBadgeAsync();
+		// La riconnessione e' il momento in cui i triplicatori saltati diventano riscuotibili:
+		// e' la caduta di rete a fine run che li ha lasciati in sospeso, ed e' qui che il
+		// giocatore deve vedere comparire la comunicazione.
+		await LoadPendingAdRewardsAsync();
 	}
 
 	/// <summary>Copia lo stato autoritativo del server nella cache locale letta dalla UI.</summary>
@@ -2773,6 +2895,53 @@ public sealed partial class BattleBoardController
 				|| singlePlayerProgressService.Honey >= HardcoreUnlockHoneyCost;
 		}
 		RefreshAccountBannerView();
+		ShowPendingClassChoiceIfAny();
+	}
+
+	private void CreateClassChoicePopup(Transform parent, Font font)
+	{
+		Image overlay = CreateImage("Class Choice Popup", parent, new Color(0f, 0f, 0f, 0.82f));
+		overlay.raycastTarget = true;
+		Stretch(overlay.rectTransform);
+		classChoicePopup = ((Component)overlay).gameObject;
+		Canvas canvas = classChoicePopup.AddComponent<Canvas>();
+		canvas.overrideSorting = true;
+		canvas.sortingOrder = 950;
+		classChoicePopup.AddComponent<GraphicRaycaster>();
+
+		Image dialog = CreateImage("Class Choice Dialog", ((Component)overlay).transform,
+			new Color(0.012f, 0.018f, 0.032f, 0.99f));
+		dialog.raycastTarget = true;
+		StylePanel(dialog);
+		SetRect(dialog.rectTransform, new Vector2(0.12f, 0.22f), new Vector2(0.88f, 0.78f));
+
+		Text title = CreateText("Class Choice Title", ((Component)dialog).transform,
+			AccardND.Battlefield.MmoUiTheme.LoreFont, 38, FontStyle.Normal, TextAnchor.MiddleCenter);
+		title.text = GameText.GetOrFallbackSilent(
+			GameTextKeys.Adventure.ClassChoiceTitle,
+			"SCEGLI UNA NUOVA CLASSE");
+		title.color = new Color(0.95f, 0.79f, 0.34f);
+		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(title);
+		SetRect(title.rectTransform, new Vector2(0.06f, 0.78f), new Vector2(0.94f, 0.94f));
+
+		Text body = CreateText("Class Choice Body", ((Component)dialog).transform, font, 23,
+			FontStyle.Normal, TextAnchor.MiddleCenter);
+		body.text = GameText.GetOrFallbackSilent(
+			GameTextKeys.Adventure.ClassChoiceBody,
+			"Hai completato il primo scenario. La classe scelta verra sbloccata permanentemente.");
+		body.color = new Color(0.86f, 0.92f, 0.96f);
+		body.horizontalOverflow = HorizontalWrapMode.Wrap;
+		SetRect(body.rectTransform, new Vector2(0.08f, 0.62f), new Vector2(0.92f, 0.78f));
+
+		classChoiceButtonsRoot = new GameObject("Class Choice Buttons", typeof(RectTransform)).GetComponent<RectTransform>();
+		classChoiceButtonsRoot.SetParent(((Component)dialog).transform, false);
+		SetRect(classChoiceButtonsRoot, new Vector2(0.06f, 0.25f), new Vector2(0.94f, 0.6f));
+
+		classChoiceStatusText = CreateText("Class Choice Status", ((Component)dialog).transform, font, 19,
+			FontStyle.Normal, TextAnchor.MiddleCenter);
+		classChoiceStatusText.color = new Color(0.95f, 0.79f, 0.34f);
+		SetRect(classChoiceStatusText.rectTransform, new Vector2(0.08f, 0.07f), new Vector2(0.92f, 0.22f));
+		classChoicePopup.SetActive(false);
 	}
 
 	private void StartAdventureMode()
@@ -2939,7 +3108,9 @@ public sealed partial class BattleBoardController
 			}
 
 			AppendLog("AVVENTURA - completamento tutorial non registrato: server non disponibile.");
-			SetMessage("Connessione al server necessaria per registrare il completamento del tutorial.");
+			SetMessage(GameText.GetOrFallbackSilent(
+				GameTextKeys.Adventure.TutorialConnectionRequired,
+				"Connessione al server necessaria per registrare il completamento del tutorial."));
 			RefreshAdventureChapterList();
 			return;
 		}
@@ -2948,42 +3119,38 @@ public sealed partial class BattleBoardController
 		AppendLog("AVVENTURA - tutorial selezionato: director guidato non ancora implementato.");
 	}
 
-	private async void TryOpenAdventureChapter(string chapterId, int cost)
+	/// <summary>
+	/// Tocco su un capitolo. Qui non si compra piu' niente: un capitolo si guadagna battendo
+	/// il boss di quello prima, oppure si compra al Santuario. Questa schermata si limita a
+	/// dire in che stato sta il capitolo e, se e' aperto, ad avviarlo.
+	/// </summary>
+	private void TryOpenAdventureChapter(string chapterId)
 	{
+		AdventureChapter chapter = AdventureChapterCatalog.Find(chapterId);
+		if (chapter == null)
+		{
+			return;
+		}
+
+		if (!chapter.Playable)
+		{
+			SetMessage(GameText.GetOrFallbackSilent(
+				GameTextKeys.Adventure.ChapterComingSoonMessage,
+				"{0} arrivera' presto: il suo boss non e' ancora pronto.",
+				chapter.Title));
+			return;
+		}
+
 		if (!singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Chapter, chapterId))
 		{
-			if (ServerProgressReady)
-			{
-				try
-				{
-					await serverProgress.PurchaseUnlockAsync(SinglePlayerUnlockType.Chapter, chapterId);
-					MirrorServerProgress();
-					SetMessage("Capitolo sbloccato.");
-					AppendLog($"AVVENTURA - {chapterId} sbloccato (server).");
-				}
-				catch (System.Exception exception)
-				{
-					SetMessage(exception.Message);
-					AppendLog($"AVVENTURA - acquisto {chapterId} rifiutato dal server: {exception.Message}");
-				}
-				RefreshAdventureChapterList();
-				return;
-			}
-
-			SetMessage("Connessione al server necessaria per sbloccare un capitolo.");
-			AppendLog($"AVVENTURA - acquisto {chapterId} non eseguito: server non disponibile.");
-			RefreshAdventureChapterList();
+			SetMessage(GameText.GetOrFallbackSilent(
+				GameTextKeys.Adventure.ChapterLockedMessage,
+				"Capitolo chiuso: batti il boss del capitolo precedente, oppure compralo al Santuario per {0} miele.",
+				chapter.HoneyCost));
 			return;
 		}
 
-		if (TryGetAdventureChapterConfig(chapterId, out _, out _, out _))
-		{
-			ShowAdventureChapterConfirmPopup(chapterId);
-			return;
-		}
-
-		SetMessage("Capitolo selezionato. Stage e scenario fisso saranno collegati nel prossimo step.");
-		AppendLog($"AVVENTURA - {chapterId} selezionato: stage config non ancora implementata.");
+		ShowAdventureChapterConfirmPopup(chapterId);
 	}
 
 	private void ConfirmStartAdventureChapter(string chapterId)
@@ -3015,52 +3182,35 @@ public sealed partial class BattleBoardController
 		StartCampaignBuilderMode();
 	}
 
+	/// <summary>
+	/// Scenario e boss del capitolo. Falso per i capitoli ancora senza boss: non c'e' niente
+	/// da caricare, e chiamarlo su quelli e' gia' un errore a monte.
+	/// </summary>
 	private static bool TryGetAdventureChapterConfig(
 		string chapterId,
 		out string scenarioId,
 		out string bossId,
 		out string scenarioLabel)
 	{
-		switch (chapterId)
+		AdventureChapter chapter = AdventureChapterCatalog.Find(chapterId);
+		if (chapter == null || !chapter.Playable)
 		{
-		case "chapter-1":
-			scenarioId = "fog";
-			bossId = BragusBossCardId;
-			scenarioLabel = "Nebbia";
-			return true;
-		case "chapter-2":
-			scenarioId = "climbing";
-			bossId = TrentorBossCardId;
-			scenarioLabel = "Rampicanti";
-			return true;
-		case "chapter-3":
-			scenarioId = "mirror";
-			bossId = MedusaBossCardId;
-			scenarioLabel = "Specchi";
-			return true;
-		case "chapter-4":
-			scenarioId = "cosmic";
-			bossId = PalatirBossCardId;
-			scenarioLabel = "Cosmica";
-			return true;
-		default:
 			scenarioId = null;
 			bossId = null;
 			scenarioLabel = null;
 			return false;
 		}
+
+		scenarioId = chapter.ScenarioId;
+		bossId = chapter.BossId;
+		scenarioLabel = chapter.ScenarioLabel;
+		return true;
 	}
 
 	private static string AdventureChapterDisplayName(string chapterId)
 	{
-		return chapterId switch
-		{
-			"chapter-1" => "Capitolo 1",
-			"chapter-2" => "Capitolo 2",
-			"chapter-3" => "Capitolo 3",
-			"chapter-4" => "Capitolo 4",
-			_ => "Capitolo"
-		};
+		AdventureChapter chapter = AdventureChapterCatalog.Find(chapterId);
+		return chapter == null ? "Capitolo" : "Capitolo " + chapter.Number;
 	}
 
 	private static (string title, string body) AdventureChapterConfirmCopy(string chapterId)
@@ -3077,26 +3227,8 @@ public sealed partial class BattleBoardController
 			$"Entrerai in {chapterName.ToLowerInvariant()}: lo scenario sara {scenarioLabel}. Alla conferma si apre la forgia mazzo per preparare la spedizione.");
 	}
 
-	private static string BossDisplayName(string bossId)
-	{
-		if (string.Equals(bossId, BragusBossCardId, StringComparison.OrdinalIgnoreCase))
-		{
-			return "Bragus";
-		}
-		if (string.Equals(bossId, TrentorBossCardId, StringComparison.OrdinalIgnoreCase))
-		{
-			return "Trentor";
-		}
-		if (string.Equals(bossId, MedusaBossCardId, StringComparison.OrdinalIgnoreCase))
-		{
-			return "Medusa";
-		}
-		if (string.Equals(bossId, PalatirBossCardId, StringComparison.OrdinalIgnoreCase))
-		{
-			return "Palatir";
-		}
-		return "Boss";
-	}
+	private static string BossDisplayName(string bossId) =>
+		AdventureChapterCatalog.BossDisplayName(bossId);
 
 	private async void StartHardcoreMode()
 	{
@@ -3120,7 +3252,9 @@ public sealed partial class BattleBoardController
 				return;
 			}
 
-			SetMessage("Connessione al server necessaria per sbloccare Hardcore.");
+			SetMessage(GameText.GetOrFallbackSilent(
+				GameTextKeys.Adventure.HardcoreConnectionRequired,
+				"Connessione al server necessaria per sbloccare Hardcore."));
 			AppendLog("SINGLE PLAYER - acquisto Hardcore non eseguito: server non disponibile.");
 			RefreshSinglePlayerProgressView();
 			return;
@@ -3131,6 +3265,9 @@ public sealed partial class BattleBoardController
 	private void StartCampaignBuilderMode()
 	{
 		campaignRunRewardId = System.Guid.NewGuid().ToString("N");
+		// L'avvio va annunciato adesso, non a fine run: le run abbandonate a meta' non
+		// arrivano mai alla reward, ed erano invisibili nelle statistiche.
+		_ = NotifyCampaignRunStarted(campaignRunRewardId);
 		pendingAdventureChapterClearTask = System.Threading.Tasks.Task.CompletedTask;
 		pendingCampaignRewardTask = System.Threading.Tasks.Task.CompletedTask;
 		pendingCampaignRewardClaimId = null;
@@ -3257,7 +3394,7 @@ public sealed partial class BattleBoardController
 		SetRect(text.rectTransform, new Vector2(0.08f, 0.18f), new Vector2(0.92f, 0.72f));
 		text.rectTransform.offsetMin = new Vector2(0f, -21f);
 		text.rectTransform.offsetMax = new Vector2(0f, -21f);
-		deckBuilderStatusText = CreateText("Budget", deckBuilderContentRoot, font, 50, (FontStyle)1, (TextAnchor)4);
+		deckBuilderStatusText = CreateText("Budget", deckBuilderContentRoot, font, 40, (FontStyle)1, (TextAnchor)4);
 		SetRect(deckBuilderStatusText.rectTransform, new Vector2(0.18f, 0.775f), new Vector2(0.82f, 0.84f));
 		deckBuilderCardsRoot = new GameObject("Deck Preview Grid", new Type[2]
 		{
@@ -3272,7 +3409,7 @@ public sealed partial class BattleBoardController
 		component.spacing = new Vector2(12f, 12f);
 		component.childAlignment = (TextAnchor)4;
 		component.cellSize = new Vector2(210f, 210f);
-		deckBuilderCardsText = CreateText("Empty Deck Hint", deckBuilderContentRoot, font, 50, (FontStyle)1, (TextAnchor)4);
+		deckBuilderCardsText = CreateText("Empty Deck Hint", deckBuilderContentRoot, font, 35, (FontStyle)1, (TextAnchor)4);
 		deckBuilderCardsText.color = new Color(0.88f, 0.92f, 0.96f);
 		SetRect(deckBuilderCardsText.rectTransform, new Vector2(0.24f, 0.55f), new Vector2(0.76f, 0.66f));
 		Button button = CreateImageButton("Buy Blind Random", deckBuilderContentRoot, font, LoadSpriteResource("UI/random_value_draw"), string.Empty);

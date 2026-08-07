@@ -113,5 +113,16 @@ namespace AccardND.GameCore.Pvp
                 result = Lower(result);
             return result;
         }
+
+        public static int StepsToMinimum(int dieSides)
+        {
+            int steps = 0;
+            while (dieSides > 3)
+            {
+                dieSides = Lower(dieSides);
+                steps++;
+            }
+            return steps;
+        }
     }
 }

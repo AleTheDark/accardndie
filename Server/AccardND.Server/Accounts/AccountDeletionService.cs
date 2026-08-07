@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using AccardND.Server.Data;
-using Microsoft.Data.Sqlite;
 
 namespace AccardND.Server.Accounts;
 
@@ -129,37 +128,18 @@ public sealed class AccountDeletionService
         return (true, null, deleted);
     }
 
-    private IReadOnlyList<DeletableAccount> FindAccounts(string email)
-    {
-        using SqliteConnection connection = database.Open();
-        using SqliteCommand command = connection.CreateCommand();
-        // L'email sta su external_identities perche' e' un dato del provider, non
-        // dell'account: e' la sola colonna che lega un login Google a un player_id.
-        command.CommandText = @"
-            SELECT DISTINCT identities.player_id,
-                   COALESCE(nicknames.nickname, account.username),
-                   account.created_at,
-                   account.last_login_at
-            FROM external_identities identities
-            JOIN accounts account ON account.player_id = identities.player_id
-            LEFT JOIN account_nicknames nicknames ON nicknames.player_id = identities.player_id
-            WHERE identities.email IS NOT NULL
-              AND lower(identities.email) = lower($email)";
-        command.Parameters.AddWithValue("$email", email);
-
-        var found = new List<DeletableAccount>();
-        using SqliteDataReader reader = command.ExecuteReader();
-        while (reader.Read())
-        {
-            found.Add(new DeletableAccount(
-                reader.GetString(0),
-                reader.IsDBNull(1) ? null : reader.GetString(1),
-                reader.IsDBNull(2) ? null : reader.GetString(2),
-                reader.IsDBNull(3) ? null : reader.GetString(3)));
-        }
-
-        return found;
-    }
+    /// <summary>
+    /// La ricerca vera sta in <see cref="LinkedAccounts"/>, condivisa con la pagina
+    /// delle statistiche: quale account appartenga a un'email verificata deve avere
+    /// una risposta sola. Qui resta solo il cambio di tipo, perche' "account che sto
+    /// per cancellare" e "account di cui sto per mostrare i numeri" sono due cose
+    /// diverse e non devono poter essere passate l'una per l'altra.
+    /// </summary>
+    private IReadOnlyList<DeletableAccount> FindAccounts(string email) =>
+        LinkedAccounts.FindByVerifiedEmail(database, email)
+            .Select(account => new DeletableAccount(
+                account.PlayerId, account.Nickname, account.CreatedAt, account.LastLoginAt))
+            .ToList();
 
     private void Prune()
     {

@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c97b479ac9ef46c4d966864af08b9aec, type: 3}
+  m_Name: bragus
+  m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.ScenarioDefinition
+  id: bragus
+  displayName: Tana di Bragus
+  background: {fileID: 21300000, guid: a9f5b43c87f14dbb9c6218dcb61e37a4, type: 3}
+  backgroundLandscape: {fileID: 0}
+  roomType: 2
+  difficulty: 0
+  bossId: boss-bragus

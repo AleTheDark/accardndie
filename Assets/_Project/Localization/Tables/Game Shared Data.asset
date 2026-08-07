@@ -767,10 +767,6 @@ MonoBehaviour:
     m_Key: card.miniboss-composable-golem.rules
     m_Metadata:
       m_Items: []
-  - m_Id: 1894395056130
-    m_Key: card.porcodio.name
-    m_Metadata:
-      m_Items: []
   - m_Id: 1894395056131
     m_Key: card.trentor.name
     m_Metadata:
@@ -2113,6 +2109,402 @@ MonoBehaviour:
       m_Items: []
   - m_Id: 380459435331587
     m_Key: rules.mana_cost.free
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534702518272
+    m_Key: combat.roll.attack
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489792
+    m_Key: combat.roll.defense
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489793
+    m_Key: combat.roll.cpu_attack
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489794
+    m_Key: combat.roll.your_defense
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489795
+    m_Key: combat.modifier.disadvantage_against
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489796
+    m_Key: campaign.message.triple_saved_to_profile
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489797
+    m_Key: campaign.message.room_reward
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489798
+    m_Key: campaign.message.account_reward_summary
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489799
+    m_Key: campaign.message.watch_ad_to_triple
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489800
+    m_Key: campaign.reward.triple_question
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489801
+    m_Key: campaign.reward.triple_question_with_ad
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489802
+    m_Key: campaign.reward.ready
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489803
+    m_Key: campaign.reward.popup_body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489804
+    m_Key: campaign.action.triple
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489805
+    m_Key: campaign.action.watch_ad_experience
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489806
+    m_Key: adventure.class_choice.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489807
+    m_Key: adventure.class_choice.body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489808
+    m_Key: adventure.class_choice.final
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489809
+    m_Key: adventure.class_choice.test_complete
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489810
+    m_Key: adventure.class_choice.unlocking
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489811
+    m_Key: adventure.class_choice.failed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489812
+    m_Key: adventure.class_choice.connection_required
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489813
+    m_Key: adventure.class_choice.unlocked_log
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489814
+    m_Key: adventure.log.chapter_clear_queued
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489815
+    m_Key: adventure.log.chapter_clear_not_recorded
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489816
+    m_Key: adventure.message.tutorial_connection_required
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489817
+    m_Key: adventure.message.chapter_connection_required
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489818
+    m_Key: adventure.message.hardcore_connection_required
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489819
+    m_Key: merchant.status.gold_available
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489820
+    m_Key: merchant.message.insufficient_gold
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489821
+    m_Key: merchant.action.sell
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489822
+    m_Key: merchant.action.recover
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489823
+    m_Key: merchant.action.select_card
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489824
+    m_Key: merchant.action.sell_for_gold
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489825
+    m_Key: merchant.action.recover_for_gold
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489826
+    m_Key: merchant.price.gold
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489827
+    m_Key: merchant.counter.gold
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489828
+    m_Key: merchant.purchase.mystery_prefix
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489829
+    m_Key: merchant.purchase.prefix
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489830
+    m_Key: merchant.log.card_purchase
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489831
+    m_Key: merchant.message.card_purchased
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489832
+    m_Key: merchant.log.item_purchase
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489833
+    m_Key: merchant.message.item_purchased
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489834
+    m_Key: merchant.log.sold
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489835
+    m_Key: merchant.message.sold
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489836
+    m_Key: merchant.message.recover_insufficient_gold
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489837
+    m_Key: merchant.log.recovered
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489838
+    m_Key: merchant.message.recovered
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489839
+    m_Key: profile.tab.overview
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489840
+    m_Key: profile.tab.statistics
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489841
+    m_Key: profile.tab.achievements
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489842
+    m_Key: profile.tab.messages
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489843
+    m_Key: profile.message.loading
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489844
+    m_Key: profile.message.none
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489845
+    m_Key: profile.reward.expires_hours
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489846
+    m_Key: profile.reward.pending_body
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489847
+    m_Key: profile.reward.triple
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489848
+    m_Key: profile.reward.pending
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489849
+    m_Key: profile.reward.campaign
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489850
+    m_Key: profile.reward.campaign_end_rooms
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489851
+    m_Key: profile.reward.campaign_end
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489852
+    m_Key: profile.reward.claiming
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489853
+    m_Key: profile.reward.loading_ad
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489854
+    m_Key: profile.reward.connection_required
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489855
+    m_Key: profile.reward.ad_unavailable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489856
+    m_Key: profile.reward.ad_incomplete
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489857
+    m_Key: profile.reward.triple_applied
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489858
+    m_Key: profile.log.pending_load_failed
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489859
+    m_Key: profile.log.triple_not_applied
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489860
+    m_Key: profile.log.triple_recovered
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489861
+    m_Key: profile.log.triple_rejected
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489862
+    m_Key: tavern.reward.claiming
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489863
+    m_Key: tavern.reward.loading_ad
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489864
+    m_Key: tavern.reward.ad_unavailable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489865
+    m_Key: tavern.reward.ad_incomplete
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489866
+    m_Key: tavern.log.claim_not_unlocked
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429364772864
+    m_Key: options.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132992
+    m_Key: options.section.audio
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132993
+    m_Key: options.section.language
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132994
+    m_Key: options.section.game
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132995
+    m_Key: options.audio.sfx
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132996
+    m_Key: options.audio.music
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132997
+    m_Key: options.language.label
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132998
+    m_Key: options.language.unavailable
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132999
+    m_Key: options.game.log
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133000
+    m_Key: options.game.aura_codex
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133001
+    m_Key: options.game.privacy
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133002
+    m_Key: options.logout
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133003
+    m_Key: campaign.chapter.honey_sanctuary
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133004
+    m_Key: campaign.chapter.coming_soon
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133005
+    m_Key: adventure.message.chapter_locked
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133006
+    m_Key: adventure.message.chapter_coming_soon
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133007
+    m_Key: sanctuary.altar.chapters
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133008
+    m_Key: sanctuary.status.chapters
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133009
+    m_Key: sanctuary.offer.chapter
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133010
+    m_Key: sanctuary.discovery.chapters
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429553516544
+    m_Key: scenario.bragus.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429553516545
+    m_Key: scenario.cosmic 1.name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429599653888
+    m_Key: scenario.mirror 1.name
     m_Metadata:
       m_Items: []
   m_Metadata:

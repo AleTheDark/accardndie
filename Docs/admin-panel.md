@@ -80,9 +80,9 @@ provider ricevevano un id giocatore e mai l'indirizzo. Dettagli in
 
 ## Cosa mostra
 
-- **Panoramica** — KPI (account, attivi 24h/7g, login, partite PvP, run campagna,
-  online ora) e un grafico dell'attività nel tempo (login, registrazioni, partite,
-  run) su 7/30/90 giorni.
+- **Panoramica** — KPI (account, attivi 24h/7g, login, partite PvP, run iniziate,
+  run concluse, online ora) e un grafico dell'attività nel tempo (login,
+  registrazioni, partite, run iniziate, run concluse) su 7/30/90 giorni.
 - **Giocatori** — ricerca per nome o `player_id`; il dettaglio raccoglie tutto
   quello che il server sa di un account:
   - account (fonte, registrazione, ultimo login, miele, livello/esperienza,
@@ -101,6 +101,9 @@ provider ricevevano un id giocatore e mai l'indirizzo. Dettagli in
   taverna, quest riscosse, giornate complete, miele erogato) su 7/14/30/90 giorni;
   catalogo completo con quante volte ogni quest e' uscita e quante riscossioni ha
   prodotto. Utile perche' le quest sono l'unica fonte di miele del gioco.
+- **Run campagna** — tutte le run, iniziate e concluse, con orario di inizio,
+  giocatore, stato, durata, capitolo e progressi. Il filtro in alto isola le run
+  **non concluse**. Vedi [Run iniziate e run concluse](#run-iniziate-e-run-concluse).
 - **Partite PvP** — ultime partite con esito, punteggi, ranked/normale.
 - **Stagioni** — elenco stagioni con conteggi.
 - **Versione client** — la build ammessa all'accesso, cambiabile a caldo. Vedi

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<!-- Homepage di accardndie.com.
+     Fino alla riorganizzazione del sito qui c'era direttamente il canvas WebGL: il
+     dominio si apriva su una barra di caricamento da decine di megabyte, senza una
+     riga di testo, e chi arrivava da una ricerca non sapeva nemmeno che gioco fosse.
+     Ora il gioco sta in /game/ e questa e' la porta: dice cos'e' in tre righe, lo
+     fa vedere in movimento e ha un tasto solo che conta.
+     Il tasto punta al WebGL nell'HTML; su Android lo riscrive site.js verso il Play
+     Store (il link nell'HTML resta quello giusto per i crawler e per tutti gli altri).
+
+     Le fasce .band sono a tutta larghezza e stanno FUORI da .wrap: l'immagine deve
+     toccare i bordi dello schermo mentre il testo resta incolonnato dentro. -->
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accard N' Die — gioco di carte e dadi, nel browser o su Android</title>
+<meta name="description" content="Schiera tre carte, tira i dadi, sfrutta le aure. Accard N' Die e' un gioco di carte tattico con nove classi, una campagna in sette capitoli e duelli online. Si gioca subito nel browser, gratis.">
+<link rel="canonical" href="https://accardndie.com/">
+<link rel="stylesheet" href="site.css">
+<link rel="apple-touch-icon" href="media/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
+
+<!-- L'immagine della fascia in cima e' l'unica cosa che si vede subito: chiederla
+     in anticipo evita che il titolo resti un attimo sospeso su fondo nero. -->
+<link rel="preload" as="image" href="media/bg/hero.jpg">
+<link rel="preload" as="font" type="font/ttf" href="fonts/lifecraft.ttf" crossorigin>
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Accard N' Die">
+<meta property="og:title" content="Accard N' Die — gioco di carte e dadi">
+<meta property="og:description" content="Tre carte in campo, nove classi, un dado che decide tutto. Gioca gratis nel browser o scarica l'app Android.">
+<meta property="og:url" content="https://accardndie.com/">
+<meta property="og:image" content="https://accardndie.com/media/social-card.jpg">
+<meta name="twitter:card" content="summary_large_image">
+
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3580486749764055" crossorigin="anonymous"></script>
+<script src="site.js" defer></script>
+</head>
+<body>
+
+<nav class="nav"><div class="wrap">
+  <a class="brand" href="/">Accard N' Die</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu-links" hidden>Menu</button>
+  <div class="menu-links" id="menu-links">
+    <a href="guida.html">Come si gioca</a>
+    <a href="classi.html">Le nove classi</a>
+    <a href="carte.html">Database carte</a>
+    <a href="/statistiche">Statistiche</a>
+    <a href="privacy.html">Privacy</a>
+  </div>
+  <a class="nav-play" data-play data-play-label="Scarica" href="/game/">Gioca</a>
+</div></nav>
+
+<header class="band band-hero">
+  <div class="wrap wide hero">
+    <h1>Accard N' Die</h1>
+    <p class="tagline">Tre carte in campo. Nove classi. Un dado che decide tutto.</p>
+
+    <div class="cta-row">
+      <a class="cta" data-play data-play-label="Scarica su Google Play" href="/game/">
+        <span data-play-text>Gioca ora</span>
+      </a>
+      <a class="cta-ghost" href="guida.html">Come si gioca</a>
+    </div>
+
+    <!-- Due frasi alternative: site.js mostra quella giusta su Android e nasconde
+         l'altra. Nell'HTML servito e' visibile la versione browser, che e' quella
+         vera per la maggioranza dei visitatori e per i crawler. -->
+    <p class="play-note" data-play-note="browser">Parte nel browser, gratis, senza registrarti e senza installare niente.</p>
+    <p class="play-note" data-play-note="android" hidden>Sei su Android: il tasto ti porta alla scheda su Google Play. Se preferisci, puoi comunque <a href="/game/">giocare nel browser</a>.</p>
+
+    <p class="sub">Costruisci la mano, schiera tre eroi e usa le loro abilita nell'ordine
+    giusto: la fortuna conta, ma e' la tattica a piegarla dalla tua parte.</p>
+  </div>
+</header>
+
+<main>
+
+<!-- Vetrina. I file .webm/.mp4 vanno messi in Docs/web/media/ (vedi il README li
+     dentro): finche' non ci sono, il browser mostra il poster, che e' comunque una
+     schermata vera del gioco. I video sono muti e in loop di proposito - devono
+     comportarsi come GIF, non come filmati da guardare - e partono solo quando
+     entrano nello schermo, perche' questa pagina si apre quasi sempre da telefono. -->
+<section class="wrap wide">
+  <h2>Uno sguardo alla partita</h2>
+  <div class="reel">
+    <figure>
+      <video data-showreel muted loop playsinline preload="none" poster="media/poster-hub.jpg" aria-label="Il rifugio: campagna, taverna, negozio e santuario">
+        <source src="media/vetrina-campagna.webm" type="video/webm">
+        <source src="media/vetrina-campagna.mp4" type="video/mp4">
+      </video>
+      <figcaption>Il rifugio, tra una run e l'altra</figcaption>
+    </figure>
+    <figure>
+      <video data-showreel muted loop playsinline preload="none" poster="media/poster-scontro.jpg" aria-label="Uno scontro: schieramento di tre carte e tiro dei dadi">
+        <source src="media/vetrina-scontro.webm" type="video/webm">
+        <source src="media/vetrina-scontro.mp4" type="video/mp4">
+      </video>
+      <figcaption>Tre carte, il triangolo delle famiglie, i dadi</figcaption>
+    </figure>
+    <figure>
+      <video data-showreel muted loop playsinline preload="none" poster="media/poster-boss.jpg" aria-label="Combattimento contro un boss di capitolo">
+        <source src="media/vetrina-boss.webm" type="video/webm">
+        <source src="media/vetrina-boss.mp4" type="video/mp4">
+      </video>
+      <figcaption>Il boss che chiude il capitolo</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band band-classi">
+  <div class="wrap wide">
+    <h2>Cosa ci trovi</h2>
+    <div class="cards pillars">
+      <div class="card">
+        <h3>Nove classi</h3>
+        <p>Ognuna con la sua abilita e il suo modo di rompere il piano dell'avversario.
+        Si sbloccano al Santuario, una alla volta.</p>
+        <!-- Gli stemmi sono gli stessi che si vedono in partita: qui fanno da
+             assaggio, la spiegazione sta in classi.html. -->
+        <div class="emblem-row">
+          <img class="emblem" src="media/classi/warrior.png" alt="" width="192" height="192" loading="lazy">
+          <img class="emblem" src="media/classi/barbarian.png" alt="" width="192" height="192" loading="lazy">
+          <img class="emblem" src="media/classi/paladin.png" alt="" width="192" height="192" loading="lazy">
+          <img class="emblem" src="media/classi/rogue.png" alt="" width="192" height="192" loading="lazy">
+          <img class="emblem" src="media/classi/assassin.png" alt="" width="192" height="192" loading="lazy">
+          <img class="emblem" src="media/classi/hunter.png" alt="" width="192" height="192" loading="lazy">
+          <img class="emblem" src="media/classi/mage.png" alt="" width="192" height="192" loading="lazy">
+          <img class="emblem" src="media/classi/necromancer.png" alt="" width="192" height="192" loading="lazy">
+          <img class="emblem" src="media/classi/priest.png" alt="" width="192" height="192" loading="lazy">
+        </div>
+        <p><a href="classi.html">Guarda le classi</a></p>
+      </div>
+      <div class="card">
+        <h3>Una campagna in sette capitoli</h3>
+        <p>Stanze, mostri, miniboss e un boss che chiude ogni capitolo. Fra una run e
+        l'altra ci sono taverna, negozio e santuario.</p>
+      </div>
+      <div class="card">
+        <h3>Duelli online</h3>
+        <p>Partite classificate con tier, divisioni e stagioni. La Hall of Fame tiene
+        il conto di chi ha chiuso ogni stagione in testa.</p>
+        <p><a href="/statistiche">Le tue statistiche</a></p>
+      </div>
+      <div class="card">
+        <h3>Il regolamento, per intero</h3>
+        <p>Famiglie, scala del Vigore, aure e database delle carte: e' tutto scritto,
+        niente e' nascosto dietro una schermata di aiuto.</p>
+        <p><a href="guida.html">Leggi il regolamento</a> · <a href="carte.html">Database carte</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band band-inizia">
+  <div class="wrap wide closer">
+    <h2>Si comincia da qui</h2>
+    <p>Nessun account obbligatorio per provare. Se poi vuoi che i progressi ti seguano
+    fra telefono e browser, ti basta accedere con Google.</p>
+    <div class="cta-row">
+      <a class="cta" data-play data-play-label="Scarica su Google Play" href="/game/">
+        <span data-play-text>Gioca ora</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site"><div class="wrap">
+  <p>Accard N' Die — <a href="guida.html">Come si gioca</a> ·
+  <a href="classi.html">Le nove classi</a> ·
+  <a href="carte.html">Database carte</a> ·
+  <a href="/statistiche">Statistiche</a> ·
+  <a href="privacy.html">Privacy</a> ·
+  <a href="/account/delete">Cancellazione account</a></p>
+</div></footer>
+
+</body>
+</html>

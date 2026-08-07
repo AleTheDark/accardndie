@@ -66,15 +66,38 @@ converte quello che il giocatore ha gia' fatto.
 
 ## Mappa capitoli e boss
 
-| Capitolo | Titolo | Boss finale |
-| --- | --- | --- |
-| 1 | La Nebbia di Bragus | Bragus |
-| 2 | I Rampicanti di Trentor | Trentor |
-| 3 | Gli Specchi di Medusa | Medusa |
-| 4 | La Cosmica di Palatir | Palatir |
+Sorgente unica: `ChapterCatalog` sul server, rispecchiato da `AdventureChapterCatalog` sul
+client. La tabella qui sotto e' solo il riassunto leggibile.
+
+| Capitolo | Scenario | Boss finale | Premio | Costo | Giocabile |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Rampicanti | Trentor | Cacciatore | dal tutorial | si |
+| 2 | Nebbia | Bragus | Barbaro | 25 | si |
+| 3 | Infestata | Jurinashor | Negromante | 50 | no, boss da fare |
+| 4 | Illuminata | Seraphel | Paladino | 80 | no, boss da fare |
+| 5 | da definire | da definire | Assassino | 120 | no, tutto da fare |
+| 6 | default (per ora) | Medusa | Sacerdote | 170 | si |
+| 7 | Cosmica | Palatir | cosmetico dadi | 230 | si, ma il cosmetico non esiste |
+
+Un capitolo si ottiene in due modi alternativi: battendo il boss del capitolo precedente,
+oppure comprandolo al Santuario (altare **Capitoli**). Nella schermata Avventura non si
+compra piu' niente. Il capitolo consegna anche la sua classe premio, che resta comunque
+acquistabile col miele: chi arriva in fondo al capitolo non paga, chi non ci arriva puo'
+ancora prenderla dall'altare.
 
 I capitoli completati restano nella lista e sono rigiocabili: i requisiti che chiedono
 piu' vittorie sullo stesso boss sono quindi soddisfacibili.
+
+**Capitoli senza boss.** I capitoli 3, 4 e 5 esistono in tabella ma non sono giocabili ne'
+acquistabili. Finche' e' cosi', completare un capitolo concede tutti quelli fino al primo
+giocabile incluso (`ChapterCatalog.UnlocksAfterClearing`): senza questa regola chi finisce
+il capitolo 2 resterebbe davanti a una porta chiusa, mentre prima del restyling la campagna
+proseguiva. La regola si spegne da sola quando ogni capitolo diventa `Playable`.
+
+**Rinumerazione.** Gli id `chapter-N` sono posizioni, e il restyling ha cambiato cosa
+indicano. `ChapterRemapMigration` gira una volta all'avvio (chiave in `server_settings`):
+sposta 1->2, 2->1, 3->6, 4->7, riempie i capitoli precedenti a quello piu' avanti raggiunto
+e consegna le classi premio dei soli capitoli davvero completati.
 
 ## Struttura della schermata
 

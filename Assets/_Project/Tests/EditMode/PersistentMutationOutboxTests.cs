@@ -110,6 +110,24 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void QueueChapterClearForReplay_PersistsBossForItsOwner()
+        {
+            var storage = new MemoryStorage();
+            var outbox = new PersistentMutationOutbox(storage);
+
+            bool queued = ServerSinglePlayerProgressClient.QueueChapterClearForReplay(
+                "boss-bragus", "player-a", outbox);
+
+            Assert.That(queued, Is.True);
+            var pending = outbox.PendingFor("player-a");
+            Assert.That(pending.Count, Is.EqualTo(1));
+            Assert.That(pending[0].messageType, Is.EqualTo(MessageTypes.SinglePlayerClearChapter));
+            Assert.That(pending[0].expectedType, Is.EqualTo(MessageTypes.SinglePlayerProgressData));
+            var payload = UnityEngine.JsonUtility.FromJson<SinglePlayerClearChapterRequest>(pending[0].payloadJson);
+            Assert.That(payload.bossId, Is.EqualTo("boss-bragus"));
+        }
+
+        [Test]
         public void PendingFor_DropsMutationsOlderThanTheServerMemory()
         {
             // Oltre la vita del dedup lato server rigiocare non è più sicuro: meglio

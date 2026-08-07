@@ -4,28 +4,39 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Informativa sulla privacy — Accard N' Die</title>
+<link rel="stylesheet" href="site.css">
+<link rel="apple-touch-icon" href="media/apple-touch-icon.png">
+<script src="site.js" defer></script>
+<!-- Questa pagina aveva un blocco <style> tutto suo, nato prima di site.css e che
+     ne ripeteva la palette a mano. Tolto: adesso e' una pagina del sito come le
+     altre, e l'unica regola che resta e' quella riga di data che non esiste altrove. -->
 <style>
-  :root { color-scheme: light dark; }
-  body {
-    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 46rem;
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    line-height: 1.65; background: #14100c; color: #e8e2d6;
-  }
-  h1 { font-size: 1.9rem; color: #f0b93d; margin-bottom: .2rem; }
-  h2 { font-size: 1.2rem; color: #f0b93d; margin-top: 2.2rem; }
-  .updated { color: #a89c88; font-size: .9rem; margin-top: 0; }
-  a { color: #7fb8ff; }
-  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
-  th, td { border: 1px solid #3a3226; padding: .5rem .6rem; text-align: left; vertical-align: top; }
-  th { background: #1f1913; color: #f0b93d; }
-  code { background: #1f1913; padding: .1rem .3rem; border-radius: .2rem; font-size: .9em; }
-  .box { border-left: 3px solid #f0b93d; background: #1c1710; padding: .8rem 1rem; margin: 1.2rem 0; }
+  .updated { color: var(--muted); font-size: .9rem; margin-top: 0; }
 </style>
 </head>
 <body>
 
-<h1>Informativa sulla privacy</h1>
-<p class="updated">Gioco: <strong>Accard N' Die</strong> — ultimo aggiornamento: 2 agosto 2026</p>
+<nav class="nav"><div class="wrap">
+  <a class="brand" href="/">Accard N' Die</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu-links" hidden>Menu</button>
+  <div class="menu-links" id="menu-links">
+    <a href="guida.html">Come si gioca</a>
+    <a href="classi.html">Le nove classi</a>
+    <a href="carte.html">Database carte</a>
+    <a href="/statistiche">Statistiche</a>
+    <a href="privacy.html" aria-current="page">Privacy</a>
+  </div>
+  <a class="nav-play" data-play data-play-label="Scarica" href="/game/">Gioca</a>
+</div></nav>
+
+<header class="band band-testata">
+  <div class="wrap">
+    <h1>Informativa sulla privacy</h1>
+    <p class="updated">Gioco: <strong>Accard N' Die</strong> — ultimo aggiornamento: 5 agosto 2026</p>
+  </div>
+</header>
+
+<main class="wrap">
 
 <p>Questa informativa spiega quali dati personali il gioco raccoglie, perché, con chi sono
 condivisi e come puoi intervenire. È scritta sulla base di ciò che il gioco fa davvero, non
@@ -63,11 +74,23 @@ su un modello generico.</p>
     <td>A ogni connessione</td>
   </tr>
   <tr>
+    <td>Sessione del sito</td>
+    <td>Sulla pagina <a href="/statistiche">accardndie.com/statistiche</a> viene impostato un
+        cookie tecnico che ricorda soltanto che hai appena fatto l'accesso con Google, per il
+        tempo in cui stai guardando i tuoi dati. Non contiene il tuo nome né la tua email, non
+        segue la navigazione e non serve a nessuna forma di pubblicità o misurazione: senza,
+        la pagina non potrebbe mostrarti niente. Si cancella quando premi <em>Esci</em>, quando
+        chiudi il browser e comunque dopo quattro ore.</td>
+    <td>Solo se accedi alla pagina delle statistiche</td>
+  </tr>
+  <tr>
     <td>Pubblicità</td>
-    <td>Identificativo pubblicitario del dispositivo e dati sulle interazioni con gli
-        annunci, raccolti da Google AdMob. Il gioco non riceve né conserva questi dati:
-        li tratta Google come titolare autonomo.</td>
-    <td>Solo nella versione Android, e solo secondo le tue scelte di consenso</td>
+    <td>Nella versione Android: identificativo pubblicitario del dispositivo e dati sulle
+        interazioni con gli annunci, raccolti da Google AdMob. Nella versione web e nella
+        PWA: cookie e identificatori simili impostati da Google AdSense e dai suoi partner
+        sul dominio accardndie.com. In entrambi i casi il gioco non riceve né conserva
+        questi dati: li tratta Google come titolare autonomo.</td>
+    <td>Mentre giochi, e solo secondo le tue scelte di consenso</td>
   </tr>
 </table>
 
@@ -85,16 +108,28 @@ precisa né contenuti dei tuoi file.</p>
 </ul>
 
 <h2>4. Pubblicità e consenso</h2>
-<p>La versione Android mostra annunci forniti da <strong>Google AdMob</strong>: alcuni sono
-facoltativi e in cambio danno una ricompensa nel gioco, altri compaiono tra un'attività e
-l'altra.</p>
+<p>Il gioco mostra annunci: alcuni sono facoltativi e in cambio danno una ricompensa nel
+gioco, altri compaiono tra un'attività e l'altra. Chi li fornisce dipende da dove giochi.</p>
+
+<ul>
+  <li><strong>Versione Android</strong> — annunci forniti da <strong>Google AdMob</strong>.</li>
+  <li><strong>Versione web e PWA su accardndie.com</strong> — annunci forniti da
+      <strong>Google AdSense</strong> (H5 Games Ads). Google e i suoi partner utilizzano
+      cookie e identificatori simili per mostrare gli annunci, misurarne il rendimento e, se
+      hai acconsentito, personalizzarli in base alle tue visite a questo e ad altri siti.</li>
+</ul>
 
 <div class="box">
-  <p><strong>Puoi cambiare idea in qualsiasi momento.</strong> Al primo avvio, se ti trovi
-  nello Spazio economico europeo, compare il pannello di consenso gestito dalla User
-  Messaging Platform di Google. Le tue scelte si rivedono dal gioco: <em>pulsante
-  impostazioni → OPZIONI → PRIVACY</em>.</p>
+  <p><strong>Puoi cambiare idea in qualsiasi momento.</strong> Se ti trovi nello Spazio
+  economico europeo compare un pannello di consenso gestito da Google: su Android è la User
+  Messaging Platform, sul web il messaggio di consenso di AdSense. Su Android le scelte si
+  rivedono dal gioco (<em>pulsante impostazioni → OPZIONI → PRIVACY</em>); sul web dal
+  collegamento che il pannello stesso lascia sulla pagina.</p>
 </div>
+
+<p>Puoi inoltre disattivare la personalizzazione degli annunci di Google dalle
+<a href="https://myadcenter.google.com" target="_blank" rel="noopener">impostazioni degli
+annunci del tuo account Google</a>, indipendentemente dalle scelte fatte qui.</p>
 
 <p>Come Google tratta questi dati è descritto nelle
 <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener">
@@ -102,7 +137,8 @@ norme di Google per i partner</a>.</p>
 
 <h2>5. Con chi sono condivisi</h2>
 <ul>
-  <li><strong>Google (AdMob e accesso con Google)</strong> — pubblicità e autenticazione.</li>
+  <li><strong>Google (AdMob, AdSense e accesso con Google)</strong> — pubblicità e
+      autenticazione.</li>
   <li><strong>Unity Technologies</strong> — servizio di autenticazione dei giocatori.</li>
   <li><strong>Cloudflare</strong> — protezione e instradamento del traffico verso il server.</li>
   <li><strong>Il fornitore del server</strong> su cui gira il gioco.</li>
@@ -132,6 +168,15 @@ anni. Se ritieni che sia accaduto, scrivici e provvederemo alla cancellazione.</
 <h2>9. Modifiche</h2>
 <p>Se questa informativa cambia, la data di aggiornamento in cima verrà modificata. Le
 modifiche rilevanti saranno segnalate all'interno del gioco.</p>
+
+</main>
+
+<footer class="site"><div class="wrap">
+  <p><a href="/game/">Gioca</a> · <a href="guida.html">Come si gioca</a> ·
+     <a href="classi.html">Le nove classi</a> · <a href="carte.html">Database carte</a> ·
+     <a href="/statistiche">Statistiche</a></p>
+  <p>Accard N' Die</p>
+</div></footer>
 
 </body>
 </html>

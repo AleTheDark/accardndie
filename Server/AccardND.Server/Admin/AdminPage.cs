@@ -149,6 +149,7 @@ tbody tr:hover{background:var(--panel2)}
     <button data-tab="overview" class="active">Panoramica</button>
     <button data-tab="players">Giocatori</button>
     <button data-tab="quests">Quest taverna</button>
+    <button data-tab="runs">Run campagna</button>
     <button data-tab="matches">Partite PvP</button>
     <button data-tab="seasons">Stagioni</button>
     <button data-tab="version">Versione client</button>
@@ -231,6 +232,32 @@ tbody tr:hover{background:var(--panel2)}
         <table><thead><tr>
           <th>Quest</th><th>Tipo</th><th>Obiettivo</th><th>Giorni in cui è uscita</th><th>Riscossioni totali</th>
         </tr></thead><tbody id="questCatalogBody"></tbody></table>
+      </section>
+    </div>
+
+    <div id="tab-runs" class="tab hidden">
+      <section class="kpis" id="runKpis"></section>
+      <section class="panel">
+        <div class="toolbar">
+          <h2 style="margin:0">Run di campagna</h2>
+          <span class="spacer"></span>
+          <select id="runStatus">
+            <option value="all" selected>Tutte</option>
+            <option value="open">Non concluse</option>
+            <option value="ended">Concluse</option>
+          </select>
+        </div>
+        <table><thead><tr>
+          <th>Iniziata</th><th>Giocatore</th><th>Stato</th><th>Durata</th>
+          <th>Capitolo</th><th>Stanze</th><th>Nemici</th><th>Boss</th><th>Conclusa</th>
+        </tr></thead><tbody id="runsBody"></tbody></table>
+        <p class="muted" style="font-size:12px">
+          La riga della run nasce quando il giocatore entra in campagna e si chiude alla
+          fine (morte o vittoria). Le run "non concluse" sono quelle lasciate a metà: gioco
+          chiuso, connessione persa, oppure partite ancora in corso proprio adesso.
+          Le run iniziate mentre il gioco era offline restano senza inizio: compaiono
+          soltanto alla fine, come prima.
+        </p>
       </section>
     </div>
 
@@ -374,8 +401,8 @@ async function showApp(){
 }
 
 /* ---- Tabs ---- */
-const LOADERS={overview:loadOverview,players:loadPlayers,quests:loadQuests,matches:loadMatches,
-  seasons:loadSeasons,version:loadVersion};
+const LOADERS={overview:loadOverview,players:loadPlayers,quests:loadQuests,runs:loadRuns,
+  matches:loadMatches,seasons:loadSeasons,version:loadVersion};
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
   b.classList.add('active');
@@ -393,9 +420,10 @@ const METRICS=[
   {key:'logins',label:'Login',color:'var(--blue)'},
   {key:'signups',label:'Registrazioni',color:'var(--gold)'},
   {key:'matches',label:'Partite PvP',color:'var(--green)'},
-  {key:'campaign',label:'Run campagna',color:'var(--purple)'},
+  {key:'campaignStarted',label:'Run iniziate',color:'var(--red)'},
+  {key:'campaign',label:'Run concluse',color:'var(--purple)'},
 ];
-let visible={logins:true,signups:true,matches:true,campaign:true};
+let visible={logins:true,signups:true,matches:true,campaignStarted:true,campaign:true};
 let seriesCache=null;
 
 async function loadOverview(){
@@ -407,7 +435,8 @@ async function loadOverview(){
     ['Attivi (24h)',o.activePlayers24h,`${o.activePlayers7d} in 7 giorni`],
     ['Login (24h)',o.logins24h,`${o.logins7d} in 7 giorni`],
     ['Partite PvP',o.totalMatches,`${o.matches24h} in 24h · ${o.rankedMatches} ranked`],
-    ['Run campagna',o.totalCampaignRuns,`${o.campaignRuns24h} in 24h · ${o.campaignRuns7d} in 7g`],
+    ['Run iniziate (24h)',o.startedRuns24h,`${o.startedRuns7d} in 7g · ${o.openRuns24h} non concluse`],
+    ['Run concluse',o.totalCampaignRuns,`${o.campaignRuns24h} in 24h · ${o.openRunsTotal} lasciate a metà`],
     ['Online ora',o.onlineNow,bySource],
     ['Stagione',o.activeSeason||'—',''],
   ];
@@ -570,6 +599,7 @@ async function openPlayer(id){
   /* Campagna */
   if(ct) html+=sub('Progressione campagna')+`<div class="grid2">
       ${f('Run concluse',ct.runs)}
+      ${f('Run iniziate',ct.startedRuns+(ct.openRuns?` <span class="muted" style="font-size:12px">${ct.openRuns} non concluse</span>`:''))}
       ${f('Stanze superate',ct.roomsCleared)}
       ${f('Nemici sconfitti',ct.enemiesDefeated)}
       ${f('Boss di capitolo',ct.bossesDefeated)}
@@ -639,10 +669,11 @@ async function openPlayer(id){
         <td>${m.ranked?'<span class="tag ranked">ranked</span>':''} <span class="muted">${esc(m.endedReason)}</span></td></tr>`;
     }).join('')}</tbody></table>`; }
   if(d.recentRuns.length){ html+=sub('Ultime run campagna')+
-    tbl(['Quando','Modalità','Capitolo','Stanze','Nemici','Boss','Miele'], d.recentRuns.map(r=>
-      `<tr><td class="muted">${fmtDate(r.endedAt)}</td><td>${esc(r.mode)||'—'}</td>
+    tbl(['Iniziata','Stato','Conclusa','Modalità','Capitolo','Stanze','Nemici','Boss'], d.recentRuns.map(r=>
+      `<tr><td class="muted">${fmtDate(r.startedAt)}</td><td>${runStatusTag(r)}</td>
+       <td class="muted">${fmtDate(r.endedAt)}</td><td>${esc(r.mode)||'—'}</td>
        <td>${esc(r.chapterId)||'—'}</td><td>${r.roomsCleared}</td><td>${r.enemiesDefeated}</td>
-       <td>${r.bossesDefeated}</td><td>${r.honeyReward}</td></tr>`).join('')); }
+       <td>${r.bossesDefeated}</td></tr>`).join('')); }
   if(d.recentLogins.length){ html+=sub('Ultimi login')+
     `<table><tbody>${d.recentLogins.map(l=>`<tr><td class="muted">${fmtDate(l.occurredAt)}</td><td>${esc(l.provider)}</td></tr>`).join('')}</tbody></table>`; }
   html=`<div style="text-align:right"><button onclick="closeModal()">✕</button></div>`+html;
@@ -774,6 +805,47 @@ function drawQuestChart(){
   if(!questHistory) return;
   el('questChart').innerHTML=lineChartSvg(questHistory, QUEST_METRICS,
     Math.min(1100, el('questChart').clientWidth||900), 220);
+}
+
+/* ---- Run di campagna ---- */
+function fmtDuration(seconds){
+  if(seconds===null||seconds===undefined) return '—';
+  if(seconds<60) return seconds+'s';
+  const m=Math.floor(seconds/60), h=Math.floor(m/60);
+  return h>0 ? `${h}h ${m%60}m` : `${m}m`;
+}
+// Una run senza fine e' abbandonata solo se e' vecchia: quelle di poco fa possono
+// benissimo essere partite ancora in mano a qualcuno.
+const RUN_IN_PROGRESS_MS=2*60*60*1000;
+function runStatusTag(r){
+  if(r.endedAt) return '<span class="tag win">conclusa</span>';
+  const started=r.startedAt?Date.parse(r.startedAt):NaN;
+  return (!isNaN(started) && Date.now()-started<RUN_IN_PROGRESS_MS)
+    ? '<span class="tag ranked">in corso</span>'
+    : '<span class="tag loss">abbandonata</span>';
+}
+el('runStatus').addEventListener('change',loadRuns);
+async function loadRuns(){
+  const data=await api('/runs?limit=200&status='+el('runStatus').value);
+  const kpis=[
+    ['Run registrate',data.open+data.ended,'inizio e fine nella stessa riga'],
+    ['Concluse',data.ended,'morte o vittoria arrivate al server'],
+    ['Non concluse',data.open,'lasciate a metà o ancora in corso'],
+  ];
+  el('runKpis').innerHTML=kpis.map(k=>
+    `<div class="kpi"><div class="v">${esc(k[1])}</div><div class="l">${esc(k[0])}</div><div class="sub">${esc(k[2])}</div></div>`).join('');
+  el('runsBody').innerHTML=data.runs.map(r=>`
+    <tr data-id="${esc(r.playerId)}">
+      <td class="muted">${fmtDate(r.startedAt)}</td>
+      <td>${esc(r.username)}</td>
+      <td>${runStatusTag(r)}</td>
+      <td class="muted">${fmtDuration(r.durationSeconds)}</td>
+      <td>${esc(r.chapterId)||'—'}<div class="muted" style="font-size:12px">${esc(r.mode)||''}</div></td>
+      <td>${r.roomsCleared}</td><td>${r.enemiesDefeated}</td><td>${r.bossesDefeated}</td>
+      <td class="muted">${fmtDate(r.endedAt)}</td>
+    </tr>`).join('') || `<tr><td colspan="9" class="muted">Nessuna run</td></tr>`;
+  el('runsBody').querySelectorAll('tr[data-id]').forEach(tr=>
+    tr.addEventListener('click',()=>openPlayer(tr.dataset.id)));
 }
 
 /* ---- Matches ---- */

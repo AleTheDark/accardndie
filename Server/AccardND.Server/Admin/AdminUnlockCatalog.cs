@@ -31,14 +31,6 @@ public static class AdminUnlockCatalog
 
     public sealed record Group(string Type, string Label, string Note, Entry[] Entries);
 
-    private static readonly (string Id, string Name)[] Chapters =
-    {
-        ("chapter-1", "Capitolo 1 · La Nebbia di Bragus"),
-        ("chapter-2", "Capitolo 2 · I Rampicanti di Trentor"),
-        ("chapter-3", "Capitolo 3 · Gli Specchi di Medusa"),
-        ("chapter-4", "Capitolo 4 · La Cosmica di Palatir")
-    };
-
     private static readonly Group[] AllGroups = BuildGroups();
 
     public static IReadOnlyList<Group> Groups => AllGroups;
@@ -103,12 +95,18 @@ public static class AdminUnlockCatalog
             "Si sommano ai due slot di partenza, fino a quattro.",
             SanctuaryEntries(SanctuaryCatalog.TypeSlot)),
 
-        new Group(TypeChapter, "Capitoli", "Accesso al capitolo in campagna.",
-            Chapters.Select(chapter => new Entry(chapter.Id, chapter.Name, null)).ToArray()),
+        new Group(TypeChapter, "Capitoli",
+            "Accesso al capitolo. In gioco arriva battendo il boss del capitolo prima, oppure comprandolo al Santuario.",
+            SanctuaryEntries(TypeChapter)),
 
         new Group(TypeChapterCleared, "Capitoli completati",
-            "Boss finale battuto. Non si compra giocando normalmente: si guadagna vincendo.",
-            Chapters.Select(chapter => new Entry(chapter.Id, chapter.Name, null)).ToArray()),
+            "Boss finale battuto. Non si compra: si guadagna vincendo, e consegna la classe premio del capitolo.",
+            ChapterCatalog.All
+                .Select(chapter => new Entry(
+                    chapter.Id,
+                    chapter.Name,
+                    chapter.RewardClassId == null ? null : "premio: " + chapter.RewardClassId))
+                .ToArray()),
 
         new Group(TypeMode, "Modalita'", null,
             new[] { new Entry("hardcore", "Hardcore", "Normalmente 50 miele.") }),

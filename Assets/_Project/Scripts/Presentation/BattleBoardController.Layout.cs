@@ -126,10 +126,13 @@ public sealed partial class BattleBoardController
 			{
 				SetRect(tableGlowRect, new Vector2(0.025f, 0.035f), new Vector2(0.975f, 0.965f));
 				SetRect(topInfoBarRect, new Vector2(0.035f, 0.952f), new Vector2(0.7f, 0.992f));
-				playerHud.Rect.anchorMin = new Vector2(0.2275f, 0.002f);
-				playerHud.Rect.anchorMax = new Vector2(0.7725f, 0.09f);
-				playerHud.Rect.offsetMin = new Vector2(0f, 11f);
-				playerHud.Rect.offsetMax = new Vector2(0f, 11f);
+				if (playerHud != null)
+				{
+					playerHud.Rect.anchorMin = new Vector2(0.2275f, 0.002f);
+					playerHud.Rect.anchorMax = new Vector2(0.7725f, 0.09f);
+					playerHud.Rect.offsetMin = new Vector2(0f, 11f);
+					playerHud.Rect.offsetMax = new Vector2(0f, 11f);
+				}
 				SetRect(cpuHud.Rect, new Vector2(0.2275f, 0.907f), new Vector2(0.7725f, 0.992f));
 				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.81f, 0.917f), new Vector2(0.982f, 0.995f));
 				if ((Object)(object)settingsButtonLabel != (Object)null)
@@ -137,10 +140,7 @@ public sealed partial class BattleBoardController
 					SetRect(settingsButtonLabel.rectTransform, new Vector2(0.785f, 0.895f), new Vector2(1f, 0.937f));
 				}
 				ConfigureLogPanelRect(compact: true, wideLandscape: false);
-				if ((Object)(object)optionsPanel != (Object)null)
-				{
-					SetRect((RectTransform)optionsPanel.transform, new Vector2(0.08f, 0.48f), new Vector2(0.92f, 0.9f));
-				}
+				ApplyOptionsPanelLayout(portrait: true);
 				implementationArchiveButtonRect.anchorMin = new Vector2(0.81f, 0.885f);
 				implementationArchiveButtonRect.anchorMax = new Vector2(0.982f, 0.965f);
 				implementationArchiveButtonRect.offsetMin = new Vector2(0f, -76.8f);
@@ -175,7 +175,8 @@ public sealed partial class BattleBoardController
 			{
 				SetRect(tableGlowRect, flag2 ?new Vector2(0.04f, 0.105f) : new Vector2(0.08f, 0.13f), flag2 ?new Vector2(0.96f, 0.895f) : new Vector2(0.92f, 0.87f));
 				SetRect(topInfoBarRect, flag2 ?new Vector2(0.05f, 0.925f) : new Vector2(0.08f, 0.93f), new Vector2(0.73f, 0.985f));
-				SetRect(playerHud.Rect, flag2 ?new Vector2(0.385f, 0.035f) : new Vector2(0.385f, 0.035f), flag2 ?new Vector2(0.615f, 0.197f) : new Vector2(0.615f, 0.198f));
+				if (playerHud != null)
+					SetRect(playerHud.Rect, flag2 ?new Vector2(0.385f, 0.035f) : new Vector2(0.385f, 0.035f), flag2 ?new Vector2(0.615f, 0.197f) : new Vector2(0.615f, 0.198f));
 				SetRect(cpuHud.Rect, flag2 ?new Vector2(0.385f, 0.823f) : new Vector2(0.385f, 0.822f), flag2 ?new Vector2(0.615f, 0.985f) : new Vector2(0.615f, 0.985f));
 				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.84f, 0.852f), new Vector2(0.995f, 0.992f));
 				if ((Object)(object)settingsButtonLabel != (Object)null)
@@ -183,10 +184,7 @@ public sealed partial class BattleBoardController
 					SetRect(settingsButtonLabel.rectTransform, new Vector2(0.81f, 0.865f), new Vector2(1f, 0.919f));
 				}
 				ConfigureLogPanelRect(false, flag2);
-				if ((Object)(object)optionsPanel != (Object)null)
-				{
-					SetRect((RectTransform)optionsPanel.transform, new Vector2(0.64f, 0.52f), new Vector2(0.98f, 0.92f));
-				}
+				ApplyOptionsPanelLayout(portrait: false);
 				SetRect(implementationArchiveButtonRect, new Vector2(0.84f, 0.79f), new Vector2(0.995f, 0.94f));
 				if ((Object)(object)implementationArchiveButtonLabel != (Object)null)
 				{
@@ -214,11 +212,16 @@ public sealed partial class BattleBoardController
 			if (useNonCombatArchiveButtonPosition)
 			{
 				// Posizione calibrata per Mercato, Loot, Imprevisto e Scelta Via.
-				// Gli offset non nulli vanno preservati: SetRect() li azzererebbe.
-				implementationArchiveButtonRect.anchorMin = new Vector2(0.81f, 0.885f);
-				implementationArchiveButtonRect.anchorMax = new Vector2(0.982f, 0.965f);
-				implementationArchiveButtonRect.offsetMin = new Vector2(0f, -1545f);
-				implementationArchiveButtonRect.offsetMax = new Vector2(0f, -1545f);
+				RectTransform optionsButtonRect = (RectTransform)((Component)logButton).transform;
+				optionsButtonRect.anchorMin = optionsButtonRect.anchorMax = new Vector2(1f, 1f);
+				optionsButtonRect.pivot = new Vector2(0.5f, 0.5f);
+				optionsButtonRect.anchoredPosition = new Vector2(-94.5f, -76f);
+				optionsButtonRect.sizeDelta = new Vector2(153f, 136f);
+
+				implementationArchiveButtonRect.anchorMin = implementationArchiveButtonRect.anchorMax = new Vector2(1f, 0f);
+				implementationArchiveButtonRect.pivot = new Vector2(0.5f, 0.5f);
+				implementationArchiveButtonRect.anchoredPosition = new Vector2(-91.5f, 107f);
+				implementationArchiveButtonRect.sizeDelta = new Vector2(153f, 140f);
 			}
 			if (IsCampaignEndedBannerVisible())
 			{
@@ -300,7 +303,8 @@ public sealed partial class BattleBoardController
 	{
 		if (cpuHud != null && (Object)(object)cpuHud.Rect != (Object)null)
 		{
-			((Component)cpuHud.Rect).gameObject.SetActive(combatChromeVisible);
+			((Component)cpuHud.Rect).gameObject.SetActive(
+				combatChromeVisible && !bragusBossPresentationActive && !trentorBossPresentationActive);
 		}
 		if ((Object)(object)cpuTitleText != (Object)null)
 		{
@@ -462,8 +466,14 @@ public sealed partial class BattleBoardController
 				if (battleCardState != null && !((Object)(object)battleCardState.View == (Object)null))
 				{
 					RectTransform rectTransform = battleCardState.View.RectTransform;
-					ConfigureBattlefieldChild(rectTransform, cardWidth, cardHeight);
-					rectTransform.anchoredPosition = new Vector2(num5 + num4 * (float)num6, 0f);
+					bool backdropBoss = battleCardState.View.IsBackdropBossPresentation;
+					float visualWidth = backdropBoss ? Mathf.Min(width * 0.62f, cardWidth * 3.1f) : cardWidth;
+					float visualHeight = backdropBoss ? cardHeight * 2.15f : cardHeight;
+					ConfigureBattlefieldChild(rectTransform, visualWidth, visualHeight);
+					int visualIndex = GetDeploymentVisualIndex(num6, num3);
+					rectTransform.anchoredPosition = new Vector2(
+						num5 + num4 * (float)visualIndex,
+						backdropBoss ? -cardHeight * 0.48f : 0f);
 					num6++;
 				}
 			}
@@ -476,10 +486,32 @@ public sealed partial class BattleBoardController
 			if (!((Object)(object)val == (Object)null))
 			{
 				ConfigureBattlefieldChild(val, cardWidth, cardHeight);
-				val.anchoredPosition = new Vector2(num5 + num4 * (float)num6, 0f);
+				int visualIndex = GetDeploymentVisualIndex(num6, num3);
+				val.anchoredPosition = new Vector2(num5 + num4 * (float)visualIndex, 0f);
 				num6++;
 			}
 		}
+	}
+
+	private static int GetDeploymentVisualIndex(int deploymentIndex, int cardCount)
+	{
+		// Le pedine mantengono visivamente l'ordine con cui entrano in campo:
+		// la prima e' centrale; la seconda entra alla sua sinistra; la terza
+		// occupa infine il centro tra le due gia' schierate.
+		if (cardCount == 2)
+		{
+			return deploymentIndex == 0 ? 1 : 0;
+		}
+		if (cardCount == 3)
+		{
+			return deploymentIndex switch
+			{
+				0 => 2,
+				1 => 0,
+				_ => 1
+			};
+		}
+		return deploymentIndex;
 	}
 
 	private static void ConfigureBattlefieldChild(RectTransform child, float cardWidth, float cardHeight)

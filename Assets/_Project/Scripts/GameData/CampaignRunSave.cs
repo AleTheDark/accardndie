@@ -42,6 +42,7 @@ namespace AccardND.GameData
         public int currentExperience;
         public int totalExperience;
         public int availableExperience;
+        public int gold;
         public int roomsCleared;
         public int enemiesDefeated;
         public int minibossesDefeated;
@@ -63,6 +64,12 @@ namespace AccardND.GameData
         // Mazzo di campagna
         public List<CampaignCardSave> deck = new List<CampaignCardSave>();
         public int nextInstanceId = 1;
+
+        // Identificativo della run lato client: e' la chiave con cui il server ha aperto la
+        // riga dello storico all'avvio. Conservarlo fa si' che una run ripresa dopo un
+        // riavvio chiuda la propria riga invece di crearne una seconda e lasciare la prima
+        // fra le abbandonate. Vuoto sui save creati prima di questa versione.
+        public string runRewardId;
 
         // Stato scenario / regole di stanza (popolato dal controller in fase di wiring)
         public string campaignScenarioId;
@@ -93,6 +100,7 @@ namespace AccardND.GameData
             save.currentExperience = progress.CurrentExperience;
             save.totalExperience = progress.TotalExperience;
             save.availableExperience = progress.AvailableExperience;
+            save.gold = progress.Gold;
             save.roomsCleared = progress.RoomsCleared;
             save.enemiesDefeated = progress.EnemiesDefeated;
             save.minibossesDefeated = progress.MinibossesDefeated;
@@ -108,7 +116,7 @@ namespace AccardND.GameData
             progress.RestoreProgress(save.playerLevel, save.currentExperience,
                 save.totalExperience, save.availableExperience, save.roomsCleared,
                 save.enemiesDefeated, save.minibossesDefeated,
-                save.diceRolled, save.abilitiesUsed);
+                save.diceRolled, save.abilitiesUsed, save.gold);
         }
 
         public static void WriteDeck(CampaignRunSave save, CampaignDeckState deck)

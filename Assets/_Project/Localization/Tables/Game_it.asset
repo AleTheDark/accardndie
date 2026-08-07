@@ -594,7 +594,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 1894298587145
-    m_Localized: Fortuza
+    m_Localized: Forzuta
     m_Metadata:
       m_Items: []
   - m_Id: 1894298587146
@@ -637,7 +637,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 1894298587155
-    m_Localized: RIDUCE IL DADO VIGORE NEMICO
+    m_Localized: MALUS CUMULABILE AL DADO VIGORE NEMICO
     m_Metadata:
       m_Items: []
   - m_Id: 1894298587156
@@ -679,7 +679,7 @@ MonoBehaviour:
       - rid: 7214883181289013806
   - m_Id: 1894298587163
     m_Localized: 'Scegli un nemico: nel prossimo confronto il suo dado Vigore scende
-      di una taglia.'
+      di una taglia. Piu marchi si accumulano, fino a un minimo di D3.'
     m_Metadata:
       m_Items: []
   - m_Id: 1894298587164
@@ -701,7 +701,7 @@ MonoBehaviour:
       m_Items:
       - rid: 7214883181289013806
   - m_Id: 1894298587168
-    m_Localized: Quando muore una pedina qualsiasi, ogni carta Fortuza con l'aura
+    m_Localized: Quando muore una pedina qualsiasi, ogni carta Forzuta con l'aura
       attiva acquisisce +1 permanente.
     m_Metadata:
       m_Items: []
@@ -827,7 +827,7 @@ MonoBehaviour:
     m_Localized: 'HP 45: Bragus Reattivo: Bragus non attacca nel suo turno. Quando
       viene attaccato si difende; se l''attaccante non supera la sua difesa, Bragus
       contrattacca subito. Presa Brutale: finche Bragus e vivo, gli avversari non
-      possono usare equipaggiamenti.'
+      possono usare equipaggiamenti ne saltare il turno.'
     m_Metadata:
       m_Items: []
   - m_Id: 1894386667522
@@ -884,10 +884,6 @@ MonoBehaviour:
 
       Forma Vetro: Potenza 5, Vigor D8; se resiste ad
       un attacco, recupera hp pari alla differenza.'
-    m_Metadata:
-      m_Items: []
-  - m_Id: 1894395056130
-    m_Localized: Porcodio
     m_Metadata:
       m_Items: []
   - m_Id: 1894395056131
@@ -1810,7 +1806,8 @@ MonoBehaviour:
       m_Items:
       - rid: 7214883181289013806
   - m_Id: 13983058661400
-    m_Localized: 'ABILITA MAGO: scegli un nemico a cui abbassare il dado Vigore.'
+    m_Localized: 'ABILITA MAGO: scegli un nemico a cui applicare un malus cumulabile
+      al dado Vigore.'
     m_Metadata:
       m_Items: []
   - m_Id: 13983058661401
@@ -2175,7 +2172,7 @@ MonoBehaviour:
       m_Items:
       - rid: 7214883181289013806
   - m_Id: 378644065062959
-    m_Localized: "Stai per acquistare {0} per {1} EXP. Questo primo acquisto chiuder\xE0
+    m_Localized: "Stai per acquistare {0} per {1} oro. Questo primo acquisto chiuder\xE0
       il banco {2} fino alla prossima stanza Mercato.\n\nVuoi procedere?"
     m_Metadata:
       m_Items:
@@ -2374,6 +2371,458 @@ MonoBehaviour:
     m_Localized: Gratuita
     m_Metadata:
       m_Items: []
+  - m_Id: 1466534702518272
+    m_Localized: ATTACCO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489792
+    m_Localized: DIFESA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489793
+    m_Localized: ATTACCO CPU
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489794
+    m_Localized: TUA DIFESA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489795
+    m_Localized: Svantaggio contro {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489796
+    m_Localized: Il triplicatore ti aspetta fra i messaggi del profilo.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489797
+    m_Localized: Hai guadagnato {0} punti esperienza e {1} oro!
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489798
+    m_Localized: 'Fine campagna: +{0} EXP account ({1}/10).'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489799
+    m_Localized: Guarda ADV per triplicare la ricompensa.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489800
+    m_Localized: Vuoi triplicare la ricompensa?
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489801
+    m_Localized: "Vuoi triplicare la ricompensa guardando una pubblicit\xE0?"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489802
+    m_Localized: "La ricompensa \xE8 pronta."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489803
+    m_Localized: 'Hai guadagnato
+
+      <size=40><b>+{0} EXP</b></size>
+
+
+      {1}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489804
+    m_Localized: TRIPLICA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489805
+    m_Localized: GUARDA ADV EXP
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489806
+    m_Localized: SCEGLI UNA NUOVA CLASSE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489807
+    m_Localized: Hai completato il primo scenario. La classe scelta verra sbloccata
+      permanentemente.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489808
+    m_Localized: La scelta e definitiva.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489809
+    m_Localized: 'TEST COMPLETATO: {0} SELEZIONATO'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489810
+    m_Localized: Sblocco in corso...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489811
+    m_Localized: 'Scelta non registrata: {0}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489812
+    m_Localized: Connessione al server non disponibile.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489813
+    m_Localized: 'PROGRESSIONE - classe scelta e sbloccata: {0}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489814
+    m_Localized: 'AVVENTURA - completamento capitolo {0} salvato: verra'' registrato
+      alla riconnessione.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489815
+    m_Localized: 'AVVENTURA - completamento capitolo {0} non registrato: server non
+      disponibile e account assente.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489816
+    m_Localized: Connessione al server necessaria per registrare il completamento
+      del tutorial.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489817
+    m_Localized: Connessione al server necessaria per sbloccare un capitolo.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489818
+    m_Localized: Connessione al server necessaria per sbloccare Hardcore.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489819
+    m_Localized: ORO DISPONIBILE  <size=30>{0}</size>
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489820
+    m_Localized: 'MERCATO: servono {0} oro, disponibili {1}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489821
+    m_Localized: VENDI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489822
+    m_Localized: RECUPERA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489823
+    m_Localized: SELEZIONA CARTA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489824
+    m_Localized: VENDI  +{0} ORO
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489825
+    m_Localized: RECUPERA  -{0} ORO
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489826
+    m_Localized: '{0} ORO'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489827
+    m_Localized: ORO {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489828
+    m_Localized: 'CARTA IGNOTA: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489829
+    m_Localized: 'ACQUISTO: '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489830
+    m_Localized: ACQUISTO - {0}, -{1} oro (tassa di carovana inclusa).
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489831
+    m_Localized: '{0}{1} entra nel mazzo per {2} oro. Oro disponibile: {3}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489832
+    m_Localized: ACQUISTO OGGETTO - {0}, -{1} oro (tassa di carovana inclusa).
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489833
+    m_Localized: 'ACQUISTO: {0} entra nella borsa per {1} oro. Oro disponibile: {2}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489834
+    m_Localized: VENDITA - {0}, +{1} oro.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489835
+    m_Localized: 'VENDUTA: {0}. Ottieni {1} oro.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489836
+    m_Localized: 'MERCATO: servono {0} oro per recuperare {1}, disponibili {2}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489837
+    m_Localized: RECUPERO MERCATO - {0} torna nel mazzo, -{1} oro.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489838
+    m_Localized: 'RECUPERATA: {0} torna nel mazzo per {1} oro. Ora puoi venderla
+      o tenerla.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489839
+    m_Localized: PANORAMICA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489840
+    m_Localized: STATISTICHE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489841
+    m_Localized: TRAGUARDI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489842
+    m_Localized: MESSAGGI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489843
+    m_Localized: CARICAMENTO...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489844
+    m_Localized: NESSUNA COMUNICAZIONE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489845
+    m_Localized: SCADE FRA {0} H
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489846
+    m_Localized: 'Hai guadagnato +{0} EXP, ma il triplicatore non e'' stato riscosso.
+
+      Guarda
+      un video e ricevi altri +{1} EXP.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489847
+    m_Localized: TRIPLICA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489848
+    m_Localized: RICOMPENSA IN SOSPESO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489849
+    m_Localized: CAMPAGNA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489850
+    m_Localized: "FINE {0} \xB7 {1} STANZE"
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489851
+    m_Localized: FINE {0}
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489852
+    m_Localized: 'Un attimo: sto riscuotendo...'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489853
+    m_Localized: "Un attimo: sto caricando la pubblicit\xE0..."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489854
+    m_Localized: 'Connessione al server necessaria: la ricompensa resta qui.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489855
+    m_Localized: "Nessuna pubblicit\xE0 disponibile: la ricompensa resta qui, riprova
+      pi\xF9 tardi."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489856
+    m_Localized: Il video va guardato per intero per triplicare l'EXP.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489857
+    m_Localized: '+{0} EXP account: ricompensa triplicata.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489858
+    m_Localized: 'PROFILO - ricompense in sospeso non caricate: {0}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489859
+    m_Localized: 'PROFILO - triplicatore in sospeso non applicato: annuncio {0}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489860
+    m_Localized: 'PROFILO - triplicatore recuperato: +{0} EXP account.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489861
+    m_Localized: 'PROFILO - triplicatore in sospeso rifiutato dal server: {0}'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 1466534723489862
+    m_Localized: 'Un attimo: sto riscuotendo...'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489863
+    m_Localized: "Un attimo: sto caricando la pubblicit\xE0..."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489864
+    m_Localized: "Nessuna pubblicit\xE0 disponibile in questo momento: la ricompensa
+      resta qui, riprova pi\xF9 tardi."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489865
+    m_Localized: "La pubblicit\xE0 va guardata per intero per riscuotere."
+    m_Metadata:
+      m_Items: []
+  - m_Id: 1466534723489866
+    m_Localized: 'TAVERNA - riscossione non sbloccata: annuncio {0}.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 2161429364772864
+    m_Localized: OPZIONI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132992
+    m_Localized: AUDIO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132993
+    m_Localized: LINGUA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132994
+    m_Localized: GIOCO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132995
+    m_Localized: EFFETTI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132996
+    m_Localized: MUSICA
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132997
+    m_Localized: LINGUA DI GIOCO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132998
+    m_Localized: NON DISPONIBILE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394132999
+    m_Localized: REGISTRO
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133000
+    m_Localized: AURE
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133001
+    m_Localized: PRIVACY
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133002
+    m_Localized: LOGOUT
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133003
+    m_Localized: 'al santuario: {0} miele'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 2161429394133004
+    m_Localized: in arrivo
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133005
+    m_Localized: 'Capitolo chiuso: batti il boss del capitolo precedente, oppure
+      compralo al Santuario per {0} miele.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 2161429394133006
+    m_Localized: '{0} arrivera'' presto: il suo boss non e'' ancora pronto.'
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 2161429394133007
+    m_Localized: Capitoli
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133008
+    m_Localized: Ogni capitolo si guadagna battendo il boss di quello prima, oppure
+      si compra qui.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429394133009
+    m_Localized: Apri questo capitolo per {0} vasetti di miele, senza battere il
+      boss di quello prima. La classe in fondo al capitolo resta da guadagnare.
+    m_Metadata:
+      m_Items:
+      - rid: 7214883181289013806
+  - m_Id: 2161429394133010
+    m_Localized: CAPITOLI APERTI
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429553516544
+    m_Localized: Tana di Bragus
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429553516545
+    m_Localized: cosmic 1
+    m_Metadata:
+      m_Items: []
+  - m_Id: 2161429599653888
+    m_Localized: mirror 1
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds:
@@ -2523,3 +2972,41 @@ MonoBehaviour:
         - id: 378644065062995
         - id: 380459435331584
         - id: 380459435331586
+        - id: 1466534723489795
+        - id: 1466534723489797
+        - id: 1466534723489798
+        - id: 1466534723489803
+        - id: 1466534723489809
+        - id: 1466534723489811
+        - id: 1466534723489813
+        - id: 1466534723489814
+        - id: 1466534723489815
+        - id: 1466534723489819
+        - id: 1466534723489820
+        - id: 1466534723489824
+        - id: 1466534723489825
+        - id: 1466534723489826
+        - id: 1466534723489827
+        - id: 1466534723489830
+        - id: 1466534723489831
+        - id: 1466534723489832
+        - id: 1466534723489833
+        - id: 1466534723489834
+        - id: 1466534723489835
+        - id: 1466534723489836
+        - id: 1466534723489837
+        - id: 1466534723489838
+        - id: 1466534723489845
+        - id: 1466534723489846
+        - id: 1466534723489850
+        - id: 1466534723489851
+        - id: 1466534723489857
+        - id: 1466534723489858
+        - id: 1466534723489859
+        - id: 1466534723489860
+        - id: 1466534723489861
+        - id: 1466534723489866
+        - id: 2161429394133003
+        - id: 2161429394133005
+        - id: 2161429394133006
+        - id: 2161429394133009

@@ -110,6 +110,7 @@ namespace AccardND.GameCore.Tests
                 honey = 120,
                 tutorialCompleted = true,
                 hardcoreUnlocked = true,
+                pendingClassChoices = { "barbarian", "hunter", "priest" },
                 unlockedChapters = { "chapter-1", "chapter-2" }
             };
             service.ApplyAuthoritative(snapshot);
@@ -117,6 +118,7 @@ namespace AccardND.GameCore.Tests
             Assert.That(service.Honey, Is.EqualTo(120));
             Assert.That(service.TutorialCompleted, Is.True);
             Assert.That(service.HardcoreUnlocked, Is.True);
+			Assert.That(service.Progress.pendingClassChoices, Is.EquivalentTo(new[] { "barbarian", "hunter", "priest" }));
             Assert.That(service.IsUnlocked(SinglePlayerUnlockType.Chapter, "chapter-2"), Is.True);
             // Lo stato precedente viene sostituito, non fuso.
             Assert.That(service.IsUnlocked(SinglePlayerUnlockType.Class, "old-class"), Is.False);
