@@ -59,9 +59,11 @@ public sealed partial class BattleBoardController
                 previous.ClearActionOverlay();
             }
             pendingDeploymentIndex = -1;
+            ClearTargetHints();
         }
 
         PrototypeCardView cardView = draftViews[index];
+        ShowDeploymentMatchupHints(draftCandidates[index]);
         if (adventureScriptedTutorialActive)
         {
             cardView.ShowConfirmAction(
@@ -81,6 +83,11 @@ public sealed partial class BattleBoardController
     {
         if (index >= 0 && index < draftViews.Count && draftViews[index] != null)
             draftViews[index].ClearActionOverlay();
+
+        // Al rilascio ToggleDraftCard riapplica subito la preview sulla carta
+        // confermabile; durante un annullamento, invece, non deve restare sospesa.
+        if (pendingDeploymentIndex < 0)
+            ClearTargetHints();
     }
 
     private void ConfirmCampaignDeploymentCard(int index)

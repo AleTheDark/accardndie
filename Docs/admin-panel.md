@@ -83,6 +83,8 @@ provider ricevevano un id giocatore e mai l'indirizzo. Dettagli in
 - **Panoramica** — KPI (account, attivi 24h/7g, login, partite PvP, run iniziate,
   run concluse, online ora) e un grafico dell'attività nel tempo (login,
   registrazioni, partite, run iniziate, run concluse) su 7/30/90 giorni.
+- **Retention** — quanti giocatori tornano dopo essersi registrati, per coorte.
+  Vedi [Retention](#retention).
 - **Giocatori** — ricerca per nome o `player_id`; il dettaglio raccoglie tutto
   quello che il server sa di un account:
   - account (fonte, registrazione, ultimo login, miele, livello/esperienza,
@@ -108,12 +110,61 @@ provider ricevevano un id giocatore e mai l'indirizzo. Dettagli in
 - **Stagioni** — elenco stagioni con conteggi.
 - **Versione client** — la build ammessa all'accesso, cambiabile a caldo. Vedi
   [Versione client richiesta](#versione-client-richiesta).
+- **Manutenzione** — chiude gli accessi senza spegnere il server. Vedi
+  [Manutenzione](#manutenzione).
 
 > Nota sulle quest: "assegnata" conta i giocatori che hanno aperto la taverna quel
 > giorno (le righe nascono al primo contatto, non a mezzanotte), e lo storico dei
 > giorni passati conta le **riscossioni**: i contatori sono cumulativi, quindi
 > rivalutare oggi il completamento di ieri direbbe quanti hanno superato la soglia
 > da allora, non entro la giornata.
+
+## Retention
+
+La scheda risponde a una domanda sola: **di cento persone che si registrano, quante
+tornano?** È la metrica che moltiplica tutte le altre, perché i giorni giocati per
+install decidono insieme ricavi pubblicitari, acquisti e passaparola
+(il conto sta in [analisi-mercato-e-ricavi.md](analisi-mercato-e-ricavi.md)).
+
+Una **coorte** è l'insieme degli account creati in un giorno UTC. Il giocatore
+"torna al giorno N" se in `login_events` c'è un accesso datato **esattamente** N
+giorni dopo la registrazione: il giorno preciso, non «entro N giorni». È la
+definizione con cui sono scritti i benchmark del settore, e l'altra è più generosa
+di qualche punto.
+
+| | Cosa vedi |
+| --- | --- |
+| KPI in alto | D1, D7 e D30 medi sulla finestra, con il numero di account su cui sono calcolati |
+| Tabella | una riga per giorno di registrazione: dimensione della coorte e i tre valori |
+| Finestra | 30 / 60 / 90 / 180 giorni (default 60: con 30 il D30 avrebbe una sola coorte matura) |
+
+Tre scelte che vale la pena conoscere prima di leggere i numeri:
+
+- **Le coorti acerbe mostrano «—», non 0%.** Chi si è registrato ieri non ha ancora
+  avuto il suo settimo giorno, e contarlo come "non tornato" schiaccia verso il
+  basso qualsiasi media. Una coorte entra nel conto del giorno N solo quando quel
+  giorno è **finito**; nella tabella compare comunque, così si vede crescere.
+- **Le medie sono pesate sulla dimensione delle coorti**, non sulla media delle
+  percentuali: due coorti da 3 e da 1 con un ritorno ciascuna fanno 50%, non 66%.
+- **Sotto i 20 account la percentuale resta grigia.** Non è una misura: in una
+  coorte da 12 tester una persona vale 8 punti. Sopra quella soglia il colore usa i
+  benchmark 2026 del genere — rosso sotto, verde sopra — con una banda per colonna,
+  perché un D7 dell'8% è buono quanto un D1 del 30%:
+
+  | | rosso sotto | verde da |
+  | --- | --- | --- |
+  | D1 | 20% | 30% |
+  | D7 | 4% | 8% |
+  | D30 | 1% | 3% |
+
+Due avvertenze sulla fonte del dato. La coorte è per **account creato**, non per
+install: combacia solo finché ogni giocatore ottiene una riga in `accounts` al primo
+avvio. E `login_events` ha una riga per **autenticazione riuscita**: il token di
+sessione del client vive solo in memoria, quindi ogni avvio dell'app produce un
+login, mentre una riconnessione a metà sessione no — ed è giusto così, conta il
+giorno, non quante volte. Dentro ci sono anche gli account di prova.
+
+API: `GET /admin/api/retention?days=60`.
 
 ## Azioni sul DB (curate)
 
@@ -144,8 +195,6 @@ Dettagli che contano:
   bloccate. Per toglierle si toglie prima il tutorial.
 - Dare il **tutorial** consegna anche classi base e primo capitolo, come a fine
   tutorial nel gioco.
-- Gli **oggetti** sbloccano il diritto di comprarli al negozio: le copie si prendono
-  lì col miele (che si imposta con l'azione dedicata).
 - La lista è una whitelist (`Admin/AdminUnlockCatalog.cs`): un id non a catalogo
   viene rifiutato, altrimenti resterebbe per sempre in `single_player_unlocks` senza
   che nulla lo riconosca.
@@ -153,6 +202,39 @@ Dettagli che contano:
 API: `GET /admin/api/players/{id}/unlocks`, `POST .../unlocks`
 (`{type,id,granted}`), `POST .../unlocks/all` (`{granted}`). Le POST rispondono col
 catalogo aggiornato.
+
+## Scorta consumabili
+
+I consumabili non sono uno sblocco ma una quantità, quindi hanno un riquadro loro nel
+dettaglio giocatore: **Scorta consumabili** elenca tutto il catalogo del negozio — non
+solo quello che il giocatore ha già — con `−` / campo numerico / `+` per ogni voce, e
+tre scorciatoie "1 di tutto", "5 di tutto", "Svuota scorta". Nessun costo in miele.
+Tetto di 99 copie per oggetto.
+
+- La quantità mandata al server è **assoluta**, non un delta: due click ravvicinati non
+  si sommano e un rinvio della stessa richiesta non raddoppia niente.
+- Portare un oggetto a **zero** lo toglie anche dalla **bisaccia**, con la stessa regola
+  del consumo in run: altrimenti la bisaccia mostrerebbe uno slot pieno che alla run
+  successiva parte vuoto.
+- La bisaccia si vede sotto la scorta (con gli slot disponibili) ma **non si modifica**
+  da qui: è una scelta del giocatore al Santuario.
+- Le righe di `player_consumables` che non stanno più a catalogo (oggetto rinominato o
+  rimosso) sono elencate a parte come "fuori catalogo": non sono modificabili voce per
+  voce e vanno via solo con "Svuota scorta".
+- Come per gli sblocchi, il gioco le legge alla prossima sincronizzazione della
+  progressione.
+
+API: `GET /admin/api/players/{id}/stash`, `POST .../stash` (`{itemId,count}`),
+`POST .../stash/all` (`{count}`). Anche qui le POST rispondono con lo stato aggiornato.
+
+## Dal telefono
+
+La pagina è la stessa, si riadatta sotto i 640px: barra delle sezioni su una riga sola
+che scorre, KPI a due colonne, schede a colonna singola, scheda giocatore a tutto
+schermo con la X appiccicata in alto, campi a 16px (sotto, iOS ingrandisce la pagina da
+solo al focus). Le tabelle scorrono orizzontalmente nel loro riquadro e le colonne
+marcate `.opt` — quelle secondarie, es. fonte, exp totale, data di registrazione —
+spariscono sotto i 780px: nessun dato e nessuna azione è raggiungibile solo da desktop.
 
 ## Versione client richiesta
 
@@ -175,6 +257,55 @@ avvio" cancella l'override e ci ritorna.
 
 Il cambio vale dai login successivi: chi sta già giocando non viene disconnesso.
 
+## Manutenzione
+
+La scheda **Manutenzione** chiude il portone **senza spegnere il server**: acceso
+l'interruttore nessun accesso passa più — login Google e riaggancio di sessione
+allo stesso modo — e chi bussa resta sulla schermata di login con il popup di
+manutenzione. Il messaggio è scrivibile dal pannello (max 240 caratteri, es.
+"Torniamo alle 18:00"); lasciandolo vuoto il gioco mostra il proprio testo tradotto.
+
+**Chi è già dentro non viene toccato.** È un *drain*, non uno sfratto: si smette di
+far entrare gente e si aspetta che il campo si svuoti. Il popup del client ha un
+tasto **Riprova** — il blocco è temporaneo, a differenza di quello di versione che
+manda a scaricare la build nuova.
+
+Come per la versione client, lo stato vive in `server_settings` sul DB e non in
+`serverconfig.json`: la manutenzione si accende **per** riavviare, quindi deve
+sopravvivere al riavvio, o il server riaprirebbe da solo a metà deploy. All'avvio
+con la manutenzione attiva il log lo dice a chiare lettere (`Avvio in MANUTENZIONE`).
+
+> Da accesa non entra **nessuno**, e non scade da sola: finché non la spegni il
+> gioco è chiuso a tutti. Per questo una banda rossa resta in cima al pannello in
+> ogni scheda, con il tasto "Riapri il server" a portata di mano.
+
+### Si può riavviare?
+
+Il riquadro sotto risponde alla domanda vera, e si rinfresca da solo ogni 10s
+mentre la scheda è aperta: **match PvP in corso**, **stanze in attesa**,
+**collegati ora**.
+
+Il numero che conta è il primo, perché le due modalità reagiscono in modo opposto
+a un riavvio:
+
+- **PvP** — una partita vive **solo in memoria** e non si riprende: al riavvio
+  viene chiusa da `MatchDrainService` con esito neutro (`server_shutdown`), quindi
+  conta come giocata ma **non tocca l'MMR** e non addebita forfeit a nessuno. I due
+  giocatori però la perdono. Vale solo per lo spegnimento **pulito** (SIGTERM, cioè
+  `systemctl stop/restart`): un `kill -9` o una caduta del VPS non registra niente.
+- **Campagna** — regge. La run prosegue offline (le letture vengono dalla cache
+  locale dell'ultima istantanea autoritativa) e la ricompensa di fine run passa dal
+  `PersistentMutationOutbox`: scritta su disco **prima** di partire, viene rigiocata
+  al lancio successivo con lo stesso `requestId`, e il dedup lato server impedisce
+  che venga applicata due volte. Nessun giocatore perde miele o sblocchi.
+
+Quindi: accendi la manutenzione, aspetti che i match in corso arrivino a zero,
+riavvii, spegni la manutenzione.
+
+API: `GET /admin/api/maintenance`, `POST /admin/api/maintenance`
+(`{enabled,message}`). La GET porta anche i contatori del drain; la POST risponde
+con lo stato aggiornato.
+
 ## Dati "nel tempo"
 
 Due tabelle append-only alimentano i grafici storici, popolate agganciando i
@@ -182,8 +313,37 @@ flussi esistenti (nessuna modifica al client Unity):
 
 - `login_events` — una riga per ogni login riuscito (password/UGS/Google).
   `accounts.last_login_at` conserva solo l'ultimo accesso; questa tabella la serie.
-- `campaign_runs` — una riga per ogni run di campagna conclusa (morte), con
-  modalità/capitolo/stanze/nemici/boss/miele, dal sommario della death-reward.
+- `campaign_runs` — una riga per ogni run di campagna, con
+  modalità/capitolo/stanze/nemici/boss/miele. La riga **nasce all'avvio della run**
+  (`started_at`) e viene **chiusa** dal sommario della death-reward (`ended_at`).
 
 Lo storico parte dal deploy di questa modifica: gli eventi precedenti non erano
 registrati.
+
+## Run iniziate e run concluse
+
+Fino al 2026-08-07 il server sentiva parlare di una run **solo alla fine**, quando
+il client chiedeva la ricompensa: chi chiudeva il gioco a metà, restava senza rete
+o crashava non lasciava alcuna traccia. Da fuori sembrava che non avesse giocato.
+
+Adesso il client manda `singleplayer.run.started` appena si entra in campagna (lo
+stesso `runId` che chiudera' la run), il server apre la riga con `started_at` e la
+death-reward la chiude aggiornandola. Ne discende la lettura del pannello:
+
+- **conclusa** — `ended_at` valorizzato: la run è arrivata a morte o vittoria;
+- **in corso** — nessuna fine e inizio da meno di due ore: probabilmente ci sta
+  giocando qualcuno proprio adesso;
+- **abbandonata** — nessuna fine e inizio più vecchio: gioco chiuso a metà.
+
+Limiti da tenere presenti:
+
+- l'avvio **non è persistente**: se il client è offline in quel momento la run
+  compare solo alla fine, senza `started_at` (un avvio rispedito ore dopo
+  racconterebbe una run cominciata quando invece era già finita);
+- una run **ripresa** dopo un riavvio chiude la propria riga perché il `runId` sta
+  nel salvataggio; i salvataggi creati prima di questa modifica non ce l'hanno, e
+  la loro riga di avvio resta fra le abbandonate;
+- le run già in archivio non hanno `started_at`: nel pannello risultano concluse
+  senza inizio né durata.
+
+API: `GET /admin/api/runs?status=all|open|ended&limit=&offset=`.

@@ -19,9 +19,8 @@ MonoBehaviour:
   strength: 8
   hasHeroClass: 1
   heroClass: 2
-  rulesText: 'HP 50. Sguardo Pietrificante: quando attacca confronta il suo dado
-    da Mago contro ogni alleato vivo, applicando vantaggio, svantaggio o neutro per
-    ciascun matchup. Somma solo i risultati scelti dei dadi, senza aggiungere la
-    forza 8. Gli alleati sommano i propri dadi Vigore. Se Medusa supera la somma
+  rulesText: 'HP 50. Sguardo Pietrificante: quando attacca tira una sola volta il
+    proprio dado Vigore e aggiunge la sua forza 8. Gli alleati vivi tirano ciascuno
+    il proprio dado Vigore e ne sommano i risultati. Se Medusa supera la somma
     totale, pietrifica tutte le pedine alleate. Nel proprio turno ogni pedina pietrificata
     tira il proprio dado Vigore: se fallisce, muore.'

@@ -10,6 +10,8 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace AccardND.Presentation
@@ -23,6 +25,16 @@ namespace AccardND.Presentation
         private static Sprite runtimeAuraSprite;
         private static Sprite bragusContourAuraSprite;
         private static Sprite trentorContourAuraSprite;
+        private static Sprite seraphelContourAuraSprite;
+        private static Sprite seraphelPhaseTwoContourAuraSprite;
+        private static Sprite jurinashorContourAuraSprite;
+        private static Sprite jurinashorPhaseTwoContourAuraSprite;
+        private const string JurinashorContourMaskResourcePath = "UI/jurinashor_phase_1_contour_mask";
+        private const string JurinashorPhaseTwoContourMaskResourcePath = "UI/jurinashor_phase_2_contour_mask";
+        private const string BragusContourMaskResourcePath = "UI/bragus_contour_mask";
+        private const string TrentorContourMaskResourcePath = "UI/trentor_contour_mask";
+        private const string SeraphelPhaseOneContourMaskResourcePath = "UI/seraphel_phase_1_contour_mask";
+        private const string SeraphelPhaseTwoContourMaskResourcePath = "UI/seraphel_phase_2_contour_mask";
         private static readonly Vector2[] BragusAuraContour =
         {
             new(0.065f, 0.115f), new(0.105f, 0.155f), new(0.145f, 0.17f),
@@ -65,6 +77,77 @@ namespace AccardND.Presentation
             new(0.22f, 0.50f), new(0.15f, 0.43f), new(0.12f, 0.32f),
             new(0.15f, 0.21f), new(0.23f, 0.12f), new(0.34f, 0.075f)
         };
+        private static readonly Vector2[] SeraphelAuraContour =
+        {
+            // Orlo della veste, aderente alla sagoma rossa fornita.
+            new(0.47f, 0.015f), new(0.61f, 0.012f), new(0.76f, 0.025f),
+            new(0.83f, 0.055f), new(0.80f, 0.12f), new(0.77f, 0.19f),
+
+            // Mantello destro: rientro e punta esterna ben marcati.
+            new(0.76f, 0.25f), new(0.82f, 0.31f), new(0.90f, 0.27f),
+            new(0.95f, 0.30f), new(0.91f, 0.39f), new(0.84f, 0.44f),
+            new(0.80f, 0.53f), new(0.75f, 0.63f), new(0.68f, 0.72f),
+
+            // Spalla destra, corona e testa, senza il vecchio alone largo.
+            new(0.64f, 0.79f), new(0.61f, 0.88f), new(0.58f, 0.96f),
+            new(0.54f, 0.99f), new(0.50f, 0.965f), new(0.47f, 0.90f),
+            new(0.45f, 0.82f), new(0.41f, 0.76f),
+
+            // Incavo tra corpo e bastone, come nel tracciato dell'utente.
+            new(0.37f, 0.70f), new(0.32f, 0.62f), new(0.28f, 0.66f),
+            new(0.27f, 0.77f), new(0.25f, 0.88f),
+
+            // Cristallo e asta: sagoma autonoma e stretta.
+            new(0.32f, 0.97f), new(0.29f, 1.00f), new(0.25f, 0.94f),
+            new(0.24f, 0.88f), new(0.27f, 0.83f), new(0.30f, 0.78f),
+            new(0.30f, 0.67f), new(0.28f, 0.56f),
+
+            // Mantello sinistro: grande punta, rientro e seconda falda.
+            new(0.24f, 0.47f), new(0.19f, 0.36f), new(0.14f, 0.25f),
+            new(0.19f, 0.25f), new(0.24f, 0.32f), new(0.29f, 0.35f),
+            new(0.27f, 0.25f), new(0.21f, 0.18f), new(0.15f, 0.11f),
+            new(0.16f, 0.065f), new(0.27f, 0.025f), new(0.36f, 0.015f)
+        };
+        private static readonly Vector2[] JurinashorAuraContour =
+        {
+            // Ala sinistra: parte dal margine, segue la grande punta e rientra
+            // sulla testa. Il tracciato riproduce la sagoma gialla di riferimento.
+            new(-0.10f, 0.70f), new(-0.05f, 0.82f), new(0.06f, 0.91f),
+            new(0.20f, 0.96f), new(0.25f, 1.01f), new(0.46f, 1.025f),
+            new(0.51f, 1.00f), new(0.51f, 0.94f), new(0.48f, 0.91f),
+            new(0.48f, 0.965f), new(0.43f, 0.96f), new(0.39f, 0.91f),
+
+            // Corna, dita e incavi centrali superiori.
+            new(0.35f, 0.84f), new(0.39f, 0.78f), new(0.46f, 0.75f),
+            new(0.43f, 0.85f), new(0.47f, 0.89f), new(0.49f, 0.82f),
+            new(0.51f, 0.76f), new(0.54f, 0.84f), new(0.58f, 0.89f),
+            new(0.56f, 0.80f), new(0.62f, 0.76f), new(0.66f, 0.82f),
+            new(0.63f, 0.90f), new(0.57f, 0.94f), new(0.57f, 0.99f),
+            new(0.60f, 1.035f), new(0.68f, 1.055f),
+
+            // Ala destra, compresa la punta bassa che arriva dietro al braccio.
+            new(0.80f, 1.03f), new(0.90f, 0.98f), new(0.96f, 0.91f),
+            new(0.99f, 0.80f), new(1.00f, 0.70f), new(1.08f, 0.59f),
+            new(1.03f, 0.61f), new(0.93f, 0.75f), new(0.87f, 0.75f),
+            new(0.84f, 0.69f), new(0.80f, 0.66f), new(0.77f, 0.70f),
+
+            // Braccio e spada destri.
+            new(0.73f, 0.66f), new(0.70f, 0.58f), new(0.74f, 0.54f),
+            new(0.86f, 0.47f), new(1.00f, 0.38f), new(1.00f, 0.35f),
+            new(0.97f, 0.35f), new(0.76f, 0.45f), new(0.66f, 0.51f),
+
+            // Fianco destro e orlo inferiore della veste.
+            new(0.66f, 0.43f), new(0.72f, 0.33f), new(0.65f, 0.33f),
+            new(0.62f, 0.25f), new(0.56f, 0.20f), new(0.36f, 0.205f),
+            new(0.41f, 0.31f), new(0.46f, 0.45f), new(0.46f, 0.55f),
+
+            // Braccio sinistro: mano aperta, gomito e rientro sul busto.
+            new(0.39f, 0.40f), new(0.35f, 0.34f), new(0.31f, 0.34f),
+            new(0.28f, 0.39f), new(0.27f, 0.48f), new(0.20f, 0.55f),
+            new(0.25f, 0.45f), new(0.22f, 0.40f), new(0.17f, 0.47f),
+            new(0.18f, 0.57f), new(0.11f, 0.62f), new(0.06f, 0.67f),
+            new(0.03f, 0.74f), new(-0.01f, 0.75f), new(-0.04f, 0.69f)
+        };
         private static Sprite runtimeSparkleSprite;
         private static Sprite petrifiedOverlaySprite;
         private static Sprite petrifiedFragmentSprite;
@@ -89,6 +172,7 @@ namespace AccardND.Presentation
         private const float ScreenDiceAreaWidth = 0.38f;
         private const float CardAspect = 848f / 1264f;
         private const float ArtworkCropOverscan = 0.86f;
+        private Image cardArtworkImage;
         private const float TurnActionMaximumVerticalLift = 0.20f;
         private static readonly Color ActionLabelOutline = new(0.02f, 0.01f, 0f);
         private static readonly Color ActionLabelGreen = new(0.05f, 0.56f, 0.24f);
@@ -109,6 +193,8 @@ namespace AccardND.Presentation
             bossHealthFrameSprite = null;
             bossHealthFillSprite = null;
             bossHealthGlowSprite = null;
+            seraphelContourAuraSprite = null;
+            jurinashorContourAuraSprite = null;
         }
         private static readonly Color SelectedAuraGold = new(1f, 0.78f, 0.16f, 1f);
         private static readonly Color SelectedBattlefieldGreen = new(0.2f, 1f, 0.65f, 1f);
@@ -126,6 +212,10 @@ namespace AccardND.Presentation
         private Image battleAuraImage;
         private Text battleAuraLabel;
         private Text strengthText;
+        private int displayedStrengthValue;
+        private bool hasDisplayedStrengthValue;
+        private Coroutine strengthIncreaseCalloutCoroutine;
+        private GameObject strengthIncreaseCalloutRoot;
         private Text defeatedLabel;
         private Text targetHintLabel;
         private Image targetHintBackground;
@@ -141,12 +231,20 @@ namespace AccardND.Presentation
         private readonly List<Transform> defeatEffectLayerAnchors = new();
         private Text statusLabel;
         private RectTransform statusIconRoot;
+        private DarkSigilLightningVfx darkSigilLightningVfx;
         private bool bragusBackdropPresentation;
         private bool trentorBackdropPresentation;
+        private bool palatirBackdropPresentation;
+        private bool seraphelBackdropPresentation;
+        private bool jurinashorBackdropPresentation;
+        private bool jurinashorSwordPresentation;
         private Image battlePreviewImage;
+        private Material assassinSilverFilmMaterial;
         private readonly List<GameObject> statusIconViews = new();
+        private RectTransform petrifiedOverlayRoot;
         private Image petrifiedOverlayImage;
         private GameObject healthBarRoot;
+        private Text healthBarNameText;
         private ArcaneExperienceFillGraphic healthBarFill;
         private Coroutine healthBarFillRoutine;
         private float healthBarDisplayedNormalized = -1f;
@@ -188,6 +286,7 @@ namespace AccardND.Presentation
         private Quaternion diceRootHomeRotation;
         private bool diceRootOnLowerScreenHalf;
         private float screenDiceCardCenterX = 0.5f;
+        private float screenDiceCaptionCenterX = 0.5f;
         private HeroClass cardHeroClass;
         private Coroutine diceCoroutine;
         private Coroutine motionCoroutine;
@@ -249,8 +348,16 @@ namespace AccardND.Presentation
         public Button Button { get; private set; }
         public HeroClass HeroClass => cardHeroClass;
         public bool IsDragging => dragging;
+
+        /// <summary>
+        /// Vero mentre la pedina sta gia' animando il proprio ingresso o la
+        /// propria rivelazione. Chi ricentra la fila deve lasciarla stare: due
+        /// scritture sulla stessa posizione nello stesso frame si vedono.
+        /// </summary>
+        public bool IsPlayingMotion => motionCoroutine != null;
         public bool IsBragusBackdropPresentation => bragusBackdropPresentation;
-        public bool IsBackdropBossPresentation => bragusBackdropPresentation || trentorBackdropPresentation;
+        public bool IsBackdropBossPresentation => bragusBackdropPresentation || trentorBackdropPresentation || palatirBackdropPresentation || seraphelBackdropPresentation || jurinashorBackdropPresentation;
+        public bool IsSeraphelBackdropPresentation => seraphelBackdropPresentation;
 
         private void Update()
         {
@@ -308,6 +415,8 @@ namespace AccardND.Presentation
 
         private void OnDestroy()
         {
+            if (assassinSilverFilmMaterial != null)
+                Destroy(assassinSilverFilmMaterial);
             if (healthBarRoot != null && healthBarRoot.transform.parent != transform)
                 Destroy(healthBarRoot);
             if (diceRootDetachedToScreen && diceRoot != null)
@@ -323,14 +432,55 @@ namespace AccardND.Presentation
 
         public readonly struct StatusToken
         {
-            public StatusToken(string label, Color color)
+            public StatusToken(string label, Color color, Sprite icon = null)
             {
                 Label = label;
                 Color = color;
+                Icon = icon;
             }
 
             public string Label { get; }
             public Color Color { get; }
+            public Sprite Icon { get; }
+        }
+
+        /// <summary>
+        /// Riveste la texture della pedina con la pellicola argentata della Suprema
+        /// dell'Assassino. Il materiale e' per-vista per non contaminare le altre pedine.
+        /// </summary>
+        public void SetAssassinSilverFilm(bool active)
+        {
+            if (battlePreviewImage == null)
+                return;
+
+            if (!active)
+            {
+                battlePreviewImage.material = null;
+                if (assassinSilverFilmMaterial != null)
+                {
+                    Destroy(assassinSilverFilmMaterial);
+                    assassinSilverFilmMaterial = null;
+                }
+                return;
+            }
+
+            if (assassinSilverFilmMaterial == null)
+            {
+                Shader shader = Resources.Load<Shader>("Shaders/AssassinSilverFilm");
+                if (shader == null)
+                {
+                    Debug.LogWarning("Shader della pellicola argentata dell'Assassino non trovato.");
+                    return;
+                }
+
+                assassinSilverFilmMaterial = new Material(shader)
+                {
+                    name = "Assassin Silver Film (Runtime)",
+                    hideFlags = HideFlags.HideAndDontSave
+                };
+            }
+
+            battlePreviewImage.material = assassinSilverFilmMaterial;
         }
 
         public static PrototypeCardView Create(
@@ -435,6 +585,7 @@ namespace AccardND.Presentation
             Stretch(artBackdrop.rectTransform);
 
             Image art = CreateImage("Artwork", artViewport, Color.white);
+            cardArtworkImage = art;
             defeatEffectImages.Add(art);
             Sprite resolvedArtwork = ResolveCardArtwork(definition);
             Sprite framedArtwork = isPalatir ? resolvedArtwork : CreateCoverArtwork(resolvedArtwork, definition.HeroClass);
@@ -466,6 +617,8 @@ namespace AccardND.Presentation
             Font font = AccardND.Battlefield.MmoUiTheme.BodyFont;
             strengthText = CreateText("Strength", transform, font, 42, FontStyle.Bold, TextAnchor.MiddleCenter);
             strengthText.text = definition.Strength.ToString();
+            displayedStrengthValue = definition.Strength;
+            hasDisplayedStrengthValue = true;
             strengthText.color = Color.white;
             Outline strengthOutline = strengthText.gameObject.AddComponent<Outline>();
             strengthOutline.effectColor = Color.black;
@@ -488,18 +641,16 @@ namespace AccardND.Presentation
                 strengthText.rectTransform.offsetMax = new Vector2(0f, 10.3f);
             }
 
-            int descriptionFontSize = DescriptionFontSize(definition.HeroClass);
+            int descriptionFontSize = isPalatir ? DescriptionFontSize(definition.HeroClass) : 14;
             Text statsText = CreateText("Description", transform, font, descriptionFontSize, FontStyle.Bold, TextAnchor.MiddleCenter);
             statsText.text = isPalatir
-                ? "COSMICO"
-                : string.IsNullOrWhiteSpace(definition.RulesText)
-                ? $"{CardRulesGlossary.HeroClassNameUpper(definition.HeroClass)}\n{CardRulesGlossary.ShortAbilityText(definition.HeroClass, configuration?.ClassBalance)}"
-                : $"{CardRulesGlossary.HeroClassNameUpper(definition.HeroClass)}\n{definition.RulesText}";
+				? GameText.Get(GameTextKeys.Combat.CosmicCardDescription)
+                : CardRulesGlossary.HeroClassNameUpper(definition.HeroClass);
             statsText.color = isPalatir ? new Color(0.9f, 0.96f, 1f) : DescriptionColor(definition.HeroClass);
             statsText.horizontalOverflow = HorizontalWrapMode.Wrap;
             statsText.verticalOverflow = VerticalWrapMode.Truncate;
-            statsText.resizeTextMinSize = 8;
-            statsText.resizeTextMaxSize = DescriptionMaxFontSize(definition.HeroClass);
+            statsText.resizeTextMinSize = isPalatir ? 8 : 10;
+            statsText.resizeTextMaxSize = isPalatir ? DescriptionMaxFontSize(definition.HeroClass) : 16;
             ApplyDescriptionReadability(statsText, definition.HeroClass);
             (Vector2 descriptionAnchorMin, Vector2 descriptionAnchorMax) = DescriptionAnchors(definition.HeroClass);
             SetAnchors(statsText.rectTransform, descriptionAnchorMin, descriptionAnchorMax);
@@ -524,7 +675,7 @@ namespace AccardND.Presentation
             CreateStatusIconRoot(new Vector2(0.04f, -0.035f), new Vector2(0.96f, 0.175f), 60f, 7f);
 
             defeatedLabel = CreateText("Defeated", transform, font, 27, FontStyle.Bold, TextAnchor.MiddleCenter);
-            defeatedLabel.text = "ELIMINATA";
+            defeatedLabel.text = GameText.GetOrFallbackSilent(GameTextKeys.Combat.CardEliminated, "ELIMINATA");
             defeatedLabel.color = new Color(1f, 0.26f, 0.22f);
             Stretch(defeatedLabel.rectTransform);
             defeatedLabel.gameObject.SetActive(false);
@@ -605,6 +756,8 @@ namespace AccardND.Presentation
             Font font = AccardND.Battlefield.MmoUiTheme.BodyFont;
             strengthText = CreateText("Dynamic Strength", transform, font, 44, FontStyle.Bold, TextAnchor.MiddleCenter);
             strengthText.text = definition.Strength.ToString();
+            displayedStrengthValue = definition.Strength;
+            hasDisplayedStrengthValue = true;
             strengthText.color = Color.white;
             Outline strengthOutline = strengthText.gameObject.AddComponent<Outline>();
             strengthOutline.effectColor = Color.black;
@@ -636,7 +789,7 @@ namespace AccardND.Presentation
             CreateStatusIconRoot(new Vector2(0.04f, -0.18f), new Vector2(0.96f, 0.08f), 56f, 6f);
 
             defeatedLabel = CreateText("Defeated", transform, font, 21, FontStyle.Bold, TextAnchor.MiddleCenter);
-            defeatedLabel.text = "KO";
+            defeatedLabel.text = GameText.GetOrFallbackSilent(GameTextKeys.Combat.CardKnockedOut, "KO");
             defeatedLabel.color = new Color(1f, 0.26f, 0.22f);
             Outline defeatedOutline = defeatedLabel.gameObject.AddComponent<Outline>();
             defeatedOutline.effectColor = Color.black;
@@ -649,8 +802,95 @@ namespace AccardND.Presentation
 
         public void SetStrengthValue(int value)
         {
-            if (strengthText != null && !combatStrengthOverrideActive)
-                strengthText.text = value.ToString();
+            if (strengthText == null || combatStrengthOverrideActive)
+                return;
+
+            int previousValue = displayedStrengthValue;
+            bool increased = hasDisplayedStrengthValue && value > previousValue;
+            strengthText.text = value.ToString();
+            displayedStrengthValue = value;
+            hasDisplayedStrengthValue = true;
+
+            if (increased && isActiveAndEnabled)
+                PlayStrengthIncreaseCallout(value - previousValue);
+        }
+
+        /// <summary>
+        /// Mostra il guadagno effettivo di Potenza sopra la pedina. Essendo chiamato dal
+        /// setter centrale copre buff, Furia, equipaggiamenti e aure senza duplicare UI.
+        /// </summary>
+        public void PlayStrengthIncreaseCallout(int amount)
+        {
+            if (amount <= 0)
+                return;
+
+            if (strengthIncreaseCalloutCoroutine != null)
+                StopCoroutine(strengthIncreaseCalloutCoroutine);
+            if (strengthIncreaseCalloutRoot != null)
+                Destroy(strengthIncreaseCalloutRoot);
+
+            strengthIncreaseCalloutCoroutine = StartCoroutine(PlayStrengthIncreaseCalloutRoutine(amount));
+        }
+
+        private IEnumerator PlayStrengthIncreaseCalloutRoutine(int amount)
+        {
+            GameObject root = new GameObject(
+                "Strength Increase Callout",
+                typeof(RectTransform),
+                typeof(Canvas),
+                typeof(CanvasGroup),
+                typeof(LayoutElement));
+            root.transform.SetParent(transform, false);
+            root.transform.SetAsLastSibling();
+            strengthIncreaseCalloutRoot = root;
+
+            RectTransform calloutRect = (RectTransform)root.transform;
+            calloutRect.anchorMin = calloutRect.anchorMax = new Vector2(0.5f, 0.5f);
+            calloutRect.pivot = new Vector2(0.5f, 0.5f);
+            calloutRect.sizeDelta = new Vector2(Mathf.Max(300f, RectTransform.rect.width * 2.1f), 92f);
+
+            LayoutElement layout = root.GetComponent<LayoutElement>();
+            layout.ignoreLayout = true;
+            Canvas canvas = root.GetComponent<Canvas>();
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = 465;
+            CanvasGroup group = root.GetComponent<CanvasGroup>();
+            group.ignoreParentGroups = true;
+            group.interactable = false;
+            group.blocksRaycasts = false;
+
+            Text text = CreateText("Strength Increase Text", calloutRect, GetActionLabelFont(), 52, FontStyle.Bold, TextAnchor.MiddleCenter);
+            text.text = $"+{amount}";
+            text.color = Color.white;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            Stretch(text.rectTransform);
+
+            Outline outline = text.gameObject.AddComponent<Outline>();
+            outline.effectColor = Color.black;
+            outline.effectDistance = new Vector2(3f, -3f);
+            outline.useGraphicAlpha = true;
+
+            // Parte in corrispondenza del numero Potenza, non dal centro della pedina.
+            float startY = Mathf.Max(2f, RectTransform.rect.height * 0.01f);
+            float endY = Mathf.Max(125f, RectTransform.rect.height * 0.55f);
+            const float duration = 0.8f;
+            float elapsed = 0f;
+            while (elapsed < duration && root != null)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+                calloutRect.anchoredPosition = new Vector2(0f, Mathf.Lerp(startY, endY, Mathf.SmoothStep(0f, 1f, progress)));
+                float fadeOut = progress < 0.34f ? 1f : 1f - Mathf.InverseLerp(0.34f, 1f, progress);
+                group.alpha = fadeOut;
+                yield return null;
+            }
+
+            if (root != null)
+                Destroy(root);
+            if (strengthIncreaseCalloutRoot == root)
+                strengthIncreaseCalloutRoot = null;
+            strengthIncreaseCalloutCoroutine = null;
         }
 
         private bool combatStrengthOverrideActive;
@@ -1200,7 +1440,13 @@ namespace AccardND.Presentation
             // Bragus non e' piu' una pedina: la forza resta consultabile nella carta,
             // mentre sul campo l'intera gigantografia diventa il bersaglio cliccabile.
             if (strengthText != null)
-                strengthText.gameObject.SetActive(false);
+            {
+                strengthText.gameObject.SetActive(true);
+                SetAnchors(strengthText.rectTransform, new Vector2(0.42f, -0.10f), new Vector2(0.58f, 0.015f));
+                strengthText.fontSize = 44;
+                strengthText.resizeTextForBestFit = false;
+                strengthText.transform.SetAsLastSibling();
+            }
 
             // La figura e' gia' parte dello sfondo della stanza: il preview resta
             // trasparente e funziona soltanto da hit area per click e interazioni.
@@ -1228,7 +1474,13 @@ namespace AccardND.Presentation
             gameObject.name = "Trentor Background Hit Area";
 
             if (strengthText != null)
-                strengthText.gameObject.SetActive(false);
+            {
+                strengthText.gameObject.SetActive(true);
+                SetAnchors(strengthText.rectTransform, new Vector2(0.42f, -0.10f), new Vector2(0.58f, 0.015f));
+                strengthText.fontSize = 44;
+                strengthText.resizeTextForBestFit = false;
+                strengthText.transform.SetAsLastSibling();
+            }
             if (battlePreviewImage != null)
                 battlePreviewImage.gameObject.SetActive(false);
 
@@ -1238,6 +1490,137 @@ namespace AccardND.Presentation
                 SetAnchors(targetHintAuraRect, new Vector2(-0.13f, -0.02f), new Vector2(1.13f, 1.18f));
             }
 
+            if (statusLabel != null)
+                statusLabel.gameObject.SetActive(false);
+            if (statusIconRoot != null)
+                SetAnchors(statusIconRoot, new Vector2(0.08f, -0.30f), new Vector2(0.92f, -0.10f));
+        }
+
+        public void ConfigureJurinashorBackdropPresentation()
+        {
+            jurinashorBackdropPresentation = true;
+            gameObject.name = "Jurinashor Background Hit Area";
+            if (strengthText != null)
+            {
+                strengthText.gameObject.SetActive(true);
+                SetAnchors(strengthText.rectTransform, new Vector2(0.42f, 0.10f), new Vector2(0.58f, 0.215f));
+                strengthText.fontSize = 44;
+                strengthText.resizeTextForBestFit = false;
+                strengthText.transform.SetAsLastSibling();
+            }
+            if (targetHintAuraImage != null)
+            {
+                targetHintAuraImage.sprite = GetJurinashorContourAuraSprite();
+                targetHintAuraImage.preserveAspect = true;
+                SetAnchors(targetHintAuraRect, new Vector2(-0.445f, 0.006f), new Vector2(1.370f, 1.428f));
+            }
+            if (battlePreviewImage != null)
+                battlePreviewImage.gameObject.SetActive(false);
+            if (statusLabel != null)
+                statusLabel.gameObject.SetActive(false);
+            if (statusIconRoot != null)
+                SetAnchors(statusIconRoot, new Vector2(0.08f, -0.08f), new Vector2(0.92f, 0.08f));
+        }
+
+		public void SetJurinashorPhaseTwoContour(bool phaseTwo)
+		{
+			if (targetHintAuraImage == null)
+				return;
+
+			targetHintAuraImage.sprite = phaseTwo
+				? GetJurinashorPhaseTwoContourAuraSprite()
+				: GetJurinashorContourAuraSprite();
+			targetHintAuraImage.preserveAspect = true;
+			if (turnAuraImage != null)
+			{
+				turnAuraImage.sprite = targetHintAuraImage.sprite;
+				turnAuraImage.preserveAspect = true;
+			}
+			Vector2 minimum = phaseTwo ? new Vector2(-0.512f, -0.069f) : new Vector2(-0.445f, 0.006f);
+			Vector2 maximum = phaseTwo ? new Vector2(1.512f, 1.524f) : new Vector2(1.370f, 1.428f);
+			SetAnchors(targetHintAuraRect, minimum, maximum);
+			if (turnAuraRect != null)
+				SetAnchors(turnAuraRect, minimum, maximum);
+		}
+
+        public void ConfigureJurinashorSwordPresentation()
+        {
+            jurinashorSwordPresentation = true;
+            gameObject.name = "Jurinashor Floating Sword";
+            if (battlePreviewImage != null)
+            {
+                Sprite weapon = Resources.Load<Sprite>("UI/jurinashor_weapon_phase_1");
+                if (weapon != null)
+                    battlePreviewImage.sprite = weapon;
+                battlePreviewImage.color = Color.white;
+                battlePreviewImage.preserveAspect = true;
+                battlePreviewImage.gameObject.SetActive(true);
+                SetAnchors(battlePreviewImage.rectTransform, new Vector2(0.01f, 0.05f), new Vector2(0.99f, 0.95f));
+            }
+            if (statusLabel != null)
+                statusLabel.gameObject.SetActive(false);
+            if (statusIconRoot != null)
+                statusIconRoot.gameObject.SetActive(false);
+        }
+
+        public void ConfigureSeraphelBackdropPresentation()
+        {
+            seraphelBackdropPresentation = true;
+            gameObject.name = "Seraphel Background Hit Area";
+
+            if (strengthText != null)
+            {
+                strengthText.gameObject.SetActive(true);
+                SetAnchors(strengthText.rectTransform, new Vector2(0.42f, -0.10f), new Vector2(0.58f, 0.015f));
+                strengthText.fontSize = 44;
+                strengthText.resizeTextForBestFit = false;
+                strengthText.transform.SetAsLastSibling();
+            }
+            if (battlePreviewImage != null)
+                battlePreviewImage.gameObject.SetActive(false);
+
+            if (targetHintAuraImage != null)
+            {
+                targetHintAuraImage.sprite = GetSeraphelContourAuraSprite();
+                SetAnchors(targetHintAuraRect, new Vector2(-0.06f, -0.075f), new Vector2(1.06f, 1.01f));
+            }
+
+            if (statusLabel != null)
+                statusLabel.gameObject.SetActive(false);
+            if (statusIconRoot != null)
+                SetAnchors(statusIconRoot, new Vector2(0.08f, -0.30f), new Vector2(0.92f, -0.10f));
+        }
+
+		public void SetSeraphelPhaseTwoContour(bool phaseTwo)
+		{
+			if (targetHintAuraImage == null)
+				return;
+			targetHintAuraImage.sprite = phaseTwo
+				? GetSeraphelPhaseTwoContourAuraSprite()
+				: GetSeraphelContourAuraSprite();
+			targetHintAuraImage.preserveAspect = true;
+			if (turnAuraImage != null)
+			{
+				turnAuraImage.sprite = targetHintAuraImage.sprite;
+				turnAuraImage.preserveAspect = true;
+			}
+		}
+
+        public void ConfigurePalatirBackdropPresentation()
+        {
+            palatirBackdropPresentation = true;
+            gameObject.name = "Palatir Background Hit Area";
+
+            if (strengthText != null)
+            {
+                strengthText.gameObject.SetActive(true);
+                SetAnchors(strengthText.rectTransform, new Vector2(0.42f, -0.10f), new Vector2(0.58f, 0.015f));
+                strengthText.fontSize = 44;
+                strengthText.resizeTextForBestFit = false;
+                strengthText.transform.SetAsLastSibling();
+            }
+            if (battlePreviewImage != null)
+                battlePreviewImage.gameObject.SetActive(false);
             if (statusLabel != null)
                 statusLabel.gameObject.SetActive(false);
             if (statusIconRoot != null)
@@ -1261,6 +1644,7 @@ namespace AccardND.Presentation
         public void SetTurnAura(bool active, bool playerOwned)
         {
             EnsureTurnAura();
+			RefreshBossTurnAuraVisual();
             turnAuraColor = playerOwned
                 ? new Color(0.25f, 1f, 0.78f, 1f)
                 : new Color(1f, 0.34f, 0.24f, 1f);
@@ -1659,6 +2043,20 @@ namespace AccardND.Presentation
             RevealActionOverlayAfterCardSettles();
         }
 
+        public void ShowSupremeAction(Sprite icon, UnityAction action, int? manaDelta = null)
+        {
+            ClearActionOverlay();
+            RectTransform root = EnsureActionOverlay();
+            float edgeBias = ConfigureTurnActionOverlay(1);
+            string label = SupremeActionText();
+            Button button = CreateIconActionButton(
+                "Supreme Action", root, icon, label, ActionLabelSupreme, manaDelta);
+            supremeActionRect = button.GetComponent<RectTransform>();
+            SetTurnActionSlot(button, 0, 1, edgeBias);
+            BindActionCallout(button, action, label, ActionLabelSupreme);
+            RevealActionOverlayAfterCardSettles();
+        }
+
         public void ShowDualActions(
             Sprite firstIcon,
             UnityAction firstAction,
@@ -1773,7 +2171,7 @@ namespace AccardND.Presentation
                 BindActionCallout(ability, abilityAction, abilityLabel, ActionLabelBlue);
             }
 
-            // La suprema sta accanto all'abilita' base: sono la stessa famiglia di
+            // La suprema sta accanto all'abilita' base: sono la stessa fazione di
             // azioni, e il verde la distingue senza spezzare la lettura da sinistra.
             if (supremeAction != null)
             {
@@ -1870,7 +2268,11 @@ namespace AccardND.Presentation
                 SetActionOverlayBounds(
                     new Vector2(minimumX, 0.94f),
                     new Vector2(maximumX, 1.52f));
-                SetActionOverlayOffsets(new Vector2(0f, -42f));
+                // Una singola action condivide la stessa altezza di Cancella: lo
+                // spostamento compatto serve solo quando affianchiamo piu' comandi.
+                SetActionOverlayOffsets(actionCount == 1
+                    ? Vector2.zero
+                    : new Vector2(0f, -42f));
                 return 0f;
             }
 
@@ -1902,19 +2304,16 @@ namespace AccardND.Presentation
             float gap = physicalGap / overlayWidth;
             float occupiedWidth = width * safeCount + gap * (safeCount - 1);
             float minimumX = (1f - occupiedWidth) * 0.5f + safeIndex * (width + gap);
-            float verticalLift = CalculateTurnActionVerticalLift(safeIndex, safeCount, 0f);
+            // Con due action alziamo leggermente solo le icone, senza far salire
+            // anche le relative etichette.
+            float iconOnlyLift = safeCount == 2 ? 0.06f : 0f;
+            float verticalLift = CalculateTurnActionVerticalLift(safeIndex, safeCount, 0f) + iconOnlyLift;
             SetAnchors(
                 button.GetComponent<RectTransform>(),
                 new Vector2(minimumX, 0.03f + verticalLift),
                 new Vector2(minimumX + width, 0.91f + verticalLift));
 
-            // Con due o tre comandi le label possono avere anche la seconda riga
-            // del costo mana: le teniamo più alte per non coprirle con le icone.
-            if (safeCount <= 3)
-                SetActionButtonLabelAnchors(
-                    button,
-                    new Vector2(-0.08f, 0.98f),
-                    new Vector2(1.08f, 1.46f));
+            // Tutti i layout condividono la stessa spaziatura compatta tra icona e label.
         }
 
         private static float TurnActionOverlayHorizontalOverflow(int actionCount)
@@ -1952,7 +2351,7 @@ namespace AccardND.Presentation
             RectTransform root = EnsureActionOverlay();
             float edgeBias = ConfigureTurnActionOverlay(2);
 
-            Button confirm = CreateIconActionButton("Confirm Action", root, confirmIcon, "Conferma", ActionLabelGreen);
+            Button confirm = CreateIconActionButton("Confirm Action", root, confirmIcon, ConfirmActionText(), ActionLabelGreen);
             SetTurnActionSlot(confirm, 0, 2, edgeBias);
             if (confirmAction != null)
                 confirm.onClick.AddListener(confirmAction);
@@ -1982,7 +2381,7 @@ namespace AccardND.Presentation
             RectTransform root = EnsureActionOverlay();
             SetActionOverlayBounds(new Vector2(0.03f, 0.92f), new Vector2(0.97f, 1.52f));
 
-            Button confirm = CreateIconActionButton("Confirm Action", root, confirmIcon, "Conferma", ActionLabelGreen);
+            Button confirm = CreateIconActionButton("Confirm Action", root, confirmIcon, ConfirmActionText(), ActionLabelGreen);
             SetAnchors(confirm.GetComponent<RectTransform>(), new Vector2(0.00f, 0.01f), new Vector2(0.46f, 0.98f));
             SetActionButtonLabelAnchors(confirm, new Vector2(-0.08f, 0.9f), new Vector2(1.08f, 1.24f));
             if (confirmAction != null)
@@ -2001,7 +2400,7 @@ namespace AccardND.Presentation
             RectTransform root = EnsureActionOverlay();
             SetActionOverlayBounds(new Vector2(0.24f, 0.94f), new Vector2(0.76f, 1.46f));
 
-            Button confirm = CreateIconActionButton("Confirm Action", root, confirmIcon, "Conferma", ActionLabelGreen);
+            Button confirm = CreateIconActionButton("Confirm Action", root, confirmIcon, ConfirmActionText(), ActionLabelGreen);
             SetAnchors(confirm.GetComponent<RectTransform>(), new Vector2(0.00f, 0.03f), new Vector2(1.00f, 0.93f));
             SetActionButtonLabelAnchors(confirm, new Vector2(-0.08f, 0.9f), new Vector2(1.08f, 1.24f));
             if (confirmAction != null)
@@ -2010,6 +2409,39 @@ namespace AccardND.Presentation
 
         public RectTransform AttackActionRect => attackActionRect;
         public RectTransform AbilityActionRect => abilityActionRect;
+        public RectTransform SupremeActionRect => supremeActionRect;
+
+        public RectTransform AttackActionSpotlightRect => ActionIconSpotlightRect(attackActionRect);
+        public RectTransform AbilityActionSpotlightRect => ActionIconSpotlightRect(abilityActionRect);
+        public RectTransform SupremeActionSpotlightRect => ActionIconSpotlightRect(supremeActionRect);
+
+        private static RectTransform ActionIconSpotlightRect(RectTransform actionRect)
+        {
+            if (actionRect == null)
+                return null;
+
+            const string targetName = "Action Icon Spotlight Target";
+            Transform existing = actionRect.Find(targetName);
+            if (existing is RectTransform existingRect)
+                return existingRect;
+
+            var targetObject = new GameObject(
+                targetName,
+                typeof(RectTransform),
+                typeof(AspectRatioFitter));
+            RectTransform target = targetObject.GetComponent<RectTransform>();
+            target.SetParent(actionRect, false);
+            target.anchorMin = new Vector2(0f, 0.5f);
+            target.anchorMax = new Vector2(1f, 0.5f);
+            target.pivot = new Vector2(0.5f, 0.5f);
+            target.anchoredPosition = Vector2.zero;
+            target.sizeDelta = Vector2.zero;
+
+            AspectRatioFitter fitter = targetObject.GetComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.WidthControlsHeight;
+            fitter.aspectRatio = 1f;
+            return target;
+        }
 
         public void SetAbilityActionInteractable(bool interactable)
         {
@@ -2035,9 +2467,12 @@ namespace AccardND.Presentation
         {
             ClearActionOverlay();
             RectTransform root = EnsureActionOverlay();
-            float edgeBias = ConfigureTurnActionOverlay(1);
+            SetActionOverlayBounds(new Vector2(0.24f, 0.94f), new Vector2(0.76f, 1.46f));
             Button cancel = CreateIconActionButton("Cancel Action", root, cancelIcon, "Cancella", ActionLabelRed);
-            SetTurnActionSlot(cancel, 0, 1, edgeBias);
+            // Mantiene la stessa dimensione fisica delle action standard: il root
+            // della singola action è più stretto, quindi il pulsante non deve occuparlo tutto.
+            SetAnchors(cancel.GetComponent<RectTransform>(), new Vector2(0.21f, 0.03f), new Vector2(0.79f, 0.93f));
+            SetActionButtonLabelAnchors(cancel, new Vector2(-0.08f, 0.9f), new Vector2(1.08f, 1.24f));
             if (cancelAction != null)
             {
                 UnityAction swipeCancelAction = () =>
@@ -2091,6 +2526,120 @@ namespace AccardND.Presentation
             for (int index = actionOverlayRoot.childCount - 1; index >= 0; index--)
                 Destroy(actionOverlayRoot.GetChild(index).gameObject);
             actionOverlayRoot.gameObject.SetActive(false);
+        }
+
+        /// <summary>Rimuove un callout già mostrato nella lingua precedente.</summary>
+        public void ClearActionCalloutForLocaleChange()
+        {
+            if (actionCalloutCoroutine != null)
+            {
+                StopCoroutine(actionCalloutCoroutine);
+                actionCalloutCoroutine = null;
+            }
+            if (actionCalloutRoot != null)
+                Destroy(actionCalloutRoot);
+            actionCalloutRoot = null;
+        }
+
+        /// <summary>
+        /// Lo swipe delle azioni tiene uno stato statico condiviso da tutte le pedine.
+        /// Se resta appeso (device perso, overlay distrutto a meta' gesture) ogni click
+        /// su Attacca/Abilita'/Suprema viene soppresso e il turno diventa ingiocabile.
+        /// Questa proprieta' permette al resto del gioco di accorgersene.
+        /// </summary>
+        public static bool HasActiveSwipeGesture => SwipeActionSelector.HasActiveGesture;
+
+        /// <summary>
+        /// Sblocca a runtime lo stato statico dello swipe. E' sempre sicura da chiamare:
+        /// se non c'e' nessuna gesture in corso non fa nulla.
+        /// </summary>
+        public static void ReleaseStuckSwipeGesture() => SwipeActionSelector.ForceReset();
+
+        /// <summary>
+        /// Fotografia dello stato dello swipe, da stampare quando lo si sblocca a forza.
+        /// </summary>
+        public static string DescribeSwipeGestureState() => SwipeActionSelector.DescribeState();
+
+        /// <summary>
+        /// Distanza massima fra il tocco e l'evento perche' si possa dire che l'uno
+        /// ha generato l'altro. Un dito reale coincide col punto dell'evento; una
+        /// decina di pixel copre l'arrotondamento fra spazi di coordinate.
+        /// </summary>
+        private const float TouchEventPositionTolerance = 40f;
+
+        /// <summary>
+        /// Dice se questo evento arriva davvero dal touchscreen.
+        /// <para>
+        /// Non basta guardare <c>pointerId</c>: con l'Input System nuovo anche il mouse
+        /// ha un id positivo, quindi il vecchio test "id >= 0 quindi e' un dito" e'
+        /// sempre vero. E non basta nemmeno <c>primaryTouch.press.isPressed</c>: un
+        /// tocco fantasma - un press mai chiuso, tipico quando la finestra perde il
+        /// focus a dito giu' - resta premuto per sempre in un punto fisso e farebbe
+        /// partire lo swipe al solo passaggio del mouse, lasciandolo poi aperto.
+        /// L'unica prova solida e' che il tocco si trovi dove si trova l'evento.
+        /// </para>
+        /// </summary>
+        public static bool IsPointerEventFromTouchscreen(PointerEventData eventData)
+        {
+            Touchscreen touchscreen = Touchscreen.current;
+            if (eventData == null
+                || touchscreen == null
+                || !touchscreen.primaryTouch.press.isPressed)
+            {
+                return false;
+            }
+
+            // InputSystemUIInputModule puo' unificare mouse e touch assegnando anche
+            // a un vero tocco un pointerId negativo. Il device dell'evento esteso e'
+            // l'informazione affidabile; pointerId resta solo un dettaglio interno
+            // dell'EventSystem e non va usato per scartare la gesture.
+            if (eventData is ExtendedPointerEventData extendedEvent
+                && extendedEvent.device != null)
+            {
+                return extendedEvent.device is Touchscreen;
+            }
+
+            Vector2 touchPosition = touchscreen.primaryTouch.position.ReadValue();
+            return (touchPosition - eventData.position).sqrMagnitude
+                <= TouchEventPositionTolerance * TouchEventPositionTolerance;
+        }
+
+        /// <summary>
+        /// Id del dito che ha generato l'evento, -1 se non viene da un touchscreen.
+        /// E' l'unico riferimento stabile a una gesture: `primaryTouch` e' solo il
+        /// primo dito in ordine di arrivo, quindi puo' essere un pollice appoggiato
+        /// sul bordo dello schermo mentre la gesture vera la sta facendo l'indice.
+        /// </summary>
+        public static int TouchIdOf(PointerEventData eventData)
+        {
+            return eventData is ExtendedPointerEventData extendedEvent
+                && extendedEvent.device is Touchscreen
+                && extendedEvent.touchId > 0
+                ? extendedEvent.touchId
+                : -1;
+        }
+
+        /// <summary>
+        /// Controllo del dito indicato, o null se il touchscreen non lo traccia piu'.
+        /// Con un id non valido si ricade su primaryTouch: e' l'unica cosa leggibile
+        /// quando l'evento non portava l'id, e resta il comportamento storico.
+        /// </summary>
+        public static TouchControl FindTouch(int touchId)
+        {
+            Touchscreen touchscreen = Touchscreen.current;
+            if (touchscreen == null)
+                return null;
+
+            if (touchId <= 0)
+                return touchscreen.primaryTouch;
+
+            foreach (TouchControl touch in touchscreen.touches)
+            {
+                if (touch.touchId.ReadValue() == touchId)
+                    return touch;
+            }
+
+            return null;
         }
 
         public void SetTargetHint(MatchupResult? matchup)
@@ -2156,10 +2705,11 @@ namespace AccardND.Presentation
             healthBarRoot.transform.SetAsLastSibling();
             if (healthBarFill != null)
             {
+                Color classColor = new Color(fillColor.r, fillColor.g, fillColor.b, 1f);
                 healthBarFill.SetPalette(
-                    new Color(0.055f, 0.001f, 0.001f, 1f),
-                    new Color(0.42f, 0.006f, 0.004f, 1f),
-                    new Color(0.68f, 0.045f, 0.025f, 1f));
+                    Color.Lerp(Color.black, classColor, 0.18f),
+                    Color.Lerp(Color.black, classColor, 0.62f),
+                    classColor);
                 if (!healthBarInitialized)
                 {
                     healthBarInitialized = true;
@@ -2194,7 +2744,57 @@ namespace AccardND.Presentation
                 }
             }
             if (healthBarText != null)
-                healthBarText.text = $"HP {clampedCurrent} / {maximum}";
+                healthBarText.text = GameText.GetOrFallbackSilent(
+                    GameTextKeys.Combat.HitPoints,
+                    "HP {0} / {1}",
+                    clampedCurrent,
+                    maximum);
+        }
+
+        public void SetClassHealthBar(int current, int maximum)
+        {
+            SetHealthBar(current, maximum, HealthBarColor(cardHeroClass));
+        }
+
+        public void SetHealthBarName(string displayName)
+        {
+            if (healthBarRoot == null)
+                CreateHealthBar(AccardND.Battlefield.MmoUiTheme.BodyFont);
+
+            if (healthBarNameText == null)
+            {
+                healthBarNameText = CreateText("Health Bar Name", healthBarRoot.transform,
+                    AccardND.Battlefield.MmoUiTheme.BodyBoldFont, 28, FontStyle.Normal, TextAnchor.MiddleCenter);
+                healthBarNameText.color = Color.white;
+                healthBarNameText.raycastTarget = false;
+                Outline outline = healthBarNameText.gameObject.AddComponent<Outline>();
+                outline.effectColor = Color.black;
+                outline.effectDistance = new Vector2(1.7f, -1.7f);
+                SetAnchors(healthBarNameText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 2f));
+                healthBarNameText.rectTransform.offsetMin = Vector2.zero;
+                healthBarNameText.rectTransform.offsetMax = Vector2.zero;
+            }
+
+            healthBarNameText.text = displayName ?? string.Empty;
+            healthBarNameText.gameObject.SetActive(!string.IsNullOrWhiteSpace(displayName));
+            healthBarNameText.transform.SetAsLastSibling();
+        }
+
+        private static Color HealthBarColor(HeroClass heroClass)
+        {
+            return heroClass switch
+            {
+                HeroClass.Assassin => new Color(0.72f, 0.08f, 0.06f),
+                HeroClass.Warrior => new Color(0.52f, 0.55f, 0.6f),
+                HeroClass.Mage => new Color(0.56f, 0.16f, 0.86f),
+                HeroClass.Paladin => new Color(1f, 0.72f, 0.07f),
+                HeroClass.Rogue => new Color(0.055f, 0.055f, 0.065f),
+                HeroClass.Hunter => new Color(1f, 0.42f, 0.02f),
+                HeroClass.Barbarian => new Color(0.48f, 0.22f, 0.07f),
+                HeroClass.Necromancer => new Color(0.34f, 0.94f, 0.07f),
+                HeroClass.Priest => new Color(0.94f, 0.94f, 0.9f),
+                _ => Color.gray
+            };
         }
 
         public void SetHealthBarVisible(bool visible)
@@ -2301,12 +2901,17 @@ namespace AccardND.Presentation
             if (lifeIconsRoot == null)
                 CreateLifeIcons();
 
+            RectTransform lifeIconsRect = (RectTransform)lifeIconsRoot.transform;
+            lifeIconsRect.offsetMin = new Vector2(0f, -192f);
+            lifeIconsRect.offsetMax = new Vector2(0f, -192f);
+
             int clampedCurrent = Mathf.Clamp(current, 0, maximum);
             lifeIconsRoot.SetActive(clampedCurrent > 0);
             lifeIconsRoot.transform.SetAsLastSibling();
 
             if (leftLifeIcon != null)
             {
+                ConfigureLifeIconOutlines(leftLifeIcon);
                 leftLifeIcon.sprite = heartIcon;
                 leftLifeIcon.color = heartIcon != null ? Color.white : new Color(0.95f, 0.05f, 0.06f, 1f);
                 leftLifeIcon.gameObject.SetActive(clampedCurrent > 0);
@@ -2314,6 +2919,7 @@ namespace AccardND.Presentation
 
             if (rightLifeIcon != null)
             {
+                ConfigureLifeIconOutlines(rightLifeIcon);
                 bool full = clampedCurrent >= Mathf.Min(maximum, 2);
                 Sprite icon = full ? heartIcon : blackHeartIcon;
                 rightLifeIcon.sprite = icon;
@@ -2340,6 +2946,7 @@ namespace AccardND.Presentation
             if (ContainsDefeatStatus(statuses))
                 SetComposableGolemOrbitVisible(false);
             SetPetrifiedOverlayVisible(ContainsPetrifiedStatus(statuses));
+            SetDarkSigilLightningVisible(ContainsDarkSigilStatus(statuses));
             if (statusIconRoot == null)
                 return;
 
@@ -2350,6 +2957,52 @@ namespace AccardND.Presentation
 
             for (int index = 0; index < statuses.Length; index++)
                 CreateStatusIcon(statuses[index], index);
+        }
+
+        private static bool ContainsDarkSigilStatus(StatusToken[] statuses)
+        {
+            if (statuses == null)
+                return false;
+
+            for (int i = 0; i < statuses.Length; i++)
+            {
+                string label = statuses[i].Label;
+                if (!string.IsNullOrWhiteSpace(label)
+                    && label.IndexOf("SIGILLO OSCURO", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private void SetDarkSigilLightningVisible(bool visible)
+        {
+            if (visible && darkSigilLightningVfx == null)
+            {
+                GameObject effect = new GameObject(
+                    "Dark Sigil Red-Black Lightning",
+                    typeof(RectTransform),
+                    typeof(CanvasRenderer),
+                    typeof(DarkSigilLightningVfx));
+                effect.transform.SetParent(transform, false);
+                darkSigilLightningVfx = effect.GetComponent<DarkSigilLightningVfx>();
+                RectTransform effectRect = darkSigilLightningVfx.rectTransform;
+                effectRect.anchorMin = new Vector2(-0.035f, -0.025f);
+                effectRect.anchorMax = new Vector2(1.035f, 1.025f);
+                effectRect.offsetMin = Vector2.zero;
+                effectRect.offsetMax = Vector2.zero;
+            }
+
+            if (darkSigilLightningVfx == null)
+                return;
+
+            darkSigilLightningVfx.gameObject.SetActive(visible);
+            if (visible)
+            {
+                darkSigilLightningVfx.transform.SetAsLastSibling();
+                if (statusIconRoot != null)
+                    statusIconRoot.SetAsLastSibling();
+            }
         }
 
         public IEnumerator PlayPetrifiedOverlayCrumble()
@@ -2363,7 +3016,8 @@ namespace AccardND.Presentation
             Vector3 originalScale = overlayRect.localScale;
             Quaternion originalRotation = overlayRect.localRotation;
             Color baseColor = new Color(0.74f, 0.78f, 0.78f, 0.72f);
-            Rect cardRect = RectTransform.rect;
+            Rect cardRect = overlayRect.rect;
+            Transform fragmentParent = overlayRect.parent;
             int columns = 8;
             int rows = 10;
             List<(GameObject obj, RectTransform rect, Image image, Vector2 start, Vector2 velocity, float spin, float delay, float size)> fragments = new();
@@ -2375,7 +3029,7 @@ namespace AccardND.Presentation
                     if (UnityEngine.Random.value < 0.16f)
                         continue;
 
-                    Image fragment = CreateImage("Petrified Falling Fragment", transform, baseColor);
+                    Image fragment = CreateImage("Petrified Falling Fragment", fragmentParent, baseColor);
                     fragment.sprite = fragmentSprite;
                     fragment.preserveAspect = true;
                     fragment.raycastTarget = false;
@@ -2405,7 +3059,7 @@ namespace AccardND.Presentation
                 }
             }
 
-            petrifiedOverlayImage.transform.SetAsLastSibling();
+			PlacePetrifiedOverlayAbovePawn();
             foreach (var fragment in fragments)
                 fragment.rect.SetAsLastSibling();
             if (statusIconRoot != null)
@@ -2485,7 +3139,7 @@ namespace AccardND.Presentation
 
             petrifiedOverlayImage.gameObject.SetActive(visible);
             petrifiedOverlayImage.color = new Color(0.74f, 0.78f, 0.78f, 0.72f);
-            petrifiedOverlayImage.transform.SetAsLastSibling();
+			PlacePetrifiedOverlayAbovePawn();
             if (statusIconRoot != null)
                 statusIconRoot.SetAsLastSibling();
         }
@@ -2495,13 +3149,57 @@ namespace AccardND.Presentation
             if (petrifiedOverlayImage != null)
                 return;
 
-            petrifiedOverlayImage = CreateImage("Petrified Overlay", transform, new Color(0.74f, 0.78f, 0.78f, 0.72f));
+			Image pawnImage = battlePreviewImage != null ? battlePreviewImage : cardArtworkImage;
+			if (pawnImage == null || pawnImage.sprite == null)
+				return;
+
+			GameObject maskObject = new GameObject(
+				"Petrified Pawn Mask",
+				typeof(RectTransform),
+				typeof(CanvasRenderer),
+				typeof(Image),
+				typeof(Mask));
+			maskObject.transform.SetParent(pawnImage.transform.parent, false);
+			petrifiedOverlayRoot = (RectTransform)maskObject.transform;
+			CopyRectTransform(pawnImage.rectTransform, petrifiedOverlayRoot);
+
+			Image maskImage = maskObject.GetComponent<Image>();
+			maskImage.sprite = pawnImage.sprite;
+			maskImage.preserveAspect = pawnImage.preserveAspect;
+			maskImage.type = pawnImage.type;
+			maskImage.raycastTarget = false;
+			maskImage.color = Color.white;
+			maskObject.GetComponent<Mask>().showMaskGraphic = false;
+
+			petrifiedOverlayImage = CreateImage("Petrified Overlay", petrifiedOverlayRoot, new Color(0.74f, 0.78f, 0.78f, 0.72f));
             petrifiedOverlayImage.sprite = GetPetrifiedOverlaySprite();
             petrifiedOverlayImage.preserveAspect = false;
             petrifiedOverlayImage.raycastTarget = false;
             Stretch(petrifiedOverlayImage.rectTransform);
             petrifiedOverlayImage.gameObject.SetActive(false);
+			PlacePetrifiedOverlayAbovePawn();
         }
+
+		private void PlacePetrifiedOverlayAbovePawn()
+		{
+			if (petrifiedOverlayRoot == null)
+				return;
+
+			Image pawnImage = battlePreviewImage != null ? battlePreviewImage : cardArtworkImage;
+			if (pawnImage != null && pawnImage.transform.parent == petrifiedOverlayRoot.parent)
+				petrifiedOverlayRoot.SetSiblingIndex(pawnImage.transform.GetSiblingIndex() + 1);
+		}
+
+		private static void CopyRectTransform(RectTransform source, RectTransform destination)
+		{
+			destination.anchorMin = source.anchorMin;
+			destination.anchorMax = source.anchorMax;
+			destination.pivot = source.pivot;
+			destination.anchoredPosition = source.anchoredPosition;
+			destination.sizeDelta = source.sizeDelta;
+			destination.localRotation = source.localRotation;
+			destination.localScale = source.localScale;
+		}
 
         private static bool ContainsDefeatStatus(StatusToken[] statuses)
         {
@@ -2561,7 +3259,10 @@ namespace AccardND.Presentation
             VigorRollResult roll,
             string caption,
             float rollDuration,
-            float resultHold)
+            float resultHold,
+            bool empowered = false,
+            bool hideCaption = false,
+            bool preserveDiscardedDie = false)
         {
             if (diceCoroutine != null)
                 CancelActiveDiceRoll();
@@ -2580,7 +3281,10 @@ namespace AccardND.Presentation
                 caption,
                 rollDuration,
                 resultHold,
-                use3DDice: true));
+                use3DDice: true,
+                empowered: empowered,
+                hideCaption: hideCaption,
+                preserveDiscardedDie: preserveDiscardedDie));
         }
 
         public static float VigorRollPresentationDuration(VigorRollResult roll, float rollDuration, float resultHold)
@@ -2594,7 +3298,22 @@ namespace AccardND.Presentation
                 total += 0.32f + Mathf.Max(rerollDuration, AnimatedDiceMinimumRollDuration * 0.72f);
             }
 
+            if (ShouldCrumbleDiscardedDie(roll.HasSecondRoll, roll.FirstRoll, roll.SecondRoll, roll.SelectionMode))
+                total += 0.68f;
+
             return total + Mathf.Max(resultHold, AnimatedDiceMinimumResultHold);
+        }
+
+        private static bool ShouldCrumbleDiscardedDie(
+            bool hasSecondResult,
+            int firstResult,
+            int secondResult,
+            VigorSelectionMode selectionMode)
+        {
+            return hasSecondResult
+                && firstResult != secondResult
+                && (selectionMode == VigorSelectionMode.Highest
+                    || selectionMode == VigorSelectionMode.Lowest);
         }
 
         private void CancelActiveDiceRoll()
@@ -3118,6 +3837,7 @@ namespace AccardND.Presentation
             Action timelineTileHidden = null,
             HeroClass? killerHeroClass = null)
         {
+            GetComponent<WarriorSupremeVfx>()?.StopOnDefeat();
             SetComposableGolemOrbitVisible(false);
             ClearDefeatCrackOverlay();
             SetBattleAura(false, Color.clear, string.Empty);
@@ -3222,9 +3942,13 @@ namespace AccardND.Presentation
             Vector3 cardOriginalScale = rectTransform.localScale;
             Vector3 tileOriginalScale = timelineTile != null ? timelineTile.transform.localScale : Vector3.one;
 
+            bool firstCrackFrame = true;
             while (elapsed < crackDuration)
             {
-                elapsed += Time.unscaledDeltaTime;
+                // Il frame che ha creato overlay, materiale e particelle e' lungo:
+                // contarne il delta faceva partire la crepa a meta' strada.
+                elapsed += firstCrackFrame ? 0f : Time.unscaledDeltaTime;
+                firstCrackFrame = false;
                 float progress = Mathf.Clamp01(elapsed / crackDuration);
 
                 float crackAlpha = Mathf.Lerp(0f, 1f, progress);
@@ -3268,17 +3992,25 @@ namespace AccardND.Presentation
             // Animate beautiful dissolve erosion in parallel with burst shatter particles!
             float dissolveElapsed = 0f;
             float dissolveDuration = 0.56f;
+            // Il dissolve morde solo le immagini col materiale: scritte e numeri
+            // restavano interi mentre il corpo si sgretolava, e poi saltavano al
+            // valore finale insieme a tutto il resto. Il gruppo scende con loro.
+            const float DefeatFadeOut = 0.12f;
+            const float DefeatRemainsAlpha = 0.52f;
 
             Coroutine cardShatter = StartCoroutine(AnimateShatterParticles(rectTransform, ashShardColor, deathBurstColor));
 
+            bool firstDissolveFrame = true;
             while (dissolveElapsed < dissolveDuration)
             {
-                dissolveElapsed += Time.unscaledDeltaTime;
+                dissolveElapsed += firstDissolveFrame ? 0f : Time.unscaledDeltaTime;
+                firstDissolveFrame = false;
                 float progress = Mathf.Clamp01(dissolveElapsed / dissolveDuration);
                 if (dissolveMat != null)
                 {
                     dissolveMat.SetFloat("_Amount", progress);
                 }
+                canvasGroup.alpha = Mathf.Lerp(1f, DefeatFadeOut, progress);
                 if (cardCrackImg != null)
                 {
                     cardCrackImg.color = new Color(crackColor.r, crackColor.g, crackColor.b, Mathf.Lerp(1f, 0.86f, progress));
@@ -3293,8 +4025,21 @@ namespace AccardND.Presentation
             if (priestPurification != null)
                 yield return priestPurification;
 
+            // La pedina non si riaccende: la cenere si ricompone nel residuo. Il
+            // materiale torna a zero mentre l'opacita' risale, cosi' il frame in
+            // cui il dissolve viene tolto non ha piu' nulla da rivelare - era
+            // quello lo scatto acceso/spento dopo l'esplosione.
+            yield return SettleDefeatedRemains(
+                dissolveMat,
+                DefeatFadeOut,
+                DefeatRemainsAlpha,
+                cardCrackImg,
+                cardCrackObj,
+                crackColor);
+
             rectTransform.localScale = initialScale * 0.93f;
-            canvasGroup.alpha = 0.52f;
+            rectTransform.localRotation = Quaternion.identity;
+            canvasGroup.alpha = DefeatRemainsAlpha;
             foreach (var img in cardImages)
             {
                 if (img != null)
@@ -3322,6 +4067,61 @@ namespace AccardND.Presentation
                 LayoutElement layout = GetComponent<LayoutElement>();
                 layout.ignoreLayout = false;
                 duelDetached = false;
+            }
+        }
+
+        /// <summary>
+        /// Riporta in scena il residuo della pedina abbattuta. Il dissolve torna
+        /// a zero e il bordo incandescente si spegne mentre l'opacita' risale
+        /// verso quella del corpo morto: quando il materiale viene finalmente
+        /// tolto le immagini sono gia' quelle definitive, e non c'e' piu' il
+        /// frame in cui la pedina riappariva di colpo dopo essere esplosa.
+        /// </summary>
+        private IEnumerator SettleDefeatedRemains(
+            Material dissolveMat,
+            float fromAlpha,
+            float toAlpha,
+            Image crackImage,
+            GameObject crackObject,
+            Color crackColor)
+        {
+            const float duration = 0.3f;
+            const float edgeWidth = 0.045f;
+            Vector3 startScale = rectTransform.localScale;
+            Vector3 targetScale = initialScale * 0.93f;
+            Quaternion startRotation = rectTransform.localRotation;
+            float elapsed = 0f;
+            bool firstFrame = true;
+
+            while (elapsed < duration)
+            {
+                elapsed += firstFrame ? 0f : Time.unscaledDeltaTime;
+                firstFrame = false;
+                float progress = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
+
+                if (dissolveMat != null)
+                {
+                    dissolveMat.SetFloat("_Amount", 1f - progress);
+                    dissolveMat.SetFloat("_EdgeWidth", Mathf.Lerp(edgeWidth, 0f, progress));
+                }
+                canvasGroup.alpha = Mathf.Lerp(fromAlpha, toAlpha, progress);
+                rectTransform.localScale = Vector3.LerpUnclamped(startScale, targetScale, progress);
+                rectTransform.localRotation = Quaternion.SlerpUnclamped(startRotation, Quaternion.identity, progress);
+                if (crackImage != null && crackObject != null)
+                {
+                    crackImage.color = new Color(crackColor.r, crackColor.g, crackColor.b, 0.86f);
+                    crackObject.transform.SetAsLastSibling();
+                }
+                yield return null;
+            }
+
+            // L'ultimo giro puo' fermarsi poco prima dello zero: il materiale va
+            // azzerato a mano, o resterebbe un velo di pixel mangiati da togliere
+            // nel frame dopo.
+            if (dissolveMat != null)
+            {
+                dissolveMat.SetFloat("_Amount", 0f);
+                dissolveMat.SetFloat("_EdgeWidth", 0f);
             }
         }
 
@@ -3573,6 +4373,46 @@ namespace AccardND.Presentation
             SetStatus(null, Color.white);
             defeatedLabel.gameObject.SetActive(false);
             ClearActionOverlay();
+        }
+
+        /// <summary>
+        /// Ricostruisce senza animazione il residuo visivo di una pedina gia' morta.
+        /// Serve quando lo stato viene caricato da uno snapshot/replay e quindi la
+        /// normale PlayDefeatAnimation non viene eseguita.
+        /// </summary>
+        public void RestoreDefeatedState(HeroClass? killerHeroClass = null)
+        {
+            GetComponent<WarriorSupremeVfx>()?.StopOnDefeat();
+            SetComposableGolemOrbitVisible(false);
+            SetBattleAura(false, Color.clear, string.Empty);
+            if (targetHintAuraRoot != null)
+                SetTargetHintAura(false, Color.clear);
+
+            foreach (Image image in DefeatEffectImages())
+            {
+                if (image != null)
+                    image.material = null;
+            }
+
+            SetStatus("MORTE", new Color(0.95f, 0.12f, 0.12f));
+            defeatedLabel.gameObject.SetActive(false);
+            canvasGroup.alpha = 0.52f;
+            rectTransform.localScale = initialScale * 0.93f;
+            rectTransform.localRotation = Quaternion.identity;
+
+            if (defeatCrackOverlay == null)
+            {
+                defeatCrackOverlay = CreateCrackOverlay(
+                    "DefeatCrackOverlay",
+                    transform,
+                    Color.white,
+                    0.86f,
+                    killerHeroClass);
+            }
+            else
+            {
+                defeatCrackOverlay.transform.SetAsLastSibling();
+            }
         }
 
         private void CreateHealthBar(Font font)
@@ -4749,12 +5589,34 @@ namespace AccardND.Presentation
             return icon;
         }
 
+        private static void ConfigureLifeIconOutlines(Image icon)
+        {
+            const int outlineCount = 3;
+            Outline[] outlines = icon.GetComponents<Outline>();
+
+            while (outlines.Length < outlineCount)
+            {
+                icon.gameObject.AddComponent<Outline>();
+                outlines = icon.GetComponents<Outline>();
+            }
+
+            for (int i = 0; i < outlines.Length; i++)
+            {
+                Outline outline = outlines[i];
+                outline.enabled = i < outlineCount;
+                outline.effectColor = new Color(0f, 0f, 0f, 1f);
+                outline.effectDistance = new Vector2(1f, -1f);
+                outline.useGraphicAlpha = true;
+            }
+        }
+
         private IEnumerator DeploymentRoutine(
             Vector3 startWorldPosition,
             Quaternion startWorldRotation,
             float duration)
         {
             LayoutElement layout = GetComponent<LayoutElement>();
+            bool layoutDriven = SettleLayoutBeforeMotion(layout);
             Vector2 targetPosition = rectTransform.anchoredPosition;
             Quaternion targetRotation = Quaternion.identity;
             Vector3 targetScale = rectTransform.localScale;
@@ -4764,9 +5626,14 @@ namespace AccardND.Presentation
             Vector2 startPosition = rectTransform.anchoredPosition;
             Quaternion localStartRotation = rectTransform.localRotation;
             float elapsed = 0f;
+            bool firstFrame = true;
             while (elapsed < duration)
             {
-                elapsed += Time.unscaledDeltaTime;
+                // Il frame che ha ridisegnato il tavolo e ricalcolato il layout e'
+                // il piu' lungo della sequenza: contarne il delta faceva partire la
+                // pedina gia' a un pezzo di strada dalla mano.
+                elapsed += firstFrame ? 0f : AnimationDeltaTime();
+                firstFrame = false;
                 float progress = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / Mathf.Max(0.001f, duration)));
                 rectTransform.anchoredPosition = Vector2.LerpUnclamped(startPosition, targetPosition, progress);
                 rectTransform.localRotation = Quaternion.SlerpUnclamped(localStartRotation, targetRotation, progress);
@@ -4776,14 +5643,14 @@ namespace AccardND.Presentation
             rectTransform.anchoredPosition = targetPosition;
             rectTransform.localRotation = targetRotation;
             rectTransform.localScale = targetScale;
-            layout.ignoreLayout = transform.parent != null
-                && IsManualBattlefieldRow(transform.parent.name);
+            layout.ignoreLayout = !layoutDriven;
             motionCoroutine = null;
         }
 
         private IEnumerator RevealRoutine(float duration)
         {
             LayoutElement layout = GetComponent<LayoutElement>();
+            bool layoutDriven = SettleLayoutBeforeMotion(layout);
             Vector3 targetScale = rectTransform.localScale;
             Vector2 targetPosition = rectTransform.anchoredPosition;
             layout.ignoreLayout = true;
@@ -4791,9 +5658,11 @@ namespace AccardND.Presentation
             rectTransform.localScale = new Vector3(0.04f, targetScale.y * 0.92f, 1f);
             canvasGroup.alpha = 0.25f;
             float elapsed = 0f;
+            bool firstFrame = true;
             while (elapsed < duration)
             {
-                elapsed += Time.unscaledDeltaTime;
+                elapsed += firstFrame ? 0f : AnimationDeltaTime();
+                firstFrame = false;
                 float progress = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / Mathf.Max(0.001f, duration)));
                 rectTransform.anchoredPosition = Vector2.LerpUnclamped(targetPosition + new Vector2(0f, 55f), targetPosition, progress);
                 rectTransform.localScale = new Vector3(
@@ -4806,14 +5675,39 @@ namespace AccardND.Presentation
             rectTransform.anchoredPosition = targetPosition;
             rectTransform.localScale = targetScale;
             canvasGroup.alpha = 1f;
-            layout.ignoreLayout = transform.parent != null
-                && IsManualBattlefieldRow(transform.parent.name);
+            layout.ignoreLayout = !layoutDriven;
             motionCoroutine = null;
         }
 
-        private static bool IsManualBattlefieldRow(string parentName)
+        /// <summary>
+        /// Prepara la lettura del bersaglio di un'animazione di ingresso e dice
+        /// se la carta e' piazzata da un layout group. Se lo e', il gruppo va
+        /// ricostruito adesso: la posizione appena assegnata dal padre non e'
+        /// ancora scritta sul rect, e leggerla in anticipo significa animare
+        /// verso un punto sbagliato per poi saltare a fine corsa. Il valore
+        /// restituito serve a restituire <c>ignoreLayout</c> com'era, invece di
+        /// indovinarlo dal nome del genitore.
+        /// </summary>
+        private bool SettleLayoutBeforeMotion(LayoutElement layout)
         {
-            return parentName == "CPU Formation" || parentName == "Player Formation";
+            bool layoutDriven = layout != null && !layout.ignoreLayout;
+            if (!layoutDriven)
+                return false;
+
+            if (rectTransform.parent is RectTransform parentRect)
+                LayoutRebuilder.ForceRebuildLayoutImmediate(parentRect);
+            return true;
+        }
+
+        /// <summary>
+        /// Passo temporale delle animazioni di ingresso. Un frame lungo — il
+        /// salto a sessanta del governor, decine di view create insieme, un
+        /// hitch del browser — non deve mangiarsi mezza animazione in un colpo:
+        /// meglio allungarla di qualche millisecondo che vederla saltare.
+        /// </summary>
+        private static float AnimationDeltaTime()
+        {
+            return Mathf.Min(Time.unscaledDeltaTime, 1f / 20f);
         }
 
         private void EnsureTurnAura()
@@ -4825,10 +5719,30 @@ namespace AccardND.Presentation
             turnAuraRoot.transform.SetParent(transform, false);
             turnAuraRoot.transform.SetAsFirstSibling();
             turnAuraRect = (RectTransform)turnAuraRoot.transform;
-            SetAnchors(turnAuraRect, new Vector2(-0.07f, -0.07f), new Vector2(1.07f, 1.07f));
+            SetAnchors(
+                turnAuraRect,
+                bragusBackdropPresentation ? new Vector2(-0.16f, -0.04f)
+                    : trentorBackdropPresentation ? new Vector2(-0.13f, -0.02f)
+                    : seraphelBackdropPresentation ? new Vector2(-0.18f, -0.13f)
+                    : jurinashorBackdropPresentation ? new Vector2(-0.445f, 0.006f)
+                    : new Vector2(-0.07f, -0.07f),
+                bragusBackdropPresentation ? new Vector2(1.16f, 1.14f)
+                    : trentorBackdropPresentation ? new Vector2(1.13f, 1.18f)
+                    : seraphelBackdropPresentation ? new Vector2(1.18f, 1.13f)
+                    : jurinashorBackdropPresentation ? new Vector2(1.370f, 1.428f)
+                    : new Vector2(1.07f, 1.07f));
 
             turnAuraImage = turnAuraRoot.GetComponent<Image>();
-            turnAuraImage.sprite = GetAuraSprite();
+            turnAuraImage.sprite = bragusBackdropPresentation
+                ? GetBragusContourAuraSprite()
+                : trentorBackdropPresentation ? GetTrentorContourAuraSprite()
+                : seraphelBackdropPresentation ? GetSeraphelContourAuraSprite()
+                : jurinashorBackdropPresentation ? GetJurinashorContourAuraSprite()
+                : GetAuraSprite();
+			turnAuraImage.preserveAspect = bragusBackdropPresentation
+				|| trentorBackdropPresentation
+				|| seraphelBackdropPresentation
+				|| jurinashorBackdropPresentation;
             turnAuraImage.raycastTarget = false;
 
             for (int index = 0; index < 10; index++)
@@ -4845,6 +5759,33 @@ namespace AccardND.Presentation
 
             turnAuraRoot.SetActive(false);
         }
+
+		private void RefreshBossTurnAuraVisual()
+		{
+			if (turnAuraImage == null)
+				return;
+
+			bool bossBackdrop = bragusBackdropPresentation
+				|| trentorBackdropPresentation
+				|| seraphelBackdropPresentation
+				|| jurinashorBackdropPresentation;
+			if (!bossBackdrop)
+				return;
+
+			Sprite contour = targetHintAuraImage != null ? targetHintAuraImage.sprite : null;
+			if (contour == null)
+			{
+				contour = bragusBackdropPresentation ? GetBragusContourAuraSprite()
+					: trentorBackdropPresentation ? GetTrentorContourAuraSprite()
+					: seraphelBackdropPresentation ? GetSeraphelContourAuraSprite()
+					: GetJurinashorContourAuraSprite();
+			}
+
+			turnAuraImage.sprite = contour;
+			turnAuraImage.preserveAspect = true;
+			if (targetHintAuraRect != null)
+				SetAnchors(turnAuraRect, targetHintAuraRect.anchorMin, targetHintAuraRect.anchorMax);
+		}
 
         private void EnsureBattleAura()
         {
@@ -4886,15 +5827,22 @@ namespace AccardND.Presentation
                 targetHintAuraRect,
                 bragusBackdropPresentation ? new Vector2(-0.16f, -0.04f)
                     : trentorBackdropPresentation ? new Vector2(-0.13f, -0.02f)
+                    : seraphelBackdropPresentation ? new Vector2(-0.18f, -0.13f)
+                    : jurinashorBackdropPresentation ? new Vector2(-0.445f, 0.006f)
                     : new Vector2(-0.055f, -0.055f),
                 bragusBackdropPresentation ? new Vector2(1.16f, 1.14f)
                     : trentorBackdropPresentation ? new Vector2(1.13f, 1.18f)
+                    : seraphelBackdropPresentation ? new Vector2(1.18f, 1.13f)
+                    : jurinashorBackdropPresentation ? new Vector2(1.370f, 1.428f)
                     : new Vector2(1.055f, 1.055f));
 
             targetHintAuraImage = targetHintAuraRoot.GetComponent<Image>();
             targetHintAuraImage.sprite = bragusBackdropPresentation
                 ? GetBragusContourAuraSprite()
-                : trentorBackdropPresentation ? GetTrentorContourAuraSprite() : GetAuraSprite();
+                : trentorBackdropPresentation ? GetTrentorContourAuraSprite()
+                : seraphelBackdropPresentation ? GetSeraphelContourAuraSprite()
+                : jurinashorBackdropPresentation ? GetJurinashorContourAuraSprite()
+                : GetAuraSprite();
             targetHintAuraImage.raycastTarget = false;
             targetHintAuraRoot.SetActive(false);
         }
@@ -5219,6 +6167,16 @@ namespace AccardND.Presentation
 
         private IEnumerator AnimateTurnAura()
         {
+            bool useBossContour = bragusBackdropPresentation
+                || trentorBackdropPresentation
+                || seraphelBackdropPresentation
+                || jurinashorBackdropPresentation;
+            foreach (Image sparkle in turnSparkles)
+            {
+                if (sparkle != null)
+                    sparkle.gameObject.SetActive(!useBossContour);
+            }
+
             while (turnAuraActive)
             {
                 float time = Time.unscaledTime;
@@ -5234,6 +6192,8 @@ namespace AccardND.Presentation
                 for (int index = 0; index < turnSparkles.Count; index++)
                 {
                     Image sparkle = turnSparkles[index];
+                    if (useBossContour || sparkle == null)
+                        continue;
                     float phase = index * 0.73f;
                     float orbit = time * (0.72f + index * 0.025f) + phase;
                     float flicker = 0.5f + 0.5f * Mathf.Sin(time * (5.5f + index * 0.4f) + phase * 2.1f);
@@ -5286,13 +6246,17 @@ namespace AccardND.Presentation
                 float time = Time.unscaledTime;
                 float pulse = 0.5f + 0.5f * Mathf.Sin(time * 3.1f);
                 Color aura = targetHintAuraColor;
-                aura.a = IsBackdropBossPresentation
-                    ? Mathf.Lerp(0.22f, 0.40f, pulse)
-                    : Mathf.Lerp(0.24f, 0.48f, pulse);
+                aura.a = seraphelBackdropPresentation
+                    ? Mathf.Lerp(0.78f, 1f, pulse)
+                    : IsBackdropBossPresentation
+                        ? Mathf.Lerp(0.42f, 0.68f, pulse)
+                        : Mathf.Lerp(0.24f, 0.48f, pulse);
                 targetHintAuraImage.color = aura;
-                targetHintAuraRect.localScale = Vector3.one * (IsBackdropBossPresentation
-                    ? Mathf.Lerp(0.998f, 1.008f, pulse)
-                    : Mathf.Lerp(0.995f, 1.025f, pulse));
+                targetHintAuraRect.localScale = Vector3.one * (seraphelBackdropPresentation
+                    ? 1f
+                    : IsBackdropBossPresentation
+                        ? Mathf.Lerp(0.998f, 1.008f, pulse)
+                        : Mathf.Lerp(0.995f, 1.025f, pulse));
 
                 yield return null;
             }
@@ -5531,7 +6495,10 @@ namespace AccardND.Presentation
 
         private void CreateStatusIcon(StatusToken status, int index)
         {
-            Sprite sprite = ResolveStatusIcon(status.Label);
+            Sprite sprite = status.Icon != null ? status.Icon : ResolveStatusIcon(status.Label);
+            bool isSeraphelSeal = status.Label != null
+                && status.Label.TrimStart().StartsWith("SIGILLI ", StringComparison.OrdinalIgnoreCase);
+            float tokenWidth = isSeraphelSeal ? statusIconSize * 1.55f : statusIconSize;
             GameObject icon = new GameObject(
                 $"Status Icon {index + 1}",
                 typeof(RectTransform),
@@ -5542,7 +6509,7 @@ namespace AccardND.Presentation
             icon.transform.SetParent(statusIconRoot, false);
 
             RectTransform iconRect = (RectTransform)icon.transform;
-            iconRect.sizeDelta = Vector2.one * statusIconSize;
+            iconRect.sizeDelta = new Vector2(tokenWidth, statusIconSize);
 
             Image image = icon.GetComponent<Image>();
             image.sprite = sprite;
@@ -5550,12 +6517,48 @@ namespace AccardND.Presentation
             image.raycastTarget = false;
             image.preserveAspect = true;
 
+            if (isSeraphelSeal)
+            {
+                // Il token dei Sigilli usa la croce della Purificazione e mostra il
+                // totale separatamente, invece del quadrato tinta-unita di fallback.
+                image.color = Color.clear;
+
+                Image cross = CreateImage("Seraphel Seal Cross", icon.transform, Color.white);
+                cross.sprite = sprite;
+                cross.preserveAspect = true;
+                cross.raycastTarget = false;
+                SetAnchors(cross.rectTransform, Vector2.zero, new Vector2(0.65f, 1f));
+
+                string sealCount = string.Empty;
+                for (int characterIndex = "SIGILLI ".Length;
+                     characterIndex < status.Label.Length && char.IsDigit(status.Label[characterIndex]);
+                     characterIndex++)
+                {
+                    sealCount += status.Label[characterIndex];
+                }
+                Text count = CreateText(
+                    "Seraphel Seal Count",
+                    icon.transform,
+                    MmoUiTheme.TitleBoldFont,
+                    Mathf.RoundToInt(statusIconSize * 0.52f),
+                    FontStyle.Bold,
+                    TextAnchor.MiddleLeft);
+                count.text = string.IsNullOrEmpty(sealCount) ? "0" : sealCount;
+                count.color = Color.white;
+                count.raycastTarget = false;
+                SetAnchors(count.rectTransform, new Vector2(0.62f, 0f), Vector2.one);
+
+                Outline countOutline = count.gameObject.AddComponent<Outline>();
+                countOutline.effectColor = new Color(0f, 0f, 0f, 0.9f);
+                countOutline.effectDistance = new Vector2(1.5f, -1.5f);
+            }
+
             Outline outline = icon.GetComponent<Outline>();
             outline.effectColor = new Color(0f, 0f, 0f, 0.72f);
             outline.effectDistance = new Vector2(1.6f, -1.6f);
 
             LayoutElement element = icon.GetComponent<LayoutElement>();
-            element.preferredWidth = statusIconSize;
+            element.preferredWidth = tokenWidth;
             element.preferredHeight = statusIconSize;
             statusIconViews.Add(icon);
         }
@@ -5629,14 +6632,18 @@ namespace AccardND.Presentation
                 "debuff_inhibited" => "assassin_debuff",
                 "debuff_marked" => "hunter_debuff",
                 "debuff_vigor_down" => "debuff_mage",
+				"debuff_petrified" => "medusa_debuff",
+				"debuff_supreme_cost" => "debuff_mage",
                 "buff_protection" => "paladin_buff",
                 "buff_blessing" => "priest_buff",
                 "buff_might" => "might_buff",
                 "fury_buff" => "fury_buff",
                 "buff_attack" => "barbarian_buff",
                 "agreement_buff" => "agreement_buff",
-                "buff_attachment" => "UI/attachment_button",
-                "buff_spirit" => "buff_spirit",
+				"buff_attachment" => "UI/attachment_button",
+				"dark_seal" => "UI/ruby_seal_item",
+				"buff_spirit" => "buff_spirit",
+                "seraphel_seal" => "UI/priest_purification_cross",
                 "ability" => "UI/ability_button",
                 "supreme" => "UI/ability_secondary_button",
                 _ => null
@@ -5650,7 +6657,7 @@ namespace AccardND.Presentation
 
             string normalized = status.Trim().ToUpperInvariant();
             normalized = normalized
-                .Replace("AURA FAMIGLIA ", "AURA ")
+                .Replace("AURA FAZIONE ", "AURA ")
                 .Replace("AURA CLASSE ", "AURA ");
             if (normalized.StartsWith("AURA +", StringComparison.Ordinal)
                 || (normalized.Contains("AURA FORZUTA") && normalized.Contains("MORTE"))
@@ -5658,7 +6665,7 @@ namespace AccardND.Presentation
                 return "buff_might";
             if (normalized.Contains("MORTE") || normalized.Contains("KO") || normalized.Contains("ELIMINAT"))
                 return "death";
-            if (normalized.Contains("AURA MIGHT") || normalized.Contains("AURA FORZA") || normalized.Contains("AURA FORTUZA"))
+            if (normalized.Contains("AURA MIGHT") || normalized.Contains("AURA FORZA") || normalized.Contains("AURA FORZUTA") || normalized.Contains("AURA FORTUZA"))
                 return "aura_might";
             if (normalized.Contains("AURA CUNNING") || normalized.Contains("AURA ASTUZIA") || normalized.Contains("AURA ASTUTA"))
                 return "aura_cunning";
@@ -5686,12 +6693,20 @@ namespace AccardND.Presentation
                 return "aura_priest";
             if (normalized.Contains("ABILITA") || normalized.Contains("ABILITÀ") || normalized.Contains("ABILITY"))
                 return "ability";
+            if (normalized.Contains("MALUS SUPREMA") || normalized.Contains("SUPREME PENALTY"))
+				return "debuff_supreme_cost";
             if (normalized.Contains("SUPREMA") || normalized.Contains("SUPREME"))
                 return "supreme";
             if (normalized.Contains("DIFESA DADO +1"))
                 return "aura_magic";
+			if (normalized.StartsWith("SIGILLI ", StringComparison.Ordinal))
+				return "seraphel_seal";
+			if (normalized.Contains("SIGILLO OSCURO"))
+				return "dark_seal";
             if (normalized.Contains("INIB"))
                 return "debuff_inhibited";
+			if (normalized.Contains("PIETRA") || normalized.Contains("PIETRIFIC") || normalized.Contains("PETRIF"))
+				return "debuff_petrified";
             if (normalized.Contains("DADO") || normalized.Contains("VIGOR"))
                 return "debuff_vigor_down";
             if (normalized.Contains("MARC") || normalized.Contains("PREDA"))
@@ -5794,7 +6809,7 @@ namespace AccardND.Presentation
             return iconName switch
             {
                 "death" => new[] { "death", "morte", "morta", "morto", "ko", "dead", "skull", "teschio", "elimin" },
-                "aura_might" => new[] { "might", "fortuza", "forza", "potenza", "aura" },
+                "aura_might" => new[] { "might", "forzuta", "forza", "potenza", "aura" },
                 "aura_cunning" => new[] { "cunning", "astuta", "astuzia", "furbizia", "aura" },
                 "aura_magic" => new[] { "magic", "magica", "magia", "magico", "aura" },
                 "aura_formation" => new[] { "formation", "formazione", "trio", "aura" },
@@ -6014,7 +7029,7 @@ namespace AccardND.Presentation
             if (spriteName.IndexOf("cancel_button", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "Cancella";
             if (spriteName.IndexOf("confirm_button", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "Conferma";
+                return ConfirmActionText();
             if (spriteName.IndexOf("attack_button", StringComparison.OrdinalIgnoreCase) >= 0)
                 return AttackActionText();
             if (spriteName.IndexOf("skip_button", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -6058,6 +7073,11 @@ namespace AccardND.Presentation
             "Salta",
             "Skip");
 
+        private static string ConfirmActionText() => LocalizedActionText(
+            GameTextKeys.Common.Confirm,
+            "Conferma",
+            "Confirm");
+
         private static string FormChangeActionText() => LocalizedActionText(
             GameTextKeys.Combat.ActionChangeForm,
             "Cambia forma",
@@ -6091,15 +7111,31 @@ namespace AccardND.Presentation
                 if (SwipeActionSelector.ShouldSuppressClick(button))
                     return;
 
-                if (!string.IsNullOrWhiteSpace(label))
-                    PlayActionCallout(label, color);
                 bool showActionAura = SupportsActionAura(button.gameObject.name);
-                if (showActionAura)
-                    SetSwipeActionPreview(true, actionColor);
-                else if (button.gameObject.name == "Cancel Action")
-                    SetSwipeActionPreview(false, default);
+
+                // Callout e aura sono contorno: se si rompono devono togliersi di
+                // mezzo, non impedire l'azione. Un'eccezione qui bloccherebbe il
+                // pulsante per tutta la partita, perche' si ripeterebbe a ogni click.
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(label))
+                        PlayActionCallout(label, color);
+                    if (showActionAura)
+                        SetSwipeActionPreview(true, actionColor);
+                    else if (button.gameObject.name == "Cancel Action")
+                        SetSwipeActionPreview(false, default);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning($"AZIONE - grafica di contorno fallita: {exception}");
+                }
+
                 action.Invoke();
-                if (showActionAura)
+
+                if (!showActionAura)
+                    return;
+
+                try
                 {
                     bool actionIsArmed = actionOverlayRoot != null
                         && actionOverlayRoot.Find("Cancel Action") != null;
@@ -6107,6 +7143,10 @@ namespace AccardND.Presentation
                         actionIsArmed,
                         actionColor,
                         restoreTurnAura: !actionIsArmed);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning($"AZIONE - aura non aggiornata dopo l'azione: {exception}");
                 }
             });
         }
@@ -6156,6 +7196,16 @@ namespace AccardND.Presentation
                 turnAuraRoot.SetActive(restoreTurnAura && turnAuraActive);
         }
 
+		internal void FinishSwipeActionPreview(Color color)
+		{
+			bool actionIsArmed = actionOverlayRoot != null
+				&& actionOverlayRoot.Find("Cancel Action") != null;
+			SetSwipeActionPreview(
+				actionIsArmed,
+				color,
+				restoreTurnAura: !actionIsArmed);
+		}
+
         internal void PlaySwipeActionCallout(string label, Color color)
         {
             PlayActionCallout(label, color);
@@ -6200,6 +7250,13 @@ namespace AccardND.Presentation
             PlayActionCallout(AttackActionText(), ActionLabelRed);
         }
 
+        public void PlayCounterattackActionCallout()
+        {
+            string label = GameText.Get(GameTextKeys.PvpLog.CounterattackPrefix)
+                .TrimEnd(' ', ':');
+            PlayActionCallout(label, ActionLabelRed);
+        }
+
         public void PlayAbilityActionCallout()
         {
             PlayActionCallout(AbilityActionText(), ActionLabelBlue);
@@ -6225,6 +7282,21 @@ namespace AccardND.Presentation
             PlayActionCallout(FormChangeActionText(), formColor);
         }
 
+		public void PlayPetrifiedCallout()
+		{
+			PlayActionCallout(GameText.Get(GameTextKeys.Combat.PetrifiedCallout), new Color(0.55f, 0.62f, 0.64f));
+		}
+
+		public void PlayFreedCallout()
+		{
+			PlayActionCallout(GameText.Get(GameTextKeys.Combat.FreedCallout), new Color(0.18f, 0.82f, 0.45f));
+		}
+
+		public void PlayCrumbledCallout()
+		{
+			PlayActionCallout(GameText.Get(GameTextKeys.Combat.CrumbledCallout), new Color(0.72f, 0.46f, 0.28f));
+		}
+
         public void PlayActionCallout(string label, Color color)
         {
             if (!isActiveAndEnabled || string.IsNullOrWhiteSpace(label))
@@ -6241,8 +7313,96 @@ namespace AccardND.Presentation
             actionCalloutCoroutine = StartCoroutine(PlayActionCalloutRoutine(label, color));
         }
 
+        /// <summary>
+        /// Mostra un annuncio di squadra al centro della meta' campo indicata.
+        /// Riutilizza intenzionalmente la stessa tipografia e gli stessi effetti dei callout azione.
+        /// </summary>
+        public void PlayFormationCallout(string label, Color color, RectTransform host, bool playerOwned)
+        {
+            if (!isActiveAndEnabled || host == null || string.IsNullOrWhiteSpace(label))
+                return;
+
+            if (actionCalloutCoroutine != null)
+                StopCoroutine(actionCalloutCoroutine);
+            if (actionCalloutRoot != null)
+                Destroy(actionCalloutRoot);
+
+            actionCalloutCoroutine = StartCoroutine(PlayFormationCalloutRoutine(label, color, host, playerOwned));
+        }
+
+        private IEnumerator PlayFormationCalloutRoutine(string label, Color color, RectTransform host, bool playerOwned)
+        {
+            var root = new GameObject(
+                "Formation Aura Callout - " + label,
+                typeof(RectTransform), typeof(Canvas), typeof(CanvasGroup), typeof(LayoutElement));
+            root.transform.SetParent(host, false);
+            root.transform.SetAsLastSibling();
+            actionCalloutRoot = root;
+
+            RectTransform calloutRect = (RectTransform)root.transform;
+            calloutRect.anchorMin = calloutRect.anchorMax = new Vector2(0.5f, playerOwned ? 0.34f : 0.63f);
+            calloutRect.pivot = new Vector2(0.5f, 0.5f);
+            calloutRect.sizeDelta = new Vector2(Mathf.Max(520f, host.rect.width * 0.72f), 110f);
+            root.GetComponent<LayoutElement>().ignoreLayout = true;
+
+            Canvas canvas = root.GetComponent<Canvas>();
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = 460;
+
+            CanvasGroup group = root.GetComponent<CanvasGroup>();
+            group.alpha = 0f;
+            group.ignoreParentGroups = true;
+            group.interactable = false;
+            group.blocksRaycasts = false;
+
+            Text text = CreateText("Formation Aura Callout Text", calloutRect, GetActionLabelFont(), 52, FontStyle.BoldAndItalic, TextAnchor.MiddleCenter);
+            text.text = label;
+            text.color = Color.Lerp(color, Color.white, 0.2f);
+            text.resizeTextMinSize = 25;
+            text.resizeTextMaxSize = 52;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            Stretch(text.rectTransform);
+
+            Outline outline = text.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(ActionLabelOutline.r, ActionLabelOutline.g, ActionLabelOutline.b, 0.96f);
+            outline.effectDistance = new Vector2(2.8f, -2.8f);
+            Shadow shadow = text.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.88f);
+            shadow.effectDistance = new Vector2(0f, -4f);
+
+            const float duration = 2.8f;
+            float elapsed = 0f;
+            while (elapsed < duration && root != null)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+                group.alpha = progress < 0.16f ? progress / 0.16f : (progress > 0.82f ? (1f - progress) / 0.18f : 1f);
+                float pop = Mathf.Clamp01(progress / 0.16f);
+                calloutRect.localScale = Vector3.one * Mathf.Lerp(0.78f, 1f, Mathf.SmoothStep(0f, 1f, pop));
+                yield return null;
+            }
+
+            if (root != null)
+                Destroy(root);
+            actionCalloutRoot = null;
+            actionCalloutCoroutine = null;
+        }
+
         private IEnumerator PlayActionCalloutRoutine(string label, Color color)
         {
+            Canvas rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;
+            Camera rootCamera = rootCanvas != null && rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay
+                ? rootCanvas.worldCamera
+                : null;
+            Vector2 cardScreenPoint = RectTransformUtility.WorldToScreenPoint(
+                rootCamera,
+                rectTransform.TransformPoint(rectTransform.rect.center));
+            float normalizedCardX = cardScreenPoint.x / Mathf.Max(1f, Screen.width);
+            bool isLateralPawn = normalizedCardX < 0.25f || normalizedCardX > 0.75f;
+            int calloutFontSize = isLateralPawn ? 30 : 52;
+            int calloutMinimumFontSize = isLateralPawn ? 14 : 25;
+
             var root = new GameObject(
                 "Action Callout - " + label,
                 typeof(RectTransform),
@@ -6276,13 +7436,13 @@ namespace AccardND.Presentation
                 "Action Callout Text",
                 calloutRect,
                 GetActionLabelFont(),
-                52,
+                calloutFontSize,
                 FontStyle.BoldAndItalic,
                 TextAnchor.MiddleCenter);
             text.text = label;
             text.color = Color.Lerp(color, Color.white, 0.2f);
-            text.resizeTextMinSize = 25;
-            text.resizeTextMaxSize = 52;
+            text.resizeTextMinSize = calloutMinimumFontSize;
+            text.resizeTextMaxSize = calloutFontSize;
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             Stretch(text.rectTransform);
@@ -6299,7 +7459,9 @@ namespace AccardND.Presentation
 
             float startY = Mathf.Max(24f, RectTransform.rect.height * 0.08f);
             float endY = Mathf.Max(132f, RectTransform.rect.height * 0.58f);
-            const float duration = 0.78f;
+            // I callout comunicano l'azione appena risolta per entrambe le squadre:
+            // devono restare leggibili abbastanza a lungo da seguire il combattimento.
+            const float duration = 1.35f;
             float elapsed = 0f;
             while (elapsed < duration && root != null)
             {
@@ -6325,7 +7487,7 @@ namespace AccardND.Presentation
                 calloutRect.localScale = Vector3.one * scale;
 
                 float fadeIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.1f));
-                float fadeOut = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((progress - 0.42f) / 0.58f));
+                float fadeOut = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((progress - 0.62f) / 0.38f));
                 group.alpha = fadeIn * fadeOut;
                 yield return null;
             }
@@ -6377,10 +7539,13 @@ namespace AccardND.Presentation
             string caption,
             float rollDuration,
             float resultHold,
-            bool use3DDice)
+            bool use3DDice,
+            bool empowered = false,
+            bool hideCaption = false,
+            bool preserveDiscardedDie = false)
         {
             diceRoot.SetActive(true);
-            diceCaption.text = NormalizeDiceCaption(caption);
+            diceCaption.text = hideCaption ? string.Empty : NormalizeDiceCaption(caption);
             diceResult.text = string.Empty;
             diceImage.rectTransform.localScale = Vector3.one;
             secondDiceImage.rectTransform.localScale = Vector3.one;
@@ -6408,6 +7573,9 @@ namespace AccardND.Presentation
                 BeginScreenDiceRollLayout();
                 ConfigureScreenDiceTextLayout();
                 EnsureDice3DViews(hasSecondResult, visualSides);
+                firstDice3D.SetEmpowered(empowered);
+                if (secondDice3D != null)
+                    secondDice3D.SetEmpowered(empowered);
                 firstDice3D.StartScriptedRoll(visualSides, cardHeroClass, firstInitialResult, rollDuration);
                 if (hasSecondResult)
                     secondDice3D.StartScriptedRoll(secondVisualSides, cardHeroClass, secondInitialResult, rollDuration);
@@ -6488,7 +7656,7 @@ namespace AccardND.Presentation
 				if (cardHeroClass == HeroClass.Rogue)
 					PlayAbilityActionCallout();
 
-                diceCaption.text = NormalizeDiceCaption(caption);
+                diceCaption.text = hideCaption ? string.Empty : NormalizeDiceCaption(caption);
                 float rerollDuration = Mathf.Max(0.45f, rollDuration * 0.66f);
 
                 if (uses3DDice)
@@ -6579,6 +7747,20 @@ namespace AccardND.Presentation
             }
 
             diceResult.text = string.Empty;
+
+            if (!preserveDiscardedDie
+                && ShouldCrumbleDiscardedDie(hasSecondResult, firstResult, secondResult, selectionMode))
+            {
+                bool crumbleFirst = selectionMode == VigorSelectionMode.Highest
+                    ? firstResult < secondResult
+                    : firstResult > secondResult;
+                if (uses3DDice)
+                {
+                    Dice3DRollView discardedDie = crumbleFirst ? firstDice3D : secondDice3D;
+                    yield return StartCoroutine(discardedDie.PlayMeshCrumble());
+                }
+            }
+
             yield return new WaitForSecondsRealtime(usesAnimatedDice
                 ? Mathf.Max(resultHold, AnimatedDiceMinimumResultHold)
                 : resultHold);
@@ -6654,7 +7836,9 @@ namespace AccardND.Presentation
         {
             if (catalog != null && catalog.FindFrames(logicalSides).Length > 0)
                 return logicalSides;
-            return logicalSides == 3 ? 6 : logicalSides;
+            // Il D2 e' un dado logico: usa mesh e sprite del D4, mentre il
+            // CombatResolver continua a generare esclusivamente risultati 1-2.
+            return logicalSides == 2 ? 4 : logicalSides;
         }
 
         private void EnsureDice3DViews(bool showTwoDice, int visualSides)
@@ -6792,10 +7976,31 @@ namespace AccardND.Presentation
             out Vector2 minimum,
             out Vector2 maximum)
         {
+			if (jurinashorSwordPresentation)
+			{
+				Camera swordCamera = rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : rootCanvas.worldCamera;
+				RectTransform visualRect = battlePreviewImage != null ? battlePreviewImage.rectTransform : rectTransform;
+				Vector2 visualCenter = RectTransformUtility.WorldToScreenPoint(
+					swordCamera, visualRect.TransformPoint(visualRect.rect.center));
+				float swordCenterX = Mathf.Clamp01(visualCenter.x / Mathf.Max(1f, Screen.width));
+				float swordCenterY = Mathf.Clamp01(visualCenter.y / Mathf.Max(1f, Screen.height));
+				const float swordDiceWidth = 0.25f;
+				const float swordDiceHeight = 0.20f;
+				float swordDiceXMin = Mathf.Clamp(swordCenterX - swordDiceWidth * 0.5f, 0.015f, 0.985f - swordDiceWidth);
+				float swordDiceYMin = Mathf.Clamp(swordCenterY + 0.035f, 0.015f, 0.985f - swordDiceHeight);
+				diceRootOnLowerScreenHalf = true;
+				screenDiceCardCenterX = Mathf.Clamp((swordCenterX - swordDiceXMin) / swordDiceWidth, 0.18f, 0.82f);
+				screenDiceCaptionCenterX = screenDiceCardCenterX;
+				minimum = new Vector2(swordDiceXMin, swordDiceYMin);
+				maximum = new Vector2(swordDiceXMin + swordDiceWidth, swordDiceYMin + swordDiceHeight);
+				return;
+			}
+
             if (IsBackdropBossPresentation)
             {
                 diceRootOnLowerScreenHalf = false;
                 screenDiceCardCenterX = 0.5f;
+                screenDiceCaptionCenterX = 0.5f;
                 minimum = new Vector2(0.26f, 0.62f);
                 maximum = new Vector2(0.74f, 0.96f);
                 return;
@@ -6820,7 +8025,13 @@ namespace AccardND.Presentation
 
             float screenWidth = Mathf.Max(1f, Screen.width);
             float screenHeight = Mathf.Max(1f, Screen.height);
-            float centerX = Mathf.Clamp01(((minX + maxX) * 0.5f) / screenWidth);
+            float cardCenterX = Mathf.Clamp01(((minX + maxX) * 0.5f) / screenWidth);
+            float centerX = cardCenterX;
+            // Le pedine laterali non devono trascinare la zona di lancio fino al
+            // bordo: con due dadi uno dei due poteva finire parzialmente fuori
+            // schermo. Avviciniamo il centro del lancio al centro della plancia;
+            // una pedina gia' centrale resta invariata.
+            centerX = Mathf.Lerp(centerX, 0.5f, 0.45f);
             float cardTop = Mathf.Clamp01(maxY / screenHeight);
             float cardBottom = Mathf.Clamp01(minY / screenHeight);
             float cardWidth = Mathf.Clamp01((maxX - minX) / screenWidth);
@@ -6837,6 +8048,12 @@ namespace AccardND.Presentation
                 : Mathf.Max(0.015f, cardBottom - gap - height);
             float xMin = Mathf.Clamp(centerX - width * 0.5f, 0.015f, 0.985f - width);
             screenDiceCardCenterX = Mathf.Clamp((centerX - xMin) / width, 0.12f, 0.88f);
+            // La didascalia resta ancorata alla posizione originale della pedina,
+            // anche se la zona di lancio dei dadi viene spostata verso il centro.
+            float originalXMin = Mathf.Clamp(cardCenterX - width * 0.5f, 0.015f, 0.985f - width);
+            float originalCaptionCenterX = originalXMin
+                + width * Mathf.Clamp((cardCenterX - originalXMin) / width, 0.24f, 0.76f);
+            screenDiceCaptionCenterX = (originalCaptionCenterX - xMin) / width;
 
             minimum = new Vector2(xMin, yMin);
             maximum = new Vector2(xMin + width, yMin + height);
@@ -6860,6 +8077,9 @@ namespace AccardND.Presentation
                 rectTransform.TransformPoint(rectTransform.rect.center));
             float screenWidth = Mathf.Max(1f, Screen.width);
             float centerX = Mathf.Clamp01(screenPoint.x / screenWidth);
+            // Mantieni anche l'area fisica di rimbalzo allineata alla zona di
+            // lancio centralizzata, soprattutto per vantaggio/svantaggio.
+            centerX = Mathf.Lerp(centerX, 0.5f, 0.45f);
             float width = 0.56f;
             float xMin = Mathf.Clamp(centerX - width * 0.5f, 0.015f, 0.985f - width);
             Vector2 minimum = cardIsInLowerHalf
@@ -6889,7 +8109,7 @@ namespace AccardND.Presentation
         private void ConfigureScreenDiceTextLayout()
         {
             float labelHalfWidth = 0.22f;
-            float labelMinX = Mathf.Clamp(screenDiceCardCenterX - labelHalfWidth, 0.02f, 0.98f - labelHalfWidth * 2f);
+            float labelMinX = screenDiceCaptionCenterX - labelHalfWidth;
             float labelMaxX = labelMinX + labelHalfWidth * 2f;
             if (diceRootOnLowerScreenHalf)
                 SetAnchors(diceCaption.rectTransform, new Vector2(labelMinX, 0f), new Vector2(labelMaxX, 0.1f));
@@ -6902,9 +8122,9 @@ namespace AccardND.Presentation
         {
             string normalized = string.IsNullOrWhiteSpace(caption) ? string.Empty : caption.ToUpperInvariant();
             if (normalized.Contains("DIFESA"))
-                return "DIFENSORE";
+                return "DEFENDER";
             if (normalized.Contains("ATTACCO"))
-                return "ATTACCANTE";
+                return "ATTACKER";
             return caption;
         }
 
@@ -6996,7 +8216,7 @@ namespace AccardND.Presentation
             {
                 HeroClass.Assassin => new Color(1f, 0.08f, 0.04f, 1f),
                 HeroClass.Warrior => new Color(0.78f, 0.82f, 0.86f, 1f),
-                HeroClass.Mage => new Color(0.18f, 0.68f, 1f, 1f),
+                HeroClass.Mage => new Color(0.66f, 0.24f, 1f, 1f),
                 HeroClass.Paladin => new Color(1f, 0.82f, 0.22f, 1f),
                 HeroClass.Rogue => new Color(0.05f, 0.05f, 0.05f, 1f),
                 HeroClass.Hunter => new Color(1f, 0.42f, 0.02f, 1f),
@@ -7221,6 +8441,73 @@ namespace AccardND.Presentation
 
             return LoadPreviewSprite("BattlePreviews/warrior_ring");
         }
+
+        public void SetCardArtwork(CardDefinition definition)
+        {
+            if (definition == null || cardArtworkImage == null)
+                return;
+            Sprite resolved = ResolveCardArtwork(definition);
+            cardArtworkImage.sprite = CreateCoverArtwork(resolved, definition.HeroClass);
+            cardArtworkImage.preserveAspect = false;
+        }
+
+        public void ConfigureSeraphelInspectionArtwork(CardDefinition definition)
+        {
+            if (definition == null || cardArtworkImage == null || cardArtworkImage.rectTransform.parent == null)
+                return;
+
+			// L'artwork standard della carta e' gia' ritagliato al centro. Per Seraphel
+			// ripartiamo dalla sprite originale, altrimenti volto e corona non possono
+			// essere recuperati da nessuna traslazione del RectTransform.
+			Sprite originalArtwork = ResolveCardArtwork(definition);
+			if (originalArtwork != null)
+				cardArtworkImage.sprite = originalArtwork;
+
+            GameObject viewport = cardArtworkImage.rectTransform.parent.gameObject;
+            if (viewport.GetComponent<RectMask2D>() == null)
+                viewport.AddComponent<RectMask2D>();
+
+            RectTransform artRect = cardArtworkImage.rectTransform;
+            artRect.anchorMin = new Vector2(0.5f, 1f);
+            artRect.anchorMax = new Vector2(0.5f, 1f);
+            artRect.pivot = new Vector2(0.5f, 1f);
+            RectTransform viewportRect = artRect.parent as RectTransform;
+            Vector2 viewportSize = viewportRect != null && viewportRect.rect.size.sqrMagnitude > 1f
+                ? viewportRect.rect.size
+                : new Vector2(280f, 360f);
+            float aspect = originalArtwork != null && originalArtwork.rect.height > 0f
+				? originalArtwork.rect.width / originalArtwork.rect.height
+				: 1f;
+			float artworkHeight = Mathf.Max(viewportSize.y, viewportSize.x / Mathf.Max(0.01f, aspect));
+			artRect.sizeDelta = new Vector2(viewportSize.x, artworkHeight);
+			artRect.anchoredPosition = Vector2.zero;
+			artRect.localScale = Vector3.one;
+			cardArtworkImage.preserveAspect = true;
+        }
+
+		public void ConfigureJurinashorInspectionArtwork(CardDefinition definition, bool phaseTwo)
+		{
+			if (definition == null || cardArtworkImage == null || cardArtworkImage.rectTransform.parent == null)
+				return;
+
+			Sprite artwork = phaseTwo
+				? Resources.Load<Sprite>("UI/boss_jurinashor_phase_2")
+				: ResolveCardArtwork(definition);
+			if (artwork == null && phaseTwo)
+			{
+				Texture2D texture = Resources.Load<Texture2D>("UI/boss_jurinashor_phase_2");
+				if (texture != null)
+					artwork = Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height), new Vector2(0.5f, 0.5f), 100f);
+			}
+			if (artwork != null)
+				cardArtworkImage.sprite = artwork;
+
+			GameObject viewport = cardArtworkImage.rectTransform.parent.gameObject;
+			if (viewport.GetComponent<RectMask2D>() == null)
+				viewport.AddComponent<RectMask2D>();
+			cardArtworkImage.preserveAspect = false;
+			SetAnchors(cardArtworkImage.rectTransform, Vector2.zero, Vector2.one);
+		}
 
         private static Sprite ResolveCardArtwork(CardDefinition definition)
         {
@@ -7448,6 +8735,16 @@ namespace AccardND.Presentation
             if (bragusContourAuraSprite != null)
                 return bragusContourAuraSprite;
 
+			Texture2D tracedMask = Resources.Load<Texture2D>(BragusContourMaskResourcePath);
+			if (tracedMask != null)
+			{
+				bragusContourAuraSprite = Sprite.Create(tracedMask,
+					new Rect(0f, 0f, tracedMask.width, tracedMask.height), new Vector2(0.5f, 0.5f), 100f);
+				bragusContourAuraSprite.name = "Bragus BG Precise Contour Aura";
+				bragusContourAuraSprite.hideFlags = HideFlags.HideAndDontSave;
+				return bragusContourAuraSprite;
+			}
+
             const int size = 192;
             const int glowRadius = 7;
             var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
@@ -7490,6 +8787,16 @@ namespace AccardND.Presentation
             if (trentorContourAuraSprite != null)
                 return trentorContourAuraSprite;
 
+			Texture2D tracedMask = Resources.Load<Texture2D>(TrentorContourMaskResourcePath);
+			if (tracedMask != null)
+			{
+				trentorContourAuraSprite = Sprite.Create(tracedMask,
+					new Rect(0f, 0f, tracedMask.width, tracedMask.height), new Vector2(0.5f, 0.5f), 100f);
+				trentorContourAuraSprite.name = "Trentor BG Precise Contour Aura";
+				trentorContourAuraSprite.hideFlags = HideFlags.HideAndDontSave;
+				return trentorContourAuraSprite;
+			}
+
             const int size = 192;
             const int glowRadius = 7;
             var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
@@ -7527,6 +8834,147 @@ namespace AccardND.Presentation
             trentorContourAuraSprite.hideFlags = HideFlags.HideAndDontSave;
             return trentorContourAuraSprite;
         }
+
+        private static Sprite GetSeraphelContourAuraSprite()
+        {
+            if (seraphelContourAuraSprite != null)
+                return seraphelContourAuraSprite;
+
+			Texture2D tracedMask = Resources.Load<Texture2D>(SeraphelPhaseOneContourMaskResourcePath);
+			if (tracedMask != null)
+			{
+				seraphelContourAuraSprite = Sprite.Create(tracedMask,
+					new Rect(0f, 0f, tracedMask.width, tracedMask.height), new Vector2(0.5f, 0.5f), 100f);
+				seraphelContourAuraSprite.name = "Seraphel Phase 1 BG Precise Contour Aura";
+				seraphelContourAuraSprite.hideFlags = HideFlags.HideAndDontSave;
+				return seraphelContourAuraSprite;
+			}
+
+            const int size = 256;
+            const float solidRadius = 1.35f;
+            const float glowRadius = 4.5f;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Seraphel Contour Aura",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            Color32[] pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    Vector2 point = new Vector2(x / (float)(size - 1), y / (float)(size - 1));
+                    float edgeDistance = DistanceToAuraContour(point, SeraphelAuraContour) * size;
+                    float glow = edgeDistance <= solidRadius
+                        ? 1f
+                        : edgeDistance <= glowRadius
+                            ? Mathf.Pow(1f - (edgeDistance - solidRadius) / (glowRadius - solidRadius), 1.8f)
+                            : 0f;
+                    pixels[y * size + x] = new Color32(255, 255, 255,
+                        (byte)Mathf.RoundToInt(255f * glow));
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            seraphelContourAuraSprite = Sprite.Create(
+                texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f);
+            seraphelContourAuraSprite.name = "Seraphel Contour Aura";
+            seraphelContourAuraSprite.hideFlags = HideFlags.HideAndDontSave;
+            return seraphelContourAuraSprite;
+        }
+
+		private static Sprite GetSeraphelPhaseTwoContourAuraSprite()
+		{
+			if (seraphelPhaseTwoContourAuraSprite != null)
+				return seraphelPhaseTwoContourAuraSprite;
+
+			Texture2D tracedMask = Resources.Load<Texture2D>(SeraphelPhaseTwoContourMaskResourcePath);
+			if (tracedMask == null)
+				return GetSeraphelContourAuraSprite();
+			seraphelPhaseTwoContourAuraSprite = Sprite.Create(tracedMask,
+				new Rect(0f, 0f, tracedMask.width, tracedMask.height), new Vector2(0.5f, 0.5f), 100f);
+			seraphelPhaseTwoContourAuraSprite.name = "Seraphel Phase 2 BG Precise Contour Aura";
+			seraphelPhaseTwoContourAuraSprite.hideFlags = HideFlags.HideAndDontSave;
+			return seraphelPhaseTwoContourAuraSprite;
+		}
+
+        private static Sprite GetJurinashorContourAuraSprite()
+        {
+            if (jurinashorContourAuraSprite != null)
+                return jurinashorContourAuraSprite;
+
+            // Questa maschera viene estratta direttamente dal tracciato approvato,
+            // quindi conserva rientri e segmenti separati senza raccordi inventati.
+            Texture2D tracedMask = Resources.Load<Texture2D>(JurinashorContourMaskResourcePath);
+            if (tracedMask != null)
+            {
+                jurinashorContourAuraSprite = Sprite.Create(
+                    tracedMask,
+                    new Rect(0f, 0f, tracedMask.width, tracedMask.height),
+                    new Vector2(0.5f, 0.5f),
+                    100f);
+                jurinashorContourAuraSprite.name = "Jurinashor Traced Contour Aura";
+                jurinashorContourAuraSprite.hideFlags = HideFlags.HideAndDontSave;
+                return jurinashorContourAuraSprite;
+            }
+
+            // Fallback procedurale solo se la risorsa non è disponibile.
+            const int size = 512;
+            const float solidRadius = 1.15f;
+            const float glowRadius = 3.8f;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Jurinashor Contour Aura",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            Color32[] pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    Vector2 point = new Vector2(x / (float)(size - 1), y / (float)(size - 1));
+                    float edgeDistance = DistanceToAuraContour(point, JurinashorAuraContour) * size;
+                    float glow = edgeDistance <= solidRadius
+                        ? 1f
+                        : edgeDistance <= glowRadius
+                            ? Mathf.Pow(1f - (edgeDistance - solidRadius) / (glowRadius - solidRadius), 1.8f)
+                            : 0f;
+                    pixels[y * size + x] = new Color32(255, 255, 255,
+                        (byte)Mathf.RoundToInt(255f * glow));
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            jurinashorContourAuraSprite = Sprite.Create(
+                texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f);
+            jurinashorContourAuraSprite.name = "Jurinashor Contour Aura";
+            jurinashorContourAuraSprite.hideFlags = HideFlags.HideAndDontSave;
+            return jurinashorContourAuraSprite;
+        }
+
+		private static Sprite GetJurinashorPhaseTwoContourAuraSprite()
+		{
+			if (jurinashorPhaseTwoContourAuraSprite != null)
+				return jurinashorPhaseTwoContourAuraSprite;
+
+			Texture2D tracedMask = Resources.Load<Texture2D>(JurinashorPhaseTwoContourMaskResourcePath);
+			if (tracedMask == null)
+				return GetJurinashorContourAuraSprite();
+
+			jurinashorPhaseTwoContourAuraSprite = Sprite.Create(
+				tracedMask,
+				new Rect(0f, 0f, tracedMask.width, tracedMask.height),
+				new Vector2(0.5f, 0.5f),
+				100f);
+			jurinashorPhaseTwoContourAuraSprite.name = "Jurinashor Phase 2 Precise Contour Aura";
+			jurinashorPhaseTwoContourAuraSprite.hideFlags = HideFlags.HideAndDontSave;
+			return jurinashorPhaseTwoContourAuraSprite;
+		}
 
         private static float DistanceToBragusAuraContour(Vector2 point)
         {
@@ -7755,6 +9203,16 @@ namespace AccardND.Presentation
             private static Button lastSwipeButton;
             private static int lastSwipeCompletionFrame = -1;
             private static int pointerMissingFrames;
+			private static float swipeStartedAt;
+			private static bool activePointerUsesTouch;
+			/// <summary>
+			/// Dito che ha aperto la gesture. Seguire `primaryTouch` significava
+			/// seguire il primo dito appoggiato sullo schermo: con un pollice fermo
+			/// sul bordo la gesture non vedeva mai il proprio rilascio e restava
+			/// aperta finche' non scadeva il timeout, bloccando le azioni del turno.
+			/// </summary>
+			private static int activeTouchId = -1;
+			private const float StuckSwipeTimeout = 8f;
 
             private PrototypeCardView owner;
             private UnityAction action;
@@ -7779,10 +9237,20 @@ namespace AccardND.Presentation
             public void OnPointerEnter(PointerEventData eventData)
             {
                 Button button = GetComponent<Button>();
-                if (action == null || button == null || !button.interactable || !IsSwipeInProgress(eventData))
+                // Il desktop ha gia' il click standard dei Button. Attivare anche lo
+                // swipe col mouse crea due flussi concorrenti e puo' lasciare il glow
+                // globale appeso: lo swipe e' esclusivamente touch. La verifica sta in
+                // IsPointerEventFromTouchscreen, che confronta il punto del tocco con
+                // quello dell'evento - l'unico modo per non farsi ingannare ne' dal
+                // pointerId del mouse ne' da un tocco fantasma rimasto premuto.
+                if (!PrototypeCardView.IsPointerEventFromTouchscreen(eventData)
+                    || action == null
+                    || button == null
+                    || !button.interactable
+                    || !IsSwipeInProgress(eventData))
                     return;
 
-                Select(eventData.pointerId);
+                Select(eventData);
             }
 
             private void Update()
@@ -7790,7 +9258,24 @@ namespace AccardND.Presentation
                 if (activeSelector != this)
                     return;
 
-                Vector2 pointerPosition = CurrentPointerPosition(activePointerId);
+				// Un device perso, una sospensione o un evento release mancato non devono
+				// lasciare lo stato statico dello swipe bloccato per il resto della partita.
+				if (Time.unscaledTime - swipeStartedAt >= StuckSwipeTimeout)
+				{
+					CancelSwipe();
+					return;
+				}
+
+                // Se il device sotto la gesture sparisce (touch perso, focus rubato,
+                // cambio di input) la posizione letta resterebbe congelata all'ultimo
+                // valore noto: il glow si pianterebbe li' e la gesture non finirebbe mai.
+                if (!TryReadPointerPosition(out Vector2 pointerPosition))
+                {
+                    Debug.LogWarning("SWIPE - device del puntatore non piu' leggibile: gesture annullata.");
+                    CancelSwipe();
+                    return;
+                }
+
                 UpdatePointerGlow(pointerPosition);
                 if (PointerWasReleased(activePointerId))
                 {
@@ -7815,33 +9300,70 @@ namespace AccardND.Presentation
                     CancelSwipe();
             }
 
+			private void OnApplicationPause(bool paused)
+			{
+				if (paused && activeSelector == this)
+					CancelSwipe();
+			}
+
             private void OnDisable()
             {
                 if (activeSelector == this)
                     CancelSwipe();
             }
 
-            private void Select(int pointerId)
+			private void OnDestroy()
+			{
+				if (activeSelector == this)
+					CancelSwipe();
+			}
+
+            private void Select(PointerEventData eventData)
             {
+                int pointerId = eventData.pointerId;
+                int touchId = PrototypeCardView.TouchIdOf(eventData);
                 if (activeSelector == this)
                 {
                     activePointerId = pointerId;
+                    activeTouchId = touchId;
                     return;
                 }
 
-                if (activeSelector != null && activeSelector != this)
-                    activeSelector.owner?.SetSwipeActionPreview(false, default);
+				if (activeSelector != null && activeSelector != this)
+					CancelSwipe();
 
                 activeSelector = this;
                 activePointerId = pointerId;
                 pointerMissingFrames = 0;
+				swipeStartedAt = Time.unscaledTime;
+				// EventSystem.pointerId e InputSystem.touchId non coincidono in modo
+				// affidabile: il primo e' un dettaglio interno dell'EventSystem, il
+				// secondo e' il dito vero e lo prendiamo dall'evento esteso. Fissiamo
+				// entrambi all'inizio e seguiamo quel dito fino al suo rilascio,
+				// preservando il comportamento drag-and-release.
+				activeTouchId = touchId;
+				activePointerUsesTouch = touchId > 0
+					|| (pointerId >= 0
+						&& Touchscreen.current != null
+						&& Touchscreen.current.primaryTouch.press.isPressed);
                 if (Pointer.current != null)
                     lastPointerPosition = Pointer.current.position.ReadValue();
-                owner?.SetSwipeActionPreview(true, previewColor);
-                if (!string.IsNullOrWhiteSpace(actionLabel))
-                    owner?.PlaySwipeActionCallout(actionLabel, previewColor);
-                EnsurePointerGlow();
-                UpdatePointerGlow(CurrentPointerPosition(pointerId));
+                // Attenzione: `?.` non usa il null di Unity, quindi su un owner gia'
+                // distrutto lancerebbe MissingReferenceException lasciando appeso lo
+                // stato statico. Qui e ovunque serve il confronto con `!= null`.
+                if (owner != null)
+                {
+                    owner.SetSwipeActionPreview(true, previewColor);
+                    if (!string.IsNullOrWhiteSpace(actionLabel))
+                        owner.PlaySwipeActionCallout(actionLabel, previewColor);
+                }
+                // Il glow nasce solo se sappiamo davvero dov'e' il dito: crearlo su una
+                // posizione ereditata lo pianterebbe li' per tutta la gesture.
+                if (TryReadPointerPosition(out Vector2 pointerPosition))
+                {
+                    EnsurePointerGlow();
+                    UpdatePointerGlow(pointerPosition);
+                }
                 GetComponent<Button>()?.Select();
             }
 
@@ -7856,26 +9378,78 @@ namespace AccardND.Presentation
                 activeSelector = null;
                 activePointerId = int.MinValue;
                 pointerMissingFrames = 0;
+				swipeStartedAt = 0f;
+				activePointerUsesTouch = false;
+				activeTouchId = -1;
                 DestroyPointerGlow();
 
                 if (selectedAction == null)
+				{
+					if (actionOwner != null)
+						actionOwner.SetSwipeActionPreview(false, default);
                     return;
+				}
 
-                selectedAction.Invoke();
+				try
+				{
+					selectedAction.Invoke();
+				}
+				finally
+				{
+					// Anche un callback fallito deve rilasciare la preview: lo stato globale
+					// dello swipe e l'interazione della pedina devono restare recuperabili.
+					if (actionOwner != null && actionOwner.isActiveAndEnabled)
+						actionOwner.FinishSwipeActionPreview(previewColor);
+				}
 
-                if (forwardReleaseToCard && target != null && actionOwner != null && actionOwner.isActiveAndEnabled)
+                // Il rilascio sulla pedina che ospita il bottone non e' un bersaglio:
+                // inoltrarlo genera un secondo click sulla carta sorgente. In particolare
+                // un semplice tap su Attacca puo cosi riaprire l'inspection durante il
+                // refresh dell'overlay. L'inoltro serve solo allo swipe verso un'altra carta.
+                if (forwardReleaseToCard
+                    && target != null
+                    && target != actionOwner
+                    && actionOwner != null
+                    && actionOwner.isActiveAndEnabled)
                 {
-                    if (target.Button != null && target.Button.IsActive() && target.Button.interactable)
-                        target.Button.onClick.Invoke();
-                    else
-                        actionOwner.StartCoroutine(ClickTargetNextFrame(target));
+                    // L'azione appena armata aggiorna anche gli hint di vantaggio/svantaggio.
+                    // Inoltrare il bersaglio nello stesso frame li consumava prima che Unity
+                    // potesse renderizzarli, rendendoli invisibili durante lo swipe d'attacco.
+                    actionOwner.StartCoroutine(ClickTargetNextFrame(target));
                 }
+            }
+
+            /// <summary>
+            /// Vero finche' esiste uno stato di swipe da rilasciare, anche se il
+            /// selettore che lo teneva e' gia' stato distrutto.
+            /// </summary>
+            internal static bool HasActiveGesture =>
+                !ReferenceEquals(activeSelector, null) || pointerGlow != null;
+
+            /// <summary>
+            /// Rilascio incondizionato dello stato statico. Serve al guardiano che
+            /// sblocca il turno quando la gesture non si e' chiusa da sola.
+            /// </summary>
+            internal static void ForceReset()
+            {
+                CancelSwipe();
+                lastSwipeButton = null;
+                lastSwipeCompletionFrame = -1;
+                // Senza questo, la gesture successiva riparte dall'ultima posizione
+                // nota e il glow ricompare piantato esattamente dov'era.
+                lastPointerPosition = Vector2.zero;
             }
 
             internal static bool ShouldSuppressClick(Button button)
             {
                 if (button == null)
                     return false;
+
+                // Un selettore distrutto sopravvive come riferimento "fake null": leggerne
+                // il gameObject lancia MissingReferenceException dentro l'onClick e
+                // l'azione non parte mai piu'. Appena lo riconosciamo, lo liberiamo.
+                if (activeSelector == null && !ReferenceEquals(activeSelector, null))
+                    ForceReset();
 
                 return (activeSelector != null && activeSelector.gameObject == button.gameObject)
                     || (lastSwipeButton == button && Time.frameCount <= lastSwipeCompletionFrame + 1);
@@ -7947,97 +9521,120 @@ namespace AccardND.Presentation
 
             private static bool PointerWasReleased(int pointerId)
             {
-                Touchscreen touchscreen = Touchscreen.current;
-                if (touchscreen != null && touchscreen.primaryTouch.press.wasReleasedThisFrame)
-                    return true;
+				if (activePointerUsesTouch)
+				{
+					TouchControl touch = PrototypeCardView.FindTouch(activeTouchId);
+					return touch != null && touch.press.wasReleasedThisFrame;
+				}
 
-                if (Mouse.current != null && Mouse.current.leftButton.wasReleasedThisFrame)
-                    return true;
-
-                if (pointerId < 0)
-                    return Mouse.current != null && Mouse.current.leftButton.wasReleasedThisFrame;
-
-                if (touchscreen == null)
-                    return false;
-
-                foreach (var touch in touchscreen.touches)
-                {
-                    if ((int)touch.touchId.ReadValue() == pointerId)
-                        return touch.press.wasReleasedThisFrame;
-                }
-                return false;
+				return Mouse.current != null && Mouse.current.leftButton.wasReleasedThisFrame;
             }
 
             private static bool PointerIsPressed(int pointerId)
             {
-                Touchscreen touchscreen = Touchscreen.current;
-                if (touchscreen != null && touchscreen.primaryTouch.press.isPressed)
-                    return true;
+				if (activePointerUsesTouch)
+				{
+					// Se lo slot del dito e' stato riciclato da un altro tocco non lo
+					// troviamo piu': vale come "non premuto" e la gesture si chiude
+					// dal conteggio dei frame senza puntatore, completando l'azione
+					// invece di annullarla.
+					TouchControl touch = PrototypeCardView.FindTouch(activeTouchId);
+					return touch != null && touch.press.isPressed;
+				}
 
-                if (Mouse.current != null && Mouse.current.leftButton.isPressed)
-                    return true;
-
-                if (Pointer.current != null && Pointer.current.press.isPressed)
-                    return true;
-
-                if (pointerId >= 0 && touchscreen != null)
-                {
-                    foreach (var touch in touchscreen.touches)
-                    {
-                        if ((int)touch.touchId.ReadValue() == pointerId)
-                            return touch.press.isPressed;
-                    }
-                }
-                return false;
+				return Mouse.current != null && Mouse.current.leftButton.isPressed;
             }
 
             private static Vector2 CurrentPointerPosition(int pointerId)
             {
-                Touchscreen touchscreen = Touchscreen.current;
-                if (touchscreen != null
-                    && (touchscreen.primaryTouch.press.isPressed
-                        || touchscreen.primaryTouch.press.wasReleasedThisFrame))
-                {
-                    lastPointerPosition = touchscreen.primaryTouch.position.ReadValue();
-                    return lastPointerPosition;
-                }
-
-                if (Mouse.current != null
-                    && (Mouse.current.leftButton.isPressed
-                        || Mouse.current.leftButton.wasReleasedThisFrame))
-                {
-                    lastPointerPosition = Mouse.current.position.ReadValue();
-                    return lastPointerPosition;
-                }
-
-                if (Pointer.current != null)
-                {
-                    lastPointerPosition = Pointer.current.position.ReadValue();
-                    return lastPointerPosition;
-                }
-
-                if (pointerId < 0)
-                    return lastPointerPosition;
-
-                if (touchscreen != null)
-                {
-                    foreach (var touch in touchscreen.touches)
-                    {
-                        if ((int)touch.touchId.ReadValue() == pointerId)
-                            return touch.position.ReadValue();
-                    }
-                }
-
-                return lastPointerPosition;
+				TryReadPointerPosition(out Vector2 position);
+				return position;
             }
+
+			/// <summary>
+			/// Legge la posizione dal device che ha aperto la gesture. Restituisce false
+			/// quando quel device non e' piu' interrogabile: in quel caso `position` e'
+			/// solo l'ultimo valore noto e non va usata per posizionare nulla.
+			/// </summary>
+			private static bool TryReadPointerPosition(out Vector2 position)
+			{
+				Touchscreen touchscreen = Touchscreen.current;
+				if (activePointerUsesTouch && touchscreen != null)
+				{
+					// Il dito puo' essere gia' sparito dai `touches` senza che il device
+					// sia perso: teniamo l'ultima posizione nota e lasciamo chiudere la
+					// gesture a PointerIsPressed. Annullarla qui perderebbe l'azione.
+					TouchControl touch = PrototypeCardView.FindTouch(activeTouchId);
+					if (touch != null)
+						lastPointerPosition = touch.position.ReadValue();
+					position = lastPointerPosition;
+					return true;
+				}
+
+				if (!activePointerUsesTouch && Mouse.current != null)
+				{
+					lastPointerPosition = Mouse.current.position.ReadValue();
+					position = lastPointerPosition;
+					return true;
+				}
+
+				position = lastPointerPosition;
+				return false;
+			}
+
+			/// <summary>
+			/// Fotografia dello stato di input al momento di uno sblocco forzato.
+			/// Serve a capire, alla prossima occorrenza, perche' la gesture non si e'
+			/// chiusa da sola invece di doverlo dedurre.
+			/// </summary>
+			internal static string DescribeState()
+			{
+				Touchscreen touchscreen = Touchscreen.current;
+				Mouse mouse = Mouse.current;
+				string selectorName = ReferenceEquals(activeSelector, null)
+					? "<null>"
+					: activeSelector == null
+						? "<distrutto>"
+						: activeSelector.gameObject.name;
+
+				TouchControl trackedTouch = PrototypeCardView.FindTouch(activeTouchId);
+				string trackedState = trackedTouch == null
+					? "<perso>"
+					: trackedTouch.press.isPressed.ToString();
+
+				return $"selector='{selectorName}' pointerId={activePointerId} "
+					+ $"touchId={activeTouchId} ditoDellaGesture={trackedState} "
+					+ $"usaTouch={activePointerUsesTouch} apertaDa={Time.unscaledTime - swipeStartedAt:F1}s "
+					+ $"frameSenzaPuntatore={pointerMissingFrames} glow={(pointerGlow != null ? "si" : "no")} "
+					+ $"ultimaPosizione={lastPointerPosition} "
+					+ $"touch={(touchscreen != null ? touchscreen.primaryTouch.press.isPressed.ToString() : "<assente>")} "
+					+ $"mouse={(mouse != null ? mouse.leftButton.isPressed.ToString() : "<assente>")}";
+			}
 
             private static void CancelSwipe()
             {
-                activeSelector?.owner?.SetSwipeActionPreview(false, default);
-                DestroyPointerGlow();
+                // Lo stato statico si azzera per primo: se la pulizia della preview
+                // fallisce (owner distrutto, callback rotto) la gesture resta comunque
+                // chiusa, altrimenti il gioco perde ogni azione per il resto della partita.
+                SwipeActionSelector selector = activeSelector;
                 activeSelector = null;
                 activePointerId = int.MinValue;
                 pointerMissingFrames = 0;
+				swipeStartedAt = 0f;
+				activePointerUsesTouch = false;
+				activeTouchId = -1;
+
+                try
+                {
+                    if (selector != null && selector.owner != null)
+                        selector.owner.SetSwipeActionPreview(false, default);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning($"SWIPE - preview non rilasciata durante il reset: {exception.Message}");
+                }
+
+                DestroyPointerGlow();
             }
 
             private void EnsurePointerGlow()

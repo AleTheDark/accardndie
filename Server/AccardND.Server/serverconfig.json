@@ -29,6 +29,7 @@
     "PlacementMatches": 5,
     "PlacementK": 40,
     "StandardK": 24,
+    "CloseMatchFactor": 0.7,
     "DivisionWidth": 100,
     "TierFloor": 800,
     "DivisionsPerTier": 4,

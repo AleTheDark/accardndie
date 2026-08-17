@@ -68,4 +68,21 @@ namespace AccardND.NetProtocol
         public string seasonName;
         public LeaderboardEntry[] entries;
     }
+
+    [Serializable]
+    public sealed class AdventureLeaderboardEntry
+    {
+        public int rank;
+        public string playerId;
+        public string username;
+        public string selectedIconId;
+        public int chapterNumber;
+        public int roomsCleared;
+    }
+
+    [Serializable]
+    public sealed class AdventureLeaderboardData
+    {
+        public AdventureLeaderboardEntry[] entries;
+    }
 }

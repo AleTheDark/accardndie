@@ -73,6 +73,14 @@ namespace AccardND.Battlefield
             float elapsed = 0f;
             while (elapsed < duration)
             {
+                if (target == null)
+                    break;
+
+                // The pawn can be moved to another slot while the turn changes.
+                // The VFX lives beside it in the UI hierarchy to avoid card masks,
+                // so keep its world position synchronized for the whole animation.
+                root.position = target.position;
+
                 elapsed += Time.unscaledDeltaTime;
                 float t = Mathf.Clamp01(elapsed / duration);
                 float attack = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.16f));
@@ -109,7 +117,8 @@ namespace AccardND.Battlefield
                 yield return null;
             }
 
-            target.localScale = originalScale;
+            if (target != null)
+                target.localScale = originalScale;
             Object.Destroy(rootObject);
         }
 

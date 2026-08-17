@@ -12,6 +12,8 @@ namespace AccardND.Presentation
 {
     public sealed class DiceRollDebugScene : MonoBehaviour
     {
+        [SerializeField] private bool startEmpowered;
+
         private readonly int[] diceSides = { 4, 6, 8, 10, 12, 20 };
         private readonly HeroClass[] classes =
         {
@@ -71,8 +73,8 @@ namespace AccardND.Presentation
             Stretch(background.rectTransform);
 
             Text title = CreateText("Title", canvas.transform, font, 44, FontStyle.Bold, TextAnchor.MiddleCenter);
-            title.text = "DICE ROLL TEST";
-            title.color = new Color(0.93f, 0.88f, 0.72f);
+            title.text = startEmpowered ? "EMPOWERED DICE — FIRE ASCENDANT" : "DICE ROLL TEST";
+            title.color = startEmpowered ? new Color(1f, 0.55f, 0.08f) : new Color(0.93f, 0.88f, 0.72f);
             SetRect(title.rectTransform, new Vector2(0.18f, 0.87f), new Vector2(0.82f, 0.96f));
 
             board = new GameObject("Invisible Dice Board", typeof(RectTransform)).GetComponent<RectTransform>();
@@ -108,7 +110,9 @@ namespace AccardND.Presentation
             supportText = CreateText("Support Label", canvas.transform, font, 22, FontStyle.Bold, TextAnchor.MiddleCenter);
             supportText.color = new Color(0.78f, 0.82f, 0.88f);
             SetRect(supportText.rectTransform, new Vector2(0.2f, 0.79f), new Vector2(0.8f, 0.84f));
-            supportText.text = "Choose die, class and forced result, then roll.";
+            supportText.text = startEmpowered
+                ? "EMPOWER ACTIVE  •  All dice use D20 styling; color follows the selected class."
+                : "Choose die, class and forced result, then roll.";
 
             Button prevDie = CreateButton("Previous Die", canvas.transform, font, "< D");
             SetRect(prevDie.GetComponent<RectTransform>(), new Vector2(0.18f, 0.045f), new Vector2(0.27f, 0.105f));
@@ -131,11 +135,15 @@ namespace AccardND.Presentation
             rollButton.onClick.AddListener(RollSelected);
 
             Button rollAllButton = CreateButton("Roll All Results", canvas.transform, font, "ROLL ALL");
-            SetRect(rollAllButton.GetComponent<RectTransform>(), new Vector2(0.75f, 0.04f), new Vector2(0.85f, 0.11f));
+            SetRect(rollAllButton.GetComponent<RectTransform>(), new Vector2(0.75f, 0.04f), new Vector2(0.84f, 0.11f));
             rollAllButton.onClick.AddListener(RollAllResults);
 
+            Button everyDieButton = CreateButton("Every Empowered Die", canvas.transform, font, "ALL DICE");
+            SetRect(everyDieButton.GetComponent<RectTransform>(), new Vector2(0.85f, 0.04f), new Vector2(0.93f, 0.11f));
+            everyDieButton.onClick.AddListener(RollEveryDieType);
+
             resultInput = CreateInputField("Forced Result", canvas.transform, font);
-            SetRect(resultInput.GetComponent<RectTransform>(), new Vector2(0.87f, 0.04f), new Vector2(0.94f, 0.11f));
+            SetRect(resultInput.GetComponent<RectTransform>(), new Vector2(0.94f, 0.04f), new Vector2(0.985f, 0.11f));
         }
 
         private void ChangeDie(int direction)
@@ -161,6 +169,7 @@ namespace AccardND.Presentation
             dieSlot.gameObject.SetActive(true);
             dieSlot.anchoredPosition = Vector2.zero;
             dieView.SetBounceArea(board, null);
+            dieView.SetEmpowered(startEmpowered);
             dieView.StartScriptedRoll(sides, heroClass, result, 1.35f);
         }
 
@@ -180,10 +189,36 @@ namespace AccardND.Presentation
                 allDieSlots[index].gameObject.SetActive(true);
                 allDieLabels[index].text = result.ToString();
                 allDieViews[index].SetBounceArea(allDieSlots[index], null);
+                allDieViews[index].SetEmpowered(startEmpowered);
                 allDieViews[index].StartScriptedRoll(sides, heroClass, result, 1.35f);
             }
 
             for (int index = sides; index < allDieSlots.Count; index++)
+            {
+                allDieViews[index].Hide();
+                allDieSlots[index].gameObject.SetActive(false);
+            }
+        }
+
+        private void RollEveryDieType()
+        {
+            resultText.text = "D4—D20";
+            dieView.Hide();
+            dieSlot.gameObject.SetActive(false);
+            EnsureAllDiceViews(diceSides.Length);
+            LayoutAllDiceSlots(diceSides.Length);
+            HeroClass heroClass = classes[Mathf.Clamp(selectedClassIndex, 0, classes.Length - 1)];
+            for (int index = 0; index < diceSides.Length; index++)
+            {
+                int sides = diceSides[index];
+                int result = Mathf.Clamp(Mathf.CeilToInt(sides * 0.62f), 1, sides);
+                allDieSlots[index].gameObject.SetActive(true);
+                allDieLabels[index].text = $"D{sides}  •  {result}";
+                allDieViews[index].SetBounceArea(allDieSlots[index], null);
+                allDieViews[index].SetEmpowered(startEmpowered);
+                allDieViews[index].StartScriptedRoll(sides, heroClass, result, 1.35f);
+            }
+            for (int index = diceSides.Length; index < allDieSlots.Count; index++)
             {
                 allDieViews[index].Hide();
                 allDieSlots[index].gameObject.SetActive(false);

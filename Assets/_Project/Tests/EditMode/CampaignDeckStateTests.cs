@@ -187,6 +187,38 @@ namespace AccardND.GameCore.Tests
             DestroyCards(new[] { first, second });
         }
 
+        [Test]
+        public void MerchantUpgrade_AddsPermanentStrengthAndStopsAtTwo()
+        {
+            CardDefinition definition = CreateCard("upgrade-target", "Upgrade Target", 6, HeroClass.Warrior);
+            var state = new CampaignDeckState(new[] { definition });
+            CampaignCardInstance card = state.Cards[0];
+
+            Assert.That(state.TryApplyMerchantUpgrade(card), Is.True);
+            Assert.That(state.TryApplyMerchantUpgrade(card), Is.True);
+            Assert.That(state.TryApplyMerchantUpgrade(card), Is.False);
+            Assert.That(card.PermanentItemBonus, Is.EqualTo(2));
+            Assert.That(card.MerchantUpgradeCount, Is.EqualTo(2));
+            DestroyCards(new[] { definition });
+        }
+
+        [Test]
+        public void ForgeTemper_CountsAsFirstMerchantUpgrade()
+        {
+            CardDefinition definition = CreateCard("forge-target", "Forge Target", 6, HeroClass.Warrior);
+            var state = new CampaignDeckState(new[] { definition });
+            CampaignCardInstance card = state.Cards[0];
+
+            Assert.That(state.TryApplyForgeTemper(card), Is.True);
+            Assert.That(card.PermanentItemBonus, Is.EqualTo(1));
+            Assert.That(card.MerchantUpgradeCount, Is.EqualTo(1));
+            Assert.That(state.TryApplyMerchantUpgrade(card), Is.True);
+            Assert.That(state.TryApplyMerchantUpgrade(card), Is.False);
+            Assert.That(card.PermanentItemBonus, Is.EqualTo(2));
+            Assert.That(card.MerchantUpgradeCount, Is.EqualTo(2));
+            DestroyCards(new[] { definition });
+        }
+
         private static List<CardDefinition> CreateCards(int count)
         {
             var result = new List<CardDefinition>();

@@ -31,7 +31,6 @@ namespace AccardND.Editor
             "Assets/Resources/UI"
         };
 
-        [MenuItem("Accard N' Die/Optimize Android Textures", priority = 50)]
         public static void OptimizeAndroidTextures()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -117,7 +116,6 @@ namespace AccardND.Editor
     {
         private const string BorderFolder = "Assets/_Project/Resources/CardBorders";
 
-        [MenuItem("Accard N' Die/Reimport Card Holders", priority = 22)]
         public static void ReimportBorders()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)

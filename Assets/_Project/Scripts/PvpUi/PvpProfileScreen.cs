@@ -247,6 +247,9 @@ namespace AccardND.PvpUi
                 ("ROUND PERSI", profile.roundsLost.ToString(), Bad),
                 ("ICONE", $"{profile.iconsUnlocked}/{profile.iconsTotal}", PvpUiFactory.Arcane));
             AddInfoRow($"ICONA ATTUALE   {IconName(profile.selectedIconId)}", Dim, 52, 22);
+            // I numeri qui sopra sono solo del matchmaking: chi gioca in stanza con gli
+            // amici va detto, o le vittorie che non vede comparire sembrano un bug.
+            AddInfoRow("Contano solo le partite classificate: le amichevoli in stanza no.", Dim, 44, 19);
         }
 
         private void RenderIcons()

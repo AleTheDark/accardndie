@@ -13,38 +13,61 @@ namespace AccardND.Server.Progression;
 /// qui, senza codice nuovo nel gameplay. Le quest non si accettano, sono attive dal momento
 /// in cui il giocatore apre la taverna (o comunque dal primo contatto del giorno).
 ///
-/// Le otto quest del giorno sono le stesse per tutti e derivano dalla data: nessuna
+/// Le dieci quest del giorno sono le stesse per tutti e derivano dalla data: nessuna
 /// estrazione da memorizzare, e due giocatori possono parlare delle prove di oggi.
-/// Ne bastano cinque per il premio di giornata, ed e' quello che permette di proporre
-/// anche prove d'arena o di fine capitolo senza penalizzare chi non ci arriva.
+/// Il premio usa punti pesati per difficolta', cosi' una prova impegnativa accelera davvero
+/// il traguardo senza rendere obbligatorie arena o fine capitolo.
 /// </summary>
 public static class TavernQuests
 {
-    /// <summary>Ricompensa di una singola quest: volutamente magra, il grosso e' il premio di giornata.</summary>
-    public const int QuestHoneyReward = 5;
+    /// <summary>Ricompensa base di una quest facile. Le difficolta' superiori pagano di piu'.</summary>
+    public const int QuestHoneyReward = 1;
 
     /// <summary>Premio di giornata, il grosso della paga.</summary>
     public const int AllQuestsHoneyReward = 50;
 
     /// <summary>Quante quest si vedono in bacheca ogni giorno.</summary>
-    public const int QuestsPerDay = 8;
+    public const int QuestsPerDay = 10;
 
     /// <summary>
-    /// Quante ne bastano per il premio di giornata. Che sia meno di <see cref="QuestsPerDay"/>
-    /// e' quello che rende sopportabili le quest fuori portata: la bacheca puo' proporre
-    /// l'arena o un boss di capitolo senza che chi non ci arriva perda i 50 vasetti, perche'
-    /// le quest sicure del fondo comune sono da sole abbastanza per la soglia.
+    /// Punti necessari al premio. Le 5 facili e le 3 intermedie valgono insieme 11 punti:
+    /// le 2 avanzate accelerano il traguardo, ma non sono obbligatorie.
     /// </summary>
-    public const int QuestsRequiredForBonus = 5;
+    public const int BonusPointsRequired = 10;
 
-    private const int AdvancedQuestsPerDay = 1;
+    private const int EasyQuestsPerDay = 5;
+    private const int IntermediateQuestsPerDay = 3;
+    private const int AdvancedQuestsPerDay = 2;
+
+    /// <summary>
+    /// Quante quest d'arena possono uscire nello stesso giorno. Con due il resto della
+    /// bacheca vale sempre almeno <see cref="BonusPointsRequired"/> punti, quindi il premio
+    /// di giornata resta raggiungibile da chi non entra mai in coda. Senza questo tetto tre
+    /// quest PvP pesanti si prenderebbero 8 dei 17 punti e il premio diventerebbe d'arena.
+    /// </summary>
     private const int PvpQuestsPerDay = 2;
 
     public const string PoolCore = "core";
     public const string PoolAdvanced = "advanced";
     public const string PoolPvp = "pvp";
 
-    private sealed record Quest(string Id, string CounterKey, int Threshold, string Title, string Description);
+    // Scorciatoie: il catalogo e' una tabella, e con i nomi lunghi dell'enum ogni riga
+    // andrebbe a capo.
+    private const TavernQuestDifficulty Easy = TavernQuestDifficulty.Easy;
+    private const TavernQuestDifficulty Medium = TavernQuestDifficulty.Intermediate;
+    private const TavernQuestDifficulty Hard = TavernQuestDifficulty.Advanced;
+
+    /// <summary>Il miele base segue la difficolta': verde 1, arancione 2, rossa 3.</summary>
+    public static int HoneyRewardFor(TavernQuestDifficulty difficulty) => difficulty switch
+    {
+        TavernQuestDifficulty.Intermediate => 2,
+        TavernQuestDifficulty.Advanced => 3,
+        _ => QuestHoneyReward
+    };
+
+    private sealed record Quest(
+        string Id, string CounterKey, int Threshold, TavernQuestDifficulty Difficulty,
+        string Title, string Description);
 
     /// <summary>
     /// Quest sempre alla portata di chiunque abbia il primo capitolo: si completano giocando,
@@ -52,84 +75,137 @@ public static class TavernQuests
     /// </summary>
     private static readonly Quest[] CoreCatalog =
     {
-        new("kill-10", CampaignCounters.EnemiesDefeated, 10, "Battuta di caccia", "Uccidi 10 nemici in campagna."),
-        new("kill-20", CampaignCounters.EnemiesDefeated, 20, "Cacciatore di mostri", "Uccidi 20 nemici in campagna."),
-        new("kill-30", CampaignCounters.EnemiesDefeated, 30, "Ripulitore di corridoi", "Uccidi 30 nemici in campagna."),
-        new("kill-40", CampaignCounters.EnemiesDefeated, 40, "Sterminatore", "Uccidi 40 nemici in campagna."),
-        new("kill-50", CampaignCounters.EnemiesDefeated, 50, "Flagello dei mostri", "Uccidi 50 nemici in campagna."),
-        new("kill-75", CampaignCounters.EnemiesDefeated, 75, "Leggenda del sottosuolo", "Uccidi 75 nemici in campagna."),
+        new("kill-10", CampaignCounters.EnemiesDefeated, 10, Easy, "Battuta di caccia", "Uccidi 10 nemici in campagna."),
+        new("kill-15", CampaignCounters.EnemiesDefeated, 15, Easy, "Sentieri ripuliti", "Uccidi 15 nemici in campagna."),
+        new("kill-20", CampaignCounters.EnemiesDefeated, 20, Easy, "Cacciatore di mostri", "Uccidi 20 nemici in campagna."),
+        new("kill-30", CampaignCounters.EnemiesDefeated, 30, Medium, "Ripulitore di corridoi", "Uccidi 30 nemici in campagna."),
+        new("kill-40", CampaignCounters.EnemiesDefeated, 40, Medium, "Sterminatore", "Uccidi 40 nemici in campagna."),
+        new("kill-50", CampaignCounters.EnemiesDefeated, 50, Hard, "Flagello dei mostri", "Uccidi 50 nemici in campagna."),
+        new("kill-75", CampaignCounters.EnemiesDefeated, 75, Hard, "Leggenda del sottosuolo", "Uccidi 75 nemici in campagna."),
+        new("kill-100", CampaignCounters.EnemiesDefeated, 100, Hard, "Marea di ferro", "Uccidi 100 nemici in campagna."),
 
-        new("rooms-3", CampaignCounters.RoomsCleared, 3, "Esploratore", "Supera 3 stanze."),
-        new("rooms-5", CampaignCounters.RoomsCleared, 5, "Passo sicuro", "Supera 5 stanze."),
-        new("rooms-8", CampaignCounters.RoomsCleared, 8, "Battitore di sentieri", "Supera 8 stanze."),
-        new("rooms-10", CampaignCounters.RoomsCleared, 10, "Profondita' del dungeon", "Supera 10 stanze."),
-        new("rooms-15", CampaignCounters.RoomsCleared, 15, "Nessuna porta chiusa", "Supera 15 stanze."),
-        new("rooms-20", CampaignCounters.RoomsCleared, 20, "Fino all'ultima soglia", "Supera 20 stanze."),
+        new("rooms-3", CampaignCounters.RoomsCleared, 3, Easy, "Esploratore", "Supera 3 stanze."),
+        new("rooms-5", CampaignCounters.RoomsCleared, 5, Easy, "Passo sicuro", "Supera 5 stanze."),
+        new("rooms-6", CampaignCounters.RoomsCleared, 6, Easy, "Sempre piu' giu'", "Supera 6 stanze."),
+        new("rooms-8", CampaignCounters.RoomsCleared, 8, Medium, "Battitore di sentieri", "Supera 8 stanze."),
+        new("rooms-10", CampaignCounters.RoomsCleared, 10, Medium, "Profondita' del dungeon", "Supera 10 stanze."),
+        new("rooms-12", CampaignCounters.RoomsCleared, 12, Medium, "Corridoi senza fine", "Supera 12 stanze."),
+        new("rooms-15", CampaignCounters.RoomsCleared, 15, Hard, "Nessuna porta chiusa", "Supera 15 stanze."),
+        new("rooms-20", CampaignCounters.RoomsCleared, 20, Hard, "Fino all'ultima soglia", "Supera 20 stanze."),
+        new("rooms-25", CampaignCounters.RoomsCleared, 25, Hard, "Il fondo del pozzo", "Supera 25 stanze."),
 
-        new("runs-1", CampaignCounters.RunsEnded, 1, "Fino in fondo", "Concludi una run."),
-        new("runs-2", CampaignCounters.RunsEnded, 2, "Doppia discesa", "Concludi 2 run."),
-        new("runs-3", CampaignCounters.RunsEnded, 3, "Instancabile", "Concludi 3 run."),
-        new("runs-4", CampaignCounters.RunsEnded, 4, "Nessuna sosta", "Concludi 4 run."),
+        new("runs-1", CampaignCounters.RunsEnded, 1, Easy, "Fino in fondo", "Concludi una run."),
+        new("runs-2", CampaignCounters.RunsEnded, 2, Medium, "Doppia discesa", "Concludi 2 run."),
+        new("runs-3", CampaignCounters.RunsEnded, 3, Medium, "Instancabile", "Concludi 3 run."),
+        new("runs-4", CampaignCounters.RunsEnded, 4, Hard, "Nessuna sosta", "Concludi 4 run."),
+        new("runs-5", CampaignCounters.RunsEnded, 5, Hard, "Giornata al tavolo", "Concludi 5 run."),
 
-        new("dice-50", CampaignCounters.DiceRolled, 50, "Mano calda", "Tira 50 volte i dadi."),
-        new("dice-100", CampaignCounters.DiceRolled, 100, "Amico della sorte", "Tira 100 volte i dadi."),
-        new("dice-150", CampaignCounters.DiceRolled, 150, "Sfida al destino", "Tira 150 volte i dadi."),
-        new("dice-200", CampaignCounters.DiceRolled, 200, "Il tavolo brucia", "Tira 200 volte i dadi."),
-        new("dice-300", CampaignCounters.DiceRolled, 300, "Le ossa non mentono", "Tira 300 volte i dadi."),
+        new("dice-50", CampaignCounters.DiceRolled, 50, Easy, "Mano calda", "Tira 50 volte i dadi."),
+        new("dice-75", CampaignCounters.DiceRolled, 75, Easy, "Le dita sporche di gesso", "Tira 75 volte i dadi."),
+        new("dice-100", CampaignCounters.DiceRolled, 100, Medium, "Amico della sorte", "Tira 100 volte i dadi."),
+        new("dice-150", CampaignCounters.DiceRolled, 150, Medium, "Sfida al destino", "Tira 150 volte i dadi."),
+        new("dice-200", CampaignCounters.DiceRolled, 200, Hard, "Il tavolo brucia", "Tira 200 volte i dadi."),
+        new("dice-300", CampaignCounters.DiceRolled, 300, Hard, "Le ossa non mentono", "Tira 300 volte i dadi."),
+        new("dice-400", CampaignCounters.DiceRolled, 400, Hard, "Tempesta d'avorio", "Tira 400 volte i dadi."),
 
-        new("ability-5", CampaignCounters.AbilitiesUsed, 5, "Mestiere", "Usa 5 volte l'abilita' di classe."),
-        new("ability-10", CampaignCounters.AbilitiesUsed, 10, "Arte della classe", "Usa 10 volte l'abilita' di classe."),
-        new("ability-15", CampaignCounters.AbilitiesUsed, 15, "Scuola di guerra", "Usa 15 volte l'abilita' di classe."),
-        new("ability-20", CampaignCounters.AbilitiesUsed, 20, "Maestria", "Usa 20 volte l'abilita' di classe."),
-        new("ability-30", CampaignCounters.AbilitiesUsed, 30, "Virtuoso", "Usa 30 volte l'abilita' di classe."),
+        new("ability-5", CampaignCounters.AbilitiesUsed, 5, Easy, "Mestiere", "Usa 5 volte l'abilita' di classe."),
+        new("ability-10", CampaignCounters.AbilitiesUsed, 10, Easy, "Arte della classe", "Usa 10 volte l'abilita' di classe."),
+        new("ability-15", CampaignCounters.AbilitiesUsed, 15, Medium, "Scuola di guerra", "Usa 15 volte l'abilita' di classe."),
+        new("ability-20", CampaignCounters.AbilitiesUsed, 20, Medium, "Maestria", "Usa 20 volte l'abilita' di classe."),
+        new("ability-30", CampaignCounters.AbilitiesUsed, 30, Hard, "Virtuoso", "Usa 30 volte l'abilita' di classe."),
+        new("ability-40", CampaignCounters.AbilitiesUsed, 40, Hard, "Nessun gesto sprecato", "Usa 40 volte l'abilita' di classe."),
 
-        new("exp-300", CampaignCounters.ExperienceEarned, 300, "Lezioni sul campo", "Guadagna 300 esperienza in campagna."),
-        new("exp-600", CampaignCounters.ExperienceEarned, 600, "Veterano del giorno", "Guadagna 600 esperienza in campagna."),
-        new("exp-1000", CampaignCounters.ExperienceEarned, 1000, "Scuola dura", "Guadagna 1000 esperienza in campagna."),
-        new("exp-1500", CampaignCounters.ExperienceEarned, 1500, "Sapere pagato caro", "Guadagna 1500 esperienza in campagna.")
+        new("exp-300", CampaignCounters.ExperienceEarned, 300, Easy, "Lezioni sul campo", "Guadagna 300 esperienza in campagna."),
+        new("exp-450", CampaignCounters.ExperienceEarned, 450, Easy, "Pratica quotidiana", "Guadagna 450 esperienza in campagna."),
+        new("exp-600", CampaignCounters.ExperienceEarned, 600, Medium, "Veterano del giorno", "Guadagna 600 esperienza in campagna."),
+        new("exp-800", CampaignCounters.ExperienceEarned, 800, Medium, "Mestiere pagato", "Guadagna 800 esperienza in campagna."),
+        new("exp-1000", CampaignCounters.ExperienceEarned, 1000, Hard, "Scuola dura", "Guadagna 1000 esperienza in campagna."),
+        new("exp-1500", CampaignCounters.ExperienceEarned, 1500, Hard, "Sapere pagato caro", "Guadagna 1500 esperienza in campagna."),
+        new("exp-2000", CampaignCounters.ExperienceEarned, 2000, Hard, "Il prezzo della saggezza", "Guadagna 2000 esperienza in campagna."),
+
+        new("supreme-1", CampaignCounters.SupremesUsed, 1, Easy, "Colpo supremo", "Attiva una suprema in campagna."),
+        new("supreme-3", CampaignCounters.SupremesUsed, 3, Easy, "Il tavolo trema", "Attiva 3 supreme in campagna."),
+        new("supreme-5", CampaignCounters.SupremesUsed, 5, Medium, "Arsenale aperto", "Attiva 5 supreme in campagna."),
+        new("supreme-8", CampaignCounters.SupremesUsed, 8, Medium, "Spettacolo di potere", "Attiva 8 supreme in campagna."),
+        new("supreme-12", CampaignCounters.SupremesUsed, 12, Hard, "Furia incontenibile", "Attiva 12 supreme in campagna."),
+
+        new("flash-1", CampaignCounters.QuickChallenges, 1, Easy, "Prova lampo", "Completa una stanza Sfida veloce."),
+        new("flash-2", CampaignCounters.QuickChallenges, 2, Easy, "Riflessi pronti", "Completa 2 stanze Sfida veloce."),
+        new("flash-3", CampaignCounters.QuickChallenges, 3, Medium, "Occhio allenato", "Completa 3 stanze Sfida veloce."),
+        new("flash-5", CampaignCounters.QuickChallenges, 5, Hard, "Mente fulminea", "Completa 5 stanze Sfida veloce."),
+
+        new("market-1", CampaignCounters.MerchantPurchases, 1, Easy, "Cliente del mercante", "Concludi un affare col mercante."),
+        new("market-2", CampaignCounters.MerchantPurchases, 2, Easy, "Giro dei banchi", "Concludi 2 affari col mercante."),
+        new("market-4", CampaignCounters.MerchantPurchases, 4, Medium, "Borsa leggera", "Concludi 4 affari col mercante."),
+        new("market-6", CampaignCounters.MerchantPurchases, 6, Medium, "Mercante compiaciuto", "Concludi 6 affari col mercante."),
+        new("market-9", CampaignCounters.MerchantPurchases, 9, Hard, "Il miglior cliente", "Concludi 9 affari col mercante."),
+
+        new("gold-100", CampaignCounters.GoldEarned, 100, Easy, "Prime monete", "Guadagna 100 oro in campagna."),
+        new("gold-200", CampaignCounters.GoldEarned, 200, Easy, "Borsa che tintinna", "Guadagna 200 oro in campagna."),
+        new("gold-400", CampaignCounters.GoldEarned, 400, Medium, "Sacchetto pieno", "Guadagna 400 oro in campagna."),
+        new("gold-700", CampaignCounters.GoldEarned, 700, Medium, "Bottino di giornata", "Guadagna 700 oro in campagna."),
+        new("gold-1200", CampaignCounters.GoldEarned, 1200, Hard, "Tesoriere del dungeon", "Guadagna 1200 oro in campagna."),
+
+        new("level-2", CampaignCounters.LevelsGained, 2, Easy, "Passo avanti", "Sali 2 volte di livello in campagna."),
+        new("level-3", CampaignCounters.LevelsGained, 3, Easy, "Si impara scendendo", "Sali 3 volte di livello in campagna."),
+        new("level-5", CampaignCounters.LevelsGained, 5, Medium, "Scalata", "Sali 5 volte di livello in campagna."),
+        new("level-8", CampaignCounters.LevelsGained, 8, Hard, "Ascesa", "Sali 8 volte di livello in campagna.")
     };
 
     /// <summary>
     /// Quest che chiedono qualcosa in piu': arrivare a un miniboss, chiudere un capitolo,
-    /// avere consumabili in bisaccia. Ne esce al massimo una al giorno.
+    /// avere consumabili in bisaccia. Il pool non e' una quota d'estrazione (quella la
+    /// decide la difficolta'): e' l'etichetta che dice a chi legge la bacheca - noi e il
+    /// pannello admin - perche' una quest puo' restare ferma anche giocando.
     /// </summary>
     private static readonly Quest[] AdvancedCatalog =
     {
-        new("miniboss-1", CampaignCounters.MinibossesDefeated, 1, "Il guardiano", "Uccidi un miniboss."),
-        new("miniboss-2", CampaignCounters.MinibossesDefeated, 2, "Due teste cadute", "Uccidi 2 miniboss."),
-        new("miniboss-3", CampaignCounters.MinibossesDefeated, 3, "Caccia grossa", "Uccidi 3 miniboss."),
-        new("miniboss-4", CampaignCounters.MinibossesDefeated, 4, "Nessun guardiano in piedi", "Uccidi 4 miniboss."),
+        new("miniboss-1", CampaignCounters.MinibossesDefeated, 1, Easy, "Il guardiano", "Uccidi un miniboss."),
+        new("miniboss-2", CampaignCounters.MinibossesDefeated, 2, Medium, "Due teste cadute", "Uccidi 2 miniboss."),
+        new("miniboss-3", CampaignCounters.MinibossesDefeated, 3, Hard, "Caccia grossa", "Uccidi 3 miniboss."),
+        new("miniboss-4", CampaignCounters.MinibossesDefeated, 4, Hard, "Nessun guardiano in piedi", "Uccidi 4 miniboss."),
 
-        new("boss-1", CampaignCounters.BossesDefeated, 1, "Fine del capitolo", "Sconfiggi il boss finale di un capitolo."),
-        new("boss-2", CampaignCounters.BossesDefeated, 2, "Doppio trofeo", "Sconfiggi 2 boss di capitolo."),
-        new("boss-3", CampaignCounters.BossesDefeated, 3, "Tre corone", "Sconfiggi 3 boss di capitolo."),
+        new("boss-1", CampaignCounters.BossesDefeated, 1, Medium, "Fine del capitolo", "Sconfiggi il boss finale di un capitolo."),
+        new("boss-2", CampaignCounters.BossesDefeated, 2, Hard, "Doppio trofeo", "Sconfiggi 2 boss di capitolo."),
+        new("boss-3", CampaignCounters.BossesDefeated, 3, Hard, "Tre corone", "Sconfiggi 3 boss di capitolo."),
 
-        new("items-2", CampaignCounters.ItemsUsed, 2, "Mano nella bisaccia", "Usa 2 volte gli oggetti."),
-        new("items-5", CampaignCounters.ItemsUsed, 5, "Bisaccia svuotata", "Usa 5 volte gli oggetti."),
-        new("items-8", CampaignCounters.ItemsUsed, 8, "Alchimista da viaggio", "Usa 8 volte gli oggetti."),
-        new("items-12", CampaignCounters.ItemsUsed, 12, "Niente resta nello zaino", "Usa 12 volte gli oggetti.")
+        // Contano tutti gli usi, non solo quelli della bisaccia: anche un oggetto trovato in
+        // una stanza o comprato al mercante e usato sul posto. I titoli non nominano la
+        // bisaccia per non far credere il contrario.
+        new("items-2", CampaignCounters.ItemsUsed, 2, Easy, "Mano lesta", "Usa 2 volte gli oggetti."),
+        new("items-3", CampaignCounters.ItemsUsed, 3, Easy, "Scorte in viaggio", "Usa 3 volte gli oggetti."),
+        new("items-5", CampaignCounters.ItemsUsed, 5, Medium, "Niente si spreca", "Usa 5 volte gli oggetti."),
+        new("items-8", CampaignCounters.ItemsUsed, 8, Hard, "Alchimista da viaggio", "Usa 8 volte gli oggetti."),
+        new("items-12", CampaignCounters.ItemsUsed, 12, Hard, "Tutto quello che trovo", "Usa 12 volte gli oggetti.")
     };
 
     /// <summary>
     /// Quest d'arena. Dipendono dal fatto che ci sia qualcuno dall'altra parte, quindi non
-    /// devono mai essere indispensabili: ne escono al massimo due su otto, e la soglia del
-    /// premio e' raggiungibile senza toccarne nessuna.
-    /// I contatori li scrive il server a fine partita, non il client.
+    /// devono mai essere indispensabili: ne escono al massimo <see cref="PvpQuestsPerDay"/>
+    /// al giorno, e con quel tetto la soglia del premio resta raggiungibile senza toccarne
+    /// nessuna.
+    /// I contatori li scrive il server a fine partita, non il client, e solo per le partite
+    /// classificate: le amichevoli in stanza non contano, altrimenti due account complici
+    /// chiuderebbero la giornata (cioe' il miele) senza mai entrare in coda. Le descrizioni
+    /// lo dicono, perche' una quest che non avanza mentre il giocatore sta giocando davvero
+    /// sembra rotta.
     /// </summary>
     private static readonly Quest[] PvpCatalog =
     {
-        new("pvp-play-1", CampaignCounters.PvpMatches, 1, "Primo sfidante", "Gioca una partita PvP."),
-        new("pvp-play-2", CampaignCounters.PvpMatches, 2, "Frequentatore dell'arena", "Gioca 2 partite PvP."),
-        new("pvp-play-3", CampaignCounters.PvpMatches, 3, "Giornata in arena", "Gioca 3 partite PvP."),
-        new("pvp-play-5", CampaignCounters.PvpMatches, 5, "Maratona d'arena", "Gioca 5 partite PvP."),
+        new("pvp-play-1", CampaignCounters.PvpMatches, 1, Easy, "Primo sfidante", "Gioca una partita PvP classificata."),
+        new("pvp-play-2", CampaignCounters.PvpMatches, 2, Medium, "Frequentatore dell'arena", "Gioca 2 partite PvP classificate."),
+        new("pvp-play-3", CampaignCounters.PvpMatches, 3, Medium, "Giornata in arena", "Gioca 3 partite PvP classificate."),
+        new("pvp-play-5", CampaignCounters.PvpMatches, 5, Hard, "Maratona d'arena", "Gioca 5 partite PvP classificate."),
 
-        new("pvp-win-1", CampaignCounters.PvpWins, 1, "Vittoria onorevole", "Vinci una partita PvP."),
-        new("pvp-win-2", CampaignCounters.PvpWins, 2, "Doppietta in arena", "Vinci 2 partite PvP."),
-        new("pvp-win-3", CampaignCounters.PvpWins, 3, "Dominio", "Vinci 3 partite PvP."),
+        new("pvp-win-1", CampaignCounters.PvpWins, 1, Easy, "Vittoria onorevole", "Vinci una partita PvP classificata."),
+        new("pvp-win-2", CampaignCounters.PvpWins, 2, Medium, "Doppietta in arena", "Vinci 2 partite PvP classificate."),
+        new("pvp-win-3", CampaignCounters.PvpWins, 3, Hard, "Dominio", "Vinci 3 partite PvP classificate."),
+        new("pvp-win-4", CampaignCounters.PvpWins, 4, Hard, "Serie aperta", "Vinci 4 partite PvP classificate."),
 
-        new("pvp-rounds-3", CampaignCounters.PvpRoundsWon, 3, "Tre round tuoi", "Vinci 3 round in PvP."),
-        new("pvp-rounds-5", CampaignCounters.PvpRoundsWon, 5, "Padrone del tavolo", "Vinci 5 round in PvP."),
-        new("pvp-rounds-8", CampaignCounters.PvpRoundsWon, 8, "Nessuno ti tocca", "Vinci 8 round in PvP.")
+        new("pvp-rounds-3", CampaignCounters.PvpRoundsWon, 3, Easy, "Tre round tuoi", "Vinci 3 round in PvP classificato."),
+        new("pvp-rounds-5", CampaignCounters.PvpRoundsWon, 5, Medium, "Padrone del tavolo", "Vinci 5 round in PvP classificato."),
+        new("pvp-rounds-8", CampaignCounters.PvpRoundsWon, 8, Hard, "Nessuno ti tocca", "Vinci 8 round in PvP classificato."),
+        new("pvp-rounds-12", CampaignCounters.PvpRoundsWon, 12, Hard, "Il tavolo e' tuo", "Vinci 12 round in PvP classificato.")
     };
 
     /// <summary>
@@ -137,7 +213,8 @@ public static class TavernQuests
     /// catalogo, senza esporre il tipo interno ne' permettere di modificarlo.
     /// </summary>
     public sealed record QuestDefinition(
-        string Id, string CounterKey, int Threshold, string Title, string Description, string Pool)
+        string Id, string CounterKey, int Threshold, string Title, string Description, string Pool,
+        TavernQuestDifficulty Difficulty, int BonusPoints)
     {
         /// <summary>Quest di campagna che richiede progressione (miniboss, boss, consumabili).</summary>
         public bool Advanced => Pool == PoolAdvanced;
@@ -169,8 +246,9 @@ public static class TavernQuests
         return false;
     }
 
-    private static QuestDefinition Describe(Quest quest) => new(
-        quest.Id, quest.CounterKey, quest.Threshold, quest.Title, quest.Description, PoolOf(quest));
+    private static QuestDefinition Describe(Quest quest) =>
+        new(quest.Id, quest.CounterKey, quest.Threshold, quest.Title, quest.Description,
+            PoolOf(quest), quest.Difficulty, BonusPointsFor(quest.Difficulty));
 
     private static string PoolOf(Quest quest)
     {
@@ -199,46 +277,67 @@ public static class TavernQuests
         string day = TodayKey();
         AssignIfMissing(connection, transaction, playerId, day);
 
+        // La bacheca e' l'estrazione del giorno, non l'elenco delle righe a database: le righe
+        // dicono solo da che punto contare e cosa e' gia' stato riscosso. Leggerle tutte
+        // significherebbe che un deploy a giornata iniziata somma la vecchia estrazione alla
+        // nuova e mostra fino a venti quest, perche' AssignIfMissing inserisce quelle nuove
+        // accanto a quelle vecchie senza poterle togliere (toglierle brucerebbe il progresso
+        // di chi ha gia' giocato). Cosi' invece le righe orfane restano a database, innocue,
+        // e la bacheca ne mostra dieci comunque.
+        var rows = ReadRows(connection, transaction, playerId, day);
         var quests = new List<TavernQuestData>();
         int completed = 0;
-        foreach ((string questId, int baseline, bool claimed) in ReadRows(connection, transaction, playerId, day))
+        int completedPoints = 0;
+        foreach (Quest quest in SelectForDay(day))
         {
-            // Una quest che non esiste piu' nel catalogo (deploy a giornata iniziata) sparisce
-            // dalla bacheca invece di bloccare il premio: il giorno dopo si riassegna comunque.
-            if (!TryFindQuest(questId, out Quest quest))
+            if (!rows.TryGetValue(quest.Id, out (int Baseline, bool Claimed) row))
                 continue;
 
+            int baseline = row.Baseline;
+            bool claimed = row.Claimed;
             int gained = Math.Max(0, ReadCounter(connection, transaction, playerId, quest.CounterKey) - baseline);
             bool isCompleted = gained >= quest.Threshold;
+            TavernQuestDifficulty difficulty = quest.Difficulty;
             if (isCompleted)
+            {
                 completed++;
+                completedPoints += BonusPointsFor(difficulty);
+            }
 
             quests.Add(new TavernQuestData
             {
                 questId = quest.Id,
+                titleKey = $"tavern.quest.{quest.Id}.title",
+                descriptionKey = $"tavern.quest.{quest.Id}.description",
                 title = quest.Title,
                 description = quest.Description,
                 // Il progresso mostrato non supera la soglia: "34/20 nemici" sarebbe rumore.
                 current = Math.Min(gained, quest.Threshold),
                 threshold = quest.Threshold,
                 completed = isCompleted,
+                difficulty = difficulty,
+                bonusPoints = BonusPointsFor(difficulty),
                 claimed = claimed,
-                honeyReward = QuestHoneyReward
+                honeyReward = HoneyRewardFor(difficulty)
             });
         }
 
         // Se il catalogo si e' ristretto a giornata iniziata la soglia non puo' restare sopra
         // il numero di quest davvero in bacheca, altrimenti il premio diventa irraggiungibile.
-        int required = Math.Min(QuestsRequiredForBonus, quests.Count);
+        int availablePoints = quests.Sum(quest => quest.bonusPoints);
+        int requiredPoints = Math.Min(BonusPointsRequired, availablePoints);
         bool bonusClaimed = IsBonusClaimed(connection, transaction, playerId, day);
         return new TavernData
         {
             honey = honey,
             quests = quests.ToArray(),
             completedCount = completed,
-            questsRequiredForBonus = required,
+            completedBonusPoints = completedPoints,
+            // Campi legacy: restano valorizzati durante la transizione dei client/admin.
+            questsRequiredForBonus = Math.Min(5, quests.Count),
+            bonusPointsRequired = requiredPoints,
             bonusHoneyReward = AllQuestsHoneyReward,
-            bonusAvailable = required > 0 && completed >= required,
+            bonusAvailable = requiredPoints > 0 && completedPoints >= requiredPoints,
             bonusClaimed = bonusClaimed,
             secondsToRefresh = SecondsToRefresh()
         };
@@ -249,7 +348,8 @@ public static class TavernQuests
     /// Ritorna un messaggio d'errore se non e' riscuotibile, altrimenti null.
     /// </summary>
     public static string ClaimQuest(
-        SqliteConnection connection, SqliteTransaction transaction, string playerId, string questId)
+        SqliteConnection connection, SqliteTransaction transaction, string playerId, string questId,
+        int rewardMultiplier = 1)
     {
         string day = TodayKey();
         AssignIfMissing(connection, transaction, playerId, day);
@@ -258,6 +358,10 @@ public static class TavernQuests
         if (!TryFindQuest(normalized, out Quest quest))
             return "Quest non valida.";
 
+        // Basta la riga, non serve che la quest sia ancora nell'estrazione di oggi: dopo un
+        // deploy a giornata iniziata la bacheca mostra la nuova, ma chi aveva gia' finito una
+        // quest della vecchia l'aveva finita davvero e il suo miele lo ha guadagnato. Non
+        // apre buchi: il premio di giornata conta solo le dieci in bacheca.
         (int baseline, bool claimed, bool assigned) = ReadRow(connection, transaction, playerId, day, normalized);
         if (!assigned)
             return "Quest non fra quelle di oggi.";
@@ -282,7 +386,7 @@ public static class TavernQuests
                 return "Ricompensa gia' riscossa.";
         }
 
-        GrantHoney(connection, transaction, playerId, QuestHoneyReward);
+        GrantHoney(connection, transaction, playerId, HoneyRewardFor(quest.Difficulty) * rewardMultiplier);
         return null;
     }
 
@@ -299,7 +403,7 @@ public static class TavernQuests
         if (state.bonusClaimed)
             return "Premio di giornata gia' riscosso.";
         if (!state.bonusAvailable)
-            return $"Completa {state.questsRequiredForBonus} quest del giorno per il premio.";
+            return $"Ottieni {state.bonusPointsRequired} punti quest per il premio.";
 
         using (SqliteCommand insert = connection.CreateCommand())
         {
@@ -348,39 +452,55 @@ public static class TavernQuests
     }
 
     /// <summary>
-    /// Le otto quest del giorno. Stabili per data: non usa GetHashCode perche' non e'
+    /// Le dieci quest del giorno. Stabili per data: non usa GetHashCode perche' non e'
     /// garantito costante tra avvii e un riavvio del server cambierebbe le quest a meta'
     /// giornata. Niente due quest sullo stesso contatore, altrimenti "uccidi 10" e "uccidi 20"
     /// si completerebbero insieme e la giornata varrebbe la meta'.
     ///
-    /// Le quote (1 avanzata, 2 d'arena, il resto dal fondo comune) garantiscono che le
-    /// cinque quest necessarie al premio siano sempre raggiungibili giocando da solo in
-    /// campagna: chi non fa PvP e non e' ancora arrivato ai boss perde tre righe su otto,
-    /// non il premio.
+    /// Le quote sono 5 facili, 3 intermedie e 2 avanzate. Un contatore compare una sola
+    /// volta, quindi due soglie dello stesso obiettivo non avanzano insieme, e le quest
+    /// d'arena hanno un tetto proprio (<see cref="PvpQuestsPerDay"/>) perche' dipendono da
+    /// un avversario e non devono poter monopolizzare i punti del premio.
     /// </summary>
     private static List<Quest> SelectForDay(string day)
     {
         var seed = new DailySequence(day);
         var picked = new List<Quest>();
         var usedCounters = new HashSet<string>();
+        int pvpPicked = 0;
 
-        Take(AdvancedCatalog, AdvancedQuestsPerDay);
-        Take(PvpCatalog, AdvancedQuestsPerDay + PvpQuestsPerDay);
-        Take(CoreCatalog, QuestsPerDay);
+        Quest[] all = CoreCatalog.Concat(AdvancedCatalog).Concat(PvpCatalog).ToArray();
+        Take(TavernQuestDifficulty.Easy, EasyQuestsPerDay);
+        Take(TavernQuestDifficulty.Intermediate, EasyQuestsPerDay + IntermediateQuestsPerDay);
+        Take(TavernQuestDifficulty.Advanced, QuestsPerDay);
         return picked;
 
-        void Take(Quest[] catalog, int upTo)
+        void Take(TavernQuestDifficulty difficulty, int upTo)
         {
+            Quest[] catalog = all.Where(quest => quest.Difficulty == difficulty).ToArray();
             foreach (int index in seed.Shuffle(catalog.Length))
             {
                 if (picked.Count >= upTo)
                     return;
                 Quest quest = catalog[index];
-                if (usedCounters.Add(quest.CounterKey))
-                    picked.Add(quest);
+                bool pvp = PoolOf(quest) == PoolPvp;
+                if (pvp && pvpPicked >= PvpQuestsPerDay)
+                    continue;
+                if (!usedCounters.Add(quest.CounterKey))
+                    continue;
+                picked.Add(quest);
+                if (pvp)
+                    pvpPicked++;
             }
         }
     }
+
+    private static int BonusPointsFor(TavernQuestDifficulty difficulty) => difficulty switch
+    {
+        TavernQuestDifficulty.Intermediate => 2,
+        TavernQuestDifficulty.Advanced => 3,
+        _ => 1
+    };
 
     /// <summary>
     /// Estrazione riproducibile a partire dalla data: hash FNV-1a del giorno come seme,
@@ -451,10 +571,15 @@ public static class TavernQuests
         return false;
     }
 
-    private static List<(string QuestId, int Baseline, bool Claimed)> ReadRows(
+    /// <summary>
+    /// Baseline e riscossione di ogni quest assegnata al giocatore per la giornata, per id.
+    /// Puo' contenerne piu' di dieci: un deploy a giornata iniziata lascia a database anche
+    /// l'estrazione precedente. E' <see cref="ReadOrAssign"/> a scegliere quali mostrare.
+    /// </summary>
+    private static Dictionary<string, (int Baseline, bool Claimed)> ReadRows(
         SqliteConnection connection, SqliteTransaction transaction, string playerId, string day)
     {
-        var rows = new List<(string, int, bool)>();
+        var rows = new Dictionary<string, (int, bool)>(StringComparer.Ordinal);
         using SqliteCommand query = connection.CreateCommand();
         query.Transaction = transaction;
         query.CommandText = @"
@@ -465,7 +590,7 @@ public static class TavernQuests
         query.Parameters.AddWithValue("$day", day);
         using SqliteDataReader reader = query.ExecuteReader();
         while (reader.Read())
-            rows.Add((reader.GetString(0), reader.GetInt32(1), !reader.IsDBNull(2)));
+            rows[reader.GetString(0)] = (reader.GetInt32(1), !reader.IsDBNull(2));
         return rows;
     }
 

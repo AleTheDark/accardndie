@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -13,7 +14,11 @@ public sealed partial class BattleBoardController
 	// Persistenza del save/resume della run di campagna. Isolato in questo partial per
 	// contenere la superficie di modifica sul controller: gli altri file lo agganciano solo
 	// nei punti di salvataggio/pulizia. La ripresa non deve bypassare la scelta single player.
-	private readonly CampaignRunSaveService runSaveService = new CampaignRunSaveService();
+	// Il salvataggio è dell'account che sta giocando: il playerId viene letto a ogni
+	// accesso, così un cambio di account durante la sessione cambia anche la campagna
+	// che il gioco propone di riprendere.
+	private readonly CampaignRunSaveService runSaveService = new CampaignRunSaveService(
+		new PlayerPrefsCampaignRunStore(() => AccardND.Network.AccountServerSession.PlayerId));
 
 	private bool HasResumableRun => runSaveService.HasSave;
 
@@ -37,8 +42,15 @@ public sealed partial class BattleBoardController
 		save.consumedBagItemIds = new List<string>(consumedBagItemIds);
 		save.merchantRoomsBlockedUntilMonster = merchantRoomsBlockedUntilMonster;
 		save.rewardRoomsBlockedUntilMonster = rewardRoomsBlockedUntilMonster;
-		save.nextMonsterTierBonus = nextMonsterTierBonus;
+		save.freeMerchantUpgradeUsed = !freeMerchantUpgradeAvailable;
+		save.secondWindUsed = !secondWindAvailable;
+		save.nextMonsterDifficultyIncrease = nextMonsterDifficultyIncrease;
 		save.nextDoorChoiceRevealed = nextDoorChoiceRevealed;
+		save.nextMonsterRewardHalved = nextMonsterRewardHalved;
+
+		// La battaglia in corso, se c'è: fuori dal combattimento resta null e il
+		// salvataggio è quello di sempre, fermo alla scelta della via.
+		save.battle = CaptureBattle();
 
 		save.consumables = new List<CampaignConsumableSave>();
 		foreach (CampaignConsumableType type in Enum.GetValues(typeof(CampaignConsumableType)))
@@ -80,6 +92,58 @@ public sealed partial class BattleBoardController
 		{
 			Debug.LogWarning($"[Campaign] Pulizia save run fallita: {exception.Message}");
 		}
+	}
+
+	// --- Proposta di ripresa ---
+
+	/// <summary>
+	/// Primo ingresso in campagna: se c'è una run lasciata a metà la si propone prima di
+	/// far scegliere la modalità. Il salvataggio resta lì finché il giocatore non decide -
+	/// annullare è l'unico modo di buttarlo via - così chiudere il gioco a metà campagna
+	/// non è più un abbandono silenzioso.
+	///
+	/// È il fratello freddo del popup della sessione rifatta: quello riprende un oggetto
+	/// ancora vivo in memoria, questo rilegge il checkpoint da disco.
+	/// </summary>
+	private void ShowResumableRunPromptIfAny()
+	{
+		// Una campagna già in corso in questa sessione non va riproposta: quel salvataggio
+		// è il suo, e a rimetterla in piedi ci pensa semmai il recupero di sessione.
+		if (campaignDeck != null || pvpPresentationActive || !HasResumableRun)
+			return;
+		// Durante il tour guidato il popup coprirebbe il passo in corso.
+		if (IsTutorialOnboardingActive())
+			return;
+
+		ShowCampaignRecoveryPopup(
+			GameText.GetOrFallbackSilent(
+				GameTextKeys.Campaign.RecoverySavedBody,
+				"Hai una campagna lasciata a meta'. Vuoi riprenderla da dov'eri o annullarla e ricominciare?"),
+			GameText.GetOrFallbackSilent(GameTextKeys.Campaign.RecoveryCancel, "ANNULLA"),
+			ResumeSavedRun,
+			CancelSavedRun);
+	}
+
+	private void ResumeSavedRun()
+	{
+		campaignRecoveryPopup.SetActive(false);
+		if (TryStartResumedCampaign())
+			return;
+
+		// Salvataggio inservibile (carte sparite in un aggiornamento, file illeggibile):
+		// via anche quello, o al prossimo ingresso in campagna riproporrebbe una ripresa
+		// che non può riuscire, all'infinito.
+		ClearSavedRun();
+		SetMessage(GameText.GetOrFallbackSilent(
+			GameTextKeys.Campaign.RecoveryUnusableSave,
+			"La campagna salvata non e' piu' riprendibile: si riparte da capo."));
+	}
+
+	private void CancelSavedRun()
+	{
+		campaignRecoveryPopup.SetActive(false);
+		ClearSavedRun();
+		AppendLog("CAMPAGNA - salvataggio annullato dal giocatore: si riparte da capo.");
 	}
 
 	// --- Ripresa ---
@@ -142,8 +206,12 @@ public sealed partial class BattleBoardController
 			consumedBagItemIds.AddRange(save.consumedBagItemIds);
 		merchantRoomsBlockedUntilMonster = save.merchantRoomsBlockedUntilMonster;
 		rewardRoomsBlockedUntilMonster = save.rewardRoomsBlockedUntilMonster;
-		nextMonsterTierBonus = save.nextMonsterTierBonus;
+		// ResetRunProgress() qui sopra ha riarmato i talenti una-tantum: il salvataggio dice
+		// quali erano gia' stati spesi, e va riletto dopo.
+		RestoreTalentRunState(save.freeMerchantUpgradeUsed, save.secondWindUsed);
+		nextMonsterDifficultyIncrease = save.nextMonsterDifficultyIncrease;
 		nextDoorChoiceRevealed = save.nextDoorChoiceRevealed;
+		nextMonsterRewardHalved = save.nextMonsterRewardHalved;
 
 		// Consumabili
 		campaignConsumables.Clear();
@@ -172,13 +240,27 @@ public sealed partial class BattleBoardController
 		// il TRIPLICA non comparirebbe mai.
 		WarmCampaignRunAds();
 		PlayTransitionSfx();
+
+		// Se il salvataggio è stato preso a metà scontro si torna in campo, non alla
+		// scelta della via. Se la battaglia non è ricostruibile - una carta sparita da un
+		// aggiornamento - si ripiega sulla scelta della via, che è sempre un punto valido:
+		// si perde lo scontro in corso, non la run.
+		if (save.HasBattle && TryRestoreBattle(save.battle))
+		{
+			AppendLog($"CAMPAGNA RIPRESA - si torna in battaglia al round {roundNumber}.");
+			return true;
+		}
+
 		BeginRoomChoice();
 		return true;
 	}
 
-	// --- Ciclo di vita app: salva uscendo, ma solo fuori dal combattimento (uno stato
-	// mid-combattimento non è un punto di ripresa valido). Il salvataggio autorevole resta
-	// quello di BeginRoomChoice. ---
+	// --- Ciclo di vita app ---
+	//
+	// Uscendo si salva solo fuori dal combattimento: durante uno scontro l'unico a
+	// scrivere e' il confine di turno (vedi SaveCurrentBattleTurn), e quello che c'e' gia'
+	// su disco e' coerente. Sovrascriverlo qui vorrebbe dire fotografare la battaglia a
+	// meta' di un'animazione, con la timeline ferma su un turno gia' cominciato.
 
 	private void OnApplicationPause(bool paused)
 	{

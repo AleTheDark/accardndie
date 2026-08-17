@@ -59,7 +59,7 @@ namespace AccardND.GameCore.Tests
             Assert.That(result.DefenderRoll.HasSecondRoll, Is.False);
         }
 
-        [TestCase(4, 3)]
+        [TestCase(4, 2)]
         [TestCase(6, 4)]
         [TestCase(8, 6)]
         [TestCase(10, 8)]
@@ -327,7 +327,9 @@ namespace AccardND.GameCore.Tests
         [Test]
         public void ResolveAttack_RogueAuraRerollsFirstOneOrTwoOncePerDefenderDieWithAdvantage()
         {
-            var random = new FixedRandomSource(3, 2, 6, 1, 5);
+            // Forza batte Astuzia: l'attaccante tira due dadi (3 e 2) prima che tocchi
+            // al difensore, che ritira sia il 2 sia l'1 una volta ciascuno.
+            var random = new FixedRandomSource(3, 2, 2, 6, 1, 5);
             var resolver = new CombatResolver(random);
             var attacker = new CombatCard("warrior", "Guerriero", HeroClass.Warrior, 5);
             var defender = new CombatCard("rogue", "Ladro", HeroClass.Rogue, 5);
@@ -384,6 +386,43 @@ namespace AccardND.GameCore.Tests
 
             Assert.That(result.AttackerTotal, Is.EqualTo(8));
             Assert.That(result.DefenderTotal, Is.EqualTo(10));
+        }
+
+        [Test]
+        public void CombatDiceRoller_WithoutBias_DoesNotConsumeAProbabilityRoll()
+        {
+            var random = new FixedRandomSource(4, 6);
+            var dice = new CombatDiceRoller(random);
+
+            Assert.That(dice.Roll(6), Is.EqualTo(4));
+            Assert.That(dice.Roll(6), Is.EqualTo(6));
+        }
+
+        [Test]
+        public void CombatDiceRoller_WhenBiasTriggers_KeepsTheHigherHiddenRoll()
+        {
+            var dice = new CombatDiceRoller(new FixedRandomSource(2, 30, 5));
+
+            Assert.That(dice.Roll(6, 30), Is.EqualTo(5));
+        }
+
+        [Test]
+        public void ResolveAttack_AppliesBiasOnlyToTheConfiguredSide()
+        {
+            var resolver = new CombatResolver(new FixedRandomSource(2, 10, 6, 3));
+            var attacker = new CombatCard("a", "Attaccante", HeroClass.Paladin, 5);
+            var defender = new CombatCard("d", "Difensore", HeroClass.Paladin, 5);
+
+            CombatResult result = resolver.ResolveAttack(
+                attacker,
+                defender,
+                6,
+                6,
+                CombatModifiers.None,
+                new CombatRollBiases(attackerHighRollChancePercent: 15, defenderHighRollChancePercent: 0));
+
+            Assert.That(result.AttackerRoll.SelectedRoll, Is.EqualTo(6));
+            Assert.That(result.DefenderRoll.SelectedRoll, Is.EqualTo(3));
         }
 
         private sealed class FixedRandomSource : IRandomSource

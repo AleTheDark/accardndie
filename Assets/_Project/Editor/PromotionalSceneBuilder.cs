@@ -15,7 +15,6 @@ internal static class PromotionalSceneBuilder
         EditorApplication.delayCall += BuildIfMissing;
     }
 
-    [MenuItem("Accard N' Die/Promotional/Rebuild Trailer Scene")]
     private static void Rebuild()
     {
         Build(true);
@@ -47,9 +46,9 @@ internal static class PromotionalSceneBuilder
         SerializedObject serialized = new SerializedObject(sequence);
         AssignSprites(serialized.FindProperty("backgrounds"), new[]
         {
-            "Assets/_Project/Art/Scenarios/bg_loot_landscape.png",
-            "Assets/_Project/Art/Scenarios/bg_default_landscape.png",
-            "Assets/_Project/Art/Scenarios/bg_loot_landscape.png"
+            "Assets/_Project/Art/Scenarios/bg_loot.png",
+            "Assets/_Project/Art/Scenarios/bg_loot.png",
+            "Assets/_Project/Art/Scenarios/bg_loot.png"
         });
         AssignSprites(serialized.FindProperty("bosses"), new[]
         {

@@ -1,5 +1,6 @@
 using System;
 using AccardND.Battlefield;
+using AccardND.Localization;
 using AccardND.NetProtocol;
 using UnityEngine;
 using UnityEngine.Events;
@@ -36,6 +37,7 @@ namespace AccardND.PvpUi
             public Action OnProfile;
             public Action OnSettings;
             public Action OnRefreshRooms;
+            public Action OnRefreshProfile;
         }
 
         private const string CodeAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -122,6 +124,7 @@ namespace AccardND.PvpUi
         private bool waitingForOpponent;
 
         private readonly Text statusText;
+        private readonly Text loadoutAvailabilityText;
 
         private string typedCode = string.Empty;
         private TouchScreenKeyboard nativeKeyboard;
@@ -154,84 +157,20 @@ namespace AccardND.PvpUi
             PvpUiFactory.Stretch(content);
             PvpUiFactory.CreateScreenOuterFrame(root, 0.795f, content);
 
-            // --- Intestazione account ---
-            // Questa testata replica volutamente quella dell'Hub. Manteniamo qui
-            // gli stessi valori visivi, così il passaggio al multiplayer non
-            // introduce una seconda variante dell'account header.
-            RectTransform header = PvpUiFactory.CreateSoftPanel(
-                content, "Account Header", Color.clear);
-            PvpUiFactory.SetAnchors(header, new Vector2(0.015f, 0.885f), new Vector2(0.985f, 0.96f));
-            Image headerBackground = header.GetComponent<Image>();
-            if (headerBackground != null)
-                headerBackground.enabled = false;
-
-            avatarPortrait = PvpUiFactory.CreateAvatar(
-                header, "Account Portrait Root", PvpUiFactory.Arcane);
-            RectTransform avatarRoot = (RectTransform)avatarPortrait.transform.parent;
-            PvpUiFactory.SetAnchors(
-                avatarRoot, new Vector2(-0.012f, -0.28f), new Vector2(0.17f, 1.28f));
-            ConfigureAvatarFrame(avatarRoot, avatarPortrait);
-            Image portraitGlow = avatarRoot.Find("Glow")?.GetComponent<Image>();
-            if (portraitGlow != null)
-            {
-                portraitGlow.name = "Account Portrait Glow";
-                portraitGlow.color = new Color(0.48f, 0.12f, 0.82f, 0.34f);
-            }
-            if (fallbackAvatar != null)
-            {
-                avatarPortrait.sprite = fallbackAvatar;
-                avatarPortrait.color = Color.white;
-                avatarPortrait.enabled = true;
-            }
-
-            playerText = PvpUiFactory.CreateTitleText(header, "Player", username, 31, TextAnchor.LowerLeft);
-            playerText.name = "Account Name";
-            playerText.color = new Color(0.96f, 0.9f, 0.78f, 1f);
-            PvpUiFactory.SetAnchors((RectTransform)playerText.transform, new Vector2(0.18f, 0.54f), new Vector2(0.72f, 0.94f));
-
-            levelText = PvpUiFactory.CreateTitleText(
-                header, "Account Level", "Lv. --", 24, TextAnchor.MiddleLeft);
-            levelText.color = new Color(0.73f, 0.38f, 0.95f, 1f);
-            PvpUiFactory.SetAnchors(
-                (RectTransform)levelText.transform, new Vector2(0.18f, 0.12f), new Vector2(0.26f, 0.48f));
-
-            xpBar = PvpUiFactory.CreateProgressBar(
-                header, "Account Banner XP Back", new Color(0.52f, 0.18f, 0.84f, 0.92f), 20);
-            PvpUiFactory.SetAnchors(xpBar.Root, new Vector2(0.26f, 0.19f), new Vector2(0.57f, 0.42f));
-            Image xpBack = xpBar.Root.GetComponent<Image>();
-            if (xpBack != null)
-                xpBack.color = new Color(0.03f, 0.018f, 0.055f, 0.86f);
-            if (xpBar.Fill != null)
-                xpBar.Fill.name = "Account Banner XP Fill";
-            if (xpBar.Label != null)
-            {
-                xpBar.Label.name = "Account XP Text";
-                xpBar.Label.color = new Color(0.92f, 0.86f, 0.98f, 1f);
-            }
-            xpBar.SetValue(0f, "EXP in aggiornamento...");
-
-            leagueText = PvpUiFactory.CreateText(
-                header, "League", "Lega in aggiornamento...", 18, TextAnchor.UpperLeft, FontStyle.Normal);
-            leagueText.color = Color.clear;
-            PvpUiFactory.SetAnchors((RectTransform)leagueText.transform, Vector2.zero, Vector2.zero);
-
-            statusText = PvpUiFactory.CreateText(
-                header, "Status", "Connessione...", 13, TextAnchor.UpperLeft, FontStyle.Normal);
-            statusText.color = Color.clear;
-            PvpUiFactory.SetAnchors((RectTransform)statusText.transform, Vector2.zero, Vector2.zero);
-
-            CreateSharedHeaderActionButton(
-                content, "Hub", "UI/SharedHeader/hub_house", () => callbacks.OnClose?.Invoke(),
-                new Vector2(0.80f, 0.883f), new Vector2(0.885f, 0.962f));
-            CreateSharedHeaderActionButton(
-                content, "Settings", "UI/SharedHeader/settings_gear", () => callbacks.OnSettings?.Invoke(),
-                new Vector2(0.90f, 0.883f), new Vector2(0.985f, 0.962f));
+            // L'account header, Settings e Honey Pot sono quelli condivisi dell'Hub.
+            // Il PvP non ne costruisce una seconda copia nel proprio canvas.
+            avatarPortrait = null;
+            playerText = null;
+            levelText = null;
+            xpBar = null;
+            leagueText = null;
+            statusText = null;
 
             // --- Fascia titolo del portale multiplayer ---
             RectTransform titleBand = PvpUiFactory.CreateScreenTitlePanel(
                 content,
-                "Multiplayer Title Band",
-                "MULTIPLAYER",
+                "Arena Title Band",
+                GameText.GetOrFallbackSilent(GameTextKeys.Hub.Arena, "ARENA"),
                 null,
                 48);
             PvpUiFactory.SetAnchors(titleBand, new Vector2(0.08f, 0.785f), new Vector2(0.92f, 0.9f));
@@ -282,19 +221,18 @@ namespace AccardND.PvpUi
             CreateDivisionStars(rankedPanel);
 
             seasonNameText = PvpUiFactory.CreateTitleText(
-                rankedPanel, "Season Name", "STAGIONE IN CORSO", 26, TextAnchor.MiddleLeft);
+                rankedPanel, "Season Name", "STAGIONE IN CORSO", 55, TextAnchor.MiddleLeft);
             MmoUiTheme.StyleAsScreenTitle(seasonNameText);
             seasonNameText.color = PvpUiFactory.Violet;
             PvpUiFactory.SetAnchors((RectTransform)seasonNameText.transform, new Vector2(0.51f, 0.845f), new Vector2(0.98f, 0.945f));
-            AddRankInfoIcon(rankedPanel);
 
             countdownText = PvpUiFactory.CreateText(
-                rankedPanel, "Countdown", "Durata stagione in aggiornamento", 22, TextAnchor.MiddleLeft, FontStyle.Normal);
+                rankedPanel, "Countdown", "Durata stagione in aggiornamento", 35, TextAnchor.MiddleLeft, FontStyle.Normal);
             countdownText.color = PvpUiFactory.TextMuted;
             PvpUiFactory.SetAnchors((RectTransform)countdownText.transform, new Vector2(0.51f, 0.79f), new Vector2(0.98f, 0.875f));
 
             Text rankCaption = PvpUiFactory.CreateLabel(
-                rankedPanel, "Rank Caption", "IL TUO RANK", 18, TextAnchor.LowerLeft);
+                rankedPanel, "Rank Caption", "IL TUO RANK", 35, TextAnchor.LowerLeft);
             PvpUiFactory.SetAnchors((RectTransform)rankCaption.transform, new Vector2(0.51f, 0.73f), new Vector2(0.98f, 0.8f));
 
             globalRankText = PvpUiFactory.CreateValueText(rankedPanel, "Global Rank", "-", 40, TextAnchor.MiddleCenter);
@@ -308,18 +246,39 @@ namespace AccardND.PvpUi
 
             PvpUiFactory.StatRow wins = PvpUiFactory.CreateStatRow(rankedPanel, "Wins Row", "VITTORIE", "-");
             PvpUiFactory.SetAnchors(wins.Root, new Vector2(0.51f, 0.48f), new Vector2(0.98f, 0.57f));
+            wins.Caption.fontSize = 40;
             winsValue = wins.Value;
+            winsValue.fontSize = 40;
             winsValue.alignment = TextAnchor.MiddleCenter;
 
             PvpUiFactory.StatRow played = PvpUiFactory.CreateStatRow(rankedPanel, "Played Row", "PARTITE GIOCATE", "-");
             PvpUiFactory.SetAnchors(played.Root, new Vector2(0.51f, 0.38f), new Vector2(0.98f, 0.47f));
+            played.Caption.fontSize = 40;
             playedValue = played.Value;
+            playedValue.fontSize = 40;
             playedValue.alignment = TextAnchor.MiddleCenter;
 
             PvpUiFactory.StatRow winRate = PvpUiFactory.CreateStatRow(rankedPanel, "Win Rate Row", "WIN RATE", "-");
             PvpUiFactory.SetAnchors(winRate.Root, new Vector2(0.51f, 0.28f), new Vector2(0.98f, 0.37f));
+            winRate.Caption.fontSize = 40;
             winRateValue = winRate.Value;
+            winRateValue.fontSize = 40;
             winRateValue.alignment = TextAnchor.MiddleCenter;
+
+            Button loadout = PvpUiFactory.CreateButton(
+                rankedPanel, "Loadout", "LOADOUT",
+                new Color(0.1f, 0.55f, 0.25f, 0.98f), () => callbacks.OnLoadout?.Invoke(), 30);
+            RectTransform loadoutRect = (RectTransform)loadout.transform;
+            PvpUiFactory.SetAnchors(
+                loadoutRect, new Vector2(0.28f, 0.22f), new Vector2(0.72f, 0.22f));
+            loadoutRect.sizeDelta = new Vector2(0f, 96f);
+            MmoUiTheme.ApplyConfirmButtonStyle(loadout, loadout.GetComponentInChildren<Text>());
+
+            loadoutAvailabilityText = PvpUiFactory.CreateLabel(
+                rankedPanel, "Loadout Availability", string.Empty, 18, TextAnchor.MiddleCenter);
+            PvpUiFactory.SetAnchors(
+                (RectTransform)loadoutAvailabilityText.transform,
+                new Vector2(0.15f, 0.275f), new Vector2(0.85f, 0.325f));
 
             Button playRanked = PvpUiFactory.CreateButton(
                 rankedPanel, "Play Ranked", "GIOCA RANKED",
@@ -337,8 +296,9 @@ namespace AccardND.PvpUi
                 playLabel.alignment = TextAnchor.MiddleCenter;
                 PvpUiFactory.SetAnchors(
                     (RectTransform)playLabel.transform, new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.97f));
+                ((RectTransform)playLabel.transform).anchoredPosition = new Vector2(18f, 0f);
             }
-            AddCrossedSwords(playRanked.transform, new Vector2(0.16f, 0.5f), new Vector2(42f, 54f));
+            AddCrossedSwords(playRanked.transform, new Vector2(0.18f, 0.5f), new Vector2(42f, 54f));
 
             BuildRoomsTab();
 
@@ -364,9 +324,23 @@ namespace AccardND.PvpUi
 
         public void Destroy() => UnityEngine.Object.Destroy(root.gameObject);
 
-        public void SetStatus(string message) => statusText.text = message ?? string.Empty;
+        public void SetStatus(string message)
+        {
+            if (statusText != null)
+                statusText.text = message ?? string.Empty;
+        }
 
-        public void SetPlayerName(string username) => playerText.text = username;
+        public void SetLoadoutAvailability(string message, bool rankedEligible)
+        {
+            loadoutAvailabilityText.text = message ?? string.Empty;
+            loadoutAvailabilityText.color = rankedEligible ? PvpUiFactory.Good : PvpUiFactory.Gold;
+        }
+
+        public void SetPlayerName(string username)
+        {
+            if (playerText != null)
+                playerText.text = username;
+        }
 
         public void SetAccountProgress(SinglePlayerProgressData progress)
         {
@@ -377,8 +351,9 @@ namespace AccardND.PvpUi
             int currentExperience = Mathf.Max(0, progress.accountExperience);
             int experienceToNextLevel = Mathf.Max(1, progress.accountExperienceToNextLevel);
 
-            levelText.text = $"Lv. {level}";
-            xpBar.SetValue(
+            if (levelText != null)
+                levelText.text = $"Lv. {level}";
+            xpBar?.SetValue(
                 Mathf.Clamp01((float)currentExperience / experienceToNextLevel),
                 $"{FormatCount(currentExperience)} / {FormatCount(experienceToNextLevel)}");
         }
@@ -394,8 +369,11 @@ namespace AccardND.PvpUi
             Color accent = PvpUiFactory.TierAccent(profile.tier);
             bool showLeague = profile.ranked && !profile.placement;
 
-            leagueText.text = FormatLeagueLine(profile);
-            leagueText.color = showLeague ? accent : PvpUiFactory.TextMuted;
+            if (leagueText != null)
+            {
+                leagueText.text = FormatLeagueLine(profile);
+                leagueText.color = showLeague ? accent : PvpUiFactory.TextMuted;
+            }
 
             tierText.text = showLeague
                 ? $"{profile.tier} {profile.division}".Trim().ToUpperInvariant()
@@ -872,8 +850,11 @@ namespace AccardND.PvpUi
             Button create = PvpUiFactory.CreateButton(
                 roomsPanel, "Create Room", "CREA STANZA",
                 new Color(0.34f, 0.22f, 0.07f, 0.98f), OpenCreateDialog, 27);
-            PvpUiFactory.SetAnchors(
-                (RectTransform)create.transform, new Vector2(0.04f, 0.03f), new Vector2(0.49f, 0.133f));
+            RectTransform createRect = (RectTransform)create.transform;
+            createRect.anchorMin = createRect.anchorMax = Vector2.zero;
+            createRect.pivot = new Vector2(0.5f, 0.5f);
+            createRect.anchoredPosition = new Vector2(274.5f, 172f);
+            createRect.sizeDelta = new Vector2(467f, 168f);
             StyleFeatureButton(
                 create, 0, "Imposta le regole e invita", new Color(0.88f, 0.78f, 0.62f, 1f));
             MmoUiTheme.StyleAsScreenTitle(create.GetComponentInChildren<Text>());
@@ -881,8 +862,11 @@ namespace AccardND.PvpUi
             Button joinByCode = PvpUiFactory.CreateButton(
                 roomsPanel, "Join With Code", "ENTRA CON CODICE",
                 new Color(0.05f, 0.26f, 0.38f, 0.98f), OpenNativeKeyboard, 26);
-            PvpUiFactory.SetAnchors(
-                (RectTransform)joinByCode.transform, new Vector2(0.51f, 0.03f), new Vector2(0.96f, 0.133f));
+            RectTransform joinByCodeRect = (RectTransform)joinByCode.transform;
+            joinByCodeRect.anchorMin = joinByCodeRect.anchorMax = new Vector2(1f, 0f);
+            joinByCodeRect.pivot = new Vector2(0.5f, 0.5f);
+            joinByCodeRect.anchoredPosition = new Vector2(-274.5f, 172f);
+            joinByCodeRect.sizeDelta = new Vector2(467f, 168f);
             StyleFeatureButton(
                 joinByCode, 1, "Inserisci il codice stanza", new Color(0.66f, 0.82f, 0.9f, 1f));
             MmoUiTheme.StyleAsScreenTitle(joinByCode.GetComponentInChildren<Text>());
@@ -903,7 +887,7 @@ namespace AccardND.PvpUi
             PvpUiFactory.SetAnchors((RectTransform)leave.transform, new Vector2(0.75f, 0.16f), new Vector2(0.97f, 0.84f));
 
             Text listCaption = PvpUiFactory.CreateTitleText(
-                roomsPanel, "List Caption", "STANZE DISPONIBILI", 27, TextAnchor.MiddleLeft);
+                roomsPanel, "List Caption", "STANZE DISPONIBILI", 45, TextAnchor.MiddleLeft);
             MmoUiTheme.StyleAsScreenTitle(listCaption);
             listCaption.color = PvpUiFactory.Gold;
             listCaptionRect = (RectTransform)listCaption.transform;
@@ -947,7 +931,7 @@ namespace AccardND.PvpUi
 
             roomListEmptyText = PvpUiFactory.CreateText(
                 scrollPanel, "Empty Hint", "Nessuna stanza aperta: creane una tu.",
-                20, TextAnchor.MiddleCenter, FontStyle.Normal);
+                45, TextAnchor.MiddleCenter, FontStyle.Normal);
             roomListEmptyText.color = PvpUiFactory.TextMuted;
             roomListEmptyText.raycastTarget = false;
             PvpUiFactory.Stretch((RectTransform)roomListEmptyText.transform, 20f, 10f);
@@ -1105,19 +1089,28 @@ namespace AccardND.PvpUi
             Button confirm = PvpUiFactory.CreateButton(
                 dialog, "Confirm Create", "APRI LA STANZA", new Color(0.08f, 0.38f, 0.32f, 0.98f), ConfirmCreate, 24);
             PvpUiFactory.SetAnchors((RectTransform)confirm.transform, new Vector2(0.51f, 0.04f), new Vector2(0.94f, 0.15f));
+            MmoUiTheme.ApplyConfirmButtonStyle(confirm);
         }
 
         // ---------- Schede ----------
 
+        public void ShowRankedTab()
+        {
+            SwitchTab(TabRanked);
+        }
+
         private void SwitchTab(string tab)
         {
+            bool returningToRanked = currentTab != TabRanked && tab == TabRanked;
             currentTab = tab;
             bool ranked = tab == TabRanked;
             rankedPanel.gameObject.SetActive(ranked);
             roomsPanel.gameObject.SetActive(!ranked);
             PvpUiFactory.SetTabActive(rankedTab, ranked);
             PvpUiFactory.SetTabActive(roomsTab, !ranked);
-            if (!ranked)
+            if (returningToRanked)
+                callbacks.OnRefreshProfile?.Invoke();
+            else if (!ranked)
                 RequestRooms();
         }
 
@@ -1354,6 +1347,8 @@ namespace AccardND.PvpUi
 
         private void ApplyAvatar(string iconId, Color accent)
         {
+            if (avatarPortrait == null)
+                return;
             Sprite artwork = iconArtwork?.Invoke(iconId) ?? fallbackAvatar;
             avatarPortrait.sprite = artwork;
             avatarPortrait.enabled = artwork != null;

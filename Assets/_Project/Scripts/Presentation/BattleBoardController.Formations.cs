@@ -17,25 +17,30 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
-	private List<CardDefinition> DrawMonsterFormationForCurrentTier()
+	private List<CardDefinition> DrawMonsterFormationForCurrentDifficulty()
 	{
 		int formationSize = configuration.Gameplay.FormationSize;
-		List<CardDefinition> monsterPoolForTier = GetMonsterPoolForTier(currentMonsterTier);
-		int num = currentMonsterTier;
-		List<CardDefinition> list = ((num <= 1) ?TryDrawNoAuraMonsterFormation(monsterPoolForTier, formationSize) : ((num >= 4) ?TryDrawSynergyMonsterFormation(monsterPoolForTier, formationSize, preferClassAura: true) : ((num != 3) ?null : TryDrawSynergyMonsterFormation(monsterPoolForTier, formationSize, preferClassAura: false))));
+		List<CardDefinition> monsterPool = GetMonsterPoolForDifficulty(pendingRoomDifficulty);
+		// Ogni stanza mostro puo' attivare un'aura: cambia solo quale viene premiata dal
+		// punteggio, non il fatto che ci sia.
+		List<CardDefinition> list = TryDrawSynergyMonsterFormation(
+			monsterPool,
+			formationSize,
+			preferClassAura: pendingRoomDifficulty == RoomDifficulty.Hard);
 		List<CardDefinition> list2 = list;
 		if (list2 != null)
 		{
-			return ApplyChapterOnePreMinibossPowerCap(list2, monsterPoolForTier, formationSize);
+			return ApplyChapterOnePreMinibossPowerCap(list2, monsterPool, formationSize);
 		}
-		if (monsterPoolForTier.Count >= formationSize)
+		if (monsterPool.Count >= formationSize)
 		{
-			list2 = DrawWeightedMonsterCandidates(monsterPoolForTier, formationSize, currentMonsterTier);
-			return ApplyChapterOnePreMinibossPowerCap(list2, monsterPoolForTier, formationSize);
+			list2 = DrawWeightedMonsterCandidates(monsterPool, formationSize, pendingRoomDifficulty);
+			return ApplyChapterOnePreMinibossPowerCap(list2, monsterPool, formationSize);
 		}
-		AppendLog($"MOSTRI TIER {currentMonsterTier} FALLBACK - pool insufficiente ({monsterPoolForTier.Count}/{formationSize}).");
-		List<CardDefinition> list3 = cardDatabase.Cards.Where((CardDefinition card) => (Object)(object)card != (Object)null && card.Category == CardCategory.Monster && card.CanEnterCombat).ToList();
-		list2 = DrawWeightedMonsterCandidates(list3, Mathf.Min(formationSize, list3.Count), currentMonsterTier);
+		AppendLog($"MOSTRI {RoomDifficultyRules.For(pendingRoomDifficulty).DisplayName.ToUpperInvariant()} FALLBACK - pool insufficiente ({monsterPool.Count}/{formationSize}).");
+		int maximumCardStrength = RoomDifficultyRules.For(pendingRoomDifficulty).MaximumMonsterCardStrength;
+		List<CardDefinition> list3 = cardDatabase.Cards.Where((CardDefinition card) => (Object)(object)card != (Object)null && card.Category == CardCategory.Monster && card.CanEnterCombat && card.Strength <= maximumCardStrength).ToList();
+		list2 = DrawWeightedMonsterCandidates(list3, Mathf.Min(formationSize, list3.Count), pendingRoomDifficulty);
 		return ApplyChapterOnePreMinibossPowerCap(list2, list3, formationSize);
 	}
 
@@ -61,7 +66,8 @@ public sealed partial class BattleBoardController
 			List<CardDefinition> allMonsters = cardDatabase.Cards
 				.Where(card => (Object)(object)card != (Object)null
 					&& card.Category == CardCategory.Monster
-					&& card.CanEnterCombat)
+					&& card.CanEnterCombat
+					&& card.Strength <= RoomDifficultyRules.For(pendingRoomDifficulty).MaximumMonsterCardStrength)
 				.ToList();
 			candidates = BuildFormationCandidates(allMonsters, formationSize)
 				.Where(candidate => candidate.Sum(card => card.Strength) <= maximumPower)
@@ -84,26 +90,22 @@ public sealed partial class BattleBoardController
 	{
 		if (survivingCpuFormation.Count == 0)
 		{
-			return DrawMonsterFormationForCurrentTier();
+			return DrawMonsterFormationForCurrentDifficulty();
 		}
 		return new List<CardDefinition>(survivingCpuFormation);
 	}
 
-	private List<CardDefinition> GetMonsterPoolForTier(int tier)
+	private List<CardDefinition> GetMonsterPoolForDifficulty(RoomDifficulty difficulty)
 	{
 		int minimumStrength;
 		int maximumStrength;
-		switch (Mathf.Clamp(tier, 1, 4))
+		switch (difficulty)
 		{
-		case 1:
-			minimumStrength = 2;
-			maximumStrength = 4;
-			break;
-		case 2:
+		case RoomDifficulty.Easy:
 			minimumStrength = 2;
 			maximumStrength = 6;
 			break;
-		case 3:
+		case RoomDifficulty.Normal:
 			minimumStrength = 4;
 			maximumStrength = 8;
 			break;
@@ -112,19 +114,8 @@ public sealed partial class BattleBoardController
 			maximumStrength = 10;
 			break;
 		}
+		maximumStrength = Mathf.Min(maximumStrength, RoomDifficultyRules.For(pendingRoomDifficulty).MaximumMonsterCardStrength);
 		return cardDatabase.Cards.Where((CardDefinition card) => (Object)(object)card != (Object)null && card.Category == CardCategory.Monster && card.CanEnterCombat && card.Strength >= minimumStrength && card.Strength <= maximumStrength).ToList();
-	}
-
-	private List<CardDefinition> TryDrawNoAuraMonsterFormation(List<CardDefinition> pool, int count)
-	{
-		if (count != 3 || pool.Count < count)
-		{
-			return null;
-		}
-		List<List<CardDefinition>> candidates = (from formation in BuildFormationCandidates(pool, count)
-			where DetermineAura(formation) == BattleAuraType.None
-			select formation).ToList();
-		return PickScoredFormation(candidates, (List<CardDefinition> formation) => -formation.Sum((CardDefinition card) => card.Strength));
 	}
 
 	private List<CardDefinition> TryDrawSynergyMonsterFormation(List<CardDefinition> pool, int count, bool preferClassAura)
@@ -145,7 +136,7 @@ public sealed partial class BattleBoardController
 		});
 	}
 
-	private List<CardDefinition> DrawWeightedMonsterCandidates(List<CardDefinition> pool, int count, int tier)
+	private List<CardDefinition> DrawWeightedMonsterCandidates(List<CardDefinition> pool, int count, RoomDifficulty difficulty)
 	{
 		if (pool.Count <= count)
 		{
@@ -155,11 +146,11 @@ public sealed partial class BattleBoardController
 		List<CardDefinition> list2 = new List<CardDefinition>(count);
 		while (list2.Count < count && list.Count > 0)
 		{
-			int val = list.Sum((CardDefinition card) => MonsterTierWeight(card, tier));
+			int val = list.Sum((CardDefinition card) => MonsterDifficultyWeight(card, difficulty));
 			int num = random.NextInclusive(1, Math.Max(1, val));
 			for (int num2 = 0; num2 < list.Count; num2++)
 			{
-				num -= MonsterTierWeight(list[num2], tier);
+				num -= MonsterDifficultyWeight(list[num2], difficulty);
 				if (num <= 0)
 				{
 					list2.Add(list[num2]);
@@ -171,14 +162,13 @@ public sealed partial class BattleBoardController
 		return list2;
 	}
 
-	private static int MonsterTierWeight(CardDefinition card, int tier)
+	private static int MonsterDifficultyWeight(CardDefinition card, RoomDifficulty difficulty)
 	{
 		int num = Mathf.Clamp(card.Strength, 1, 10);
-		return Mathf.Clamp(tier, 1, 4) switch
+		return difficulty switch
 		{
-			1 => 12 - num, 
-			2 => 8 + Math.Abs(4 - num) * -1, 
-			3 => num, 
+			RoomDifficulty.Easy => 8 + Math.Abs(4 - num) * -1,
+			RoomDifficulty.Normal => num,
 			_ => num * num, 
 		};
 	}

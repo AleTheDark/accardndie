@@ -3,6 +3,7 @@
   "rootNamespace": "AccardND.Presentation",
   "references": [
     "AccardND.Ads",
+    "AccardND.Iap",
     "AccardND.GameCore",
     "AccardND.GameData",
     "AccardND.Localization",

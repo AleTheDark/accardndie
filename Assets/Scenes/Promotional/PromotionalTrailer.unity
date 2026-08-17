@@ -241,9 +241,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: AccardND.Presentation::AccardND.Presentation.PromotionalSequenceController
   backgrounds:
-  - {fileID: 21300000, guid: 4719d6413334a8e4bb9575fac964f578, type: 3}
-  - {fileID: 21300000, guid: b35898af8f8551d41b3d820af873f0b0, type: 3}
-  - {fileID: 21300000, guid: 4719d6413334a8e4bb9575fac964f578, type: 3}
+  - {fileID: 21300000, guid: 94b16812bc0f965498f46cbb9005c9fa, type: 3}
+  - {fileID: 21300000, guid: 94b16812bc0f965498f46cbb9005c9fa, type: 3}
+  - {fileID: 21300000, guid: 94b16812bc0f965498f46cbb9005c9fa, type: 3}
   bosses:
   - {fileID: 21300000, guid: 7de3e61986ec4098bd62b619f4de3ed3, type: 3}
   - {fileID: 21300000, guid: 18feb9d7ee924206a8314e5b50cf695d, type: 3}

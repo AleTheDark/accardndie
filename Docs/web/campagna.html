@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<!-- La campagna: struttura di una run e i sette capitoli.
+     Tutti i numeri qui sotto vengono da due posti, e vanno riletti da la' se cambia il
+     bilanciamento:
+     - Assets/_Project/Resources/GameConfiguration.asset, sezione progression (stanze,
+       livelli, esperienza) e MerchantEconomy in GameCore/CombatResult.cs (l'oro);
+     - Assets/_Project/Scripts/GameData/AdventureChapterCatalog.cs per i capitoli, gli
+       scenari, i boss e le classi premio. La gemella sul server e'
+       Server/AccardND.Server/Progression/ChapterCatalog.cs.
+     La colonna "stato" segue il catalogo del CLIENT, perche' e' quello che decide cosa il
+     giocatore vede selezionabile nella schermata Avventura.
+     Le illustrazioni dei boss sono ridotte da gen-media.py. -->
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La campagna — AcCard N' Die</title>
+<meta name="description" content="Come è fatta una run di AcCard N' Die: venti stanze, tre porte per volta, miniboss e boss, i sei livelli del Vigore e i sette capitoli con i loro scenari e le classi premio.">
+<link rel="canonical" href="https://accardndie.com/campagna">
+<link rel="stylesheet" href="site.css?v=8019aee5">
+<link rel="apple-touch-icon" href="media/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3580486749764055" crossorigin="anonymous"></script>
+<script src="site.js?v=49ec8cb4" defer></script>
+</head>
+<body>
+
+<nav class="nav"><div class="wrap">
+  <a class="brand" href="/">AcCard N' Die</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu-links" hidden>Menu</button>
+  <div class="menu-links" id="menu-links">
+    <a href="/guida">Come si gioca</a>
+    <a href="/strategia">Strategia</a>
+    <a href="/classi">Le nove classi</a>
+    <a href="/carte">Database carte</a>
+    <a href="/campagna" aria-current="page">Campagna</a>
+    <a href="/duelli">Duelli</a>
+    <a href="/hall-of-fame">Hall of Fame</a>
+  </div>
+  <a class="nav-play" data-play data-play-label="Scarica" href="/game/">Gioca</a>
+</div></nav>
+
+<header class="band band-testata">
+  <div class="wrap">
+    <h1>La campagna</h1>
+    <p class="lead">Una run è un percorso di <strong>venti stanze</strong> con un boss in
+    fondo. Il mazzo si compra all'inizio e si perde alla fine; quello che resta è il miele, le
+    classi e i punti talento. Questa pagina spiega com'è fatto quel percorso e cosa aspettarsi
+    capitolo per capitolo.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<h2>Com'è fatta una run</h2>
+
+<p>Si comincia componendo il mazzo: nove carte, di cui scegli solo il <strong>campione</strong>
+(il 10 della classe che indichi) e il <strong>vice</strong> (il 9) — le altre sette escono a caso,
+come spiegato in <a href="/guida">Come si gioca</a>. Poi si entra, e da lì in
+avanti la run è una sequenza di stanze con una scelta a ogni passo: <strong>tre porte</strong>,
+e non sai cosa c'è dietro, a meno che tu non abbia un Detector in bisaccia.</p>
+
+<div class="scroll">
+<table>
+  <caption>Le stanze che si possono incontrare.</caption>
+  <tr><th>Stanza</th><th>Cosa succede</th><th>Esperienza</th></tr>
+  <tr><td><strong>Mostri</strong></td>
+      <td>Uno scontro: schieri tre carte contro tre della stanza.</td><td>10</td></tr>
+  <tr><td><strong>Mercante</strong></td>
+      <td>Due carte in vista, una coperta a prezzo ridotto, i consumabili, il banco per
+          potenziare, quello per recuperare una carta caduta e quello per vendere.</td>
+      <td>—</td></tr>
+  <tr><td><strong>Bottino</strong></td>
+      <td>Consegna consumabili e una carta di riserva.</td><td>10</td></tr>
+  <tr><td><strong>Prova lampo</strong></td>
+      <td>Una sfida breve. Non dà esperienza di base, ma può pagare un premio di
+          <strong>50</strong>.</td><td>0 / 50</td></tr>
+  <tr><td><strong>Miniboss</strong> — stanza 10</td>
+      <td>Un avversario singolo più duro di una stanza normale.</td><td>50</td></tr>
+  <tr><td><strong>Boss</strong> — stanza 20</td>
+      <td>Il boss del capitolo. Batterlo chiude il capitolo.</td><td>—</td></tr>
+</table>
+</div>
+
+<p>Il mazzo non resta quello di partenza: fra le stanze si compra dal mercante con l'oro
+raccolto combattendo, e può crescere <strong>fino a dodici carte</strong>. Una stanza di mostri
+paga dai 6 ai 24 pezzi d'oro secondo quanto è avanti la run e quanto era dura; un miniboss
+paga da 24 a 40.</p>
+
+<h2>I sei livelli, e perché la seconda metà è un altro gioco</h2>
+
+<p>Dentro la run si sale di livello con l'esperienza, e il livello fa una cosa sola ma
+enorme: <strong>cambia il dado</strong>.</p>
+
+<div class="scroll">
+<table class="grid">
+  <caption>I livelli di una run e il Vigore che portano.</caption>
+  <tr><th class="rowhead">Livello</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th></tr>
+  <tr><th class="rowhead">Vigore</th><td>D4</td><td>D6</td><td>D8</td><td>D10</td><td>D12</td><td>D20</td></tr>
+  <tr><th class="rowhead">Esperienza per il livello dopo</th><td>50</td><td>75</td><td>100</td><td>125</td><td>150</td><td>—</td></tr>
+</table>
+</div>
+
+<p>Sono 500 punti di esperienza per arrivare in cima, e una stanza di mostri ne paga 10: il
+livello massimo non è una cosa che capita, è una cosa che si costruisce prendendo le stanze
+giuste. Il miniboss della stanza 10, da solo, ne vale <strong>cinque</strong>.</p>
+
+<div class="box">
+  <p><strong>Il salto che conta.</strong> Fra il D12 e il D20 non c'è il D16: passare al sesto
+  livello alza la media del tiro di <strong>quattro punti</strong>, mentre ogni altro livello ne
+  alza uno. È anche il motivo per cui, arrivati là, ogni effetto che abbassa il dado di uno
+  scalino diventa quattro volte più pericoloso di prima — il conto completo è in
+  <a href="/strategia">Strategia</a>.</p>
+</div>
+
+<p>Nello stesso tempo cambiano gli avversari, in due modi. Il primo: la stanza pesca fra tre
+difficoltà, e i pesi si spostano man mano.</p>
+
+<div class="scroll">
+<table>
+  <caption>Le tre difficoltà delle stanze di mostri.</caption>
+  <tr><th>Difficoltà</th><th>Potenza dello schieramento nemico</th><th>Carta più alta</th><th>Cosa fa il nemico</th></tr>
+  <tr><td><strong>Accessibile</strong></td><td>6–20</td><td>8</td>
+      <td>Usa abilità e mana, parte con 1 mana.</td></tr>
+  <tr><td><strong>Normale</strong></td><td>6–25</td><td>9</td>
+      <td>Come sopra, ma parte con 2 mana.</td></tr>
+  <tr><td><strong>Diabolica</strong></td><td>24–30</td><td>10</td>
+      <td>Parte con 4 mana e <strong>usa anche le supreme</strong>. In compenso lascia una
+          carta come bottino.</td></tr>
+</table>
+</div>
+
+<p>Nelle prime dieci stanze del primo capitolo le Diaboliche non escono affatto; dalla stanza
+11 in poi compaiono, e più avanti è lo scenario più diventano la norma — nell'ultimo scenario
+della campagna, nella seconda metà della run, sono <strong>l'unica cosa che esce</strong>. Il
+secondo modo è più silenzioso: il livello dell'avversario cresce ogni cinque stanze, per conto
+suo, indipendentemente da quanta esperienza hai fatto tu. Restare indietro col livello non
+rallenta il gioco: lo rende più ripido.</p>
+
+<h2>I sette capitoli</h2>
+
+<p>La campagna è divisa in sette capitoli, e non sono sette varianti della stessa cosa: ognuno
+ha uno <strong>scenario</strong>, che è un ambiente con una regola sua, un <strong>boss</strong>
+alla fine e una <strong>classe</strong> in premio.</p>
+
+<div class="scroll">
+<table>
+  <caption>I capitoli, i loro boss e cosa consegnano.</caption>
+  <tr><th>Capitolo</th><th>Scenario</th><th>Boss</th><th>Classe in premio</th>
+      <th>Esperienza account</th><th>Stato</th></tr>
+  <tr><td>1 · I Rampicanti di Trentor</td><td>Rampicanti</td><td>Trentor</td>
+      <td><a href="/classi">Hunter</a></td><td>100%</td><td>si gioca</td></tr>
+  <tr><td>2 · La Nebbia di Bragus</td><td>Nebbia</td><td>Bragus</td>
+      <td><a href="/classi">Barbarian</a></td><td>120%</td><td>si gioca</td></tr>
+  <tr><td>3 · L'Infestazione di Jurinashor</td><td>Infestata</td><td>Jurinashor</td>
+      <td><a href="/classi">Necromancer</a></td><td>140%</td><td>si gioca</td></tr>
+  <tr><td>4 · La Luce di Seraphel</td><td>Illuminata</td><td>Seraphel</td>
+      <td><a href="/classi">Paladin</a></td><td>160%</td><td>si gioca</td></tr>
+  <tr><td>5</td><td>—</td><td>—</td><td><a href="/classi">Assassin</a></td><td>180%</td>
+      <td>in arrivo</td></tr>
+  <tr><td>6</td><td>—</td><td>—</td><td><a href="/classi">Priest</a></td><td>200%</td>
+      <td>in arrivo</td></tr>
+  <tr><td>7 · La Cosmica di Palatir</td><td>Cosmica</td><td>Palatir</td>
+      <td>— (dadi cosmetici)</td><td>250%</td><td>si gioca</td></tr>
+</table>
+</div>
+
+<div class="box">
+  <p><strong>AcCard N' Die è in sviluppo.</strong> Tutti e sette i capitoli sono già scritti
+  nel gioco con i loro identificativi definitivi, ma i boss del 5 e del 6 non ci sono ancora:
+  nella schermata Avventura quei due capitoli si vedono segnati come in arrivo. Scenari, boss e
+  premi dei capitoli mancanti possono ancora cambiare — quando cambiano, cambia anche questa
+  pagina.</p>
+</div>
+
+<h3>L'esperienza account: perché non è la stessa in tutti i capitoli</h3>
+
+<p>L'ultima colonna della tabella è la leva che rende la campagna una progressione invece di
+una collezione di boss. Una run giocata nel primo capitolo paga l'esperienza account al 100%;
+la stessa run nel settimo la paga al <strong>250%</strong>. Battere un boss non apre solo il
+capitolo dopo: alza il ritmo di <em>tutto</em> quello che giocherai da lì in avanti, perché il
+livello account è quello che distribuisce i punti dell'<a href="/rifugio">albero dei
+talenti</a>.</p>
+
+<p>La prima uccisione del boss di un capitolo vale in più <strong>3 punti talento</strong>,
+una tantum e non ripetibili: rigiocare un capitolo continua a dare esperienza, ma i punti li
+paga solo la prima volta. Sui sette capitoli fanno 21 punti, e sono la sola sorgente di punti
+che non dipende da quanto hai giocato.</p>
+
+<h3>Le classi in premio, e l'altra strada</h3>
+
+<p>Sei capitoli su sette consegnano una classe. Non è l'unico modo di averla: le classi si
+comprano anche al <a href="/rifugio">Santuario</a> col miele, da 40 a 60 secondo la classe.
+Chi arriva in fondo al capitolo non paga; chi non ci arriva può prenderla dall'altare. Chi
+l'aveva già comprata non riceve niente e non perde niente.</p>
+
+<h2>Gli scenari: l'ambiente è una regola</h2>
+
+<p>Uno scenario non è uno sfondo. Ognuno porta un malus che vale per tutta la stanza e per
+tutta la run, e ognuno ha <strong>un solo boss</strong> associato: scoprire lo scenario
+significa sapere già chi ci sarà in fondo. Il gioco lo dice con un indizio, mai con un nome.</p>
+
+<ul>
+  <li><strong>Infestata</strong> — «I morti qui non rispondono solo a te.» L'abilità del
+      Necromancer non funziona. È il capitolo che <em>regala</em> il Necromancer: lo vinci
+      senza poterlo usare.</li>
+  <li><strong>Illuminata</strong> — «Nessuna lama resta nascosta sotto questa luce.»</li>
+  <li><strong>Specchi</strong> — «Ogni forza riflessa torna contro chi la mostra.» I Warrior non
+      possono usare l'abilità.</li>
+  <li><strong>Esalazioni Tossiche</strong> — «L'aria corrompe ogni benedizione.» La benedizione
+      del Priest scende a +1.</li>
+  <li><strong>Spettrale</strong> — «La rabbia non trova presa contro ciò che non ha carne.»</li>
+  <li><strong>Arcobaleno</strong> — «Il potere si spezza in colori imprevedibili.» Contro
+      miniboss e boss l'unica aura che si accende è quella di Formazione.</li>
+  <li><strong>Nebbia</strong> — schieri tutte e tre le carte per primo, quindi l'avversario
+      compone il suo schieramento sapendo già il tuo.</li>
+</ul>
+
+<p>La grotta normale, che è lo scenario di default, non applica niente e pesca il boss finale
+dalla pool completa. Non tutti gli scenari qui sopra sono già assegnati a un capitolo: alcuni
+esistono come ambiente e aspettano il loro boss.</p>
+
+<h2>I boss</h2>
+
+<p>Un boss è una pedina sola contro le tue tre, e non è un mostro più grosso: ha un
+comportamento suo, e nel caso di Seraphel <strong>due fasi</strong> con due forme diverse.</p>
+
+<div class="cardstrip">
+  <figure class="cardart">
+    <img src="media/boss/boss_trentor_card.webp" width="480" height="480" alt="Trentor, boss del primo capitolo">
+    <figcaption><b>Trentor</b> Capitolo 1</figcaption>
+  </figure>
+  <figure class="cardart">
+    <img src="media/boss/boss_bragus.webp" width="480" height="853" loading="lazy" alt="Bragus, boss del secondo capitolo">
+    <figcaption><b>Bragus</b> Capitolo 2</figcaption>
+  </figure>
+  <figure class="cardart">
+    <img src="media/boss/boss_jurinashor_phase_1.webp" width="480" height="480" loading="lazy" alt="Jurinashor, boss del terzo capitolo">
+    <figcaption><b>Jurinashor</b> Capitolo 3</figcaption>
+  </figure>
+  <figure class="cardart">
+    <img src="media/boss/boss_seraphel_phase_1.webp" width="480" height="800" loading="lazy" alt="Seraphel, prima fase">
+    <figcaption><b>Seraphel</b> Capitolo 4, prima fase</figcaption>
+  </figure>
+  <figure class="cardart">
+    <img src="media/boss/boss_seraphel_phase_2.webp" width="480" height="800" loading="lazy" alt="Seraphel, seconda fase">
+    <figcaption><b>Seraphel</b> Capitolo 4, seconda fase</figcaption>
+  </figure>
+  <figure class="cardart">
+    <img src="media/boss/boss_palatir.webp" width="480" height="480" loading="lazy" alt="Palatir, boss che chiude la campagna">
+    <figcaption><b>Palatir</b> Capitolo 7</figcaption>
+  </figure>
+  <figure class="cardart">
+    <img src="media/boss/boss_medusa_card.webp" width="480" height="480" loading="lazy" alt="Medusa, miniboss">
+    <figcaption><b>Medusa</b> Miniboss</figcaption>
+  </figure>
+</div>
+
+<p>Contro un boss cambiano due cose che altrove non contano. La prima: l'aura
+<strong>Hunter</strong> non consuma il marchio sui boss, quindi ogni attacco successivo se lo
+ritrova pronto — contro un boss l'Hunter smette di preparare e diventa un moltiplicatore
+permanente. La seconda: il nodo <em>Sfidante</em> dell'albero dei talenti dà Potenza in più al
+primo attacco di ogni scontro contro un boss o un miniboss, e in una run se ne incontrano due.</p>
+
+<h2>Cosa resta quando la run finisce</h2>
+
+<p>Le run finiscono, e finiscono spesso: il mazzo si perde e l'oro si perde. Quello che
+attraversa la morte è tutto fuori dalla run:</p>
+
+<ul>
+  <li><strong>L'esperienza account</strong>, moltiplicata per il capitolo in cui hai giocato.</li>
+  <li><strong>I punti talento</strong> che quei livelli hanno distribuito.</li>
+  <li><strong>Il capitolo sbloccato e la classe</strong>, se hai battuto il boss.</li>
+  <li><strong>I contatori</strong> che alimentano le quest della taverna — miniboss battuti,
+      dadi tirati, abilità usate, oro guadagnato: sono quelli che poi diventano miele.</li>
+</ul>
+
+<p>Il miele, invece, non arriva da qui: la fine di una run non ne paga, e l'unica fonte sono le
+quest giornaliere. È spiegato nel <a href="/rifugio">rifugio</a>, insieme a dove si spende.</p>
+
+<h2>Da dove continuare</h2>
+
+<ul>
+  <li><a href="/guida">Come si gioca</a> — il regolamento completo.</li>
+  <li><a href="/strategia">Strategia</a> — cosa conviene fare, con i conti.</li>
+  <li><a href="/rifugio">Il rifugio</a> — taverna, negozio, Santuario, talenti.</li>
+  <li><a href="/duelli">I duelli online</a> — l'altra modalità, con le stesse regole.</li>
+</ul>
+
+</main>
+
+<footer class="site"><div class="wrap">
+  <p><a href="/game/">Gioca</a> · <a href="/guida">Come si gioca</a> ·
+     <a href="/strategia">Strategia</a> · <a href="/classi">Le nove classi</a> ·
+     <a href="/carte">Database carte</a> · <a href="/campagna">Campagna</a> ·
+     <a href="/duelli">Duelli</a> · <a href="/rifugio">Il rifugio</a> ·
+     <a href="/faq">Domande frequenti</a> ·
+     <a href="/hall-of-fame">Hall of Fame</a> · <a href="/statistiche">Statistiche</a></p>
+  <p><a href="/chi-siamo">Chi siamo</a> · <a href="/contatti">Contatti</a> ·
+     <a href="/privacy">Privacy</a> · <a href="/account/delete">Cancellazione account</a></p>
+  <p><a href="https://www.youtube.com/@accardndie" rel="noopener">YouTube</a> ·
+     <a href="https://www.instagram.com/accardndie/" rel="noopener">Instagram</a> ·
+     <a href="https://www.tiktok.com/@accardndie" rel="noopener">TikTok</a></p>
+  <p>AcCard N' Die</p>
+</div></footer>
+
+</body>
+</html>

@@ -30,6 +30,7 @@ namespace AccardND.Battlefield
         private AudioClip necromancerJoinBattlefieldSfx;
         private AudioClip priestJoinBattlefieldSfx;
         private AudioClip deathCardSfx;
+        private AudioClip loseFirstHpSfx;
         private AudioClip attachmentSfx;
         private AudioClip assassinAbilitySfx;
         private AudioClip mageAbilitySfx;
@@ -40,6 +41,10 @@ namespace AccardND.Battlefield
         private AudioClip warriorAbilitySfx;
         private AudioClip warriorSupremeSfx;
         private AudioClip mageSupremeSfx;
+        private AudioClip barbarianSupremeSfx;
+        private AudioClip assassinSupremeSfx;
+        private AudioClip priestSupremeSfx;
+        private AudioClip necromancerSupremeSfx;
         private AudioClip assassinAttackHitSfx;
         private AudioClip assassinAttackBlockedSfx;
         private AudioClip warriorAttackHitSfx;
@@ -160,6 +165,8 @@ namespace AccardND.Battlefield
 
         public void PlayDeath() => PlayClip(deathCardSfx);
 
+        public void PlayLoseFirstHp() => PlayClip(loseFirstHpSfx);
+
         public void PlayAttachment() => PlayClip(attachmentSfx);
 
         public void PlayBarbarianFury() => PlayClip(barbarianFurySfx);
@@ -182,7 +189,15 @@ namespace AccardND.Battlefield
 
         public void PlayWarriorSupreme() => PlayClip(warriorSupremeSfx);
 
+        public void PlayBarbarianSupreme() => PlayClip(barbarianSupremeSfx);
+
         public void PlayMageSupreme() => PlayClip(mageSupremeSfx);
+
+        public void PlayAssassinSupreme() => PlayClip(assassinSupremeSfx);
+
+        public void PlayPriestSupreme() => PlayClip(priestSupremeSfx);
+
+        public void PlayNecromancerSupreme() => PlayClip(necromancerSupremeSfx);
 
         public void PlayAttackResult(HeroClass heroClass, bool hit)
         {
@@ -241,6 +256,7 @@ namespace AccardND.Battlefield
             necromancerJoinBattlefieldSfx = LoadSfx("necromancer_hjoin_battlefield");
             priestJoinBattlefieldSfx = LoadSfx("priest_join_battlefield");
             deathCardSfx = LoadSfx("death_card");
+            loseFirstHpSfx = LoadSfx("lose_first_hp");
             attachmentSfx = LoadSfx("attachment");
             assassinAbilitySfx = LoadSfx("assassin_ability");
             mageAbilitySfx = LoadSfx("mage_ability");
@@ -251,6 +267,10 @@ namespace AccardND.Battlefield
             warriorAbilitySfx = LoadSfx("warrior_ability");
             warriorSupremeSfx = LoadSfx("warrior_supreme");
             mageSupremeSfx = LoadSfx("mage_supreme");
+            barbarianSupremeSfx = LoadSfx("barbarian_supreme");
+            assassinSupremeSfx = LoadSfx("assassin_supreme");
+            priestSupremeSfx = LoadSfx("priest_supreme");
+            necromancerSupremeSfx = LoadSfx("necromancer_supreme");
             assassinAttackHitSfx = LoadSfx("assassin_attack_hit");
             assassinAttackBlockedSfx = LoadSfx("assassin_attack_blocked");
             warriorAttackHitSfx = LoadSfx("warrior_attack_hit");

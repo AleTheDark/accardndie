@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using AccardND.GameCore;
+using AccardND.GameData;
 using AccardND.Localization;
 using AccardND.NetProtocol;
 using UnityEngine;
@@ -20,13 +21,7 @@ public sealed partial class BattleBoardController
 	{
 		Classes,
 		Techniques,
-		Relics,
-
-		/// <summary>
-		/// Accesso ai capitoli della campagna. E' l'unico banco dove si comprano: nella
-		/// schermata Avventura un capitolo chiuso si guarda soltanto.
-		/// </summary>
-		Chapters
+		Relics
 	}
 
 	private GameObject sanctuaryPanel;
@@ -80,12 +75,6 @@ public sealed partial class BattleBoardController
 	private GameObject sanctuaryConfirmPopup;
 
 	private Image sanctuaryConfirmDialogImage;
-
-	private Sprite sanctuaryConfirmDialogDefaultSprite;
-
-	private Color sanctuaryConfirmDialogDefaultColor;
-
-	private Image.Type sanctuaryConfirmDialogDefaultType;
 
 	private Text sanctuaryConfirmTitleText;
 
@@ -143,7 +132,7 @@ public sealed partial class BattleBoardController
 			backgroundFitter.aspectRatio = background.sprite.rect.width / Mathf.Max(1f, background.sprite.rect.height);
 		}
 
-		Image backgroundVeil = CreateImage("Sanctuary Background Veil", ((Component)root).transform, new Color(0f, 0.005f, 0.015f, 0.42f));
+		Image backgroundVeil = CreateImage("Sanctuary Background Veil", ((Component)root).transform, new Color(0f, 1f / 255f, 4f / 255f, 0.4196078f));
 		backgroundVeil.raycastTarget = false;
 		SetRect(backgroundVeil.rectTransform, Vector2.zero, Vector2.one);
 
@@ -197,7 +186,6 @@ public sealed partial class BattleBoardController
 		CreateSanctuaryAltarButton(content, font, SanctuaryAltarLabel(SanctuaryAltar.Classes), SanctuaryAltar.Classes);
 		CreateSanctuaryAltarButton(content, font, SanctuaryAltarLabel(SanctuaryAltar.Techniques), SanctuaryAltar.Techniques);
 		CreateSanctuaryAltarButton(content, font, SanctuaryAltarLabel(SanctuaryAltar.Relics), SanctuaryAltar.Relics);
-		CreateSanctuaryAltarButton(content, font, SanctuaryAltarLabel(SanctuaryAltar.Chapters), SanctuaryAltar.Chapters);
 
 		sanctuaryDiscoveryPanelImage = CreateImage("Sanctuary Discovery Summary", content, Color.white);
 		sanctuaryDiscoveryPanelImage.sprite = LoadSpriteResource("UI/Sanctuary/sanctuary_tab_frame_v2");
@@ -388,7 +376,6 @@ public sealed partial class BattleBoardController
 		BindSanctuaryPrefabAltar(SanctuaryAltar.Classes);
 		BindSanctuaryPrefabAltar(SanctuaryAltar.Techniques);
 		BindSanctuaryPrefabAltar(SanctuaryAltar.Relics);
-		BindSanctuaryPrefabAltar(SanctuaryAltar.Chapters);
 
 		sanctuaryConfirmPopup = SanctuaryPrefabObject("Sanctuary Confirm Popup");
 		Image popupOverlay = SanctuaryPrefabComponent<Image>("Sanctuary Confirm Popup");
@@ -403,7 +390,6 @@ public sealed partial class BattleBoardController
 		{
 			sanctuaryConfirmDialogImage.color = new Color(0.012f, 0.018f, 0.032f, 0.98f);
 			StylePanel(sanctuaryConfirmDialogImage);
-			CacheSanctuaryConfirmDialogStyle();
 		}
 		Image confirmCrest = SanctuaryPrefabComponent<Image>("Sanctuary Confirm Crest");
 		if ((Object)(object)confirmCrest != (Object)null)
@@ -466,16 +452,7 @@ public sealed partial class BattleBoardController
 		Button button = SanctuaryPrefabComponent<Button>("Sanctuary Altar " + altar);
 		if ((Object)(object)button == (Object)null)
 		{
-			// L'altare dei Capitoli e' nato dopo il prefab, che ne disegna solo tre. Invece
-			// di rifare l'asset, la scheda mancante si ricava clonando una di quelle che
-			// ci sono: posizione e stile arrivano comunque dal codice, che dispone i tab in
-			// parti uguali su quanti ne trova. Il giorno in cui il prefab avra' anche questa
-			// scheda, verra' usata quella e il clone non nascera'.
-			button = CloneSanctuaryPrefabAltar(altar);
-			if ((Object)(object)button == (Object)null)
-			{
-				return;
-			}
+			return;
 		}
 
 		SanctuaryAltar boundAltar = altar;
@@ -496,43 +473,10 @@ public sealed partial class BattleBoardController
 		AttachSanctuaryAltarVfx(button);
 	}
 
-	/// <summary>
-	/// Crea la scheda di un altare che il prefab non ha, copiando quella delle Classi. Torna
-	/// null se manca anche quella: in quel caso il prefab non e' quello che ci aspettiamo e
-	/// improvvisare peggiorerebbe le cose.
-	/// </summary>
-	private Button CloneSanctuaryPrefabAltar(SanctuaryAltar altar)
-	{
-		Button template = SanctuaryPrefabComponent<Button>("Sanctuary Altar " + SanctuaryAltar.Classes);
-		if ((Object)(object)template == (Object)null)
-		{
-			return null;
-		}
-
-		GameObject clone = Object.Instantiate(
-			((Component)template).gameObject, ((Component)template).transform.parent, false);
-		clone.name = "Sanctuary Altar " + altar;
-		clone.transform.SetSiblingIndex(((Component)template).transform.GetSiblingIndex() + 1);
-
-		Image icon = FindSanctuaryPrefabTransform(clone.transform, "Icon") is Transform iconTransform
-			? ((Component)iconTransform).GetComponent<Image>()
-			: null;
-		if ((Object)(object)icon != (Object)null)
-		{
-			Sprite emblem = LoadSpriteResource(SanctuaryAltarEmblemResource(altar));
-			if ((Object)(object)emblem != (Object)null)
-			{
-				icon.sprite = emblem;
-			}
-		}
-		return clone.GetComponent<Button>();
-	}
-
 	private static string SanctuaryAltarEmblemResource(SanctuaryAltar altar) => altar switch
 	{
 		SanctuaryAltar.Classes => "UI/Sanctuary/sanctuary_classes_emblem_aaa",
 		SanctuaryAltar.Techniques => "UI/Sanctuary/sanctuary_techniques_emblem_aaa",
-		SanctuaryAltar.Chapters => "UI/Sanctuary/sanctuary_chapters_emblem_aaa",
 		_ => "UI/Sanctuary/sanctuary_relics_emblem_aaa"
 	};
 
@@ -587,7 +531,6 @@ public sealed partial class BattleBoardController
 		sanctuaryConfirmDialogImage = CreateImage("Sanctuary Confirm Dialog", ((Component)overlay).transform, new Color(0.012f, 0.018f, 0.032f, 0.98f));
 		sanctuaryConfirmDialogImage.raycastTarget = true;
 		StylePanel(sanctuaryConfirmDialogImage);
-		CacheSanctuaryConfirmDialogStyle();
 		AccardND.Battlefield.MmoUiTheme.AddPanelGem(sanctuaryConfirmDialogImage.rectTransform, "Sanctuary Confirm Crest", new Vector2(0.5f, 1f), new Vector2(42f, 42f), Color.white);
 		SetRect(sanctuaryConfirmDialogImage.rectTransform, new Vector2(0.12f, 0.32f), new Vector2(0.88f, 0.68f));
 
@@ -596,11 +539,13 @@ public sealed partial class BattleBoardController
 		sanctuaryConfirmTitleText.color = SanctuaryGold;
 		SetRect(sanctuaryConfirmTitleText.rectTransform, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.91f));
 
-		sanctuaryConfirmBodyText = CreateText("Sanctuary Confirm Body", ((Component)sanctuaryConfirmDialogImage).transform, font, 30, FontStyle.Bold, TextAnchor.MiddleCenter);
+		sanctuaryConfirmBodyText = CreateText("Sanctuary Confirm Body", ((Component)sanctuaryConfirmDialogImage).transform, font, 40, FontStyle.Bold, TextAnchor.MiddleCenter);
 		sanctuaryConfirmBodyText.color = new Color(0.88f, 0.92f, 0.96f);
 		sanctuaryConfirmBodyText.horizontalOverflow = HorizontalWrapMode.Wrap;
 		sanctuaryConfirmBodyText.verticalOverflow = VerticalWrapMode.Truncate;
-		sanctuaryConfirmBodyText.resizeTextForBestFit = false;
+		sanctuaryConfirmBodyText.resizeTextForBestFit = true;
+		sanctuaryConfirmBodyText.resizeTextMinSize = 18;
+		sanctuaryConfirmBodyText.resizeTextMaxSize = 40;
 		SetRect(sanctuaryConfirmBodyText.rectTransform, new Vector2(0.08f, 0.34f), new Vector2(0.92f, 0.7f));
 		StyleSanctuaryConfirmTypography();
 
@@ -636,17 +581,6 @@ public sealed partial class BattleBoardController
 		SetRect((RectTransform)((Component)sanctuaryConfirmButton).transform, new Vector2(0.56f, 0.1f), new Vector2(0.92f, 0.27f));
 
 		sanctuaryConfirmPopup.SetActive(false);
-	}
-
-	private void CacheSanctuaryConfirmDialogStyle()
-	{
-		if ((Object)(object)sanctuaryConfirmDialogImage == (Object)null)
-		{
-			return;
-		}
-		sanctuaryConfirmDialogDefaultSprite = sanctuaryConfirmDialogImage.sprite;
-		sanctuaryConfirmDialogDefaultColor = sanctuaryConfirmDialogImage.color;
-		sanctuaryConfirmDialogDefaultType = sanctuaryConfirmDialogImage.type;
 	}
 
 	private static void ApplySanctuaryCampaignCta(Button button, string spriteResource)
@@ -691,7 +625,7 @@ public sealed partial class BattleBoardController
 		}
 		if ((Object)(object)sanctuaryConfirmBodyText != (Object)null)
 		{
-			sanctuaryConfirmBodyText.fontSize = 30;
+			sanctuaryConfirmBodyText.fontSize = 40;
 			sanctuaryConfirmBodyText.resizeTextForBestFit = false;
 		}
 	}
@@ -702,22 +636,13 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
-		if (sanctuaryActiveAltar == SanctuaryAltar.Relics)
-		{
-			Sprite relicFrame = LoadSpriteResource("UI/Sanctuary/sanctuary_card_frame_v2");
-			if ((Object)(object)relicFrame != (Object)null)
-			{
-				sanctuaryConfirmDialogImage.sprite = relicFrame;
-				sanctuaryConfirmDialogImage.type = Image.Type.Simple;
-				sanctuaryConfirmDialogImage.preserveAspect = false;
-				sanctuaryConfirmDialogImage.color = Color.white;
-				return;
-			}
-		}
-		sanctuaryConfirmDialogImage.sprite = sanctuaryConfirmDialogDefaultSprite;
-		sanctuaryConfirmDialogImage.type = sanctuaryConfirmDialogDefaultType;
+		// Classi, tecniche e reliquie condividono sempre il pannello MMO.
+		// L'assegnazione esplicita evita di ereditare cover del Santuario dal prefab
+		// o da una precedente apertura del popup.
+		sanctuaryConfirmDialogImage.sprite = AccardND.Battlefield.MmoUiTheme.GetPanelSprite();
+		sanctuaryConfirmDialogImage.type = Image.Type.Sliced;
 		sanctuaryConfirmDialogImage.preserveAspect = false;
-		sanctuaryConfirmDialogImage.color = sanctuaryConfirmDialogDefaultColor;
+		sanctuaryConfirmDialogImage.color = new Color(1f, 1f, 1f, 0.98f);
 	}
 
 	private static string SanctuaryAltarLabel(SanctuaryAltar altar)
@@ -732,7 +657,6 @@ public sealed partial class BattleBoardController
 				"TECNICHE"),
 			// Il tab nasce clonando quello delle Classi: non deve poter ereditare
 			// una voce localizzata obsoleta dal template.
-			SanctuaryAltar.Chapters => "Capitoli",
 			_ => GameText.GetOrFallbackSilent(
 				GameTextKeys.Sanctuary.AltarRelics,
 				"RELIQUIE")
@@ -859,6 +783,7 @@ public sealed partial class BattleBoardController
 		RefreshSanctuaryLayout();
 		RefreshSanctuaryList();
 		LoadSanctuaryFromServer();
+		TryStartPendingTutorialTour(AccardND.GameData.TutorialSurface.HubSanctuary);
 	}
 
 	private void HideSanctuary()
@@ -906,6 +831,9 @@ public sealed partial class BattleBoardController
 		sanctuaryActiveAltar = altar;
 		RefreshSanctuaryLayout();
 		RefreshSanctuaryList();
+		// Prima si costruiscono le carte del nuovo altare, poi il tour passa alla tappa
+		// successiva: cosi' lo spotlight puo' trovare subito la carta Mago appena apparsa.
+		NotifyGuidedTourTargetTapped();
 		if ((Object)(object)sanctuaryScrollRect != (Object)null)
 		{
 			Canvas.ForceUpdateCanvases();
@@ -1037,10 +965,8 @@ public sealed partial class BattleBoardController
 	{
 		SanctuaryAltar.Classes => entry.type == "class",
 		SanctuaryAltar.Techniques => entry.type == "secondAbility",
-		SanctuaryAltar.Chapters => entry.type == "chapter",
-		// L'altare delle Reliquie tiene insieme oggetti e slot: gli slot sono il contenitore
-		// degli oggetti, separarli in due schermate spezzerebbe la lettura.
-		_ => entry.type == "item" || entry.type == "slot"
+		// I consumabili sono tutti nel negozio; qui restano gli ampliamenti permanenti.
+		_ => entry.type == "slot"
 	};
 
 	private string DefaultSanctuaryStatus()
@@ -1057,16 +983,9 @@ public sealed partial class BattleBoardController
 				GameTextKeys.Sanctuary.TechniquesStatus,
 				"Ogni tecnica chiede la classe corrispondente, oltre al miele.");
 		}
-		if (sanctuaryActiveAltar == SanctuaryAltar.Chapters)
-		{
-			return GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.ChaptersStatus,
-				"Ogni capitolo si guadagna battendo il boss di quello prima, oppure si compra qui.");
-		}
-		// Qui si sblocca il diritto di comprare: le copie si prendono al negozio.
 		return GameText.GetOrFallbackSilent(
 			GameTextKeys.Sanctuary.RelicsStatus,
-			"Sblocca gli oggetti per renderli acquistabili al negozio. Slot bisaccia: {0}.",
+			"Amplia la bisaccia per portare piu' consumabili. Slot disponibili: {0}.",
 			sanctuaryData?.bagSlots ?? 0);
 	}
 
@@ -1106,8 +1025,11 @@ public sealed partial class BattleBoardController
 
 		Image cover = CreateImage("Cover", card.transform, Color.white);
 		cover.raycastTarget = false;
-		cover.sprite = LoadSpriteResource("UI/Sanctuary/santuary_items");
-		cover.type = Image.Type.Simple;
+		bool relicCard = entry.type != "class" && entry.type != "secondAbility";
+		cover.sprite = relicCard
+			? AccardND.Battlefield.MmoUiTheme.GetPanelSprite()
+			: LoadSpriteResource("UI/Sanctuary/santuary_items");
+		cover.type = relicCard ? Image.Type.Sliced : Image.Type.Simple;
 		cover.preserveAspect = false;
 		cover.color = entry.owned || entry.available
 			? Color.white
@@ -1165,30 +1087,20 @@ public sealed partial class BattleBoardController
 		nameText.resizeTextMinSize = 9;
 		nameText.resizeTextMaxSize = 26;
 		AddSanctuaryTextOutline(nameText);
-		SetRect(nameText.rectTransform, new Vector2(0.06f, 0.79f), new Vector2(0.94f, 0.96f));
+		nameText.rectTransform.anchorMin = new Vector2(0.06f, 0.79f);
+		nameText.rectTransform.anchorMax = new Vector2(0.94f, 0.96f);
+		nameText.rectTransform.offsetMin = new Vector2(0f, -21f);
+		nameText.rectTransform.offsetMax = new Vector2(0f, -21f);
 
 		Image icon = CreateImage("Icon", parent, Color.white);
 		icon.sprite = GetSanctuaryEntrySprite(entry);
 		icon.preserveAspect = true;
 		icon.raycastTarget = false;
-		SetRect(icon.rectTransform, new Vector2(0.19f, 0.45f), new Vector2(0.81f, 0.79f));
+		icon.rectTransform.anchorMin = new Vector2(0.14f, 0.29f);
+		icon.rectTransform.anchorMax = new Vector2(0.86f, 0.79f);
+		icon.rectTransform.offsetMin = new Vector2(0f, -19f);
+		icon.rectTransform.offsetMax = new Vector2(0f, -19f);
 		((Component)icon).gameObject.SetActive((Object)(object)icon.sprite != (Object)null);
-
-		Text descriptionText = CreateText(
-			"Description",
-			parent,
-			AccardND.Battlefield.MmoUiTheme.BodyFont,
-			30,
-			FontStyle.Normal,
-			TextAnchor.UpperCenter);
-		descriptionText.text = entry.description ?? string.Empty;
-		descriptionText.color = new Color(0.86f, 0.83f, 0.77f);
-		descriptionText.horizontalOverflow = HorizontalWrapMode.Wrap;
-		descriptionText.verticalOverflow = VerticalWrapMode.Truncate;
-		descriptionText.resizeTextForBestFit = true;
-		descriptionText.resizeTextMinSize = 12;
-		descriptionText.resizeTextMaxSize = 30;
-		SetRect(descriptionText.rectTransform, new Vector2(0.07f, 0.19f), new Vector2(0.93f, 0.45f));
 
 		GameObject costPlateObject = new GameObject("Cost Plate", typeof(RectTransform));
 		costPlateObject.transform.SetParent(parent, false);
@@ -1198,7 +1110,7 @@ public sealed partial class BattleBoardController
 			"Status",
 			costPlate.transform,
 			sanctuaryStatusFont,
-			20,
+			28,
 			FontStyle.Normal,
 			TextAnchor.MiddleCenter);
 		statusText.raycastTarget = false;
@@ -1208,7 +1120,7 @@ public sealed partial class BattleBoardController
 		statusText.verticalOverflow = VerticalWrapMode.Truncate;
 		statusText.resizeTextForBestFit = true;
 		statusText.resizeTextMinSize = 10;
-		statusText.resizeTextMaxSize = 20;
+		statusText.resizeTextMaxSize = 28;
 		AddSanctuaryTextOutline(statusText);
 		SetRect(statusText.rectTransform, Vector2.zero, Vector2.one);
 	}
@@ -1231,7 +1143,10 @@ public sealed partial class BattleBoardController
 		nameText.horizontalOverflow = HorizontalWrapMode.Wrap;
 		nameText.verticalOverflow = VerticalWrapMode.Truncate;
 		AddSanctuaryTextOutline(nameText);
-		SetRect(nameText.rectTransform, new Vector2(0.06f, 0.79f), new Vector2(0.94f, 0.96f));
+		nameText.rectTransform.anchorMin = new Vector2(0.06f, 0.79f);
+		nameText.rectTransform.anchorMax = new Vector2(0.94f, 0.96f);
+		nameText.rectTransform.offsetMin = new Vector2(0f, -17f);
+		nameText.rectTransform.offsetMax = new Vector2(0f, -17f);
 
 		Image icon = CreateImage("Icon", parent, Color.white);
 		icon.sprite = GetSanctuaryEntrySprite(entry);
@@ -1278,7 +1193,7 @@ public sealed partial class BattleBoardController
 			"Status",
 			costPlate.transform,
 			sanctuaryStatusFont,
-			20,
+			28,
 			FontStyle.Normal,
 			TextAnchor.MiddleCenter);
 		statusText.raycastTarget = false;
@@ -1288,7 +1203,7 @@ public sealed partial class BattleBoardController
 		statusText.verticalOverflow = VerticalWrapMode.Truncate;
 		statusText.resizeTextForBestFit = true;
 		statusText.resizeTextMinSize = 10;
-		statusText.resizeTextMaxSize = 20;
+		statusText.resizeTextMaxSize = 28;
 		AddSanctuaryTextOutline(statusText);
 		SetRect(statusText.rectTransform, Vector2.zero, Vector2.one);
 	}
@@ -1303,7 +1218,7 @@ public sealed partial class BattleBoardController
 
 		Font classNameFont = Resources.Load<Font>("Fonts/IMFellEnglishSC")
 			?? AccardND.Battlefield.MmoUiTheme.TitleBoldFont;
-		Text label = CreateText("Name", parent, classNameFont, 26, FontStyle.Normal, TextAnchor.MiddleCenter);
+		Text label = CreateText("Name", parent, classNameFont, 30, FontStyle.Normal, TextAnchor.MiddleCenter);
 		label.raycastTarget = false;
 		label.text = HeroClassDisplayName(heroClass).ToUpperInvariant();
 		label.color = SanctuaryGold;
@@ -1311,13 +1226,16 @@ public sealed partial class BattleBoardController
 		label.verticalOverflow = VerticalWrapMode.Truncate;
 		label.resizeTextForBestFit = true;
 		label.resizeTextMinSize = 8;
-		label.resizeTextMaxSize = 26;
+		label.resizeTextMaxSize = 30;
 		AddSanctuaryTextOutline(label);
-		SetRect(label.rectTransform, new Vector2(0.04f, 0.27f), new Vector2(0.96f, 0.4f));
+		label.rectTransform.anchorMin = new Vector2(0.04f, 0.27f);
+		label.rectTransform.anchorMax = new Vector2(0.96f, 0.4f);
+		label.rectTransform.offsetMin = new Vector2(0f, -21.6f);
+		label.rectTransform.offsetMax = new Vector2(0f, -21.6f);
 
 		Font sanctuaryStatusFont = Resources.Load<Font>("Fonts/Alegreya")
 			?? AccardND.Battlefield.MmoUiTheme.BodyFont;
-		Text statusText = CreateText("Status", parent, sanctuaryStatusFont, 20, FontStyle.Normal, TextAnchor.MiddleCenter);
+		Text statusText = CreateText("Status", parent, sanctuaryStatusFont, 28, FontStyle.Normal, TextAnchor.MiddleCenter);
 		statusText.raycastTarget = false;
 		string requirement = SanctuaryRequirementSummary(entry);
 		statusText.text = string.IsNullOrWhiteSpace(requirement)
@@ -1328,31 +1246,21 @@ public sealed partial class BattleBoardController
 		statusText.verticalOverflow = VerticalWrapMode.Truncate;
 		statusText.resizeTextForBestFit = true;
 		statusText.resizeTextMinSize = 10;
-		statusText.resizeTextMaxSize = 20;
+		statusText.resizeTextMaxSize = 28;
 		AddSanctuaryTextOutline(statusText);
 		SetRect(statusText.rectTransform, new Vector2(0.05f, 0.055f), new Vector2(0.95f, 0.27f));
 	}
 
 	private Sprite GetSanctuaryEntrySprite(SanctuaryEntryData entry)
 	{
-		// Un capitolo si riconosce dal suo scenario, non da un'icona generica: e' la stessa
-		// immagine che il giocatore trova nella schermata Avventura.
-		if (entry?.type == "chapter")
-		{
-			Sprite background = AdventureChapterBackgroundSprite(entry.id);
-			if ((Object)(object)background != (Object)null)
-			{
-				return background;
-			}
-			return LoadSpriteResource("UI/locked_chapter");
-		}
-
 		string value = $"{entry?.id} {entry?.name}".ToLowerInvariant();
 		string resourcePath;
-		if (value.Contains("detector"))
+		if (entry?.id == "merchant-upgrade-relic-1")
+			resourcePath = "UI/merchant_upgrade_relic_1";
+		else if (entry?.id == "merchant-upgrade-relic-2")
+			resourcePath = "UI/merchant_upgrade_relic_2";
+		else if (value.Contains("detector"))
 			resourcePath = "UI/detector_item";
-		else if (value.Contains("defrost"))
-			resourcePath = "UI/defrost_item";
 		else if (value.Contains("double_exp") || value.Contains("doppia exp") || value.Contains("double exp"))
 			resourcePath = "UI/double_exp_item";
 		else if (value.Contains("empower"))
@@ -1361,6 +1269,12 @@ public sealed partial class BattleBoardController
 			resourcePath = "UI/second_chance_item";
 		else if (value.Contains("ruby") || value.Contains("rubino"))
 			resourcePath = "UI/ruby_seal_item";
+		else if (value.Contains("mana-5") || value.Contains("mana +5"))
+			resourcePath = "UI/mana_gain_5_item";
+		else if (value.Contains("mana-10") || value.Contains("mana +10"))
+			resourcePath = "UI/mana_gain_10_item";
+		else if (value.Contains("jolly"))
+			resourcePath = "UI/jolly_item";
 		else if (value.Contains("blackheart") || value.Contains("blackhearth"))
 			resourcePath = "UI/blackhearth_icon";
 		else if (entry?.type == "slot")
@@ -1379,8 +1293,24 @@ public sealed partial class BattleBoardController
 	/// posseduta. Il miele insufficiente non blocca il click: la conferma lo dice, cosi'
 	/// il giocatore vede quanto gli manca invece di trovarsi una carta morta.
 	/// </summary>
-	private static bool CanOfferSanctuaryEntry(SanctuaryEntryData entry) =>
-		entry != null && entry.available && entry.requirementsMet && !entry.owned;
+	private bool CanOfferSanctuaryEntry(SanctuaryEntryData entry) =>
+		entry != null
+		&& entry.available
+		&& entry.requirementsMet
+		&& !entry.owned
+		&& IsTutorialSanctuaryPurchaseAllowed(entry);
+
+	private bool IsTutorialSanctuaryPurchaseAllowed(SanctuaryEntryData entry)
+	{
+		if (!IsTutorialOnboardingActive())
+			return true;
+
+		string requiredClassId = TutorialGate.PendingPurchaseClassId(CurrentTutorialFlow());
+		return entry != null
+			&& !string.IsNullOrEmpty(requiredClassId)
+			&& entry.type == "class"
+			&& string.Equals(entry.id, requiredClassId, StringComparison.OrdinalIgnoreCase);
+	}
 
 	private int SanctuaryHoney() =>
 		sanctuaryData != null ? sanctuaryData.honey : singlePlayerProgressService.Honey;
@@ -1419,18 +1349,12 @@ public sealed partial class BattleBoardController
 					GameTextKeys.Sanctuary.OfferTechnique,
 					"Possiedi la classe. Offri {0} vasetti di miele per apprendere questa tecnica: sara' tua su ogni carta della classe.",
 					entry.honeyCost),
-				// Comprare l'accesso non e' averlo giocato: la classe premio resta da guadagnare
-				// in fondo al capitolo, e va detto prima di incassare il miele.
-				"chapter" => GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.OfferChapter,
-					"Apri questo capitolo per {0} vasetti di miele, senza battere il boss di quello prima. La classe in fondo al capitolo resta da guadagnare.",
-					entry.honeyCost),
 				_ => GameText.GetOrFallbackSilent(
 					GameTextKeys.Sanctuary.OfferClass,
 					"Hai superato le prove. Offri {0} vasetti di miele all'alveare per ricordare questa classe.",
 					entry.honeyCost)
 			};
-			sanctuaryConfirmBodyText.text = affordable
+			string purchaseBody = affordable
 				? GameText.GetOrFallbackSilent(
 					GameTextKeys.Sanctuary.HoneyAvailable,
 					"{0}\n\nMiele disponibile: {1}.",
@@ -1441,6 +1365,25 @@ public sealed partial class BattleBoardController
 					"Servono {0} vasetti di miele e ne hai {1}.\n\nTorna quando ne avrai abbastanza.",
 					entry.honeyCost,
 					honey);
+			bool tutorialMagePurchase = entry.type == "class"
+				&& string.Equals(entry.id, "mage", StringComparison.OrdinalIgnoreCase)
+				&& string.Equals(
+					TutorialGate.PendingPurchaseClassId(CurrentTutorialFlow()),
+					"mage",
+					StringComparison.OrdinalIgnoreCase);
+			bool tutorialRoguePurchase = entry.type == "class"
+				&& string.Equals(entry.id, "rogue", StringComparison.OrdinalIgnoreCase)
+				&& string.Equals(
+					TutorialGate.PendingPurchaseClassId(CurrentTutorialFlow()),
+					"rogue",
+					StringComparison.OrdinalIgnoreCase);
+			sanctuaryConfirmBodyText.text = tutorialRoguePurchase
+				? $"Hai superato il tutorial mago. Offri {entry.honeyCost} vasetti di miele al santuario per sbloccare questa classe.\n\nMiele disponibile: {honey}."
+				: tutorialMagePurchase
+				? $"Hai superato il tutorial guerriero. Offri {entry.honeyCost} vasetti di miele al santuario per sbloccare questa classe.\n\nMiele disponibile: {honey}."
+				: entry.type == "secondAbility" && !string.IsNullOrWhiteSpace(entry.description)
+					? $"{entry.description.Trim()}\n\n{purchaseBody}"
+					: purchaseBody;
 		}
 		if ((Object)(object)sanctuaryConfirmButton != (Object)null)
 		{
@@ -1467,15 +1410,31 @@ public sealed partial class BattleBoardController
 
 		sanctuaryConfirmPopup.SetActive(true);
 		sanctuaryConfirmPopup.transform.SetAsLastSibling();
+		string guidedClassId = TutorialGate.PendingPurchaseClassId(CurrentTutorialFlow());
+		if (IsGuidedTourActive
+			&& string.Equals(entry.id, guidedClassId, StringComparison.OrdinalIgnoreCase)
+			&& (Object)(object)sanctuaryConfirmButton != (Object)null)
+		{
+			MoveAdventureTutorialSpotlight(
+				(RectTransform)((Component)sanctuaryConfirmButton).transform);
+		}
 	}
 
 	private void HideSanctuaryConfirmPopup()
 	{
+		string closedEntryId = sanctuaryPendingEntry?.id;
 		if ((Object)(object)sanctuaryConfirmPopup != (Object)null)
 		{
 			sanctuaryConfirmPopup.SetActive(false);
 		}
 		sanctuaryPendingEntry = null;
+		string guidedClassId = TutorialGate.PendingPurchaseClassId(CurrentTutorialFlow());
+		if (IsGuidedTourActive
+			&& !string.IsNullOrEmpty(closedEntryId)
+			&& string.Equals(closedEntryId, guidedClassId, StringComparison.OrdinalIgnoreCase))
+		{
+			MoveAdventureTutorialSpotlight(SanctuaryEntryRect(closedEntryId));
+		}
 	}
 
 	/// <summary>
@@ -1488,6 +1447,16 @@ public sealed partial class BattleBoardController
 		SanctuaryEntryData entry = sanctuaryPendingEntry;
 		if (entry == null || sanctuaryPurchasing)
 		{
+			return;
+		}
+		if (!IsTutorialSanctuaryPurchaseAllowed(entry))
+		{
+			string requiredClassId = TutorialGate.PendingPurchaseClassId(CurrentTutorialFlow());
+			string requiredName = requiredClassId == "rogue" ? "il Ladro" : "il Mago";
+			SetSanctuaryStatus(requiredClassId == null
+				? "Completa il prossimo passo del tutorial prima di fare altri acquisti."
+				: $"Durante il tutorial puoi acquistare soltanto {requiredName}.");
+			HideSanctuaryConfirmPopup();
 			return;
 		}
 
@@ -1509,12 +1478,11 @@ public sealed partial class BattleBoardController
 		try
 		{
 			await serverProgress.PurchaseUnlockAsync(SanctuaryUnlockTypeOf(entry), entry.id);
-			sanctuaryNotice = string.Equals(entry.type, "item", StringComparison.Ordinal)
-				? GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.ItemUnlocked,
-					"{0} sbloccato: ora il negozio puo' vendertelo.",
-					entry.name)
-				: GameText.GetOrFallbackSilent(
+			bool purchasedTutorialMage = SanctuaryUnlockTypeOf(entry) == SinglePlayerUnlockType.Class
+				&& string.Equals(entry.id, "mage", StringComparison.OrdinalIgnoreCase);
+			bool purchasedTutorialRogue = SanctuaryUnlockTypeOf(entry) == SinglePlayerUnlockType.Class
+				&& string.Equals(entry.id, "rogue", StringComparison.OrdinalIgnoreCase);
+			sanctuaryNotice = GameText.GetOrFallbackSilent(
 					GameTextKeys.Sanctuary.EntryOwned,
 					"{0} ora e' tua.",
 					entry.name);
@@ -1526,6 +1494,24 @@ public sealed partial class BattleBoardController
 				entry.id,
 				entry.honeyCost));
 			HideSanctuaryConfirmPopup();
+			// Se un tour d'acquisto stava aspettando proprio questa classe, prosegue da qui:
+			// e' l'acquisto vero a sbloccare la tappa, non una finta conferma del tutorial.
+			if (SanctuaryUnlockTypeOf(entry) == AccardND.GameData.SinglePlayerUnlockType.Class)
+			{
+				NotifyTutorialClassPurchased(entry.id);
+			}
+			if (purchasedTutorialMage || purchasedTutorialRogue)
+			{
+				// La navigazione non deve dipendere dal fatto che il tour d'acquisto fosse
+				// ancora vivo (puo' non esserlo dopo una riconnessione). L'acquisto server
+				// riuscito e' da solo la condizione definitiva per chiudere il Santuario.
+				if ((Object)(object)sanctuaryPanel != (Object)null)
+					sanctuaryPanel.SetActive(false);
+				if (purchasedTutorialRogue)
+					StartRogueTutorialNavigationTour();
+				else
+					StartMageTutorialNavigationTour();
+			}
 		}
 		catch (Exception exception)
 		{
@@ -1551,8 +1537,6 @@ public sealed partial class BattleBoardController
 	{
 		"secondAbility" => AccardND.GameData.SinglePlayerUnlockType.SecondAbility,
 		"slot" => AccardND.GameData.SinglePlayerUnlockType.Slot,
-		"item" => AccardND.GameData.SinglePlayerUnlockType.Item,
-		"chapter" => AccardND.GameData.SinglePlayerUnlockType.Chapter,
 		_ => AccardND.GameData.SinglePlayerUnlockType.Class
 	};
 
@@ -1729,6 +1713,7 @@ public sealed partial class BattleBoardController
 				sanctuaryAltarIcons[index].color = active ? new Color(0.86f, 0.72f, 1f) : SanctuaryGold;
 			}
 		}
+		RefreshSanctuaryTutorialGates();
 	}
 
 	private void RefreshSanctuaryDiscoverySummary()
@@ -1763,9 +1748,6 @@ public sealed partial class BattleBoardController
 				SanctuaryAltar.Techniques => GameText.GetOrFallbackSilent(
 					GameTextKeys.Sanctuary.DiscoveryTechniques,
 					"TECNICHE SCOPERTE"),
-				SanctuaryAltar.Chapters => GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.DiscoveryChapters,
-					"CAPITOLI APERTI"),
 				_ => GameText.GetOrFallbackSilent(
 					GameTextKeys.Sanctuary.DiscoveryRelics,
 					"RELIQUIE SCOPERTE")

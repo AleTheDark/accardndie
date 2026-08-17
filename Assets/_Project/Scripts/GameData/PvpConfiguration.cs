@@ -74,7 +74,7 @@ namespace AccardND.GameData
         [SerializeField, Min(1)] private int roundsToWinMatch = 2;
         [SerializeField, Min(1)] private int deployedCardLives = 2;
         [SerializeField, Min(0), Tooltip("Secondi per mossa; 0 = nessun timer.")]
-        private int turnTimerSeconds = 60;
+        private int turnTimerSeconds = 30;
         [SerializeField, Min(1)] private int disconnectTimeoutSeconds = 120;
 
         public int LoadoutBudget => loadoutBudget;

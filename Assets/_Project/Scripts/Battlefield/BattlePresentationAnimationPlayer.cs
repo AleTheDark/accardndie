@@ -19,6 +19,21 @@ namespace AccardND.Battlefield
             yield return BarbarianFuryVfx.Play(target.RectTransform);
         }
 
+        public IEnumerator PlayBarbarianSupreme(PrototypeCardView caster)
+        {
+            if (caster == null || caster.RectTransform == null)
+                yield break;
+
+            yield return BarbarianSupremeVfx.Play(caster.RectTransform);
+        }
+
+        public IEnumerator PlayNecromancerMinionSupreme(PrototypeCardView caster, bool belongsToPlayer)
+        {
+            if (caster == null || caster.RectTransform == null)
+                yield break;
+            yield return NecromancerMinionVfx.Summon(caster.RectTransform, belongsToPlayer);
+        }
+
         private readonly Queue<IEnumerator> queue = new();
         private Coroutine routine;
         private static Sprite hunterArrowSprite;
@@ -28,15 +43,18 @@ namespace AccardND.Battlefield
         private static Sprite hunterExplosionEmberSprite;
         private static Sprite hunterExplosionSmokeSprite;
         private static Sprite assassinSmokeSprite;
+        private static Sprite assassinSmokeBombSprite;
         private static Sprite assassinDaggerLeftSprite;
         private static Sprite assassinDaggerRightSprite;
         private static Sprite barbarianDoubleAxeSprite;
         private static Sprite bragusCleaverSprite;
+        private static Sprite jurinashorPhaseOneWeaponSprite;
         private static Sprite warriorSwordSprite;
         private static Sprite warriorSlashSprite;
         private static Sprite warriorDashTrailSprite;
         private static Sprite warriorGroundCrackSprite;
         private static Sprite mageProjectileSprite;
+        private static Sprite mageSupremeMeteorSprite;
         private static Sprite mageParticleSprite;
         private static Sprite mageTrailSprite;
         private static Sprite priestBeamSprite;
@@ -46,7 +64,9 @@ namespace AccardND.Battlefield
         private static Sprite paladinCrestSprite;
         private static Sprite paladinShardSprite;
         private static Sprite paladinConstellationShieldSprite;
+        private static Sprite paladinHammerSprite;
         private static Sprite rogueDaggerSprite;
+        private static Sprite rogueBlackHandSprite;
         private static Sprite rogueHitMarkerSprite;
         private static Sprite rogueDeflectSprite;
         private static Sprite necromancerSkullSprite;
@@ -85,7 +105,13 @@ namespace AccardND.Battlefield
             bool defenderHit = false,
             int attackerTotal = 0,
             int defenderTotal = 0,
-            HeroClass? attackerHeroClass = null)
+            HeroClass? attackerHeroClass = null,
+            int attackerStrengthStart = 0,
+            int defenderStrengthStart = 0,
+            System.Action onDefenderBlocked = null,
+            System.Func<PrototypeCardView, HeroClass, IEnumerator> playDefeat = null,
+            System.Action onAttackStarted = null,
+            System.Action onDefeatStarted = null)
         {
             Vector3 attackerPoint = DuelWorldPoint(root, 0.34f);
             Vector3 defenderPoint = DuelWorldPoint(root, 0.66f);
@@ -109,7 +135,13 @@ namespace AccardND.Battlefield
                 defenderHit,
                 attackerTotal,
                 defenderTotal,
-                attackerHeroClass);
+                attackerHeroClass,
+                attackerStrengthStart,
+                defenderStrengthStart,
+                onDefenderBlocked,
+                playDefeat,
+                onAttackStarted,
+                onDefeatStarted);
         }
 
         public void PlayDuelAtPoints(
@@ -132,7 +164,13 @@ namespace AccardND.Battlefield
             bool defenderHit = false,
             int attackerTotal = 0,
             int defenderTotal = 0,
-            HeroClass? attackerHeroClass = null)
+            HeroClass? attackerHeroClass = null,
+            int attackerStrengthStart = 0,
+            int defenderStrengthStart = 0,
+            System.Action onDefenderBlocked = null,
+            System.Func<PrototypeCardView, HeroClass, IEnumerator> playDefeat = null,
+            System.Action onAttackStarted = null,
+            System.Action onDefeatStarted = null)
         {
             queue.Enqueue(PlayDuelRoutine(
                 configuration,
@@ -154,9 +192,20 @@ namespace AccardND.Battlefield
                 defenderHit,
                 attackerTotal,
                 defenderTotal,
-                attackerHeroClass));
+                attackerHeroClass,
+                attackerStrengthStart,
+                defenderStrengthStart,
+                onDefenderBlocked,
+                playDefeat,
+                onAttackStarted,
+                onDefeatStarted));
             if (routine == null)
+            {
+                // La coda dei duelli e' animazione pura dall'inizio alla fine:
+                // si prende i sessanta frame e li restituisce quando svuota.
+                FrameRateGovernor.Acquire(this);
                 routine = StartCoroutine(RunQueue());
+            }
         }
 
         public static VigorRollResult BuildRoll(int dieSides, int first, int second, bool hasSecond, int selected)
@@ -251,6 +300,7 @@ namespace AccardND.Battlefield
             while (queue.Count > 0)
                 yield return StartCoroutine(queue.Dequeue());
             routine = null;
+            FrameRateGovernor.Release(this);
         }
 
         private IEnumerator PlayDuelRoutine(
@@ -273,23 +323,22 @@ namespace AccardND.Battlefield
             bool defenderHit,
             int attackerTotal,
             int defenderTotal,
-            HeroClass? attackerHeroClass)
+            HeroClass? attackerHeroClass,
+            int attackerStrengthStart,
+            int defenderStrengthStart,
+            System.Action onDefenderBlocked,
+            System.Func<PrototypeCardView, HeroClass, IEnumerator> playDefeat,
+            System.Action onAttackStarted,
+            System.Action onDefeatStarted)
         {
             if (attacker == null || defender == null)
                 yield break;
 
             Canvas.ForceUpdateCanvases();
             onDuelStarted?.Invoke();
-            bool isHunterAttack = attacker.HeroClass == HeroClass.Hunter;
-            bool isMageAttack = attacker.HeroClass == HeroClass.Mage;
-            bool isAssassinAttack = attacker.HeroClass == HeroClass.Assassin;
-            bool isBarbarianAttack = attacker.HeroClass == HeroClass.Barbarian;
-            bool isWarriorAttack = attacker.HeroClass == HeroClass.Warrior;
-            bool isPaladinAttack = attacker.HeroClass == HeroClass.Paladin;
-            bool isPriestAttack = attacker.HeroClass == HeroClass.Priest;
-            bool isRogueAttack = attacker.HeroClass == HeroClass.Rogue;
-            bool isNecromancerAttack = attacker.HeroClass == HeroClass.Necromancer;
-            if (!isHunterAttack && !isMageAttack && !isAssassinAttack && !isBarbarianAttack && !isWarriorAttack && !isPaladinAttack && !isPriestAttack && !isRogueAttack && !isNecromancerAttack)
+            // Chi ha un colpo di classe se lo gioca da dove sta: solo gli altri
+            // vengono portati al centro del tavolo.
+            if (!HasClassAttackAnimation(attacker.HeroClass))
             {
                 yield return MoveToDuelPoints(
                     attacker,
@@ -342,86 +391,307 @@ namespace AccardND.Battlefield
                 yield return new WaitForSecondsRealtime(synchronizedDiceDuration);
             onDiceResolved?.Invoke();
 
-            if (isHunterAttack)
+            bool showResolvedStrength = attackerTotal > 0 && defenderTotal > 0
+                && attackerStrengthStart > 0 && defenderStrengthStart > 0;
+            if (showResolvedStrength)
             {
-                if (defenderHit)
-                    yield return StartCoroutine(PlayHunterArrowAttack(attacker, defender));
-                else
-                    yield return StartCoroutine(PlayHunterArrowMiss(attacker));
-            }
-            else if (isMageAttack)
-            {
-                if (defenderHit)
-                    yield return StartCoroutine(PlayMageArcaneBoltAttack(attacker, defender));
-                else
-                    yield return StartCoroutine(PlayMageArcaneBoltBlocked(attacker, defender));
-            }
-            else if (isAssassinAttack)
-            {
-                if (defenderHit)
-                    yield return StartCoroutine(PlayAssassinShadowStrike(attacker, defender));
-                else
-                    yield return StartCoroutine(PlayAssassinShadowStrikeBlocked(attacker, defender));
-            }
-            else if (isBarbarianAttack)
-            {
-                if (defenderHit)
-                    yield return StartCoroutine(PlayBarbarianAxeSmash(attacker, defender));
-                else
-                    yield return StartCoroutine(PlayBarbarianAxeSmashBlocked(attacker, defender));
-            }
-            else if (isWarriorAttack)
-            {
-                bool abilityAttack = attackerRoll.SelectionMode == VigorSelectionMode.Sum;
-                if (defenderHit)
-                    yield return StartCoroutine(PlayWarriorSwordRush(attacker, defender, abilityAttack));
-                else
-                    yield return StartCoroutine(PlayWarriorSwordBlocked(attacker, defender));
-            }
-            else if (isPaladinAttack)
-            {
-                if (defenderHit)
-                    yield return StartCoroutine(PlayPaladinDivineShieldBash(attacker, defender));
-                else
-                    yield return StartCoroutine(PlayPaladinAegisBlocked(attacker, defender));
-            }
-            else if (isPriestAttack)
-            {
-                if (defenderHit)
-                    yield return StartCoroutine(PlayPriestSacredJudgement(attacker, defender));
-                else
-                    yield return StartCoroutine(PlayPriestJudgementBlocked(attacker, defender));
-            }
-            else if (isRogueAttack)
-            {
-                if (defenderHit)
-                    yield return StartCoroutine(PlayRogueDaggerFlurry(attacker, defender, attackerTotal - defenderTotal));
-                else
-                    yield return StartCoroutine(PlayRogueDaggerBlocked(attacker, defender));
-            }
-            else if (isNecromancerAttack)
-            {
-                if (defenderHit)
-                    yield return StartCoroutine(PlayNecromancerSoulSwarm(attacker, defender));
-                else
-                    yield return StartCoroutine(PlayNecromancerSoulWardBlocked(attacker, defender));
-            }
-            else
-            {
-                yield return StartCoroutine(attacker.PlayAttackAnimation());
-                yield return ReturnDuelParticipants(
+                yield return AnimateResolvedStrength(
                     attacker,
                     defender,
-                    returnAttacker: true,
-                    returnDefender: true,
-                    wait: 0.26f);
+                    attackerStrengthStart,
+                    defenderStrengthStart,
+                    attackerTotal,
+                    defenderTotal,
+                    attackerRoll.SelectedRoll,
+                    defenderRoll.SelectedRoll,
+                    // Stesse durate della campagna (ShowCombatResult): conteggio
+                    // e attesa di lettura prima che parta il colpo.
+                    Mathf.Clamp(configuration.Animation.CombatResultHold * 0.38f, 0.42f, 0.78f),
+                    Mathf.Max(0.35f, configuration.Animation.CombatResultHold * 0.42f) + 0.2f);
             }
+
+            // Questo callback appartiene alla timeline locale: viene emesso nello
+            // stesso frame in cui parte il movimento/VFX, non quando arriva l'esito server.
+            onAttackStarted?.Invoke();
+            yield return PlayClassAttack(
+                attacker,
+                defender,
+                attacker.HeroClass,
+                defenderHit,
+                abilityAttack: attackerRoll.SelectionMode == VigorSelectionMode.Sum,
+                attackMargin: attackerTotal - defenderTotal,
+                onBlocked: onDefenderBlocked);
             onDuelFinished?.Invoke();
             if (defenderEliminated)
             {
+				onDefeatStarted?.Invoke();
                 HeroClass resolvedAttackerHeroClass = attackerHeroClass ?? attacker.HeroClass;
                 Debug.Log($"[DeathCrack] duel-defender-eliminated: attackerView={attacker.name}, defenderView={defender.name}, attackerHeroClassArg={attackerHeroClass?.ToString() ?? "NULL"}, attackerViewHeroClass={attacker.HeroClass}, resolved={resolvedAttackerHeroClass}");
-                yield return StartCoroutine(defender.PlayDefeatAnimation(killerHeroClass: resolvedAttackerHeroClass));
+                // Chi ha una timeline da incrinare passa la propria morte: e' la
+                // stessa animazione, ma sa anche spegnere la tessera iniziativa.
+                yield return playDefeat != null
+                    ? playDefeat(defender, resolvedAttackerHeroClass)
+                    : defender.PlayDefeatAnimation(killerHeroClass: resolvedAttackerHeroClass);
+            }
+
+            // I totali tornano potenze solo a duello finito, morte compresa:
+            // e' l'ordine della campagna, e tiene il verdetto colorato sotto gli
+            // occhi per tutta la durata del colpo.
+            if (showResolvedStrength)
+            {
+                yield return RestoreResolvedStrength(
+                    attacker,
+                    defender,
+                    attackerStrengthStart,
+                    defenderStrengthStart,
+                    attackerTotal,
+                    defenderTotal,
+                    ResolvedStrengthScale(attackerTotal, defenderTotal, attackerRoll.SelectedRoll),
+                    ResolvedStrengthScale(defenderTotal, attackerTotal, defenderRoll.SelectedRoll),
+                    Mathf.Clamp(configuration.Animation.CombatResultHold * 0.38f, 0.42f, 0.78f));
+            }
+        }
+
+        /// <summary>
+        /// Le classi che hanno un colpo dedicato. Chi non e' in elenco tira il
+        /// pugno generico e torna al suo posto.
+        /// </summary>
+        public static bool HasClassAttackAnimation(HeroClass heroClass)
+        {
+            switch (heroClass)
+            {
+                case HeroClass.Hunter:
+                case HeroClass.Mage:
+                case HeroClass.Assassin:
+                case HeroClass.Barbarian:
+                case HeroClass.Warrior:
+                case HeroClass.Paladin:
+                case HeroClass.Priest:
+                case HeroClass.Rogue:
+                case HeroClass.Necromancer:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// Il colpo di classe, andato a segno o parato. Campagna e PvP avevano
+        /// due catene di if gemelle sulle stesse nove classi: aggiungerne una
+        /// significava ricordarsi di due posti, e infatti l'ascia parata del
+        /// Barbaro era finita solo da una parte. Qui la tabella e' una sola.
+        /// </summary>
+        public IEnumerator PlayClassAttack(
+            PrototypeCardView attacker,
+            PrototypeCardView defender,
+            HeroClass heroClass,
+            bool hit,
+            bool abilityAttack = false,
+            int attackMargin = 1,
+            System.Action onHit = null,
+            System.Action onBlocked = null)
+        {
+            if (attacker == null || defender == null)
+                yield break;
+
+            // Il Ladro chiama l'impatto a meta' raffica: e' l'unico che si porta
+            // dentro la callback invece di riceverla alla fine.
+            bool onHitAlreadyInvoked = false;
+            switch (heroClass)
+            {
+                case HeroClass.Assassin:
+                    yield return hit
+                        ? PlayAssassinShadowStrike(attacker, defender)
+                        : PlayAssassinShadowStrikeBlocked(attacker, defender);
+                    break;
+                case HeroClass.Barbarian:
+                    yield return hit
+                        ? PlayBarbarianAxeSmash(attacker, defender)
+                        : PlayBarbarianAxeSmashBlocked(attacker, defender);
+                    break;
+                case HeroClass.Warrior:
+                    yield return hit
+                        ? PlayWarriorSwordRush(attacker, defender, abilityAttack)
+                        : PlayWarriorSwordBlocked(attacker, defender);
+                    break;
+                case HeroClass.Paladin:
+                    yield return hit
+                        ? PlayPaladinDivineShieldBash(attacker, defender)
+                        : PlayPaladinAegisBlocked(attacker, defender);
+                    break;
+                case HeroClass.Mage:
+                    yield return hit
+                        ? PlayMageArcaneBoltAttack(attacker, defender)
+                        : PlayMageArcaneBoltBlocked(attacker, defender);
+                    break;
+                case HeroClass.Priest:
+                    yield return hit
+                        ? PlayPriestSacredJudgement(attacker, defender)
+                        : PlayPriestJudgementBlocked(attacker, defender);
+                    break;
+                case HeroClass.Rogue:
+                    if (hit)
+                    {
+                        onHitAlreadyInvoked = true;
+                        yield return PlayRogueDaggerFlurry(attacker, defender, attackMargin, onHit);
+                    }
+                    else
+                    {
+                        yield return PlayRogueDaggerBlocked(attacker, defender);
+                    }
+                    break;
+                case HeroClass.Necromancer:
+                    yield return hit
+                        ? PlayNecromancerSoulSwarm(attacker, defender)
+                        : PlayNecromancerSoulWardBlocked(attacker, defender);
+                    break;
+                case HeroClass.Hunter:
+                    yield return hit
+                        ? PlayHunterArrowAttack(attacker, defender)
+                        : PlayHunterArrowMiss(attacker);
+                    break;
+                default:
+                    yield return attacker.PlayAttackAnimation();
+                    yield return ReturnDuelParticipants(attacker, defender, returnAttacker: true, returnDefender: true, wait: 0.26f);
+                    break;
+            }
+
+            if (hit)
+            {
+                if (!onHitAlreadyInvoked)
+                    onHit?.Invoke();
+            }
+            else
+            {
+                onBlocked?.Invoke();
+            }
+        }
+
+        /// <summary>
+        /// I colori dell'esito di un confronto: verde a chi la spunta, rosso a chi
+        /// cede, giallo sul pareggio. Stanno qui perche' li leggono sia la
+        /// campagna sia il PvP, e finche' erano scritti a mano da una parte sola
+        /// il PvP mostrava i totali senza dire chi aveva vinto.
+        /// </summary>
+        public static readonly Color ResolvedStrengthWinnerColor = new Color(0.3f, 1f, 0.5f, 1f);
+        public static readonly Color ResolvedStrengthLoserColor = new Color(1f, 0.25f, 0.18f, 1f);
+        public static readonly Color ResolvedStrengthTieColor = new Color(1f, 0.72f, 0.25f, 1f);
+
+        /// <summary>
+        /// Chi non cede si gonfia in proporzione al tiro: e' lo stesso ingrossamento
+        /// del badge Potenza che usa la campagna.
+        /// </summary>
+        public static float ResolvedStrengthScale(int ownTotal, int otherTotal, int ownRoll)
+        {
+            return ownTotal >= otherTotal ? 1f + Mathf.Max(0, ownRoll) * 0.02f : 1f;
+        }
+
+        public static Color ResolvedStrengthColor(int ownTotal, int otherTotal)
+        {
+            if (ownTotal > otherTotal)
+                return ResolvedStrengthWinnerColor;
+            return ownTotal < otherTotal ? ResolvedStrengthLoserColor : ResolvedStrengthTieColor;
+        }
+
+        /// <summary>
+        /// Il conto delle potenze del confronto: i badge salgono dai valori veri
+        /// ai totali, chi non cede si gonfia, e alla fine il colore dice com'e'
+        /// andata. Unico punto per campagna e PvP.
+        /// </summary>
+        public static IEnumerator AnimateResolvedStrength(
+            PrototypeCardView attacker,
+            PrototypeCardView defender,
+            int attackerStart,
+            int defenderStart,
+            int attackerTotal,
+            int defenderTotal,
+            int attackerRoll,
+            int defenderRoll,
+            float duration,
+            float resultHold)
+        {
+            float attackerScale = ResolvedStrengthScale(attackerTotal, defenderTotal, attackerRoll);
+            float defenderScale = ResolvedStrengthScale(defenderTotal, attackerTotal, defenderRoll);
+            if (attacker != null)
+                attacker.BeginCombatStrengthPresentation(attackerStart);
+            if (defender != null)
+                defender.BeginCombatStrengthPresentation(defenderStart);
+
+            duration = Mathf.Max(0.001f, duration);
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+                float eased = 1f - Mathf.Pow(1f - progress, 3f);
+                if (attacker != null)
+                {
+                    attacker.SetCombatStrengthValue(Mathf.RoundToInt(Mathf.Lerp(attackerStart, attackerTotal, eased)));
+                    attacker.SetCombatStrengthScale(Mathf.Lerp(1f, attackerScale, eased));
+                }
+                if (defender != null)
+                {
+                    defender.SetCombatStrengthValue(Mathf.RoundToInt(Mathf.Lerp(defenderStart, defenderTotal, eased)));
+                    defender.SetCombatStrengthScale(Mathf.Lerp(1f, defenderScale, eased));
+                }
+                yield return null;
+            }
+
+            // Come in campagna: il verdetto si legge sul colore, e resta fermo
+            // il tempo di vederlo prima che parta il colpo.
+            if (attacker != null)
+                attacker.SetStrengthColor(ResolvedStrengthColor(attackerTotal, defenderTotal));
+            if (defender != null)
+                defender.SetStrengthColor(ResolvedStrengthColor(defenderTotal, attackerTotal));
+            if (resultHold > 0f)
+                yield return new WaitForSecondsRealtime(resultHold);
+        }
+
+        /// <summary>
+        /// I totali del confronto tornano alle potenze vere scendendo, non
+        /// sparendo: in PvP questo ritorno era una riga secca e i numeri
+        /// cambiavano di scatto mentre in campagna scivolavano indietro.
+        /// </summary>
+        public static IEnumerator RestoreResolvedStrength(
+            PrototypeCardView attacker,
+            PrototypeCardView defender,
+            int attackerStart,
+            int defenderStart,
+            int attackerTotal,
+            int defenderTotal,
+            float attackerScale,
+            float defenderScale,
+            float duration)
+        {
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float eased = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / Mathf.Max(0.001f, duration)));
+                if (attacker != null)
+                {
+                    attacker.SetCombatStrengthValue(Mathf.RoundToInt(Mathf.Lerp(attackerTotal, attackerStart, eased)));
+                    attacker.SetCombatStrengthScale(Mathf.Lerp(attackerScale, 1f, eased));
+                }
+                if (defender != null)
+                {
+                    defender.SetCombatStrengthValue(Mathf.RoundToInt(Mathf.Lerp(defenderTotal, defenderStart, eased)));
+                    defender.SetCombatStrengthScale(Mathf.Lerp(defenderScale, 1f, eased));
+                }
+                yield return null;
+            }
+
+            if (attacker != null)
+            {
+                attacker.EndCombatStrengthPresentation(attackerStart);
+                attacker.SetCombatStrengthScale(1f);
+                attacker.SetStrengthColor(Color.white);
+            }
+            if (defender != null)
+            {
+                defender.EndCombatStrengthPresentation(defenderStart);
+                defender.SetCombatStrengthScale(1f);
+                defender.SetStrengthColor(Color.white);
             }
         }
 
@@ -523,77 +793,101 @@ namespace AccardND.Battlefield
             Quaternion defenderRotation = defenderRect.localRotation;
             Vector3 attackDirection = defenderStart - attackerStart;
             float side = Mathf.Abs(attackDirection.x) < 0.001f ? 1f : Mathf.Sign(attackDirection.x);
-            Vector3 leapTarget = defenderStart - new Vector3(side * 86f, 0f, 0f);
-            Vector3 leapApex = Vector3.Lerp(attackerStart, leapTarget, 0.55f) + new Vector3(0f, 110f, 0f);
+            Vector3 direction = attackDirection.sqrMagnitude > 0.001f ? attackDirection.normalized : Vector3.right;
+            int attackerSibling = attackerRect.GetSiblingIndex();
+
+            // Il Barbaro deve poter abbandonare temporaneamente il proprio slot e passare
+            // davanti alle altre pedine durante il balzo.
+            attacker.SetLayoutIgnored(true);
+            attackerRect.SetAsLastSibling();
 
             GameObject axe = CreateOverlaySprite(
                 parent,
                 "Barbarian Double Axe",
                 LoadBarbarianDoubleAxeSprite(),
-                new Vector2(220f, 220f),
+                new Vector2(230f, 300f),
                 out RectTransform axeRect,
                 out Image axeImage);
             axeImage.color = new Color(1f, 1f, 1f, 0f);
 
-            float leapDuration = 0.34f;
+            // Caricamento: la pedina si comprime prima di spiccare il salto. L'ascia resta
+            // saldamente accanto al Barbaro, senza diventare un proiettile.
+            float windupDuration = 0.18f;
             float elapsed = 0f;
-            while (elapsed < leapDuration)
+            while (elapsed < windupDuration)
             {
                 elapsed += Time.unscaledDeltaTime;
-                float progress = Mathf.Clamp01(elapsed / leapDuration);
-                Vector3 a = Vector3.LerpUnclamped(attackerStart, leapApex, progress);
-                Vector3 b = Vector3.LerpUnclamped(leapApex, leapTarget, progress);
-                attackerRect.position = Vector3.LerpUnclamped(a, b, progress);
-                attackerRect.localScale = attackerScale * Mathf.Lerp(1f, 1.16f, Mathf.Sin(progress * Mathf.PI));
-                attackerRect.localRotation = attackerRotation * Quaternion.Euler(0f, 0f, -side * Mathf.Lerp(0f, 10f, Mathf.Sin(progress * Mathf.PI)));
-                axeRect.position = attackerRect.position + new Vector3(side * 34f, 62f, 0f);
-                axeRect.localRotation = Quaternion.Euler(0f, 0f, -side * Mathf.Lerp(58f, 18f, progress));
-                axeRect.localScale = Vector3.one * Mathf.Lerp(0.72f, 1.05f, progress);
-                axeImage.color = new Color(1f, 1f, 1f, Mathf.Clamp01(progress * 3.2f));
+                float progress = Mathf.Clamp01(elapsed / windupDuration);
+                float eased = Mathf.SmoothStep(0f, 1f, progress);
+                attackerRect.position = Vector3.LerpUnclamped(attackerStart, attackerStart - direction * 22f, eased);
+                attackerRect.localScale = Vector3.Scale(attackerScale, new Vector3(1.08f, Mathf.Lerp(1f, 0.88f, eased), 1f));
+                attackerRect.localRotation = attackerRotation * Quaternion.Euler(0f, 0f, -side * 8f * eased);
+                axeRect.position = attackerRect.position - direction * 48f + Vector3.up * 58f;
+                axeRect.localRotation = Quaternion.Euler(0f, 0f, -side * 132f);
+                axeRect.localScale = Vector3.one * Mathf.Lerp(0.72f, 0.92f, eased);
+                axeImage.color = new Color(1f, 1f, 1f, Mathf.Clamp01(progress * 6f));
                 yield return null;
             }
 
-            Vector3 smashStart = attackerRect.position;
-            Vector3 smashEnd = defenderStart - new Vector3(side * 58f, -8f, 0f);
-            float smashDuration = 0.28f;
+            // Balzo: e' la pedina del Barbaro a raggiungere il bersaglio. La parabola alta
+            // rende inequivocabile il decollo e termina sovrapposta alla pedina colpita.
+            Vector3 jumpStart = attackerRect.position;
+            Vector3 landingPoint = defenderStart - direction * 18f + Vector3.up * 12f;
+            float jumpDuration = 0.42f;
             elapsed = 0f;
-            while (elapsed < smashDuration)
+            while (elapsed < jumpDuration)
             {
                 elapsed += Time.unscaledDeltaTime;
-                float progress = Mathf.Clamp01(elapsed / smashDuration);
-                float fall = progress * progress;
-                attackerRect.position = Vector3.LerpUnclamped(smashStart, smashEnd, fall);
-                attackerRect.localScale = attackerScale * Mathf.Lerp(1.12f, 1.02f, fall);
-                attackerRect.localRotation = attackerRotation * Quaternion.Euler(0f, 0f, -side * Mathf.Lerp(10f, 4f, fall));
-                axeRect.position = attackerRect.position + new Vector3(side * Mathf.Lerp(38f, 70f, fall), Mathf.Lerp(64f, 6f, fall), 0f);
-                axeRect.localRotation = Quaternion.Euler(0f, 0f, -side * Mathf.Lerp(78f, -34f, fall));
-                axeRect.localScale = Vector3.one * Mathf.Lerp(1.1f, 1.45f, Mathf.Sin(progress * Mathf.PI));
-                axeImage.color = new Color(1f, 1f, 1f, Mathf.Clamp01(Mathf.Min(progress * 8f, (1f - progress) * 10f)));
+                float progress = Mathf.Clamp01(elapsed / jumpDuration);
+                float travel = Mathf.SmoothStep(0f, 1f, progress);
+                float arc = Mathf.Sin(progress * Mathf.PI) * 175f;
+                attackerRect.position = Vector3.LerpUnclamped(jumpStart, landingPoint, travel) + Vector3.up * arc;
+                attackerRect.localScale = attackerScale * (1f + Mathf.Sin(progress * Mathf.PI) * 0.13f);
+                attackerRect.localRotation = attackerRotation * Quaternion.Euler(0f, 0f, -side * Mathf.Sin(progress * Mathf.PI) * 14f);
+                axeRect.position = attackerRect.position - direction * 34f + Vector3.up * 54f;
+                axeRect.localRotation = Quaternion.Euler(0f, 0f, -side * Mathf.Lerp(132f, 168f, progress));
+                axeImage.color = new Color(1f, 1f, 1f, 1f);
+                yield return null;
+            }
 
-                defenderRect.position = defenderStart + new Vector3(UnityEngine.Random.Range(-4f, 4f), Mathf.Sin(progress * Mathf.PI) * 18f, 0f);
-                defenderRect.localRotation = defenderRotation * Quaternion.Euler(0f, 0f, Mathf.Sin(progress * Mathf.PI * 5f) * 6f);
+            // Slash ravvicinato all'atterraggio: l'ascia attraversa soltanto il bersaglio,
+            // mentre il Barbaro resta fisicamente sopra di lui.
+            Vector3 slashStart = landingPoint - direction * 68f + Vector3.up * 82f;
+            Vector3 slashEnd = landingPoint + direction * 62f - Vector3.up * 52f;
+            float slashDuration = 0.20f;
+            elapsed = 0f;
+            while (elapsed < slashDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / slashDuration);
+                float eased = 1f - Mathf.Pow(1f - progress, 3f);
+                attackerRect.position = landingPoint + Vector3.up * (Mathf.Sin(progress * Mathf.PI) * 10f);
+                attackerRect.localScale = attackerScale * Mathf.Lerp(1.08f, 1f, eased);
+                attackerRect.localRotation = attackerRotation * Quaternion.Euler(0f, 0f, side * Mathf.Lerp(-10f, 8f, eased));
+                axeRect.position = Vector3.LerpUnclamped(slashStart, slashEnd, eased);
+                axeRect.localRotation = Quaternion.Euler(0f, 0f, -side * Mathf.Lerp(168f, -48f, eased));
+                axeRect.localScale = Vector3.one * Mathf.Lerp(1.05f, 1.28f, Mathf.Sin(progress * Mathf.PI));
 
-                if (progress > 0.48f)
-                {
-                    float crackProgress = Mathf.Clamp01((progress - 0.48f) / 0.22f);
-                    float shake = (1f - crackProgress) * 10f;
-                    defenderRect.position += new Vector3(UnityEngine.Random.Range(-shake, shake), UnityEngine.Random.Range(-shake, shake) * 0.35f, 0f);
-                }
-
+                float shake = Mathf.Sin(progress * Mathf.PI) * 9f;
+                defenderRect.position = defenderStart + new Vector3(UnityEngine.Random.Range(-shake, shake), -Mathf.Sin(progress * Mathf.PI) * 14f, 0f);
+                defenderRect.localRotation = defenderRotation * Quaternion.Euler(0f, 0f, Mathf.Sin(progress * Mathf.PI * 5f) * 7f);
                 yield return null;
             }
 
             yield return StartCoroutine(PlayImpactPulse(defenderRect));
-            float returnDuration = 0.22f;
+            Destroy(axe);
+
+            float returnDuration = 0.30f;
             elapsed = 0f;
             Vector3 returnStart = attackerRect.position;
             Quaternion returnRotation = attackerRect.localRotation;
             while (elapsed < returnDuration)
             {
                 elapsed += Time.unscaledDeltaTime;
-                float progress = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / returnDuration));
-                attackerRect.position = Vector3.LerpUnclamped(returnStart, attackerStart, progress);
-                attackerRect.localScale = Vector3.LerpUnclamped(attackerRect.localScale, attackerScale, progress);
+                float rawProgress = Mathf.Clamp01(elapsed / returnDuration);
+                float progress = Mathf.SmoothStep(0f, 1f, rawProgress);
+                attackerRect.position = Vector3.LerpUnclamped(returnStart, attackerStart, progress) + Vector3.up * (Mathf.Sin(rawProgress * Mathf.PI) * 54f);
+                attackerRect.localScale = attackerScale * (1f + Mathf.Sin(rawProgress * Mathf.PI) * 0.05f);
                 attackerRect.localRotation = Quaternion.SlerpUnclamped(returnRotation, attackerRotation, progress);
                 yield return null;
             }
@@ -604,7 +898,8 @@ namespace AccardND.Battlefield
             attackerRect.position = attackerStart;
             attackerRect.localScale = attackerScale;
             attackerRect.localRotation = attackerRotation;
-            Destroy(axe);
+            attackerRect.SetSiblingIndex(attackerSibling);
+            attacker.SetLayoutIgnored(false);
         }
 
         public IEnumerator PlayAssassinShadowStrikeBlocked(PrototypeCardView attacker, PrototypeCardView defender)
@@ -752,13 +1047,11 @@ namespace AccardND.Battlefield
                 yield return null;
             }
 
-            yield return StartCoroutine(PlayClassBlockedWard(
+            yield return StartCoroutine(PlayBarbarianGlancingMiss(
                 parent,
                 blockPoint,
-                defenderRect,
-                new Color(1f, 0.22f, 0.02f, 1f),
-                new Color(1f, 0.72f, 0.18f, 1f),
-                "Barbarian Rage Guard"));
+                normalizedDirection,
+                side));
 
             float returnDuration = 0.22f;
             elapsed = 0f;
@@ -806,9 +1099,16 @@ namespace AccardND.Battlefield
             attacker.SetLayoutIgnored(true);
             attackerRect.SetAsLastSibling();
 
+            WarriorSupremeVfx supremeVfx = attacker.GetComponent<WarriorSupremeVfx>();
+            if (supremeVfx != null && supremeVfx.HasEmpoweredSword)
+                StartCoroutine(supremeVfx.PlaySwordInfusion(parent, defenderRect));
+
             if (abilityAttack)
             {
                 yield return StartCoroutine(PlayWarriorJudgementSword(parent, defenderRect));
+                if (attacker == null || attackerRect == null)
+                    yield break;
+
                 attackerRect.position = attackerStart;
                 attackerRect.localScale = attackerScale;
                 attackerRect.localRotation = attackerRotation;
@@ -832,7 +1132,15 @@ namespace AccardND.Battlefield
             }
 
             yield return StartCoroutine(PlayWarriorCleaveStrike(parent, attackerRect, defenderRect, normalizedDirection, blocked: false));
+            if (attacker == null || attackerRect == null)
+                yield break;
+
             yield return StartCoroutine(PlayImpactPulse(defenderRect));
+            // In PvP the presentation can remove a defeated card view while the
+            // impact animation is yielding. Unity's destroyed-object null check
+            // must happen before restoring the attacker transform.
+            if (attacker == null || attackerRect == null)
+                yield break;
 
             float returnDuration = 0.18f;
             elapsed = 0f;
@@ -875,6 +1183,10 @@ namespace AccardND.Battlefield
 
             attacker.SetLayoutIgnored(true);
             attackerRect.SetAsLastSibling();
+
+            WarriorSupremeVfx supremeVfx = attacker.GetComponent<WarriorSupremeVfx>();
+            if (supremeVfx != null && supremeVfx.HasEmpoweredSword)
+                StartCoroutine(supremeVfx.PlaySwordInfusion(parent, defenderRect));
 
             float windupDuration = 0.14f;
             float elapsed = 0f;
@@ -1159,8 +1471,8 @@ namespace AccardND.Battlefield
             float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
             arrowRect.localRotation = Quaternion.Euler(0f, 0f, angle);
 
-            float drawDuration = 0.2f;
-            float flightDuration = 0.34f;
+            float drawDuration = 0.12f;
+            float flightDuration = 0.2f;
             float elapsed = 0f;
             Vector3 originalScale = attacker.RectTransform.localScale;
             Vector3 originalPosition = attacker.RectTransform.position;
@@ -1248,6 +1560,9 @@ namespace AccardND.Battlefield
             float elapsed = 0f;
             while (elapsed < duration)
             {
+                if (target == null)
+                    yield break;
+
                 elapsed += Time.unscaledDeltaTime;
                 float progress = Mathf.Clamp01(elapsed / duration);
                 float eased = Mathf.SmoothStep(0f, 1f, progress);
@@ -1511,12 +1826,28 @@ namespace AccardND.Battlefield
 
             GameObject cleaver = CreateOverlaySprite(parent, "Bragus Flying Cleaver", LoadBragusCleaverSprite(), new Vector2(260f, 260f), out RectTransform cleaverRect, out Image cleaverImage);
             GameObject aura = CreateOverlaySprite(parent, "Bragus Cleaver Aura", LoadHunterExplosionCoreSprite(), new Vector2(220f, 220f), out RectTransform auraRect, out Image auraImage);
+            GameObject trailObject = new GameObject(
+                "Bragus Cleaver Dice Trail",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(ArcaneDiceTrailGraphic));
+            RectTransform trailRect = (RectTransform)trailObject.transform;
+            trailRect.SetParent(parent, false);
+            trailRect.anchorMin = Vector2.zero;
+            trailRect.anchorMax = Vector2.one;
+            trailRect.offsetMin = Vector2.zero;
+            trailRect.offsetMax = Vector2.zero;
+            trailRect.SetSiblingIndex(Mathf.Max(0, cleaverRect.GetSiblingIndex() - 1));
+            ArcaneDiceTrailGraphic diceTrail = trailObject.GetComponent<ArcaneDiceTrailGraphic>();
+            diceTrail.raycastTarget = false;
+            diceTrail.Configure(new Color(1f, 0.015f, 0.005f), cleaverRect);
+            cleaverRect.position = start;
+            auraRect.position = start;
             cleaverImage.color = new Color(1f, 1f, 1f, 0f);
             auraImage.color = new Color(1f, 0.18f, 0.04f, 0f);
-            List<GameObject> trailSegments = new List<GameObject>(24);
-            List<Image> trailImages = new List<Image>(24);
-            List<float> trailBirthProgress = new List<float>(24);
-            const int maxTrailSegments = 22;
+            // È la stessa ribbon nera/rossa usata dai dadi: segue direttamente
+            // la mannaia e si interrompe all'impatto, dove parte lo slash esistente.
+            diceTrail.Begin();
 
             Vector3 originalDefenderPosition = defenderRect.position;
             Vector3 originalDefenderScale = defenderRect.localScale;
@@ -1547,41 +1878,10 @@ namespace AccardND.Battlefield
                 auraRect.localScale = Vector3.one * Mathf.Lerp(0.32f, 1.05f, arc);
                 auraImage.color = new Color(1f, 0.12f, 0.02f, alpha * 0.42f);
 
-                int desiredTrailSegments = Mathf.Clamp(Mathf.FloorToInt(progress * maxTrailSegments), 0, maxTrailSegments);
-                while (trailSegments.Count < desiredTrailSegments)
-                {
-                    float segmentProgress = trailSegments.Count / (float)Mathf.Max(1, maxTrailSegments - 1);
-                    float segmentArc = Mathf.Sin(segmentProgress * Mathf.PI);
-                    Vector3 segmentPosition = Vector3.Lerp(start, travelEnd, Mathf.SmoothStep(0f, 1f, segmentProgress))
-                        + perpendicular * Mathf.Sin(segmentProgress * Mathf.PI * 2.2f) * 92f
-                        + Vector3.up * segmentArc * 135f;
-                    float segmentAngle = angle + side * (segmentProgress * 620f + 32f);
-                    float segmentScale = Mathf.Lerp(0.34f, cleaverScale * 1.18f, segmentProgress);
-                    float spiralOffset = Mathf.Sin(segmentProgress * Mathf.PI * 5.5f) * Mathf.Lerp(12f, 42f, segmentProgress);
-                    Vector3 segmentForward = Quaternion.Euler(0f, 0f, segmentAngle) * Vector3.right;
-                    Vector3 segmentSide = Quaternion.Euler(0f, 0f, segmentAngle) * Vector3.up;
-
-                    GameObject segment = CreateOverlaySprite(parent, "Bragus Cleaver Spiral Trail", LoadMageTrailSprite(), new Vector2(230f, 74f), out RectTransform segmentRect, out Image segmentImage);
-                    segmentRect.position = segmentPosition - segmentForward * Mathf.Lerp(28f, 96f, segmentProgress) + segmentSide * spiralOffset;
-                    segmentRect.localRotation = Quaternion.Euler(0f, 0f, segmentAngle + 180f);
-                    segmentRect.localScale = new Vector3(segmentScale * 1.55f, segmentScale * 0.52f, 1f);
-                    segmentImage.color = new Color(1f, 0.025f, 0.01f, Mathf.Lerp(0.18f, 0.72f, segmentProgress));
-                    trailSegments.Add(segment);
-                    trailImages.Add(segmentImage);
-                    trailBirthProgress.Add(segmentProgress);
-                }
-
-                for (int i = 0; i < trailImages.Count; i++)
-                {
-                    float maturity = Mathf.InverseLerp(trailBirthProgress[i], 1f, progress);
-                    float segmentAlpha = Mathf.Lerp(0.28f, 0.78f, trailBirthProgress[i]) * Mathf.Lerp(0.92f, 1.08f, Mathf.Sin(maturity * Mathf.PI));
-                    trailImages[i].color = new Color(1f, 0.02f, 0.01f, segmentAlpha * alpha);
-                }
                 yield return null;
             }
 
-            for (int i = 0; i < trailSegments.Count; i++)
-                Destroy(trailSegments[i]);
+            diceTrail.StopEmission();
             Destroy(aura);
             Destroy(cleaver);
             if (hit)
@@ -1595,6 +1895,115 @@ namespace AccardND.Battlefield
                 originalDefenderScale,
                 originalDefenderRotation,
                 angle));
+            Destroy(trailObject);
+        }
+
+        public IEnumerator PlayJurinashorPhaseOneDeflection(
+            PrototypeCardView attacker,
+            PrototypeCardView defender,
+            System.Func<bool> incomingHitPending = null)
+        {
+            RectTransform parent = ResolveProjectileParent(defender);
+            if (parent == null || defender == null || defender.RectTransform == null)
+                yield break;
+
+            Sprite weaponSprite = jurinashorPhaseOneWeaponSprite != null
+                ? jurinashorPhaseOneWeaponSprite
+                : jurinashorPhaseOneWeaponSprite = Resources.Load<Sprite>("UI/jurinashor_weapon_phase_1");
+            if (weaponSprite == null)
+                yield break;
+
+            GameObject weapon = CreateOverlaySprite(
+                parent,
+                "Jurinashor Phase 1 Deflection Weapon",
+                weaponSprite,
+                new Vector2(340f, 635f),
+                out RectTransform weaponRect,
+                out Image weaponImage);
+            weaponImage.preserveAspect = true;
+            // Il manico è nella parte inferiore dell'asset: questo è il fulcro
+            // fisico attorno al quale la lama deve ruotare durante la parata.
+            weaponRect.pivot = new Vector2(0.5f, 0.12f);
+
+            GameObject tipTrackerObject = new GameObject(
+                "Jurinashor Deflection Blade Tip",
+                typeof(RectTransform));
+            RectTransform tipTracker = (RectTransform)tipTrackerObject.transform;
+            tipTracker.SetParent(weaponRect, false);
+            tipTracker.anchorMin = new Vector2(0.5f, 0.975f);
+            tipTracker.anchorMax = new Vector2(0.5f, 0.975f);
+            tipTracker.pivot = new Vector2(0.5f, 0.5f);
+            tipTracker.anchoredPosition = Vector2.zero;
+            tipTracker.sizeDelta = new Vector2(4f, 4f);
+
+            GameObject trailObject = new GameObject(
+                "Jurinashor Green Deflection Trail",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(ArcaneDiceTrailGraphic));
+            RectTransform trailRect = (RectTransform)trailObject.transform;
+            trailRect.SetParent(parent, false);
+            trailRect.anchorMin = Vector2.zero;
+            trailRect.anchorMax = Vector2.one;
+            trailRect.offsetMin = Vector2.zero;
+            trailRect.offsetMax = Vector2.zero;
+            trailRect.SetSiblingIndex(Mathf.Max(0, weaponRect.GetSiblingIndex() - 1));
+            ArcaneDiceTrailGraphic trail = trailObject.GetComponent<ArcaneDiceTrailGraphic>();
+            trail.raycastTarget = false;
+            // La ribbon segue la punta, non più il centro dell'immagine.
+            trail.Configure(new Color(0.16f, 1f, 0.28f), tipTracker);
+
+            Vector3 center = defender.RectTransform.position + Vector3.up * 28f;
+            Vector3 incomingDirection = attacker != null && attacker.RectTransform != null
+                ? center - attacker.RectTransform.position
+                : Vector3.up;
+            if (incomingDirection.sqrMagnitude < 0.001f)
+                incomingDirection = Vector3.up;
+            // Lo sprite ha la lama lungo il proprio asse Y: sottrarre 90 gradi
+            // lo mette parallelo alla linea attacker -> boss prima della rotazione.
+            float incomingAngle = Mathf.Atan2(incomingDirection.y, incomingDirection.x) * Mathf.Rad2Deg - 90f;
+            const float defaultDuration = 0.48f;
+            const float minimumVisibleDuration = 0.16f;
+            const float maximumSafetyDuration = 3f;
+            float elapsed = 0f;
+
+            // Inizializza completamente il bersaglio PRIMA del primo campione.
+            // Prima la trail campionava la posizione prefab (0,0) e al frame
+            // successivo il centro del boss, generando la lunga barra verticale.
+            weaponRect.position = center;
+            weaponRect.localRotation = Quaternion.Euler(0f, 0f, incomingAngle);
+            weaponRect.localScale = Vector3.one * 0.78f;
+            weaponImage.color = new Color(1f, 1f, 1f, 0f);
+            Canvas.ForceUpdateCanvases();
+            trail.Begin();
+            while (elapsed < maximumSafetyDuration
+                && (elapsed < minimumVisibleDuration
+                    || (incomingHitPending != null ? incomingHitPending() : elapsed < defaultDuration)))
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float intro = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / 0.11f));
+                float spin = elapsed * 3000f;
+                float orbitAngle = elapsed * Mathf.PI * 12.5f;
+                // Solo un lieve restringimento rispetto ai precedenti 68 px:
+                // la scia resta ampia ma passa appena più vicina al manico-pivot.
+                float radius = 64f * intro;
+                float alpha = intro;
+
+                weaponRect.position = center + new Vector3(
+                    Mathf.Cos(orbitAngle) * radius,
+                    Mathf.Sin(orbitAngle) * radius * 0.44f,
+                    0f);
+                weaponRect.localRotation = Quaternion.Euler(0f, 0f, incomingAngle + spin);
+                weaponRect.localScale = Vector3.one * Mathf.Lerp(0.78f, 0.96f, intro);
+                weaponImage.color = new Color(1f, 1f, 1f, alpha);
+                yield return null;
+            }
+
+            trail.StopEmission();
+            weaponImage.color = Color.clear;
+            Destroy(weapon);
+            yield return new WaitForSecondsRealtime(0.16f);
+            Destroy(trailObject);
         }
 
         private static IEnumerator PlayBragusCleaverImpact(
@@ -1693,13 +2102,59 @@ namespace AccardND.Battlefield
                 Destroy(shard.obj);
         }
 
-        public IEnumerator PlayAssassinInhibitSmoke(PrototypeCardView target)
+        /// <summary>
+        /// Lancia una bomba fumogena sull'avversario inibito. La nube resta agganciata
+        /// alla carta finche' il malus e' attivo, invece di essere solo un flash.
+        /// </summary>
+        public IEnumerator PlayAssassinSmokeBomb(
+            PrototypeCardView caster,
+            PrototypeCardView target,
+            Func<bool> isInhibited)
         {
             RectTransform parent = ResolveProjectileParent(target);
-            if (parent == null || target == null)
+            if (parent == null || caster == null || target == null)
                 yield break;
 
             RectTransform targetRect = target.RectTransform;
+            RectTransform casterRect = caster.RectTransform;
+            if (targetRect == null || casterRect == null)
+                yield break;
+
+            GameObject bomb = CreateOverlaySprite(
+                parent,
+                "Assassin Smoke Bomb",
+                LoadAssassinSmokeBombSprite(),
+                new Vector2(112f, 112f),
+                out RectTransform bombRect,
+                out Image bombImage);
+            Vector3 launchPoint = casterRect.position + new Vector3(0f, 35f, 0f);
+            float flightDuration = 0.52f;
+            float flightElapsed = 0f;
+            while (flightElapsed < flightDuration)
+            {
+                flightElapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(flightElapsed / flightDuration);
+                Vector3 destination = targetRect.position;
+                bombRect.position = Vector3.Lerp(launchPoint, destination, progress)
+                    + Vector3.up * (Mathf.Sin(progress * Mathf.PI) * 150f);
+                bombRect.localRotation = Quaternion.Euler(0f, 0f, -progress * 900f);
+                bombRect.localScale = Vector3.one * Mathf.Lerp(0.72f, 1.04f, Mathf.SmoothStep(0f, 1f, progress));
+                bombImage.color = new Color(1f, 1f, 1f, Mathf.Lerp(0.8f, 1f, progress));
+                yield return null;
+            }
+            Destroy(bomb);
+
+            StartCoroutine(KeepAssassinSmokeOnInhibitedTarget(parent, targetRect, isInhibited));
+        }
+
+        private IEnumerator KeepAssassinSmokeOnInhibitedTarget(
+            RectTransform parent,
+            RectTransform targetRect,
+            Func<bool> isInhibited)
+        {
+            if (parent == null || targetRect == null)
+                yield break;
+
             Vector2 targetSize = targetRect.rect.size;
             float smokeSize = Mathf.Clamp(Mathf.Max(targetSize.x, targetSize.y) * 3.1f, 560f, 1040f);
 
@@ -1718,37 +2173,34 @@ namespace AccardND.Battlefield
                 out RectTransform veilRect,
                 out Image veilImage);
 
-            Vector3 originalTargetScale = targetRect.localScale;
-            Quaternion originalTargetRotation = targetRect.localRotation;
-            float duration = 0.78f;
+            float duration = 0.28f;
             float elapsed = 0f;
-            while (elapsed < duration)
+            // La nube vive sul canvas degli effetti, non sotto la pedina. Se il bersaglio
+            // muore mentre e' ancora inibito, il suo RectTransform viene distrutto ma lo
+            // stato puo' conservare InhibitedTurns > 0: in quel caso l'overlay rimarrebbe
+            // orfano (o la coroutine terminerebbe con MissingReferenceException) senza
+            // raggiungere i Destroy finali.
+            while (targetRect != null
+                && targetRect.gameObject.activeInHierarchy
+                && (elapsed < duration || (isInhibited != null && isInhibited())))
             {
                 elapsed += Time.unscaledDeltaTime;
-                float progress = Mathf.Clamp01(elapsed / duration);
-                float appear = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.22f));
-                float vanish = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((progress - 0.58f) / 0.42f));
-                float alpha = Mathf.Clamp01(appear * (1f - vanish));
-                float shiver = Mathf.Sin(progress * Mathf.PI * 8f);
+                float progress = elapsed / duration;
+                float appear = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress));
+                float alpha = Mathf.Lerp(0.52f, 0.68f, (Mathf.Sin(elapsed * 3.4f) + 1f) * 0.5f) * appear;
                 Vector3 center = targetRect.position;
 
-                smokeRect.position = center + new Vector3(Mathf.Sin(progress * Mathf.PI * 2f) * 8f, 6f, 0f);
-                veilRect.position = center + new Vector3(Mathf.Cos(progress * Mathf.PI * 2.4f) * 10f, -8f, 0f);
-                smokeRect.localScale = Vector3.one * Mathf.Lerp(0.58f, 1.22f, Mathf.SmoothStep(0f, 1f, progress));
-                veilRect.localScale = Vector3.one * Mathf.Lerp(0.42f, 1.36f, Mathf.SmoothStep(0f, 1f, progress));
-                smokeRect.localRotation = Quaternion.Euler(0f, 0f, progress * 34f);
-                veilRect.localRotation = Quaternion.Euler(0f, 0f, -progress * 47f);
+                smokeRect.position = center + new Vector3(Mathf.Sin(elapsed * 2.2f) * 8f, 6f, 0f);
+                veilRect.position = center + new Vector3(Mathf.Cos(elapsed * 2.7f) * 10f, -8f, 0f);
+                smokeRect.localScale = Vector3.one * Mathf.Lerp(0.9f, 1.16f, (Mathf.Sin(elapsed * 1.8f) + 1f) * 0.5f);
+                veilRect.localScale = Vector3.one * Mathf.Lerp(0.8f, 1.22f, (Mathf.Sin(elapsed * 2.1f + 1f) + 1f) * 0.5f);
+                smokeRect.localRotation = Quaternion.Euler(0f, 0f, elapsed * 24f);
+                veilRect.localRotation = Quaternion.Euler(0f, 0f, -elapsed * 31f);
                 smokeImage.color = new Color(0.86f, 0.82f, 0.95f, alpha * 0.82f);
                 veilImage.color = new Color(0.36f, 0.32f, 0.48f, alpha * 0.58f);
-
-                float pulse = Mathf.Sin(Mathf.Clamp01(progress / 0.48f) * Mathf.PI) * 0.075f;
-                targetRect.localScale = originalTargetScale * (1f + pulse);
-                targetRect.localRotation = originalTargetRotation * Quaternion.Euler(0f, 0f, shiver * 2.2f * (1f - vanish));
                 yield return null;
             }
 
-            targetRect.localScale = originalTargetScale;
-            targetRect.localRotation = originalTargetRotation;
             Destroy(veil);
             Destroy(smoke);
         }
@@ -2033,9 +2485,12 @@ namespace AccardND.Battlefield
                 parent,
                 "Paladin Divine Shield Bash",
                 LoadPaladinShieldSprite(),
-                new Vector2(170f, 190f),
+                new Vector2(230f, 230f),
                 out RectTransform shieldRect,
                 out Image shieldImage);
+            // Sigilli ancestrali persistenti: la scia deve rimanere leggibile dietro
+            // lo scudo anche durante il contrattacco rapido.
+            var ancestralTrail = new List<(GameObject obj, RectTransform rect, Image image, float birth, float rotation)>();
 
             float windupDuration = 0.16f;
             float elapsed = 0f;
@@ -2050,7 +2505,7 @@ namespace AccardND.Battlefield
                 crestRect.localScale = Vector3.one * Mathf.Lerp(0.36f, 0.92f, eased);
                 crestImage.color = new Color(1f, 0.78f, 0.3f, Mathf.Clamp01(Mathf.Min(progress * 8f, (1f - progress * 0.28f)) * 0.82f));
                 shieldRect.position = start - direction * 36f + new Vector3(0f, 12f, 0f);
-                shieldRect.localRotation = Quaternion.Euler(0f, 0f, angle - 90f);
+                shieldRect.localRotation = Quaternion.Euler(0f, 0f, angle - 90f - progress * 80f);
                 shieldRect.localScale = Vector3.one * Mathf.Lerp(0.74f, 1.04f, eased);
                 shieldImage.color = new Color(1f, 0.9f, 0.62f, Mathf.Clamp01(progress * 7f));
                 yield return null;
@@ -2065,9 +2520,35 @@ namespace AccardND.Battlefield
                 float eased = 1f - Mathf.Pow(1f - progress, 3f);
                 Vector3 arc = Vector3.up * Mathf.Sin(progress * Mathf.PI) * 18f;
                 shieldRect.position = Vector3.LerpUnclamped(start, end, eased) + arc;
-                shieldRect.localRotation = Quaternion.Euler(0f, 0f, angle - 90f + Mathf.Sin(progress * Mathf.PI) * 7f);
+                // Il contrattacco usa lo stesso attacco di classe: lo scudo attraversa
+                // il campo ruotando, invece di limitarsi al piccolo colpo oscillante.
+                shieldRect.localRotation = Quaternion.Euler(0f, 0f, angle - 90f - eased * 720f);
                 shieldRect.localScale = Vector3.one * Mathf.Lerp(1.04f, 1.22f, Mathf.Sin(progress * Mathf.PI));
                 shieldImage.color = new Color(1f, 0.88f, 0.54f, Mathf.Clamp01(Mathf.Min(progress * 10f, (1f - progress) * 12f)));
+
+                if (ancestralTrail.Count < 18)
+                {
+                    GameObject glyph = CreateOverlaySprite(
+                        parent,
+                        "Paladin Ancestral Shield Trail",
+                        LoadPaladinCrestSprite(),
+                        new Vector2(118f, 118f),
+                        out RectTransform glyphRect,
+                        out Image glyphImage);
+                    glyphRect.position = shieldRect.position - direction * 20f;
+                    glyphRect.localScale = Vector3.one * Mathf.Lerp(0.42f, 0.74f, progress);
+                    glyphRect.localRotation = Quaternion.Euler(0f, 0f, angle - 90f - eased * 180f);
+                    glyphImage.color = new Color(1f, 0.71f, 0.2f, 0.82f);
+                    ancestralTrail.Add((glyph, glyphRect, glyphImage, progress, UnityEngine.Random.Range(-130f, 130f)));
+                }
+
+                foreach (var glyph in ancestralTrail)
+                {
+                    float age = Mathf.Clamp01((progress - glyph.birth) / 0.46f);
+                    glyph.rect.localScale = Vector3.one * Mathf.Lerp(0.78f, 1.42f, age);
+                    glyph.rect.localRotation *= Quaternion.Euler(0f, 0f, glyph.rotation * Time.unscaledDeltaTime);
+                    glyph.image.color = new Color(1f, 0.65f, 0.14f, (1f - age) * 0.68f);
+                }
 
                 crestRect.position = shieldRect.position - direction * 42f;
                 crestRect.localRotation = Quaternion.Euler(0f, 0f, progress * 96f);
@@ -2079,6 +2560,8 @@ namespace AccardND.Battlefield
             attackerRect.localScale = originalScale;
             Destroy(crest);
             Destroy(shield);
+            foreach (var glyph in ancestralTrail)
+                Destroy(glyph.obj);
             yield return StartCoroutine(PlayPaladinHolyImpact(parent, defenderRect.position, blocked: false));
             yield return StartCoroutine(PlayImpactPulse(defenderRect));
         }
@@ -2120,6 +2603,42 @@ namespace AccardND.Battlefield
             Destroy(shield);
         }
 
+        /// <summary>La parata vera e propria alza lo scudo illustrato davanti alla pedina.</summary>
+        public IEnumerator PlayPaladinAegisRaised(PrototypeCardView target)
+        {
+            RectTransform parent = ResolveProjectileParent(target);
+            if (parent == null || target == null)
+                yield break;
+
+            RectTransform targetRect = target.RectTransform;
+            GameObject shield = CreateOverlaySprite(
+                parent,
+                "Paladin Raised Aegis",
+                LoadPaladinShieldSprite(),
+                new Vector2(250f, 250f),
+                out RectTransform shieldRect,
+                out Image shieldImage);
+
+            const float duration = 0.62f;
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+                float eased = Mathf.SmoothStep(0f, 1f, progress);
+                float appear = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.18f));
+                float fade = 1f - Mathf.SmoothStep(0.42f, 1f, progress);
+                float pulse = Mathf.Sin(progress * Mathf.PI);
+                shieldRect.position = targetRect.position + new Vector3(0f, Mathf.Lerp(-92f, 16f + pulse * 5f, eased), 0f);
+                shieldRect.localScale = Vector3.one * Mathf.Lerp(0.36f, 1.22f, eased);
+                shieldRect.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(-13f, 3f, eased));
+                shieldImage.color = new Color(1f, 0.9f, 0.65f, Mathf.Clamp01(appear * fade));
+                yield return null;
+            }
+
+            Destroy(shield);
+        }
+
         public IEnumerator PlayPaladinAegisBlocked(PrototypeCardView attacker, PrototypeCardView defender)
         {
             RectTransform parent = ResolveProjectileParent(attacker);
@@ -2143,7 +2662,7 @@ namespace AccardND.Battlefield
                 parent,
                 "Paladin Aegis Block",
                 LoadPaladinShieldSprite(),
-                new Vector2(220f, 248f),
+                new Vector2(250f, 250f),
                 out RectTransform shieldRect,
                 out Image shieldImage);
             GameObject crest = CreateOverlaySprite(
@@ -2154,25 +2673,46 @@ namespace AccardND.Battlefield
                 out RectTransform crestRect,
                 out Image crestImage);
 
-            float duration = 0.42f;
+            Vector3 launchPoint = EdgePoint(attackerRect, guardPoint) - fromAttacker * 26f;
+            const float duration = 0.18f;
             float elapsed = 0f;
             while (elapsed < duration)
             {
                 elapsed += Time.unscaledDeltaTime;
                 float progress = Mathf.Clamp01(elapsed / duration);
                 float appear = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.18f));
-                float fade = Mathf.Clamp01(1f - Mathf.SmoothStep(0.62f, 1f, progress));
                 float pulse = Mathf.Sin(progress * Mathf.PI);
                 attackerRect.localScale = Vector3.LerpUnclamped(originalScale, originalScale * 1.035f, pulse);
-                shieldRect.position = guardPoint + new Vector3(Mathf.Sin(progress * Mathf.PI * 9f) * 2f * fade, 0f, 0f);
-                shieldRect.localRotation = Quaternion.Euler(0f, 0f, angle - 90f);
-                shieldRect.localScale = Vector3.one * Mathf.Lerp(0.72f, 1.16f, appear) * (1f + pulse * 0.045f);
-                shieldImage.color = new Color(1f, 0.88f, 0.56f, Mathf.Clamp01(appear * fade));
+                shieldRect.position = launchPoint - fromAttacker * 36f + Vector3.up * 10f;
+                shieldRect.localRotation = Quaternion.Euler(0f, 0f, angle - 90f - progress * 70f);
+                shieldRect.localScale = Vector3.one * Mathf.Lerp(0.58f, 1.02f, appear);
+                shieldImage.color = new Color(1f, 0.88f, 0.56f, appear);
 
-                crestRect.position = guardPoint;
-                crestRect.localRotation = Quaternion.Euler(0f, 0f, progress * -92f);
-                crestRect.localScale = Vector3.one * Mathf.Lerp(0.74f, 1.28f, appear);
-                crestImage.color = new Color(1f, 0.68f, 0.22f, Mathf.Clamp01(appear * fade * 0.55f));
+                crestRect.position = shieldRect.position - fromAttacker * 34f;
+                crestRect.localRotation = Quaternion.Euler(0f, 0f, progress * -110f);
+                crestRect.localScale = Vector3.one * Mathf.Lerp(0.45f, 0.92f, appear);
+                crestImage.color = new Color(1f, 0.68f, 0.22f, appear * 0.55f);
+                yield return null;
+            }
+
+            // Anche un colpo bloccato percorre l'intera traiettoria: l'impatto si
+            // ferma sulla guardia del bersaglio e usa il burst "blocked".
+            const float flightDuration = 0.28f;
+            elapsed = 0f;
+            while (elapsed < flightDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / flightDuration);
+                float eased = 1f - Mathf.Pow(1f - progress, 3f);
+                Vector3 arc = Vector3.up * Mathf.Sin(progress * Mathf.PI) * 16f;
+                shieldRect.position = Vector3.LerpUnclamped(launchPoint, guardPoint, eased) + arc;
+                shieldRect.localRotation = Quaternion.Euler(0f, 0f, angle - 90f - 720f * eased);
+                shieldRect.localScale = Vector3.one * Mathf.Lerp(1.02f, 1.18f, Mathf.Sin(progress * Mathf.PI));
+                shieldImage.color = new Color(1f, 0.88f, 0.56f, Mathf.Clamp01(Mathf.Min(progress * 10f, (1f - progress) * 11f)));
+                crestRect.position = shieldRect.position - fromAttacker * 38f;
+                crestRect.localRotation = Quaternion.Euler(0f, 0f, -progress * 280f);
+                crestRect.localScale = Vector3.one * Mathf.Lerp(0.84f, 1.18f, Mathf.Sin(progress * Mathf.PI));
+                crestImage.color = new Color(1f, 0.68f, 0.22f, (1f - progress) * 0.55f);
                 yield return null;
             }
 
@@ -2715,16 +3255,26 @@ namespace AccardND.Battlefield
             Vector3 normalized = direction.sqrMagnitude > 0.001f ? direction.normalized : Vector3.right;
             float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
 
+            GameObject trail = CreateOverlaySprite(
+                parent,
+                "Rogue Dagger Black Trail",
+                LoadRogueDaggerSprite(),
+                new Vector2(178f, 178f),
+                out RectTransform trailRect,
+                out Image trailImage);
             GameObject dagger = CreateOverlaySprite(
                 parent,
                 blocked ? "Rogue Deflected Dagger" : "Rogue Flying Dagger",
                 LoadRogueDaggerSprite(),
-                new Vector2(124f, 124f),
+                new Vector2(166f, 166f),
                 out RectTransform daggerRect,
                 out Image daggerImage);
             daggerRect.position = start;
             daggerRect.localRotation = Quaternion.Euler(0f, 0f, angle - 90f);
             daggerRect.localScale = Vector3.one * UnityEngine.Random.Range(0.72f, 0.96f);
+            trailRect.position = start - normalized * 24f;
+            trailRect.localRotation = daggerRect.localRotation;
+            trailRect.localScale = Vector3.Scale(daggerRect.localScale, new Vector3(0.88f, 1.55f, 1f));
 
             float flightDuration = UnityEngine.Random.Range(0.24f, 0.38f);
             float elapsed = 0f;
@@ -2736,10 +3286,15 @@ namespace AccardND.Battlefield
                 Vector3 arc = new Vector3(0f, Mathf.Sin(progress * Mathf.PI) * UnityEngine.Random.Range(10f, 24f), 0f);
                 daggerRect.position = Vector3.LerpUnclamped(start, end, eased) + arc;
                 daggerRect.localRotation = Quaternion.Euler(0f, 0f, angle - 90f + Mathf.Sin(progress * Mathf.PI) * UnityEngine.Random.Range(-8f, 8f));
-                daggerImage.color = new Color(1f, 1f, 1f, Mathf.Clamp01(Mathf.Min(progress * 10f, (1f - progress) * 12f)));
+                float alpha = Mathf.Clamp01(Mathf.Min(progress * 10f, (1f - progress) * 12f));
+                daggerImage.color = new Color(1f, 1f, 1f, alpha);
+                trailRect.position = daggerRect.position - normalized * Mathf.Lerp(34f, 58f, progress);
+                trailRect.localRotation = daggerRect.localRotation;
+                trailImage.color = new Color(0.012f, 0.008f, 0.018f, alpha * 0.7f);
                 yield return null;
             }
 
+            Destroy(trail);
             Destroy(dagger);
             if (blocked)
             {
@@ -2751,6 +3306,49 @@ namespace AccardND.Battlefield
                 onHit?.Invoke();
                 yield return StartCoroutine(PlayRogueHitMarker(parent, end, index));
             }
+        }
+
+        public IEnumerator PlayRogueSupremeBlackHand(PrototypeCardView rogue, PrototypeCardView target)
+        {
+            if (rogue == null || target == null || rogue.RectTransform == null || target.RectTransform == null)
+                yield break;
+            RectTransform parent = ResolveProjectileParent(rogue);
+            if (parent == null)
+                yield break;
+
+            Vector3 start = EdgePoint(rogue.RectTransform, target.RectTransform.position);
+            Vector3 targetEdge = EdgePoint(target.RectTransform, rogue.RectTransform.position);
+            Vector3 direction = targetEdge - start;
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            GameObject hand = CreateOverlaySprite(parent, "Rogue Supreme Black Hand", LoadRogueBlackHandSprite(),
+                new Vector2(190f, 190f), out RectTransform handRect, out Image handImage);
+            handRect.position = start;
+            handRect.localRotation = Quaternion.Euler(0f, 0f, angle - 90f);
+            handImage.color = new Color(0.02f, 0f, 0.04f, 0f);
+
+            yield return MoveRogueHand(handRect, handImage, start, targetEdge, 0.34f, false);
+            PlayRogueDaggerHitSfx();
+            yield return new WaitForSecondsRealtime(0.22f);
+            handRect.localRotation = Quaternion.Euler(0f, 0f, angle + 90f);
+            yield return MoveRogueHand(handRect, handImage, targetEdge, start, 0.4f, true);
+            Destroy(hand);
+        }
+
+        private static IEnumerator MoveRogueHand(RectTransform hand, Image image, Vector3 from, Vector3 to, float duration, bool returning)
+        {
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                float eased = t * t * (3f - 2f * t);
+                Vector3 arc = Vector3.up * Mathf.Sin(t * Mathf.PI) * (returning ? -22f : 22f);
+                hand.position = Vector3.LerpUnclamped(from, to, eased) + arc;
+                hand.localScale = Vector3.one * Mathf.Lerp(returning ? 1.08f : 0.72f, returning ? 0.72f : 1.08f, eased);
+                image.color = new Color(0.02f, 0f, 0.04f, Mathf.Clamp01(Mathf.Min(t * 7f, (1f - t) * 8f + 0.2f)));
+                yield return null;
+            }
+            hand.position = to;
         }
 
         private void PlayRogueDaggerHitSfx()
@@ -2798,7 +3396,7 @@ namespace AccardND.Battlefield
                 float fade = 1f - Mathf.SmoothStep(0f, 1f, progress);
                 markerRect.localScale = Vector3.one * Mathf.Lerp(0.46f, 1.18f, Mathf.Sin(progress * Mathf.PI));
                 markerRect.localRotation = Quaternion.Euler(0f, 0f, markerRect.localRotation.eulerAngles.z + (index % 2 == 0 ? 90f : -90f) * Time.unscaledDeltaTime);
-                markerImage.color = new Color(0.9f, 1f, 0.72f, Mathf.Clamp01(Mathf.Min(progress * 12f, fade * 1.1f)));
+                markerImage.color = new Color(0.025f, 0.018f, 0.032f, Mathf.Clamp01(Mathf.Min(progress * 12f, fade * 1.1f)));
                 yield return null;
             }
 
@@ -2828,7 +3426,7 @@ namespace AccardND.Battlefield
                 deflectRect.position = worldPosition + drift * eased + new Vector3(0f, -28f * progress, 0f);
                 deflectRect.localScale = Vector3.one * Mathf.Lerp(0.58f, 1.34f, Mathf.Sin(progress * Mathf.PI));
                 deflectRect.localRotation = Quaternion.Euler(0f, 0f, deflectRect.localRotation.eulerAngles.z + 560f * Time.unscaledDeltaTime);
-                deflectImage.color = new Color(0.72f, 1f, 0.86f, Mathf.Clamp01(Mathf.Min(progress * 10f, (1f - progress) * 1.4f)));
+                deflectImage.color = new Color(0.045f, 0.035f, 0.055f, Mathf.Clamp01(Mathf.Min(progress * 10f, (1f - progress) * 1.4f)));
                 yield return null;
             }
 
@@ -3072,7 +3670,10 @@ namespace AccardND.Battlefield
             yield return StartCoroutine(PlayHolySparkScatter(parent, blockPoint, blocked: true));
         }
 
-		public IEnumerator PlayMageFireballSupreme(PrototypeCardView mage, IReadOnlyList<PrototypeCardView> targets)
+		public IEnumerator PlayMageFireballSupreme(
+			PrototypeCardView mage,
+			IReadOnlyList<PrototypeCardView> targets,
+			Action onImpact = null)
 		{
 			RectTransform parent = ResolveProjectileParent(mage);
 			if (parent == null || mage == null || targets == null || targets.Count == 0)
@@ -3089,7 +3690,8 @@ namespace AccardND.Battlefield
 			if (visibleTargets == 0) yield break;
 			center /= visibleTargets;
 
-			GameObject meteor = CreateOverlaySprite(parent, "Mage Supreme Meteor", LoadHunterExplosionCoreSprite(), new Vector2(720f, 720f), out RectTransform meteorRect, out Image meteorImage);
+			MageMeteorVfx meteor = MageMeteorVfx.Create(parent, Resources.Load<Texture2D>("VFX/MageMeteor"));
+			RectTransform meteorRect = meteor.Rect;
 			GameObject corona = CreateOverlaySprite(parent, "Mage Supreme Corona", LoadHunterExplosionRingSprite(), new Vector2(900f, 900f), out RectTransform coronaRect, out Image coronaImage);
 			Vector3 start = center + new Vector3(-420f, 760f, 0f);
 			float elapsed = 0f;
@@ -3102,7 +3704,7 @@ namespace AccardND.Battlefield
 				meteorRect.position = Vector3.LerpUnclamped(start, center, eased);
 				meteorRect.localScale = Vector3.one * Mathf.Lerp(0.18f, 1.18f, p);
 				meteorRect.localRotation = Quaternion.Euler(0f, 0f, elapsed * 240f);
-				meteorImage.color = new Color(1f, Mathf.Lerp(0.92f, 0.24f, p), 0.04f, Mathf.Clamp01(p * 5f));
+				meteor.SetFlight(elapsed, p);
 				coronaRect.position = meteorRect.position;
 				coronaRect.localScale = meteorRect.localScale * 1.15f;
 				coronaImage.color = new Color(1f, 0.28f, 0.02f, Mathf.Clamp01(p * (1f - p) * 2.8f));
@@ -3118,6 +3720,10 @@ namespace AccardND.Battlefield
 				image.color = new Color(1f, 0.42f, 0.03f, 0f);
 				impacts.Add(impact);
 			}
+			// Il colpo arriva: tutti i canvas UI (HUD, carte e tabellone) tremano
+			// nella stessa direzione e le eliminazioni possono partire in questo frame.
+			StartCoroutine(ShakeAllRootCanvases(0.34f, 22f));
+			onImpact?.Invoke();
 
 			elapsed = 0f;
 			const float blast = 0.72f;
@@ -3128,7 +3734,7 @@ namespace AccardND.Battlefield
 				float fade = 1f - p;
 				meteorRect.position = center;
 				meteorRect.localScale = Vector3.one * Mathf.Lerp(1.2f, 3.8f, Mathf.SmoothStep(0f, 1f, p));
-				meteorImage.color = new Color(1f, 0.72f, 0.12f, fade);
+				meteor.SetDissolve(Mathf.SmoothStep(0f, 1f, p));
 				coronaRect.position = center;
 				coronaRect.localScale = Vector3.one * Mathf.Lerp(0.25f, 4.5f, p);
 				coronaImage.color = new Color(1f, 0.22f, 0.01f, fade * 0.9f);
@@ -3142,20 +3748,72 @@ namespace AccardND.Battlefield
 				yield return null;
 			}
 
-			Destroy(meteor);
+			Destroy(meteor.gameObject);
 			Destroy(corona);
 			foreach (GameObject impact in impacts) Destroy(impact);
+		}
+
+		private IEnumerator ShakeAllRootCanvases(float duration, float magnitude)
+		{
+			Canvas[] canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+			var roots = new List<RectTransform>();
+			var origins = new List<Vector3>();
+			foreach (Canvas canvas in canvases)
+			{
+				if (canvas == null || canvas.rootCanvas != canvas || canvas.transform is not RectTransform root)
+					continue;
+				roots.Add(root);
+				origins.Add(root.localPosition);
+			}
+			if (roots.Count == 0)
+				yield break;
+
+			float elapsed = 0f;
+			while (elapsed < duration)
+			{
+				elapsed += Time.unscaledDeltaTime;
+				float fade = 1f - Mathf.Clamp01(elapsed / duration);
+				Vector2 offset = UnityEngine.Random.insideUnitCircle * (magnitude * fade);
+				for (int index = 0; index < roots.Count; index++)
+					roots[index].localPosition = origins[index] + new Vector3(offset.x, offset.y, 0f);
+				yield return null;
+			}
+			for (int index = 0; index < roots.Count; index++)
+				roots[index].localPosition = origins[index];
 		}
 
 		public IEnumerator PlayHunterVolleySupreme(
 			PrototypeCardView hunter,
 			IReadOnlyList<PrototypeCardView> targets,
 			IReadOnlyList<bool> hits,
-			Action onArrowShot = null)
+			Action onArrowShot = null,
+			Action onArrowHit = null)
 		{
 			RectTransform parent = ResolveProjectileParent(hunter);
 			if (parent == null || hunter == null || targets == null || hits == null)
 				yield break;
+
+			List<Vector3> validTargets = new List<Vector3>();
+			List<Vector3> hitTargets = new List<Vector3>();
+			int count = Mathf.Min(targets.Count, hits.Count);
+			for (int index = 0; index < count; index++)
+			{
+				PrototypeCardView target = targets[index];
+				if (target == null || target.RectTransform == null) continue;
+				Vector3 position = target.RectTransform.position;
+				validTargets.Add(position);
+				if (hits[index]) hitTargets.Add(position);
+			}
+			if (validTargets.Count == 0) yield break;
+
+			// I tre colpi sono il segnale di apertura della suprema; la pioggia parte
+			// soltanto dopo l'ultimo, senza far uscire proiettili dalla pedina.
+			const float shotInterval = 0.18f;
+			for (int step = 0; step < 3; step++)
+			{
+				onArrowShot?.Invoke();
+				yield return new WaitForSecondsRealtime(shotInterval);
+			}
 
 			List<GameObject> arrows = new List<GameObject>();
 			List<RectTransform> arrowRects = new List<RectTransform>();
@@ -3163,74 +3821,60 @@ namespace AccardND.Battlefield
 			List<Vector3> starts = new List<Vector3>();
 			List<Vector3> ends = new List<Vector3>();
 			List<bool> arrowHits = new List<bool>();
-			List<int> volleySteps = new List<int>();
-			int count = Mathf.Min(targets.Count, hits.Count);
-			for (int targetIndex = 0; targetIndex < count; targetIndex++)
+			List<float> delays = new List<float>();
+			float minX = validTargets[0].x;
+			float maxX = validTargets[0].x;
+			float minY = validTargets[0].y;
+			float maxY = validTargets[0].y;
+			for (int index = 1; index < validTargets.Count; index++)
 			{
-				PrototypeCardView target = targets[targetIndex];
-				if (target == null || target.RectTransform == null) continue;
-				Vector3 baseStart = EdgePoint(hunter.RectTransform, target.RectTransform.position);
-				Vector3 impact = EdgePoint(target.RectTransform, hunter.RectTransform.position);
-				Vector3 direction = (impact - baseStart).normalized;
-				Vector3 perpendicular = new Vector3(-direction.y, direction.x, 0f);
-				for (int arrowIndex = 0; arrowIndex < 3; arrowIndex++)
-				{
-					float lane = (arrowIndex - 1) * 24f;
-					Vector3 start = baseStart + perpendicular * lane;
-					Vector3 end = impact + perpendicular * lane;
-					if (!hits[targetIndex])
-						end += direction * 780f; // Il colpo perso attraversa la linea e vola fuori campo.
-
-					GameObject arrow = CreateHunterArrowProjectile(parent, out RectTransform rect, out Image image);
-					rect.position = start;
-					rect.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg);
-					arrows.Add(arrow);
-					arrowRects.Add(rect);
-					arrowImages.Add(image);
-					starts.Add(start);
-					ends.Add(end);
-					arrowHits.Add(hits[targetIndex]);
-					volleySteps.Add(arrowIndex);
-				}
+				minX = Mathf.Min(minX, validTargets[index].x);
+				maxX = Mathf.Max(maxX, validTargets[index].x);
+				minY = Mathf.Min(minY, validTargets[index].y);
+				maxY = Mathf.Max(maxY, validTargets[index].y);
 			}
-			if (arrows.Count == 0) yield break;
+			float spreadX = Mathf.Max(420f, maxX - minX + 360f);
+			float spreadY = Mathf.Max(260f, maxY - minY + 220f);
+			Vector3 center = new Vector3((minX + maxX) * 0.5f, (minY + maxY) * 0.5f, validTargets[0].z);
+			int randomArrowCount = Mathf.Clamp(validTargets.Count * 7, 18, 36);
+			int totalArrowCount = randomArrowCount + hitTargets.Count;
+			for (int arrowIndex = 0; arrowIndex < totalArrowCount; arrowIndex++)
+			{
+				bool isHitArrow = arrowIndex >= randomArrowCount;
+				// Due distribuzioni sovrapposte creano zone fitte e zone vuote, evitando
+				// l'effetto regolare di una griglia casuale uniforme.
+				Vector2 clusterOffset = UnityEngine.Random.insideUnitCircle;
+				Vector3 randomImpact = center + new Vector3(
+					clusterOffset.x * spreadX * UnityEngine.Random.Range(0.18f, 0.55f),
+					clusterOffset.y * spreadY * UnityEngine.Random.Range(0.18f, 0.55f),
+					0f);
+				Vector3 end = isHitArrow ? hitTargets[arrowIndex - randomArrowCount] : randomImpact;
+				Vector3 start = end + new Vector3(UnityEngine.Random.Range(-130f, 130f), UnityEngine.Random.Range(760f, 1080f), 0f);
+				GameObject arrow = CreateHunterArrowProjectile(parent, out RectTransform rect, out Image image);
+				rect.position = start;
+				rect.localRotation = Quaternion.Euler(0f, 0f, -90f + UnityEngine.Random.Range(-5f, 5f));
+				arrows.Add(arrow);
+				arrowRects.Add(rect);
+				arrowImages.Add(image);
+				starts.Add(start);
+				ends.Add(end);
+				arrowHits.Add(isHitArrow);
+				float delay = isHitArrow
+					? UnityEngine.Random.Range(0.48f, 1.55f)
+					: Mathf.Pow(UnityEngine.Random.value, 0.72f) * 1.75f;
+				delays.Add(delay);
+			}
 
-			Vector3 originalScale = hunter.RectTransform.localScale;
 			float elapsed = 0f;
-			const float drawDuration = 0.32f;
-			while (elapsed < drawDuration)
+			const float singleArrowFlight = 0.22f;
+			const float rainDuration = 2.05f;
+			bool[] hitExplosionsPlayed = new bool[arrows.Count];
+			while (elapsed < rainDuration)
 			{
 				elapsed += Time.unscaledDeltaTime;
-				float p = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / drawDuration));
-				hunter.RectTransform.localScale = Vector3.LerpUnclamped(originalScale, originalScale * 1.13f, p);
 				for (int index = 0; index < arrows.Count; index++)
 				{
-					arrowRects[index].position = starts[index];
-					arrowImages[index].color = new Color(1f, 0.86f, 0.38f, 0f);
-				}
-				yield return null;
-			}
-
-			List<GameObject> impacts = new List<GameObject>();
-			elapsed = 0f;
-			const float singleArrowFlight = 0.46f;
-			const float shotInterval = 0.16f;
-			float volleyDuration = singleArrowFlight + shotInterval * 2f;
-			bool[] shotSfxPlayed = new bool[3];
-			while (elapsed < volleyDuration)
-			{
-				elapsed += Time.unscaledDeltaTime;
-				for (int step = 0; step < shotSfxPlayed.Length; step++)
-				{
-					if (!shotSfxPlayed[step] && elapsed >= step * shotInterval)
-					{
-						shotSfxPlayed[step] = true;
-						onArrowShot?.Invoke();
-					}
-				}
-				for (int index = 0; index < arrows.Count; index++)
-				{
-					float shotElapsed = elapsed - volleySteps[index] * shotInterval;
+					float shotElapsed = elapsed - delays[index];
 					if (shotElapsed < 0f)
 					{
 						arrowImages[index].color = new Color(1f, 0.94f, 0.62f, 0f);
@@ -3241,25 +3885,17 @@ namespace AccardND.Battlefield
 					arrowRects[index].position = Vector3.LerpUnclamped(starts[index], ends[index], eased);
 					arrowRects[index].localScale = Vector3.one * Mathf.Lerp(1f, 1.38f, Mathf.Sin(p * Mathf.PI));
 					arrowImages[index].color = new Color(1f, 0.94f, 0.62f, p >= 1f ? 0f : Mathf.Clamp01(Mathf.Min(p * 12f, (1f - p) * 8f)));
+					if (arrowHits[index] && !hitExplosionsPlayed[index] && p >= 1f)
+					{
+						hitExplosionsPlayed[index] = true;
+						onArrowHit?.Invoke();
+						StartCoroutine(PlayHunterHitExplosion(parent, ends[index], null));
+					}
 				}
 				yield return null;
 			}
-
-			for (int index = 0; index < arrows.Count; index++)
-			{
-				if (arrowHits[index] && index % 3 == 1)
-				{
-					GameObject impact = CreateOverlaySprite(parent, "Hunter Volley Impact", LoadHunterExplosionCoreSprite(), new Vector2(300f, 300f), out RectTransform rect, out Image image);
-					rect.position = ends[index];
-					rect.localScale = Vector3.one * 1.35f;
-					image.color = new Color(1f, 0.58f, 0.08f, 0.95f);
-					impacts.Add(impact);
-				}
-			}
 			yield return new WaitForSecondsRealtime(0.2f);
-			hunter.RectTransform.localScale = originalScale;
 			foreach (GameObject arrow in arrows) Destroy(arrow);
-			foreach (GameObject impact in impacts) Destroy(impact);
 		}
 
         public IEnumerator PlayPriestBlessing(PrototypeCardView caster, PrototypeCardView target, int magnitude = 0)
@@ -3353,44 +3989,83 @@ namespace AccardND.Battlefield
         /// Impulso condiviso della Riserva del Paladino. Vive nella regia Battlefield
         /// affinche' campagna e PvP riproducano esattamente lo stesso VFX.
         /// </summary>
-        public IEnumerator PlayPaladinSupremePulse(PrototypeCardView paladin)
+        public IEnumerator PlayPaladinSupremePulse(PrototypeCardView paladin, RectTransform manaIcon = null, bool enemyReserve = false, int manaStrikes = 1, System.Action onManaImpact = null)
         {
             if (paladin == null)
                 yield break;
 
-            RectTransform parent = ResolveProjectileParent(paladin);
+            Canvas canvas = paladin.GetComponentInParent<Canvas>();
+            RectTransform parent = canvas != null
+                ? canvas.rootCanvas.transform as RectTransform
+                : ResolveProjectileParent(paladin);
             if (parent == null)
                 yield break;
 
-            GameObject ring = CreateOverlaySprite(
+            Vector3 target = manaIcon != null ? manaIcon.position : paladin.RectTransform.position;
+            GameObject hammer = CreateOverlaySprite(
                 parent,
-                "Paladin Supreme Blue Pulse",
-                LoadHunterExplosionRingSprite(),
-                new Vector2(330f, 330f),
-                out RectTransform ringRect,
-                out Image ringImage);
+                "Paladin Supreme Mana Hammer",
+                LoadPaladinHammerSprite(),
+                new Vector2(210f, 210f),
+                out RectTransform hammerRect,
+                out Image hammerImage);
             Vector3 originalScale = paladin.RectTransform.localScale;
-            ringRect.position = paladin.RectTransform.position;
+            Vector3 originalManaScale = manaIcon != null ? manaIcon.localScale : Vector3.one;
 
-            const float duration = 0.62f;
+            int hammerStrikes = Mathf.Max(1, manaStrikes);
+            float duration = 0.28f + hammerStrikes * 0.34f;
+            int strikesPlayed = 0;
             float elapsed = 0f;
             while (elapsed < duration)
             {
                 elapsed += Time.unscaledDeltaTime;
                 float progress = Mathf.Clamp01(elapsed / duration);
-                float eased = Mathf.SmoothStep(0f, 1f, progress);
-                float pulse = Mathf.Sin(progress * Mathf.PI);
-                float alpha = (1f - eased) * Mathf.Clamp01(progress * 9f);
-
-                ringRect.position = paladin.RectTransform.position;
-                ringRect.localScale = Vector3.one * Mathf.Lerp(0.35f, 2.15f, eased);
-                ringImage.color = new Color(0.16f, 0.62f, 1f, alpha * 0.92f);
-                paladin.RectTransform.localScale = originalScale * (1f + pulse * 0.07f);
+                target = manaIcon != null ? manaIcon.position : paladin.RectTransform.position;
+                float strikeProgress = progress * hammerStrikes;
+                int currentStrike = Mathf.Min(hammerStrikes - 1, Mathf.FloorToInt(strikeProgress));
+                float strikePhase = strikeProgress - Mathf.Floor(strikeProgress);
+                Vector3 hammerRest = target + new Vector3(82f, 140f, 0f);
+                Vector3 hammerWindup = target + new Vector3(176f, 315f, 0f);
+                Vector3 hammerImpact = target + new Vector3(38f, 14f, 0f);
+                float rotation;
+                if (strikePhase < 0.28f)
+                {
+                    float lift = Mathf.SmoothStep(0f, 1f, strikePhase / 0.28f);
+                    hammerRect.position = Vector3.Lerp(hammerRest, hammerWindup, lift);
+                    rotation = Mathf.Lerp(8f, -42f, lift);
+                }
+                else if (strikePhase < 0.76f)
+                {
+                    // Rincorsa lenta all'inizio, poi accelerazione da martello da fabbro.
+                    float fall = (strikePhase - 0.28f) / 0.48f;
+                    fall *= fall;
+                    hammerRect.position = Vector3.Lerp(hammerWindup, hammerImpact, fall);
+                    rotation = Mathf.Lerp(-42f, 16f, fall);
+                }
+                else
+                {
+                    float recoil = Mathf.SmoothStep(0f, 1f, (strikePhase - 0.76f) / 0.24f);
+                    hammerRect.position = Vector3.Lerp(hammerImpact, hammerRest, recoil);
+                    rotation = Mathf.Lerp(16f, 8f, recoil);
+                }
+                float impactPulse = Mathf.Clamp01(1f - Mathf.Abs(strikePhase - 0.76f) / 0.11f);
+                hammerRect.localRotation = Quaternion.Euler(0f, 0f, rotation);
+                hammerRect.localScale = Vector3.one * (1f + impactPulse * 0.1f);
+                hammerImage.color = Color.white;
+                if (strikesPlayed <= currentStrike && strikePhase >= 0.76f)
+                {
+                    strikesPlayed++;
+                    onManaImpact?.Invoke();
+                }
+                if (manaIcon != null)
+                    manaIcon.localScale = originalManaScale * (1f + impactPulse * 0.24f);
                 yield return null;
             }
 
             paladin.RectTransform.localScale = originalScale;
-            Destroy(ring);
+            if (manaIcon != null)
+                manaIcon.localScale = originalManaScale;
+            Destroy(hammer);
         }
 
         public IEnumerator PlayHunterArrowMiss(PrototypeCardView attacker)
@@ -3701,6 +4376,117 @@ namespace AccardND.Battlefield
                 Destroy(shardObjects[i]);
         }
 
+        private static IEnumerator PlayBarbarianGlancingMiss(
+            RectTransform parent,
+            Vector3 worldPosition,
+            Vector3 attackDirection,
+            float side)
+        {
+            // A miss should read as steel cutting past the target, not as an impact on it.
+            Vector3 tangent = new Vector3(-attackDirection.y, attackDirection.x, 0f).normalized;
+            Vector3 missCenter = worldPosition + tangent * side * 38f + attackDirection * 18f;
+
+            GameObject slash = CreateOverlaySprite(
+                parent,
+                "Barbarian Miss Axe Arc",
+                LoadWarriorSlashSprite(),
+                new Vector2(470f, 250f),
+                out RectTransform slashRect,
+                out Image slashImage);
+            GameObject afterimage = CreateOverlaySprite(
+                parent,
+                "Barbarian Miss Axe Afterimage",
+                LoadWarriorSlashSprite(),
+                new Vector2(540f, 286f),
+                out RectTransform afterimageRect,
+                out Image afterimageImage);
+            GameObject airRing = CreateOverlaySprite(
+                parent,
+                "Barbarian Miss Air Wake",
+                LoadHunterExplosionRingSprite(),
+                new Vector2(250f, 250f),
+                out RectTransform airRingRect,
+                out Image airRingImage);
+            GameObject dust = CreateOverlaySprite(
+                parent,
+                "Barbarian Miss Dust",
+                LoadHunterExplosionSmokeSprite(),
+                new Vector2(270f, 180f),
+                out RectTransform dustRect,
+                out Image dustImage);
+
+            float rotation = Mathf.Atan2(attackDirection.y, attackDirection.x) * Mathf.Rad2Deg - 8f * side;
+            slashRect.position = missCenter;
+            afterimageRect.position = missCenter - attackDirection * 22f;
+            airRingRect.position = missCenter + attackDirection * 56f;
+            dustRect.position = missCenter - Vector3.up * 45f;
+            slashRect.localRotation = Quaternion.Euler(0f, side < 0f ? 180f : 0f, rotation);
+            afterimageRect.localRotation = Quaternion.Euler(0f, side < 0f ? 180f : 0f, rotation - 7f * side);
+
+            const int sparkCount = 13;
+            var sparks = new List<(GameObject obj, RectTransform rect, Image image, Vector3 velocity, float spin)>(sparkCount);
+            for (int i = 0; i < sparkCount; i++)
+            {
+                float spread = UnityEngine.Random.Range(-0.52f, 0.52f);
+                Vector3 sparkDirection = (attackDirection + tangent * spread).normalized;
+                GameObject spark = CreateOverlaySprite(
+                    parent,
+                    "Barbarian Miss Spark",
+                    LoadHunterExplosionEmberSprite(),
+                    new Vector2(UnityEngine.Random.Range(10f, 17f), UnityEngine.Random.Range(48f, 86f)),
+                    out RectTransform sparkRect,
+                    out Image sparkImage);
+                sparkRect.position = missCenter + attackDirection * 38f;
+                sparkRect.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(sparkDirection.y, sparkDirection.x) * Mathf.Rad2Deg - 90f);
+                sparkImage.color = new Color(1f, 0.68f, 0.18f, 0f);
+                sparks.Add((spark, sparkRect, sparkImage, sparkDirection * UnityEngine.Random.Range(110f, 220f), UnityEngine.Random.Range(-90f, 90f)));
+            }
+
+            float duration = 0.48f;
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / duration);
+                float reveal = Mathf.Clamp01(progress * 9f);
+                float fade = 1f - Mathf.SmoothStep(0.34f, 1f, progress);
+                float sweep = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.62f));
+
+                slashRect.position = missCenter + attackDirection * Mathf.Lerp(-42f, 74f, sweep);
+                slashRect.localScale = new Vector3(Mathf.Lerp(0.62f, 1.12f, sweep), Mathf.Lerp(1.18f, 0.84f, sweep), 1f);
+                slashImage.color = new Color(1f, 0.78f, 0.3f, reveal * fade * 0.96f);
+                afterimageRect.position = missCenter + attackDirection * Mathf.Lerp(-72f, 42f, sweep);
+                afterimageRect.localScale = Vector3.one * Mathf.Lerp(0.7f, 1.18f, sweep);
+                afterimageImage.color = new Color(0.9f, 0.18f, 0.035f, reveal * fade * 0.42f);
+
+                airRingRect.localScale = Vector3.one * Mathf.Lerp(0.18f, 1.42f, sweep);
+                airRingRect.localRotation = Quaternion.Euler(0f, 0f, progress * 68f * side);
+                airRingImage.color = new Color(1f, 0.76f, 0.34f, reveal * fade * 0.48f);
+                dustRect.position = missCenter - Vector3.up * 45f + attackDirection * progress * 24f;
+                dustRect.localScale = new Vector3(Mathf.Lerp(0.35f, 1.45f, sweep), Mathf.Lerp(0.3f, 0.86f, sweep), 1f);
+                dustImage.color = new Color(0.34f, 0.19f, 0.09f, reveal * fade * 0.38f);
+
+                for (int i = 0; i < sparks.Count; i++)
+                {
+                    var spark = sparks[i];
+                    float sparkTime = Mathf.Max(0f, elapsed - i * 0.008f);
+                    spark.rect.position = missCenter + attackDirection * 38f + spark.velocity * sparkTime + Vector3.down * (150f * sparkTime * sparkTime);
+                    spark.rect.localRotation *= Quaternion.Euler(0f, 0f, spark.spin * Time.unscaledDeltaTime);
+                    spark.rect.localScale = Vector3.one * Mathf.Lerp(0.9f, 0.28f, progress);
+                    spark.image.color = new Color(1f, Mathf.Lerp(0.84f, 0.25f, progress), 0.06f, reveal * fade);
+                }
+
+                yield return null;
+            }
+
+            Destroy(slash);
+            Destroy(afterimage);
+            Destroy(airRing);
+            Destroy(dust);
+            foreach (var spark in sparks)
+                Destroy(spark.obj);
+        }
+
         private static GameObject CreateOverlaySprite(
             RectTransform parent,
             string objectName,
@@ -3767,6 +4553,46 @@ namespace AccardND.Battlefield
             targetLineSprite = Sprite.Create(texture, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 1f);
             targetLineSprite.name = "Runtime Target Line Sprite";
             return targetLineSprite;
+        }
+
+        private static Sprite LoadRogueBlackHandSprite()
+        {
+            if (rogueBlackHandSprite != null)
+                return rogueBlackHandSprite;
+
+            const int size = 96;
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Runtime Rogue Black Hand",
+                hideFlags = HideFlags.HideAndDontSave,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            Color32[] pixels = new Color32[size * size];
+            Color32 ink = new Color32(255, 255, 255, 255);
+            void Fill(int x0, int y0, int x1, int y1)
+            {
+                for (int y = Mathf.Max(0, y0); y <= Mathf.Min(size - 1, y1); y++)
+                    for (int x = Mathf.Max(0, x0); x <= Mathf.Min(size - 1, x1); x++)
+                        pixels[y * size + x] = ink;
+            }
+            Fill(27, 20, 68, 58);
+            Fill(35, 4, 43, 36);
+            Fill(46, 1, 54, 36);
+            Fill(57, 5, 65, 38);
+            Fill(68, 12, 76, 43);
+            for (int y = 22; y <= 51; y++)
+            {
+                int x = 19 - (y - 22) / 4;
+                Fill(x, y, x + 17, y + 6);
+            }
+            Fill(34, 58, 62, 88);
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            rogueBlackHandSprite = Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+            rogueBlackHandSprite.name = "Runtime Rogue Black Hand Sprite";
+            rogueBlackHandSprite.hideFlags = HideFlags.HideAndDontSave;
+            return rogueBlackHandSprite;
         }
 
         private static Vector3 BehindTargetPoint(RectTransform target, Vector3 attackerHomePosition)
@@ -4208,8 +5034,11 @@ namespace AccardND.Battlefield
                 yield return null;
             }
 
-            target.localScale = originalScale;
-            target.localRotation = originalRotation;
+            if (target != null)
+            {
+                target.localScale = originalScale;
+                target.localRotation = originalRotation;
+            }
         }
 
         private static IEnumerator PlayHunterHitExplosion(RectTransform parent, Vector3 worldPosition, RectTransform target)
@@ -4701,6 +5530,18 @@ namespace AccardND.Battlefield
             return hunterExplosionCoreSprite;
         }
 
+        /// <summary>Sprite fisico della meteora della Palla di Fuoco, separato dalla corona luminosa.</summary>
+        private static Sprite LoadMageSupremeMeteorSprite()
+        {
+            if (mageSupremeMeteorSprite != null)
+                return mageSupremeMeteorSprite;
+
+            mageSupremeMeteorSprite = Resources.Load<Sprite>("VFX/mage_supreme_meteor");
+            return mageSupremeMeteorSprite != null
+                ? mageSupremeMeteorSprite
+                : LoadHunterExplosionCoreSprite();
+        }
+
         private static Sprite LoadHunterExplosionRingSprite()
         {
             if (hunterExplosionRingSprite != null)
@@ -4894,7 +5735,7 @@ namespace AccardND.Battlefield
             if (paladinShieldSprite != null)
                 return paladinShieldSprite;
 
-            paladinShieldSprite = Resources.Load<Sprite>("UI/paladin_divine_shield");
+            paladinShieldSprite = Resources.Load<Sprite>("UI/paladin_divine_shield_v2");
             if (paladinShieldSprite != null)
                 return paladinShieldSprite;
 
@@ -4923,6 +5764,14 @@ namespace AccardND.Battlefield
                 return paladinShardSprite;
 
             return paladinShardSprite = CreateFallbackPaladinShardSprite("Paladin Shield Shard Fallback");
+        }
+
+        private static Sprite LoadPaladinHammerSprite()
+        {
+            if (paladinHammerSprite != null)
+                return paladinHammerSprite;
+
+            return paladinHammerSprite = Resources.Load<Sprite>("UI/paladin_hammer");
         }
 
         private static Sprite LoadPaladinConstellationShieldSprite()
@@ -5015,6 +5864,44 @@ namespace AccardND.Battlefield
                 return assassinSmokeSprite;
 
             return assassinSmokeSprite = CreateFallbackBlobSprite("Assassin Smoke Fallback", new Color32(54, 48, 66, 190));
+        }
+
+        private static Sprite LoadAssassinSmokeBombSprite()
+        {
+            if (assassinSmokeBombSprite != null)
+                return assassinSmokeBombSprite;
+
+            const int size = 128;
+            Texture2D texture = NewRuntimeTexture(size, size);
+            Color32[] pixels = new Color32[size * size];
+            Vector2 center = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    Vector2 point = new Vector2(x, y);
+                    float radius = Vector2.Distance(point, center) / (size * 0.5f);
+                    float fuse = Vector2.Distance(point, new Vector2(center.x, size * 0.86f));
+                    if (fuse < 13f)
+                        pixels[y * size + x] = new Color32(239, 190, 75, 255);
+                    else if (radius < 0.78f)
+                    {
+                        float shine = Mathf.Clamp01(1f - Vector2.Distance(point, center + new Vector2(-18f, 18f)) / 46f);
+                        pixels[y * size + x] = Color.Lerp(
+                            new Color32(28, 31, 45, 255),
+                            new Color32(106, 116, 145, 255),
+                            shine);
+                    }
+                    else
+                        pixels[y * size + x] = new Color32(0, 0, 0, 0);
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+            assassinSmokeBombSprite = Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+            assassinSmokeBombSprite.name = "Assassin Smoke Bomb Runtime Asset";
+            assassinSmokeBombSprite.hideFlags = HideFlags.HideAndDontSave;
+            return assassinSmokeBombSprite;
         }
 
         private static Sprite LoadAssassinDaggerLeftSprite()

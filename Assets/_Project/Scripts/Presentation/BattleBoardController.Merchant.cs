@@ -19,7 +19,9 @@ public sealed partial class BattleBoardController
 	private const int MerchantItemOffers = 3;
 
 	private const int MerchantDeckLimit = 12;
-	private int merchantPurchasesThisVisit;
+	private const int MerchantMaximumUpgrades = 2;
+	private const string MerchantUpgradeRelicOneId = "merchant-upgrade-relic-1";
+	private const string MerchantUpgradeRelicTwoId = "merchant-upgrade-relic-2";
 
 	private sealed class MerchantCardOffer
 	{
@@ -89,7 +91,6 @@ public sealed partial class BattleBoardController
 		merchantVisibleBranch = MerchantBranch.Cards;
 		merchantShowingGraveyard = false;
 		merchantStockRoomKey = -1;
-		merchantPurchasesThisVisit = 0;
 	}
 
 	private void EnsureMerchantStock()
@@ -155,6 +156,20 @@ public sealed partial class BattleBoardController
 			.ToList();
 	}
 
+	// La carta ignota non deve coincidere con una carta scoperta ancora in vetrina.
+	// In caso contrario, comprando prima l'ignota il mercante continuerebbe a mostrare
+	// come acquistabile una carta che il giocatore ha appena aggiunto al mazzo.
+	private List<CardDefinition> GetMerchantMysteryCardPool()
+	{
+		List<CardDefinition> pool = GetMerchantCardPool();
+		pool.RemoveAll(candidate => merchantCardOffers.Any(offer =>
+			!offer.Sold
+			&& !offer.Mystery
+			&& (Object)(object)offer.Definition != (Object)null
+			&& CardPurchaseUniqueness.AreEquivalent(offer.Definition, candidate)));
+		return pool;
+	}
+
 	// --- Refresh pannello ---
 
 	private void RefreshMerchantPanel()
@@ -169,7 +184,7 @@ public sealed partial class BattleBoardController
 		{
 			merchantStatusText.text = GameText.GetOrFallbackSilent(
 				GameTextKeys.Merchant.GoldAvailable,
-				"ORO DISPONIBILE  <size=30>{0}</size>",
+				"ORO <size=30>{0}</size>  •  CARTE 12/18/26/36  •  UPGRADE +1 DA 14 ORO  •  PREZZI FISSI",
 				runProgress.Gold);
 		}
 		RefreshMerchantBranchTabs();
@@ -188,14 +203,21 @@ public sealed partial class BattleBoardController
 			merchantCardsTabLockImage,
 			merchantCardsTabVfx,
 			MerchantBranch.Cards,
-			"CARTE");
+			GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchCards, "CARTE"));
 		ApplyMerchantTabState(
 			merchantItemsTabButton,
 			merchantItemsTabText,
 			merchantItemsTabLockImage,
 			merchantItemsTabVfx,
 			MerchantBranch.Items,
-			"OGGETTI");
+			GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchItems, "OGGETTI"));
+		ApplyMerchantTabState(
+			merchantUpgradesTabButton,
+			merchantUpgradesTabText,
+			merchantUpgradesTabLockImage,
+			merchantUpgradesTabVfx,
+			MerchantBranch.Upgrades,
+			GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchUpgrades, "POTENZIA"));
 	}
 
 	private void ApplyMerchantTabState(
@@ -221,13 +243,23 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)label != (Object)null)
 		{
 			label.text = title;
+			label.fontSize = locked ? 28 : 30;
+			label.resizeTextMaxSize = locked ? 28 : 30;
 			label.color = locked
 				? new Color(0.66f, 0.7f, 0.72f)
 				: (selected ? new Color(0.98f, 0.86f, 0.45f) : new Color(0.88f, 0.93f, 0.95f));
+			SetRect(
+				label.rectTransform,
+				new Vector2(0.04f, 0.06f),
+				locked ? new Vector2(0.76f, 0.94f) : new Vector2(0.96f, 0.94f));
 		}
 		if ((Object)(object)lockImage != (Object)null)
 		{
 			((Component)lockImage).gameObject.SetActive(locked);
+			if (locked)
+			{
+				lockImage.rectTransform.SetAsLastSibling();
+			}
 		}
 		if ((Object)(object)vfx != (Object)null)
 		{
@@ -235,31 +267,18 @@ public sealed partial class BattleBoardController
 		}
 	}
 
-	private string MerchantShelfHint()
-	{
-		if (merchantLockedBranch == MerchantBranch.Cards)
-		{
-			return "Hai scelto il banco delle carte: gli oggetti restano chiusi in questa stanza.";
-		}
-		if (merchantLockedBranch == MerchantBranch.Items)
-		{
-			return "Hai scelto il banco degli oggetti: le carte restano chiuse in questa stanza.";
-		}
-		return "Carte o oggetti: il primo acquisto chiude l'altro banco. Vendere e recuperare resta sempre possibile.";
-	}
-
 	private bool IsMerchantBranchLocked(MerchantBranch branch)
 	{
-		return merchantLockedBranch != MerchantBranch.None && merchantLockedBranch != branch;
+		return branch != MerchantBranch.Upgrades
+			&& merchantLockedBranch != MerchantBranch.None
+			&& merchantLockedBranch != branch;
 	}
 
 	private void SelectMerchantBranch(MerchantBranch branch)
 	{
 		if (IsMerchantBranchLocked(branch))
 		{
-			SetMessage(branch == MerchantBranch.Items
-				? "MERCATO: hai gia' comprato al banco delle carte. Gli oggetti sono chiusi fino alla prossima stanza."
-				: "MERCATO: hai gia' comprato al banco degli oggetti. Le carte sono chiuse fino alla prossima stanza.");
+			SetMessage("MERCATO: il primo acquisto ha chiuso questo banco fino alla prossima stanza.");
 			return;
 		}
 		if (merchantVisibleBranch == branch)
@@ -267,6 +286,8 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		merchantVisibleBranch = branch;
+		selectedMerchantSaleCard = null;
+		merchantShowingGraveyard = false;
 		PlayArrowChangeSfx();
 		RefreshMerchantPanel();
 	}
@@ -284,6 +305,11 @@ public sealed partial class BattleBoardController
 			{
 				BuildMerchantItemSlot(offer);
 			}
+			return;
+		}
+		if (merchantVisibleBranch == MerchantBranch.Upgrades)
+		{
+			BuildMerchantUpgradeInfoSlot();
 			return;
 		}
 		foreach (MerchantCardOffer offer2 in merchantCardOffers)
@@ -340,7 +366,7 @@ public sealed partial class BattleBoardController
 		CardDefinition definition = offer.Definition;
 		if (offer.Mystery)
 		{
-			List<CardDefinition> pool = GetMerchantCardPool();
+			List<CardDefinition> pool = GetMerchantMysteryCardPool();
 			if (pool.Count == 0)
 			{
 				SetMessage(GameText.GetOrFallbackSilent(
@@ -383,7 +409,7 @@ public sealed partial class BattleBoardController
 		{
 			// La carta ignota viene estratta solo dopo la conferma, cosi' Annulla non consuma
 			// neppure una scelta casuale del mercato.
-			List<CardDefinition> pool = GetMerchantCardPool();
+			List<CardDefinition> pool = GetMerchantMysteryCardPool();
 			if (pool.Count == 0)
 			{
 				SetMessage(GameText.GetOrFallbackSilent(
@@ -414,12 +440,13 @@ public sealed partial class BattleBoardController
 		// La carta ignota resta acquistabile: e' un pozzo senza fondo limitato solo da oro e
 		// dal tetto del mazzo. Le offerte scoperte invece sono pezzi unici.
 		offer.Sold = !offer.Mystery;
-		merchantPurchasesThisVisit++;
 		merchantLockedBranch = MerchantBranch.Cards;
+		if (ShouldTrackQuestProgress)
+			runProgress.RecordMerchantPurchase();
 		string displayName = CardDisplayNames.MarketName(definition);
 		AppendLog(GameText.GetOrFallbackSilent(
 			GameTextKeys.Merchant.CardPurchaseLog,
-			"ACQUISTO - {0}, -{1} oro (tassa di carovana inclusa).",
+			"ACQUISTO - {0}, -{1} oro.",
 			displayName,
 			cost));
 		PlayBuyCardSfx();
@@ -493,12 +520,13 @@ public sealed partial class BattleBoardController
 		}
 		campaignConsumables.Add(offer.ItemType);
 		offer.Sold = true;
-		merchantPurchasesThisVisit++;
 		merchantLockedBranch = MerchantBranch.Items;
+		if (ShouldTrackQuestProgress)
+			runProgress.RecordMerchantPurchase();
 		string itemName = CampaignConsumableName(offer.ItemType);
 		AppendLog(GameText.GetOrFallbackSilent(
 			GameTextKeys.Merchant.ItemPurchaseLog,
-			"ACQUISTO OGGETTO - {0}, -{1} oro (tassa di carovana inclusa).",
+			"ACQUISTO OGGETTO - {0}, -{1} oro.",
 			itemName,
 			cost));
 		PlayBuyCardSfx();
@@ -524,8 +552,18 @@ public sealed partial class BattleBoardController
 		}
 		string cardsBranch = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchCards, "CARTE");
 		string itemsBranch = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchItems, "OGGETTI");
-		string chosenName = chosenBranch == MerchantBranch.Cards ? cardsBranch : itemsBranch;
-		string closedName = chosenBranch == MerchantBranch.Cards ? itemsBranch : cardsBranch;
+		string chosenName = chosenBranch switch
+		{
+			MerchantBranch.Cards => cardsBranch,
+			MerchantBranch.Items => itemsBranch,
+			_ => "POTENZIA"
+		};
+		string closedName = chosenBranch switch
+		{
+			MerchantBranch.Cards => "OGGETTI",
+			MerchantBranch.Items => "CARTE",
+			_ => string.Empty
+		};
 		merchantBranchConfirmTitleText.text = GameText.GetOrFallbackSilent(
 			GameTextKeys.Merchant.BranchConfirmTitle,
 			"SCEGLI IL BANCO {0}",
@@ -558,9 +596,14 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
+		bool upgradePage = merchantVisibleBranch == MerchantBranch.Upgrades;
 		if (selectedMerchantSaleCard == null)
 		{
-			merchantSellText.text = merchantShowingGraveyard
+			merchantSellText.text = upgradePage
+				? GameText.GetOrFallbackSilent(
+					GameTextKeys.Merchant.UpgradeSelectionHint,
+					"Scegli una pedina da potenziare. Servono le Reliquie del Fabbro del Santuario.")
+				: merchantShowingGraveyard
 				? "Scegli una pedina da recuperare."
 				: "Scegli una pedina da vendere.";
 			return;
@@ -569,24 +612,38 @@ public sealed partial class BattleBoardController
 		string displayName = CardDisplayNames.MarketName(definition);
 		if (selectedMerchantSaleCard.Zone == CampaignCardZone.Graveyard)
 		{
-			merchantSellText.text = $"{displayName}\nRecupero dal Cimitero";
+			merchantSellText.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.RecoverDescription, "{0}\nRecupero dal Cimitero", displayName);
+		}
+		else if (upgradePage)
+		{
+			int strength = definition.Strength + selectedMerchantSaleCard.PermanentItemBonus;
+			merchantSellText.text = selectedMerchantSaleCard.MerchantUpgradeCount >= MerchantMaximumUpgrades
+				? GameText.GetOrFallbackSilent(
+					GameTextKeys.Merchant.UpgradeCardMaximumDescription,
+					"{0}  •  Forza {1}\nPotenziamento massimo raggiunto",
+					displayName, strength)
+				: GameText.GetOrFallbackSilent(
+					GameTextKeys.Merchant.UpgradeCardDescription,
+					"{0}  •  Forza {1}\nUpgrade +1: {2} oro",
+					displayName, strength, UpgradeCostFor(selectedMerchantSaleCard));
 		}
 		else
 		{
-			merchantSellText.text = $"{displayName}\nVendita al Mercante";
+			merchantSellText.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.SellDescription, "{0}\nVendita al Mercante", displayName);
 		}
 	}
 
 	private void RefreshMerchantActionButtons()
 	{
 		bool hasSelection = selectedMerchantSaleCard != null;
-		bool recoveryMode = hasSelection
+		bool upgradePage = merchantVisibleBranch == MerchantBranch.Upgrades;
+		bool recoveryMode = !upgradePage && (hasSelection
 			? selectedMerchantSaleCard.Zone == CampaignCardZone.Graveyard
-			: merchantShowingGraveyard;
+			: merchantShowingGraveyard);
 		if ((Object)(object)merchantSellButton != (Object)null)
 		{
-			((Component)merchantSellButton).gameObject.SetActive(!recoveryMode);
-			merchantSellButton.interactable = hasSelection && !recoveryMode;
+			((Component)merchantSellButton).gameObject.SetActive(!recoveryMode && !upgradePage);
+			merchantSellButton.interactable = hasSelection && !recoveryMode && !upgradePage;
 			Text sellLabel = ((Component)merchantSellButton).GetComponentInChildren<Text>();
 			if ((Object)(object)sellLabel != (Object)null)
 			{
@@ -601,7 +658,9 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)merchantRecoverButton != (Object)null)
 		{
 			((Component)merchantRecoverButton).gameObject.SetActive(recoveryMode);
-			merchantRecoverButton.interactable = hasSelection && recoveryMode;
+			bool canAffordRecovery = hasSelection
+				&& (runProgress?.Gold ?? 0) >= RecoveryCostFor(selectedMerchantSaleCard.Definition);
+			merchantRecoverButton.interactable = hasSelection && recoveryMode && canAffordRecovery;
 			Text recoverLabel = ((Component)merchantRecoverButton).GetComponentInChildren<Text>();
 			if ((Object)(object)recoverLabel != (Object)null)
 			{
@@ -613,6 +672,33 @@ public sealed partial class BattleBoardController
 					: GameText.GetOrFallbackSilent(GameTextKeys.Merchant.SelectCard, "SELEZIONA CARTA");
 			}
 		}
+		if ((Object)(object)merchantUpgradeButton != (Object)null)
+		{
+			((Component)merchantUpgradeButton).gameObject.SetActive(upgradePage);
+			bool upgradeEligible = hasSelection && !recoveryMode
+				&& selectedMerchantSaleCard.MerchantUpgradeCount < MerchantMaximumUpgrades
+				&& HasMerchantUpgradeRelic(selectedMerchantSaleCard.MerchantUpgradeCount + 1);
+			bool canUpgrade = upgradeEligible
+				&& (runProgress?.Gold ?? 0) >= UpgradeCostFor(selectedMerchantSaleCard);
+			merchantUpgradeButton.interactable = canUpgrade;
+			Text upgradeLabel = ((Component)merchantUpgradeButton).GetComponentInChildren<Text>();
+			if ((Object)(object)upgradeLabel != (Object)null)
+			{
+				upgradeLabel.text = !hasSelection
+					? GameText.GetOrFallbackSilent(GameTextKeys.Merchant.SelectUpgradePawn, "SELEZIONA PEDINA")
+					: upgradeEligible
+						? GameText.GetOrFallbackSilent(
+							GameTextKeys.Merchant.UpgradeAction,
+							"POTENZIA +1  •  {0} ORO",
+							UpgradeCostFor(selectedMerchantSaleCard))
+						: selectedMerchantSaleCard.MerchantUpgradeCount >= MerchantMaximumUpgrades
+							? GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeMaximum, "POTENZIAMENTO MAX")
+							: GameText.GetOrFallbackSilent(
+								GameTextKeys.Merchant.UpgradeRelicRequired,
+								"SERVE RELIQUIA DEL FABBRO {0}",
+								selectedMerchantSaleCard.MerchantUpgradeCount + 1);
+			}
+		}
 	}
 
 	private void RefreshMerchantOwnedCards()
@@ -620,13 +706,18 @@ public sealed partial class BattleBoardController
 		DestroyPrototypeViews(merchantOwnedCardViews);
 		List<CampaignCardInstance> deckCards = GetMerchantDeckCards();
 		List<CampaignCardInstance> graveyardCards = GetMerchantGraveyardCards();
+		bool upgradePage = merchantVisibleBranch == MerchantBranch.Upgrades;
+		if ((Object)(object)merchantDeckTabButton != (Object)null)
+			((Component)merchantDeckTabButton).gameObject.SetActive(!upgradePage);
+		if ((Object)(object)merchantGraveyardTabButton != (Object)null)
+			((Component)merchantGraveyardTabButton).gameObject.SetActive(!upgradePage);
 		if ((Object)(object)merchantDeckTabText != (Object)null)
 		{
-			merchantDeckTabText.text = $"MAZZO {deckCards.Count}";
+			merchantDeckTabText.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.DeckCount, "MAZZO {0}", deckCards.Count);
 		}
 		if ((Object)(object)merchantGraveyardTabText != (Object)null)
 		{
-			merchantGraveyardTabText.text = $"CIMITERO {graveyardCards.Count}";
+			merchantGraveyardTabText.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.GraveyardCount, "CIMITERO {0}", graveyardCards.Count);
 		}
 		SetMerchantOwnedCardsTabActive(
 			merchantDeckTabButton,
@@ -639,7 +730,7 @@ public sealed partial class BattleBoardController
 		PopulateMerchantCardSection(
 			merchantDeckCardsRoot,
 			merchantDeckEmptyText,
-			merchantShowingGraveyard ? graveyardCards : deckCards);
+			upgradePage ? deckCards : merchantShowingGraveyard ? graveyardCards : deckCards);
 	}
 
 	private void SelectMerchantOwnedCardsTab(bool showGraveyard)
@@ -839,6 +930,9 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		CardDefinition definition = selectedMerchantSaleCard.Definition;
+		// Il recupero si paga sempre: lo sconto del talento "Recupero" e' gia' dentro questo
+		// prezzo. Il "Secondo fiato" non passa piu' di qui - non sconta un recupero, evita
+		// che la pedina arrivi al cimitero.
 		int num = RecoveryCostFor(definition);
 		string displayName = CardDisplayNames.MarketName(definition);
 		if (!runProgress.TrySpendGold(num))
@@ -859,6 +953,8 @@ public sealed partial class BattleBoardController
 		}
 		else
 		{
+			if (ShouldTrackQuestProgress)
+				runProgress.RecordMerchantPurchase();
 			AppendLog(GameText.GetOrFallbackSilent(
 				GameTextKeys.Merchant.RecoveredLog,
 				"RECUPERO MERCATO - {0} torna nel mazzo, -{1} oro.",
@@ -890,7 +986,9 @@ public sealed partial class BattleBoardController
 	private int MerchantCardCostFor(CardDefinition definition)
 	{
 		int strength = ((Object)(object)definition != (Object)null) ? definition.Strength : 0;
-		return MerchantEconomy.CardCost(strength, runProgress?.RoomsCleared ?? 0);
+		return AccardND.GameData.TalentRunModifiers.MerchantCost(
+			MerchantEconomy.CardCost(strength, runProgress?.RoomsCleared ?? 0),
+			ActiveTalents);
 	}
 
 	private int MerchantItemCostFor(CampaignConsumableType itemType)
@@ -898,11 +996,13 @@ public sealed partial class BattleBoardController
 		int baseCost = itemType switch
 		{
 			CampaignConsumableType.Detector => 12,
-			CampaignConsumableType.Defrost => 15,
 			CampaignConsumableType.DoubleExp => 18,
 			CampaignConsumableType.SigilloRubino => 24,
 			CampaignConsumableType.Empower => 22,
 			CampaignConsumableType.SecondChance => 26,
+			CampaignConsumableType.ManaGain5 => 12,
+			CampaignConsumableType.ManaGain10 => 20,
+			CampaignConsumableType.Jolly => 28,
 			_ => 18,
 		};
 		return MerchantEconomy.ScaleByRoom(baseCost, runProgress?.RoomsCleared ?? 0);
@@ -929,17 +1029,106 @@ public sealed partial class BattleBoardController
 		return Math.Max(3, definition.Strength * 2);
 	}
 
+	// Non piu' statica: lo sconto del ramo Borsa vive nel pacchetto talenti della run, e
+	// senza istanza non c'e' modo di leggerlo.
+	private int UpgradeCostFor(CampaignCardInstance card)
+	{
+		if (card == null) return 0;
+		return AccardND.GameData.TalentRunModifiers.MerchantCost(
+			MerchantEconomy.UpgradeCost(
+				card.Definition.Strength + card.PermanentItemBonus,
+				card.MerchantUpgradeCount),
+			ActiveTalents);
+	}
+
+	private bool HasMerchantUpgradeRelic(int upgradeLevel)
+	{
+		string relicId = upgradeLevel <= 1
+			? MerchantUpgradeRelicOneId
+			: MerchantUpgradeRelicTwoId;
+		return singlePlayerProgressService != null &&
+			singlePlayerProgressService.IsUnlocked(
+				AccardND.GameData.SinglePlayerUnlockType.Slot,
+				relicId);
+	}
+
 	private int RecoveryCostFor(CardDefinition definition)
 	{
 		if (!((Object)(object)definition != (Object)null))
 		{
 			return 0;
 		}
-		return MerchantEconomy.RecoveryCost(definition.Strength, runProgress?.RoomsCleared ?? 0);
+		return AccardND.GameData.TalentRunModifiers.RecoveryCost(
+			MerchantEconomy.RecoveryCost(definition.Strength, runProgress?.RoomsCleared ?? 0),
+			ActiveTalents);
 	}
 
-	private int EffectiveMerchantCost(int baseCost) =>
-		MerchantEconomy.ApplyCaravanTax(baseCost, merchantPurchasesThisVisit);
+	private static int EffectiveMerchantCost(int baseCost) => baseCost;
+
+	private void UpgradeSelectedMerchantCard()
+	{
+		CampaignCardInstance card = selectedMerchantSaleCard;
+		if (card == null || card.Zone == CampaignCardZone.Graveyard)
+		{
+			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeSelectDeckPawn, "MERCATO: scegli una pedina del mazzo da potenziare."));
+			return;
+		}
+		if (card.MerchantUpgradeCount >= MerchantMaximumUpgrades)
+		{
+			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeAlreadyMaximum, "MERCATO: questa pedina ha gia' raggiunto il massimo di 2 potenziamenti."));
+			return;
+		}
+		if (merchantVisibleBranch != MerchantBranch.Upgrades || IsMerchantBranchLocked(MerchantBranch.Upgrades))
+		{
+			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeBranchLocked, "MERCATO: il banco Potenzia e' chiuso fino alla prossima stanza."));
+			return;
+		}
+		int requiredRelic = card.MerchantUpgradeCount + 1;
+		if (!HasMerchantUpgradeRelic(requiredRelic))
+		{
+			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeUnlockRelic, "MERCATO: sblocca la Reliquia del Fabbro {0} al Santuario.", requiredRelic));
+			RefreshMerchantPanel();
+			return;
+		}
+
+		// "Primo affare" si consuma qui e non al calcolo del prezzo: il pannello mostra il
+		// costo pieno finche' il giocatore non conferma, altrimenti il talento brucerebbe
+		// ogni volta che apre e chiude la scheda di una pedina.
+		int fullCost = UpgradeCostFor(card);
+		int cost = ConsumeMerchantUpgradeCost(fullCost);
+		bool usedFreeUpgrade = cost < fullCost;
+		if (!runProgress.TrySpendGold(cost))
+		{
+			RestoreMerchantUpgradeCost(usedFreeUpgrade);
+			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeInsufficientGold, "MERCATO: servono {0} oro per il potenziamento, disponibili {1}.", cost, runProgress.Gold));
+			RefreshMerchantPanel();
+			return;
+		}
+		if (!campaignDeck.TryApplyMerchantUpgrade(card, MerchantMaximumUpgrades))
+		{
+			runProgress.AddGold(cost);
+			RestoreMerchantUpgradeCost(usedFreeUpgrade);
+			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeUnavailable, "MERCATO: questa pedina non puo' essere potenziata adesso."));
+			RefreshMerchantPanel();
+			return;
+		}
+
+		if (ShouldTrackQuestProgress)
+			runProgress.RecordMerchantPurchase();
+		string displayName = CardDisplayNames.MarketName(card.Definition);
+		if (cost <= 0)
+		{
+			AppendLog(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeFreeLog, "POTENZIAMENTO MERCATO - {0} ottiene +1 Forza. Primo affare: gratis.", displayName));
+			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeFreeSuccess, "POTENZIATA: {0} ottiene +1 Forza permanente. Primo affare: gratis.", displayName));
+		}
+		else
+		{
+			AppendLog(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradePaidLog, "POTENZIAMENTO MERCATO - {0} ottiene +1 Forza, -{1} oro.", displayName, cost));
+			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradePaidSuccess, "POTENZIATA: {0} ottiene +1 Forza permanente per {1} oro.", displayName, cost));
+		}
+		PlayForgeHitSfx();
+		RefreshMerchantPanel();
+	}
 
 	private void RefreshBagGoldCounter()
 	{

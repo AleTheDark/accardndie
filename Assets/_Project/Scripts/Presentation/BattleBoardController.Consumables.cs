@@ -12,6 +12,11 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	// Forza permanente incisa dal Sigillo Oscuro. Confluisce nel bonus permanente
+	// della carta ma resta scorporata nei pannelli di stato, che le danno un token
+	// e una descrizione a parte.
+	private const int RubySealPowerBonus = 2;
+
 	// Oggetti della bisaccia portati in questa run e non ancora usati.
 	private readonly List<string> runBagItemIds = new List<string>();
 
@@ -24,21 +29,29 @@ public sealed partial class BattleBoardController
 		{
 			CampaignConsumableType.Detector => "detector_item",
 			CampaignConsumableType.SecondChance => "second_chance_item",
-			CampaignConsumableType.Defrost => "defrost_item",
 			CampaignConsumableType.Empower => "empower_item",
 			CampaignConsumableType.SigilloRubino => "ruby_seal_item",
 			CampaignConsumableType.DoubleExp => "double_exp_item",
+			CampaignConsumableType.ManaGain5 => "mana_gain_5_item",
+			CampaignConsumableType.ManaGain10 => "mana_gain_10_item",
+			CampaignConsumableType.Jolly => "jolly_item",
 			_ => "info_button",
 		};
 	}
 
 	private static string CampaignConsumableName(CampaignConsumableType itemType)
 	{
+		if (itemType == CampaignConsumableType.ManaGain5) return "Mana +5";
+		if (itemType == CampaignConsumableType.ManaGain10) return "Mana +10";
+		if (itemType == CampaignConsumableType.Jolly) return "Jolly";
 		return GameText.Get(GameTextKeys.Consumables.Name(CampaignConsumableLocalizationId(itemType)));
 	}
 
 	private static string CampaignConsumableDescription(CampaignConsumableType itemType)
 	{
+		if (itemType == CampaignConsumableType.ManaGain5) return "Recupera 5 mana in qualsiasi momento, senza superare il limite massimo di 10.";
+		if (itemType == CampaignConsumableType.ManaGain10) return "Recupera 10 mana in qualsiasi momento, senza superare il limite massimo di 10.";
+		if (itemType == CampaignConsumableType.Jolly) return "Ti teletrasporta subito alla scelta della stanza, anche mentre sei gia dentro una stanza.";
 		return GameText.Get(GameTextKeys.Consumables.Description(CampaignConsumableLocalizationId(itemType)));
 	}
 
@@ -48,10 +61,12 @@ public sealed partial class BattleBoardController
 		{
 			CampaignConsumableType.Detector => "detector",
 			CampaignConsumableType.SecondChance => "second_chance",
-			CampaignConsumableType.Defrost => "defrost",
 			CampaignConsumableType.Empower => "empower",
 			CampaignConsumableType.SigilloRubino => "ruby_seal",
 			CampaignConsumableType.DoubleExp => "double_experience",
+			CampaignConsumableType.ManaGain5 => "mana_gain_5",
+			CampaignConsumableType.ManaGain10 => "mana_gain_10",
+			CampaignConsumableType.Jolly => "jolly",
 			_ => "generic",
 		};
 	}
@@ -102,7 +117,7 @@ public sealed partial class BattleBoardController
 		{
 			return false;
 		}
-		RecordConsumedBagItem(itemType);
+		RecordCampaignItemUsed(itemType);
 		switch (itemType)
 		{
 		case CampaignConsumableType.Detector:
@@ -124,11 +139,6 @@ public sealed partial class BattleBoardController
 			SetMessage(GameText.Format(GameTextKeys.Consumables.SecondChanceUsed, revived));
 			AppendLog(GameText.Format(GameTextKeys.Consumables.SecondChanceUsedLog, revived));
 			return true;
-		case CampaignConsumableType.Defrost:
-			int defrosted = campaignDeck?.ReleaseCooldown() ?? 0;
-			SetMessage(GameText.Format(GameTextKeys.Consumables.DefrostUsed, defrosted));
-			AppendLog(GameText.Format(GameTextKeys.Consumables.DefrostUsedLog, defrosted));
-			return true;
 		case CampaignConsumableType.Empower:
 			PlayEmpowerItemUseSfx();
 			nextRoomEmpowered = true;
@@ -140,6 +150,41 @@ public sealed partial class BattleBoardController
 			nextRoomDoubleExperience = true;
 			SetMessage(GameText.Get(GameTextKeys.Consumables.DoubleExperienceReady));
 			AppendLog(GameText.Get(GameTextKeys.Consumables.DoubleExperienceReadyLog));
+			return true;
+		case CampaignConsumableType.ManaGain5:
+			int gainedFive = campaignPlayerMana.Gain(5);
+			battleSfx?.PlayManaGain();
+			RefreshPlayerHud();
+			SetMessage(GameText.GetLocalizedFallback(GameTextKeys.Consumables.ManaRecovered, "Mana recuperato: +{0}. Riserva {1}/{2}.", "Mana restored: +{0}. Reserve {1}/{2}.", "Mana wiederhergestellt: +{0}. Reserve {1}/{2}.", "Maná recuperado: +{0}. Reserva {1}/{2}.", "Mana récupéré : +{0}. Réserve {1}/{2}.", gainedFive, CampaignPlayerManaCurrent, CampaignManaMaximum));
+			AppendLog(GameText.Format(GameTextKeys.Consumables.ManaRecoveredLog, 5, gainedFive, CampaignPlayerManaCurrent, CampaignManaMaximum));
+			return true;
+		case CampaignConsumableType.ManaGain10:
+			int gainedTen = campaignPlayerMana.Gain(10);
+			battleSfx?.PlayManaGain();
+			RefreshPlayerHud();
+			SetMessage(GameText.GetLocalizedFallback(GameTextKeys.Consumables.ManaRecovered, "Mana recuperato: +{0}. Riserva {1}/{2}.", "Mana restored: +{0}. Reserve {1}/{2}.", "Mana wiederhergestellt: +{0}. Reserve {1}/{2}.", "Maná recuperado: +{0}. Reserva {1}/{2}.", "Mana récupéré : +{0}. Réserve {1}/{2}.", gainedTen, CampaignPlayerManaCurrent, CampaignManaMaximum));
+			AppendLog(GameText.Format(GameTextKeys.Consumables.ManaRecoveredLog, 10, gainedTen, CampaignPlayerManaCurrent, CampaignManaMaximum));
+			return true;
+		case CampaignConsumableType.Jolly:
+			// Prima di abbandonare la stanza consolidiamo le eliminazioni: le carte morte
+			// devono restare al cimitero. Le sopravvissute tornano subito disponibili,
+			// perche' il Jolly non equivale al completamento di un combattimento.
+			if (campaignDeck != null)
+			{
+				CampaignCardInstance[] defeatedCards = playerCards
+					.Where(card => card != null && card.Eliminated && card.CampaignCard != null)
+					.Select(card => card.CampaignCard)
+					.Distinct()
+					.ToArray();
+				campaignDeck.CompleteCombat(defeatedCards, skipCooldown: true);
+				ApplySecondWindTalent(defeatedCards);
+			}
+			// Il Jolly puo' interrompere anche una stanza attiva. BeginRoomChoice esegue
+			// poi la stessa pulizia visiva usata al termine di una stanza.
+			BeginRoomChoice();
+			RevealCurrentCampaignDoorsWithDetector();
+			SetMessage(GameText.GetLocalizedFallback(GameTextKeys.Consumables.JollyUsed, "Jolly usato: scegli la stanza in cui teletrasportarti.", "Joker used: choose the room to teleport to.", "Joker benutzt: Wähle den Raum, in den du dich teleportieren möchtest.", "Comodín usado: elige la sala a la que teletransportarte.", "Joker utilisé : choisissez la salle vers laquelle vous téléporter."));
+			AppendLog(GameText.GetLocalizedFallback(GameTextKeys.Consumables.JollyUsedLog, "JOLLY - teletrasporto alla scelta della stanza", "JOKER - teleporting to room choice", "JOKER - Teleport zur Raumauswahl", "COMODÍN - teletransporte a la elección de sala", "JOKER - téléportation vers le choix de salle"));
 			return true;
 		default:
 			return false;
@@ -188,13 +233,13 @@ public sealed partial class BattleBoardController
 			rubySealTargetSelectionActive = false;
 			return false;
 		}
-		if (!campaignDeck.TryApplyRubySeal(target, 2))
+		if (!campaignDeck.TryApplyRubySeal(target, RubySealPowerBonus))
 		{
 			campaignConsumables.Add(CampaignConsumableType.SigilloRubino);
 			SetMessage(GameText.Get(GameTextKeys.Consumables.RubySealAlreadyApplied));
 			return false;
 		}
-		RecordConsumedBagItem(CampaignConsumableType.SigilloRubino);
+		RecordCampaignItemUsed(CampaignConsumableType.SigilloRubino);
 		rubySealTargetSelectionActive = false;
 		PlayEmpowerItemUseSfx();
 		string cardName = CardDisplayNames.MarketName(target.Definition);
@@ -214,37 +259,55 @@ public sealed partial class BattleBoardController
 
 	private static bool IsRubySealBattleTarget(BattleCardState card)
 	{
-		return card != null && !card.Eliminated && IsRubySealTarget(card.CampaignCard);
+		return card != null
+			&& !card.Eliminated
+			&& !card.HasEquipment
+			&& IsRubySealTarget(card.CampaignCard);
 	}
 
 	private void ShowRubySealTargetPanel()
 	{
 		CloseRubySealTargetPanel(cancelSelection: false);
 		Font font = AccardND.Battlefield.MmoUiTheme.BodyFont;
-		Image backdrop = CreateImage("Ruby Seal Target Backdrop", (Transform)(object)safeAreaRoot, new Color(0.015f, 0.005f, 0.02f, 0.88f));
+		Image backdrop = CreateImage("Ruby Seal Target Backdrop", (Transform)(object)safeAreaRoot, Color.clear);
 		backdrop.raycastTarget = true;
 		Stretch(backdrop.rectTransform, 0f);
 		rubySealTargetPanel = ((Component)backdrop).gameObject;
+		Canvas overlayCanvas = rubySealTargetPanel.AddComponent<Canvas>();
+		overlayCanvas.overrideSorting = true;
+		overlayCanvas.sortingOrder = 5000;
+		rubySealTargetPanel.AddComponent<GraphicRaycaster>();
 
-		Image window = CreateImage("Ruby Seal Target Window", ((Component)backdrop).transform, new Color(0.18f, 0.035f, 0.055f, 0.98f));
+		Image window = CreateImage("Ruby Seal Target Window", ((Component)backdrop).transform, Color.white);
+		window.sprite = LoadSpriteResource("UI/Sanctuary/santuary_items");
+		window.type = Image.Type.Simple;
 		RectTransform windowRect = window.rectTransform;
-		windowRect.anchorMin = new Vector2(0.15f, 0.2f);
-		windowRect.anchorMax = new Vector2(0.85f, 0.8f);
+		windowRect.anchorMin = new Vector2(0.08f, 0.1f);
+		windowRect.anchorMax = new Vector2(0.92f, 0.9f);
 		windowRect.offsetMin = Vector2.zero;
 		windowRect.offsetMax = Vector2.zero;
-
-		Text title = CreateText("Ruby Seal Target Title", ((Component)window).transform, font, 30, FontStyle.Bold, TextAnchor.MiddleCenter);
+		Text title = CreateText("Ruby Seal Target Title", ((Component)window).transform, font, 24, FontStyle.Bold, TextAnchor.MiddleCenter);
 		title.text = GameText.GetOrFallbackSilent(
 			GameTextKeys.Consumables.RubySealTargetTitle,
-			"SIGILLO RUBINO - SCEGLI UNA PEDINA SCHIERATA");
+			"SIGILLO RUBINO\nScegli una pedina schierata da sigillare, prenderà +2 potenza permanente ma non potrà più ricevere equipaggiamenti dagli alleati");
+		title.horizontalOverflow = HorizontalWrapMode.Wrap;
+		title.verticalOverflow = VerticalWrapMode.Truncate;
+		title.resizeTextForBestFit = true;
+		title.resizeTextMinSize = 17;
+		title.resizeTextMaxSize = 24;
 		RectTransform titleRect = title.rectTransform;
-		titleRect.anchorMin = new Vector2(0.05f, 0.82f);
-		titleRect.anchorMax = new Vector2(0.95f, 0.97f);
+		titleRect.anchorMin = new Vector2(0.08f, 0.72f);
+		titleRect.anchorMax = new Vector2(0.92f, 0.91f);
 		titleRect.offsetMin = Vector2.zero;
 		titleRect.offsetMax = Vector2.zero;
 
-		rubySealTargetCardsRoot = CreateCardRow("Ruby Seal Deployed Pawns", ((Component)window).transform, new Vector2(0.5f, 0.52f));
-		rubySealTargetCardsRoot.sizeDelta = new Vector2(1050f, 300f);
+		rubySealTargetCardsRoot = CreateCardRow("Ruby Seal Deployed Pawns", ((Component)window).transform, new Vector2(0.5f, 0.49f));
+		rubySealTargetCardsRoot.anchorMin = new Vector2(0.09f, 0.34f);
+		rubySealTargetCardsRoot.anchorMax = new Vector2(0.91f, 0.64f);
+		rubySealTargetCardsRoot.offsetMin = Vector2.zero;
+		rubySealTargetCardsRoot.offsetMax = Vector2.zero;
+		HorizontalLayoutGroup cardsLayout = ((Component)rubySealTargetCardsRoot).GetComponent<HorizontalLayoutGroup>();
+		cardsLayout.spacing = 12f;
 		foreach (BattleCardState battleCard in playerCards.Where(IsRubySealBattleTarget))
 		{
 			PrototypeCardView view = PrototypeCardView.CreateBattlefieldPreview((Transform)(object)rubySealTargetCardsRoot, battleCard.Definition, configuration);
@@ -263,10 +326,13 @@ public sealed partial class BattleBoardController
 			font,
 			GameText.GetOrFallbackSilent(GameTextKeys.Common.Cancel, "ANNULLA"));
 		RectTransform cancelRect = ((Component)cancel).GetComponent<RectTransform>();
-		cancelRect.anchorMin = new Vector2(0.4f, 0.04f);
-		cancelRect.anchorMax = new Vector2(0.6f, 0.16f);
+		cancelRect.anchorMin = new Vector2(0.3f, 0.035f);
+		cancelRect.anchorMax = new Vector2(0.7f, 0.17f);
 		cancelRect.offsetMin = Vector2.zero;
 		cancelRect.offsetMax = Vector2.zero;
+		Text cancelLabel = ((Component)cancel).GetComponentInChildren<Text>();
+		if ((Object)(object)cancelLabel != (Object)null)
+			cancelLabel.fontSize = 26;
 		((UnityEvent)cancel.onClick).AddListener((UnityAction)delegate { CloseRubySealTargetPanel(cancelSelection: true); });
 		rubySealTargetPanel.transform.SetAsLastSibling();
 	}
@@ -275,10 +341,11 @@ public sealed partial class BattleBoardController
 	{
 		if (!IsRubySealBattleTarget(battleCard) || !TryApplyRubySealTo(battleCard.CampaignCard))
 			return;
-		battleCard.PermanentCombatBonus += 2;
+		battleCard.PermanentCombatBonus += RubySealPowerBonus;
 		if ((Object)(object)battleCard.View != (Object)null)
-			battleCard.View.SetStrengthValue(DisplayStrength(battleCard));
+			RefreshPersistentStatus(battleCard);
 		CloseRubySealTargetPanel(cancelSelection: false);
+		CloseImplementationArchive();
 	}
 
 	private void CloseRubySealTargetPanel(bool cancelSelection)
@@ -305,8 +372,7 @@ public sealed partial class BattleBoardController
 
 	private static bool IsConsumableBlockedInBattle(CampaignConsumableType itemType)
 	{
-		return itemType == CampaignConsumableType.SecondChance
-			|| itemType == CampaignConsumableType.Defrost;
+		return itemType == CampaignConsumableType.SecondChance;
 	}
 
 	private bool IsCampaignBattleActive()
@@ -344,16 +410,26 @@ public sealed partial class BattleBoardController
 
 	private (string description, int bonusExperience) GrantRandomConsumable(string source)
 	{
+		return GrantRandomConsumable(source, out _);
+	}
+
+	private (string description, int bonusExperience) GrantRandomConsumable(
+		string source,
+		out CampaignConsumableType grantedItem)
+	{
 		CampaignConsumableType[] pool =
 		{
 			CampaignConsumableType.Detector,
 			CampaignConsumableType.SecondChance,
-			CampaignConsumableType.Defrost,
 			CampaignConsumableType.Empower,
 			CampaignConsumableType.SigilloRubino,
 			CampaignConsumableType.DoubleExp
+			, CampaignConsumableType.ManaGain5
+			, CampaignConsumableType.ManaGain10
+			, CampaignConsumableType.Jolly
 		};
 		CampaignConsumableType itemType = pool[random.NextInclusive(0, pool.Length - 1)];
+		grantedItem = itemType;
 		campaignConsumables.Add(itemType);
 		string itemName = CampaignConsumableName(itemType);
 		AppendLog(GameText.Format(GameTextKeys.Consumables.GrantedLog, source, itemName));
@@ -404,9 +480,6 @@ public sealed partial class BattleBoardController
 		case "second-chance":
 			itemType = CampaignConsumableType.SecondChance;
 			return true;
-		case "defrost":
-			itemType = CampaignConsumableType.Defrost;
-			return true;
 		case "empower":
 			itemType = CampaignConsumableType.Empower;
 			return true;
@@ -416,6 +489,17 @@ public sealed partial class BattleBoardController
 			return true;
 		case "double-exp":
 			itemType = CampaignConsumableType.DoubleExp;
+			return true;
+		case "mana-5":
+		case "mana_gain_5":
+			itemType = CampaignConsumableType.ManaGain5;
+			return true;
+		case "mana-10":
+		case "mana_gain_10":
+			itemType = CampaignConsumableType.ManaGain10;
+			return true;
+		case "jolly":
+			itemType = CampaignConsumableType.Jolly;
 			return true;
 		default:
 			itemType = CampaignConsumableType.Detector;
@@ -427,16 +511,19 @@ public sealed partial class BattleBoardController
 	{
 		CampaignConsumableType.Detector => "detector",
 		CampaignConsumableType.SecondChance => "second-chance",
-		CampaignConsumableType.Defrost => "defrost",
 		CampaignConsumableType.Empower => "empower",
 		CampaignConsumableType.SigilloRubino => "sigillo-rubino",
 		CampaignConsumableType.DoubleExp => "double-exp",
+		CampaignConsumableType.ManaGain5 => "mana-5",
+		CampaignConsumableType.ManaGain10 => "mana-10",
+		CampaignConsumableType.Jolly => "jolly",
 		_ => null
 	};
 
 	/// <summary>
-	/// Segna come consumato un oggetto arrivato dalla bisaccia. Solo questi vengono scalati
-	/// dalla scorta a fine run: quelli trovati in run (loot, mercante) non ne fanno parte.
+	/// Segna un oggetto come usato. Il contatore delle quest non guarda la provenienza: vale
+	/// tanto un oggetto della bisaccia quanto uno trovato in una stanza o comprato al mercante
+	/// e usato subito. La bisaccia si conta a parte perche' solo quella scala la scorta.
 	///
 	/// E' anche il punto in cui parte l'interstitial dell'uso oggetti, ed e' l'unico che va
 	/// bene: qui l'oggetto e' gia' stato tolto dalla borsa, quindi la pubblicita' non puo'
@@ -444,8 +531,10 @@ public sealed partial class BattleBoardController
 	/// boss). Le regole di frequenza fanno il resto: tre oggetti di fila restano una
 	/// pubblicita' sola.
 	/// </summary>
-	private void RecordConsumedBagItem(CampaignConsumableType itemType)
+	private void RecordCampaignItemUsed(CampaignConsumableType itemType)
 	{
+		if (ShouldTrackQuestProgress)
+			runProgress?.RecordItemUsed();
 		string itemId = SanctuaryItemIdOf(itemType);
 		if (string.IsNullOrEmpty(itemId) || !runBagItemIds.Remove(itemId))
 		{
@@ -453,6 +542,108 @@ public sealed partial class BattleBoardController
 		}
 		consumedBagItemIds.Add(itemId);
 		AccardND.Ads.AdService.ShowInterstitial(AccardND.Ads.AdPlacement.BagItemUsed);
+	}
+
+	/// <summary>
+	/// Gli oggetti ancora in mano a fine run che il server deve versare nella scorta: quelli
+	/// trovati nelle stanze o comprati al mercante e mai usati. Gli oggetti della bisaccia
+	/// rimasti (<see cref="runBagItemIds"/>) restano fuori: non sono mai usciti dalla scorta,
+	/// aggiungerli li duplicherebbe a ogni run.
+	/// </summary>
+	private string[] CollectUnusedRunItemIds()
+	{
+		if (campaignConsumables == null)
+		{
+			return Array.Empty<string>();
+		}
+		var kept = new List<string>();
+		foreach (CampaignConsumableType itemType in Enum.GetValues(typeof(CampaignConsumableType)))
+		{
+			string itemId = SanctuaryItemIdOf(itemType);
+			if (string.IsNullOrEmpty(itemId))
+			{
+				continue;
+			}
+			int stillInBag = 0;
+			foreach (string bagItemId in runBagItemIds)
+			{
+				if (bagItemId == itemId)
+					stillInBag++;
+			}
+			int foundInRun = campaignConsumables.GetQuantity(itemType) - stillInBag;
+			for (int index = 0; index < foundInRun; index++)
+			{
+				kept.Add(itemId);
+			}
+		}
+		return kept.ToArray();
+	}
+
+	/// <summary>
+	/// Chiude sul server una campagna abbandonata che ha lasciato qualcosa in sospeso sugli
+	/// oggetti: consumi della bisaccia da scalare, usi da contare per le quest o oggetti
+	/// trovati in run da versare nella scorta. Tornare al menu cancella il salvataggio, quindi
+	/// e' l'ultimo momento utile. Il riepilogo persistente e' lo stesso usato a fine run,
+	/// percio' tutto sopravvive anche se la connessione cade mentre si torna al menu.
+	/// </summary>
+	private async System.Threading.Tasks.Task PersistConsumedBagItemsOnCampaignExitAsync()
+	{
+		if (runProgress == null)
+		{
+			return;
+		}
+
+		string[] keptItemIds = CollectUnusedRunItemIds();
+		if (consumedBagItemIds.Count == 0 && runProgress.ItemsUsed == 0 && keptItemIds.Length == 0)
+		{
+			return;
+		}
+
+		if (string.IsNullOrWhiteSpace(campaignRunRewardId))
+		{
+			campaignRunRewardId = System.Guid.NewGuid().ToString("N");
+		}
+
+		var summary = new AccardND.Network.DeathRewardSummary(
+			campaignRunRewardId,
+			"campaign",
+			string.IsNullOrWhiteSpace(activeAdventureChapterId) ? "free-run" : activeAdventureChapterId,
+			string.IsNullOrWhiteSpace(campaignScenarioId) ? "default" : campaignScenarioId,
+			runProgress.RoomsCleared,
+			runProgress.EnemiesDefeated,
+			0,
+			Mathf.Max(0, runProgress.AvailableExperience),
+			runProgress.MinibossesDefeated,
+			defeatedBossIdsInRun.ToArray(),
+			consumedBagItemIds.ToArray(),
+			runProgress.DiceRolled,
+			runProgress.AbilitiesUsed,
+			runProgress.TotalExperience,
+			runProgress.SupremesUsed,
+			runProgress.QuickChallengesCompleted,
+			runProgress.MerchantPurchases,
+			runProgress.GoldEarned,
+			runProgress.LevelsGained,
+			runProgress.ItemsUsed,
+			keptItemIds);
+
+		if (serverProgress != null || await EnsureServerProgressAsync())
+		{
+			try
+			{
+				await serverProgress.ClaimDeathRewardAsync(summary);
+				MirrorServerProgress();
+				return;
+			}
+			catch (System.Exception exception)
+			{
+				// La richiesta online e' persistente ed e' gia' nell'outbox: verra' ritentata.
+				AppendLog($"ACCOUNT - consumo oggetti in attesa di sincronizzazione: {exception.Message}");
+				return;
+			}
+		}
+
+		AccardND.Network.ServerSinglePlayerProgressClient.QueueDeathRewardForReplay(summary);
 	}
 
 	private int ConsumeNextRoomExperienceMultiplier()

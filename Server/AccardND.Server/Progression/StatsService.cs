@@ -5,7 +5,11 @@ using Microsoft.Data.Sqlite;
 
 namespace AccardND.Server.Progression;
 
-/// <summary>Query di sola lettura sugli aggregati player_stats per la UI.</summary>
+/// <summary>
+/// Query di sola lettura sugli aggregati player_stats per la UI. Dentro ci sono solo
+/// le partite classificate: le amichevoli in stanza non arrivano mai a player_stats
+/// (vedi <see cref="MatchResultRecorder"/>), quindi non c'e' niente da filtrare qui.
+/// </summary>
 public sealed class StatsService
 {
     private readonly AccardDatabase database;

@@ -29,6 +29,7 @@ namespace AccardND.PvpUi
                     && System.Enum.IsDefined(typeof(HeroClass), source.ability),
                 AbilityClass = (HeroClass)source.ability,
                 AbilityMagnitude = source.magnitude,
+				Amount = source.amount,
 				ManaCurrent = source.mana,
 				ManaDelta = source.manaDelta,
 				ManaReason = source.reason,
@@ -52,13 +53,20 @@ namespace AccardND.PvpUi
                 DefenderRollSecondBeforeReroll = source.defenderRollSecondBeforeReroll,
                 DefenderTotal = source.defenderTotal,
                 DefenderLostLife = source.defenderLostLife,
+                DefenderRemainingLives = source.defenderRemainingLives,
                 DefenderEliminated = source.defenderEliminated,
                 BecameSpirit = source.becameSpirit,
                 Overkill = source.overkill,
-                Redirected = source.redirected
+                Redirected = source.redirected,
+                IsCounter = source.isCounter,
+                InterceptedByNecromancerMinion = source.interceptedByNecromancerMinion,
+                Winner = source.winner,
+                WinsPlayer0 = source.winsPlayer0,
+                WinsPlayer1 = source.winsPlayer1
             };
 
             if (string.Equals(source.type, "AttackResolved", System.StringComparison.Ordinal)
+                && !target.HasHeroClass
                 && TryFindHeroClass(state, source.player, source.slot, out HeroClass attackerClass))
             {
                 target.HasHeroClass = true;

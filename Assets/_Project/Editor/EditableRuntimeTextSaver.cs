@@ -10,7 +10,6 @@ namespace AccardND.Editor
         private const string ResourceFolder = "Assets/_Project/Resources";
         private const string AssetPath = ResourceFolder + "/EditableTextOverrides.asset";
 
-        [MenuItem("Accard N' Die/Text Overrides/Save From Open Scenes", priority = 80)]
         public static void SaveFromOpenScenes()
         {
             EditableTextOverrideDatabase database = LoadOrCreateDatabase();

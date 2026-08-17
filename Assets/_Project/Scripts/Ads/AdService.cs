@@ -67,11 +67,25 @@ namespace AccardND.Ads
         /// altrimenti risponderebbe la pubblicita' finta e non si vedrebbe mai questo ramo.
         /// </summary>
         public static bool RewardsWaivedWithoutAds =>
+            AdsRemoved ||
 #if ACCARDND_WAIVE_ADS || (UNITY_WEBGL && !UNITY_EDITOR)
             true;
 #else
             false;
 #endif
+
+        /// <summary>
+        /// L'account ha comprato la rimozione della pubblicita'. Lo dice il server dopo aver
+        /// verificato la ricevuta: qui si tiene solo l'ultima risposta.
+        ///
+        /// Toglie gli annunci ma non le ricompense. I cancelli pubblicitari del gioco - il
+        /// miele delle quest, il premio di giornata, l'EXP tripla - sono il modo con cui si
+        /// guadagna, non un pedaggio: chi paga per non vedere la pubblicita' compra il tempo
+        /// che avrebbe speso a guardarla, non una progressione piu' lenta. Per questo entra
+        /// in <see cref="RewardsWaivedWithoutAds"/>, che e' la stessa strada gia' battuta sul
+        /// web quando un annuncio non arriva.
+        /// </summary>
+        public static bool AdsRemoved { get; set; }
 
         /// <summary>
         /// Il provider e' stato preparato con successo. Falso puo' voler dire "non ancora"
@@ -131,6 +145,11 @@ namespace AccardND.Ads
         /// </summary>
         public static void Warm(AdPlacement placement)
         {
+            // Chi ha comprato la rimozione non vedra' nessun annuncio: caricarlo sarebbe una
+            // richiesta ad AdMob che nessuno guardera' mai.
+            if (AdsRemoved)
+                return;
+
             // Un interstitial oltre il tetto di sessione non si mostrera' comunque: chiederlo
             // sarebbe inventario buttato, ed e' esattamente il rapporto richieste/impressioni
             // che si sta cercando di tenere sano.
@@ -207,6 +226,14 @@ namespace AccardND.Ads
         {
             AdFormat format = AdPlacements.FormatOf(placement);
             string key = AdPlacements.KeyOf(placement);
+
+            // Rimozione comprata: nessun annuncio parte. Davanti a un cancello si passa
+            // comunque per il condono, che concede la ricompensa senza mostrare niente.
+            if (AdsRemoved)
+            {
+                Write($"{key}: pubblicita' rimossa dall'acquisto.");
+                return asGate ? Unavailable(AdOutcome.NoFill, key) : AdResult.Of(AdOutcome.Suppressed);
+            }
 
             // Due annunci insieme non sono un caso di scuola: un doppio tocco sul bottone di
             // riscossione basta a produrli.

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -94,9 +95,9 @@ public sealed partial class BattleBoardController
 			9f / 16f);
 
 		Image shade = CreateImage(
-			"Library Background Shade",
+			"Library Veil",
 			root.transform,
-			new Color(0.005f, 0.007f, 0.011f, 0.48f));
+			new Color(0f, 1f / 255f, 4f / 255f, 0.4196078f));
 		shade.raycastTarget = false;
 		Stretch(shade.rectTransform);
 
@@ -122,7 +123,7 @@ public sealed partial class BattleBoardController
 			FontStyle.Normal,
 			TextAnchor.MiddleCenter);
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(title);
-		title.text = "BIBLIOTECA";
+		title.text = GameText.GetOrFallbackSilent(GameTextKeys.Library.Title, "BIBLIOTECA");
 		title.color = new Color32(0xF2, 0xC9, 0x57, 0xFF);
 		AddLibraryTextShadow(title, 2f);
 		SetRect(title.rectTransform, new Vector2(0.08f, 0.18f), new Vector2(0.92f, 0.72f));
@@ -759,11 +760,11 @@ public sealed partial class BattleBoardController
 	private static string BuildLibraryClassesText()
 	{
 		StringBuilder builder = new();
-		builder.AppendLine("<color=#E2A64B><b>CLASSI, FAMIGLIE E AURE</b></color>");
-		builder.AppendLine("Tre carte della stessa classe attivano la relativa Aura di Classe. Tre classi diverse della stessa famiglia attivano l'Aura di Famiglia.");
+		builder.AppendLine("<color=#E2A64B><b>CLASSI, FAZIONI E AURE</b></color>");
+		builder.AppendLine("Tre carte della stessa classe attivano la relativa Aura di Classe. Tre classi diverse della stessa fazione attivano l'Aura di Fazione.");
 		builder.AppendLine("Una carta Fortuza, una Astuta e una Magica attivano l'Aura di Formazione.");
 		builder.AppendLine();
-		builder.AppendLine("<b>Priorita:</b> Aura di Classe  >  Aura di Famiglia  >  Aura di Formazione.");
+		builder.AppendLine("<b>Priorita:</b> Aura di Classe  >  Aura di Fazione  >  Aura di Formazione.");
 		builder.AppendLine();
 
 		foreach (HeroClass heroClass in Enum.GetValues(typeof(HeroClass)))
@@ -777,7 +778,7 @@ public sealed partial class BattleBoardController
 			builder.AppendLine();
 		}
 
-		builder.AppendLine("<color=#D9A34A><b>AURE DI FAMIGLIA</b></color>");
+		builder.AppendLine("<color=#D9A34A><b>AURE DI FAZIONE</b></color>");
 		builder.AppendLine("<b>Fortuza:</b> " + AuraEffectText(BattleAuraType.Might));
 		builder.AppendLine("<b>Astuta:</b> " + AuraEffectText(BattleAuraType.Cunning));
 		builder.AppendLine("<b>Magica:</b> " + AuraEffectText(BattleAuraType.Magic));
@@ -864,7 +865,7 @@ public sealed partial class BattleBoardController
 		builder.AppendLine("<color=#D9A34A><b>2. VIGORE</b></color>");
 		builder.AppendLine("Il valore della carta indica il dado Vigore usato nei confronti: D4, D6, D8, D10, D12 o D20.");
 		builder.AppendLine();
-		builder.AppendLine("<color=#D9A34A><b>3. FAMIGLIE</b></color>");
+		builder.AppendLine("<color=#D9A34A><b>3. FAZIONI</b></color>");
 		builder.AppendLine("Fortuza, Astuta e Magica determinano vantaggio e svantaggio durante i confronti.");
 		builder.AppendLine();
 		builder.AppendLine("<color=#D9A34A><b>4. ATTACCO E DIFESA</b></color>");
@@ -941,7 +942,7 @@ public sealed partial class BattleBoardController
 		return section switch
 		{
 			LibrarySection.Cards => "Catalogo delle carte presenti nel gioco.",
-			LibrarySection.ClassesAndAuras => "Classi, abilita, famiglie e combinazioni di aura.",
+			LibrarySection.ClassesAndAuras => "Classi, abilita, fazioni e combinazioni di aura.",
 			LibrarySection.Bestiary => "Creature, miniboss e boss della campagna.",
 			LibrarySection.Atlas => "Capitoli, stanze e scenari del viaggio.",
 			_ => "Regole, meccaniche e consigli di gioco."
@@ -979,7 +980,7 @@ public sealed partial class BattleBoardController
 			RoomType.Boss => "Boss",
 			RoomType.Merchant => "Mercante",
 			RoomType.Loot => "Tesoro",
-			RoomType.UnexpectedOpportunity => "Imprevisto",
+			RoomType.QuickChallenge => "Sfida Veloce",
 			_ => "Qualsiasi"
 		};
 	}

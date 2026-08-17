@@ -3,15 +3,15 @@ using UnityEngine;
 namespace AccardND.Presentation
 {
     /// <summary>
-    /// Su desktop apre il gioco in finestra landscape 16:9 (il layout è ormai
-    /// landscape-ready), scalata per stare nello schermo disponibile.
+    /// Su desktop apre il gioco in finestra portrait 9:16, scalata per stare
+    /// nello schermo disponibile.
     /// </summary>
     internal static class StandaloneWindowBootstrap
     {
-        private const int TargetWidth = 1920;
-        private const int TargetHeight = 1080;
-        private const int MinimumWidth = 960;
-        private const int MinimumHeight = 540;
+        private const int TargetWidth = 1080;
+        private const int TargetHeight = 1920;
+        private const int MinimumWidth = 540;
+        private const int MinimumHeight = 960;
         private const int DesktopWindowMargin = 80;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]

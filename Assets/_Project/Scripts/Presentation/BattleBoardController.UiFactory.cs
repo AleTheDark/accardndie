@@ -48,6 +48,23 @@ public sealed partial class BattleBoardController
 		global::AccardND.Battlefield.EditableRuntimeText.BindLocalized(target, key, fallback);
 	}
 
+	private static void SetLocalizedText(Text target, string key, string italianFallback)
+	{
+		if ((Object)(object)target == (Object)null)
+			return;
+
+		target.text = GameText.GetOrFallbackSilent(key, italianFallback);
+		EditableRuntimeText.BindLocalized(target, key, italianFallback);
+	}
+
+	private static void SetLocalizedButtonLabel(Button button, string key, string italianFallback)
+	{
+		if ((Object)(object)button == (Object)null)
+			return;
+
+		SetLocalizedText(button.GetComponentInChildren<Text>(), key, italianFallback);
+	}
+
 	private static Canvas CreateCanvas()
 	{
 		GameObject val = new GameObject("Battle Canvas", new Type[4]

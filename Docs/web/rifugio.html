@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<!-- Il rifugio: forgia, taverna, negozio, Santuario, talenti.
+     Tutti i prezzi in miele e tutti gli effetti dei talenti vengono dal server, che e'
+     l'autorita' unica per catalogo e costi:
+     - Server/AccardND.Server/Progression/SanctuaryCatalog.cs (classi, tecniche,
+       consumabili, slot bisaccia, loadout, reliquie del fabbro);
+     - TalentCatalog.cs (i 17 nodi, i costi in propoli e le soglie TierGates);
+     - TavernQuests.cs (dieci quest al giorno, punti di difficolta', premio);
+     - GameCore/AccountLevelCurve.cs (quanti propoli da' un livello account);
+     - GameCore/CombatResult.cs, classe MerchantEconomy (i prezzi in oro del mercante).
+     Se si ritocca il bilanciamento di uno di questi, la pagina va riletta: i numeri qui
+     sono scritti a mano e non generati. -->
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Il rifugio — AcCard N' Die</title>
+<meta name="description" content="Cosa si fa fra una run e l'altra in AcCard N' Die: come si compone il mazzo, le quest della taverna, il negozio, il Santuario che sblocca classi e supreme, e i diciassette nodi dell'albero dei talenti.">
+<link rel="canonical" href="https://accardndie.com/rifugio">
+<link rel="stylesheet" href="site.css?v=8019aee5">
+<link rel="apple-touch-icon" href="media/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3580486749764055" crossorigin="anonymous"></script>
+<script src="site.js?v=49ec8cb4" defer></script>
+</head>
+<body>
+
+<nav class="nav"><div class="wrap">
+  <a class="brand" href="/">AcCard N' Die</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu-links" hidden>Menu</button>
+  <div class="menu-links" id="menu-links">
+    <a href="/guida">Come si gioca</a>
+    <a href="/strategia">Strategia</a>
+    <a href="/classi">Le nove classi</a>
+    <a href="/carte">Database carte</a>
+    <a href="/campagna">Campagna</a>
+    <a href="/duelli">Duelli</a>
+    <a href="/hall-of-fame">Hall of Fame</a>
+  </div>
+  <a class="nav-play" data-play data-play-label="Scarica" href="/game/">Gioca</a>
+</div></nav>
+
+<header class="band band-testata">
+  <div class="wrap">
+    <h1>Il rifugio</h1>
+    <p class="lead">Fra una run e l'altra non si aspetta: si compone il mazzo, si ritirano le
+    quest della taverna, si compra al negozio, si sblocca al Santuario e si spendono i punti
+    talento. È la metà del gioco che <strong>resta</strong>, mentre le run passano.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<h2>Due valute, e non si somigliano</h2>
+
+<p>La prima cosa che confonde chi comincia sono le valute. Sono due, e la differenza non è
+quanto valgono: è <strong>quanto durano</strong>.</p>
+
+<div class="scroll">
+<table>
+  <tr><th>Valuta</th><th>Dove si usa</th><th>Quanto dura</th><th>Da dove arriva</th></tr>
+  <tr><td><strong>Oro</strong></td><td>Solo dal mercante, dentro la run</td>
+      <td>Una run. Finisce con lei</td><td>Combattendo: 6–24 per stanza, 24–40 per un miniboss</td></tr>
+  <tr><td><strong>Miele</strong></td><td>Negozio, Santuario, bisaccia, loadout</td>
+      <td><strong>Per sempre</strong></td><td>Solo dalle quest della taverna</td></tr>
+</table>
+</div>
+
+<div class="box">
+  <p>Il miele è l'unica valuta che attraversa le run, e ha <strong>una sola fonte</strong>: le
+  quest giornaliere. Non lo paga la fine di una run, non lo paga il livello dell'account, non lo
+  pagano i boss. Se stai cercando di capire come guadagnarne di più, la risposta è sempre la
+  taverna.</p>
+</div>
+
+<h2>Il mazzo: due scelte e sette carte a caso</h2>
+
+<p>Il mazzo di una run è di nove carte e si rifà da zero ogni volta: non è una collezione che si
+accumula. Le decisioni sono due, e sono all'inizio — scegli la classe del
+<strong>campione</strong>, che ti dà il <strong>10</strong> di quella classe, e quella del
+<strong>vice</strong>, che ti dà il <strong>9</strong>. <strong>Le altre sette escono a
+caso</strong>, e nel mazzo non possono finire due copie della stessa carta.</p>
+
+<p>Da qui viene tutto il resto: campione e vice sono l'unica leva sul mazzo di partenza, quindi
+prenderli della stessa classe è il modo più diretto di puntare a un'aura di classe — se conviene
+è discusso in <a href="/strategia">Strategia</a>. Tutto il resto della run è quello che fai
+con le sette carte capitate, più quelle che compri dal <a href="/guida">mercante</a> strada
+facendo.</p>
+
+<h2>La taverna: dieci quest al giorno</h2>
+
+<p>Ogni giorno la bacheca propone <strong>dieci quest</strong>, estratte da un catalogo di
+circa novanta. Non sono dieci quest uguali: hanno tre livelli di difficoltà, e ognuno vale un
+numero diverso di punti.</p>
+
+<div class="scroll">
+<table>
+  <caption>La bacheca di una giornata.</caption>
+  <tr><th>Difficoltà</th><th>Quante</th><th>Punti l'una</th><th>Punti in tutto</th></tr>
+  <tr><td>Facile</td><td>5</td><td>1</td><td>5</td></tr>
+  <tr><td>Intermedia</td><td>3</td><td>2</td><td>6</td></tr>
+  <tr><td>Avanzata</td><td>2</td><td>3</td><td>6</td></tr>
+  <tr><th colspan="3">Disponibili in una giornata</th><th>17</th></tr>
+  <tr><th colspan="3">Necessari per il premio</th><th>10</th></tr>
+</table>
+</div>
+
+<p>Ogni quest completata paga <strong>5 miele</strong>. Arrivare a dieci punti paga in più il
+<strong>premio di giornata: 50 miele</strong>. Le due cose insieme sono il ritmo con cui si
+sblocca il gioco: un giorno pieno vale fra i 70 e i 100 miele, cioè una classe ogni pochi
+giorni.</p>
+
+<div class="box">
+  <p><strong>Non serve giocare in arena.</strong> Al massimo <strong>due</strong> delle dieci
+  quest del giorno riguardano i <a href="/duelli">duelli online</a>, e i punti restanti
+  bastano sempre a raggiungere la soglia: chi gioca solo in campagna arriva al premio ogni
+  giorno. È una garanzia verificata su tutte le date dell'anno, non una probabilità.</p>
+</div>
+
+<p>Le quest non chiedono di fare cose strane: contano quello che fai comunque — stanze
+superate, miniboss battuti, dadi tirati, abilità e supreme usate, oggetti consumati, oro
+guadagnato, livelli presi, acquisti dal mercante. I contatori si aggiornano <strong>a run
+conclusa</strong>, non stanza per stanza, e hanno un tetto per run: sono diventati moneta, e una
+moneta senza tetto in un combattimento che gira sul dispositivo del giocatore è un invito.</p>
+
+<h2>Il negozio: i consumabili</h2>
+
+<p>Al negozio si comprano col miele le copie dei consumabili, che si portano in run nella
+bisaccia. Sono in ordine di forza, e il prezzo lo rispetta:</p>
+
+<div class="scroll">
+<table>
+  <caption>I consumabili e il prezzo di una copia.</caption>
+  <tr><th>Oggetto</th><th>Miele</th><th>Cosa fa</th></tr>
+  <tr><td><strong>Detector</strong></td><td>5</td><td>Rivela il destino delle tre porte.</td></tr>
+  <tr><td><strong>Mana +5</strong></td><td>5</td><td>Recupera 5 mana in qualsiasi momento, fino al tetto di 10.</td></tr>
+  <tr><td><strong>Doppia EXP</strong></td><td>7</td><td>Raddoppia l'esperienza di una stanza.</td></tr>
+  <tr><td><strong>Mana +10</strong></td><td>9</td><td>Recupera 10 mana, fino al tetto di 10.</td></tr>
+  <tr><td><strong>Empower</strong></td><td>10</td><td>Alza di uno scalino il dado Vigore in attacco.</td></tr>
+  <tr><td><strong>Sigillo Rubino</strong></td><td>12</td><td>Incide +2 permanente su una carta, una sola volta per carta.</td></tr>
+  <tr><td><strong>Seconda Chance</strong></td><td>17</td><td>Riporta nel mazzo le carte dal cimitero.</td></tr>
+  <tr><td><strong>Jolly</strong></td><td>20</td><td>Teletrasporta alla stanza scelta, anche da una già iniziata.</td></tr>
+</table>
+</div>
+
+<p>La bisaccia parte con <strong>due slot</strong> e vale una regola sola: <em>un solo pezzo per
+tipo</em>. Gli slot in più si comprano, e costano il doppio ogni volta — <strong>30</strong> il
+terzo, <strong>60</strong> il quarto, <strong>120</strong> il quinto, <strong>240</strong> il
+sesto, che è il tetto. Oltre sei la run smetterebbe di essere una serie di scelte.</p>
+
+<h3>Le reliquie del fabbro</h3>
+
+<p>Due sblocchi a parte, che non si consumano: la <strong>Reliquia del Fabbro I</strong>
+(80 miele) apre il banco <em>Potenzia</em> del mercante, che dà +1 al valore di una pedina; la
+<strong>II</strong> (160) permette il secondo potenziamento della stessa pedina. Senza la prima
+quel banco non c'è: è l'unico sblocco che aggiunge un pezzo al mercato invece di un oggetto alla
+bisaccia.</p>
+
+<h3>I loadout</h3>
+
+<p>Uno spazio in cui salvare un mazzo per i <a href="/duelli">duelli</a>. Il secondo costa
+<strong>50</strong> miele, il terzo <strong>100</strong>, il quarto <strong>200</strong>.</p>
+
+<h2>Il Santuario: classi e supreme</h2>
+
+<p>È il posto dove il miele diventa qualcosa che resta. Il <strong>Warrior</strong> lo consegna
+il tutorial: è la dotazione con cui si comincia. Le altre otto classi si comprano, e il prezzo è
+l'unico cancello — non ci sono prove da superare.</p>
+
+<div class="scroll">
+<table>
+  <caption>Le classi al Santuario. <a href="/campagna">I capitoli della campagna</a> ne
+  consegnano sei come premio: chi arriva in fondo al capitolo non paga.</caption>
+  <tr><th>Costo</th><th>Classi</th></tr>
+  <tr><td><strong>Gratis</strong></td><td>Warrior <em>(dal tutorial)</em></td></tr>
+  <tr><td><strong>40 miele</strong></td><td>Mage, Rogue, Assassin, Hunter, Paladin</td></tr>
+  <tr><td><strong>60 miele</strong></td><td>Barbarian, Necromancer, Priest</td></tr>
+</table>
+</div>
+
+<p>Le <strong>supreme</strong> — le seconde abilità, una per classe — costano
+<strong>80 miele</strong> ciascuna e chiedono una cosa sola: possedere già quella classe. Sono
+l'acquisto più caro del Santuario, e anche il più pesante sul gioco: una carta appena schierata
+non ha la supreme, e comprarla la accende <em>per tutte</em> le carte di quella classe, per
+sempre. Cosa fa ciascuna delle nove è in <a href="/classi">Le nove classi</a>; quanto costa
+in mana e perché rincara a ogni riuso è in <a href="/strategia">Strategia</a>.</p>
+
+<div class="box">
+  <p>La supreme del <strong>Necromancer</strong> è l'unica ancora non acquistabile: si vede a
+  catalogo col suo prezzo, ma è segnata in preparazione. Le altre otto funzionano.</p>
+</div>
+
+<h2>L'albero dei talenti</h2>
+
+<p>I talenti si pagano in <strong>propoli</strong>, e i propoli arrivano dal livello
+dell'account — cioè da quanto hai giocato, non da quanto hai speso. Le due sorgenti sono:</p>
+
+<ul>
+  <li><strong>1 propoli per ogni livello account</strong>, più <strong>2 in più</strong> ogni
+      cinque livelli. Salire a livello 10 ne consegna 14 in tutto.</li>
+  <li><strong>3 propoli</strong> per la prima uccisione del boss di un capitolo, una tantum e
+      non ripetibili. Sui sette capitoli fanno 21 punti.</li>
+</ul>
+
+<p>Il livello account costa 100 esperienza per il primo, e 25 in più per ogni livello
+successivo: il secondo 125, il terzo 150, e così via. Quanta esperienza paga una run dipende dal
+capitolo in cui la giochi — dal 100% del primo al 250% del settimo — che è la ragione per cui
+avanzare in <a href="/campagna">campagna</a> accelera anche i talenti.</p>
+
+<h3>Quattro rami</h3>
+
+<p>Diciassette nodi in quattro rami, e i rami non fanno la stessa cosa con numeri diversi:
+toccano quattro momenti diversi della run.</p>
+
+<div class="scroll">
+<table>
+  <caption><strong>Borsa</strong> — l'economia della run.</caption>
+  <tr><th>Nodo</th><th>Propoli per rango</th><th>Effetto</th></tr>
+  <tr><td>Fondo di viaggio</td><td>1</td><td>Da +2 a +10 oro alla partenza.</td></tr>
+    <tr><td>Mercante compiacente</td><td>3</td><td>−10% o −20% sui prezzi del mercante.</td></tr>
+  <tr><td>Tempra del fabbro</td><td>5</td><td>Una o due carte del mazzo appena composto prendono +1 permanente.</td></tr>
+  <tr><td>Primo affare</td><td>6</td><td>Il primo potenziamento comprato dal mercante è gratis, una volta per run.</td></tr>
+</table>
+</div>
+
+<div class="scroll">
+<table>
+  <caption><strong>Iniziativa</strong> — i tre dadi che decidono l'ordine dei turni.</caption>
+  <tr><th>Nodo</th><th>Propoli per rango</th><th>Effetto</th></tr>
+  <tr><td>Avanguardia</td><td>1</td><td>Da +1 a +3 al primo dado d'iniziativa.</td></tr>
+  <tr><td>Fiancheggiatore</td><td>2</td><td>Da +1 a +3 al secondo.</td></tr>
+  <tr><td>Retroguardia</td><td>3</td><td>Da +1 a +3 al terzo.</td></tr>
+  <tr><td>Apertura</td><td>8</td><td>Apri sempre tu lo scontro: il tuo primo dado batte qualunque numero in campo.</td></tr>
+</table>
+</div>
+
+<div class="scroll">
+<table>
+  <caption><strong>Maestria</strong> — il mana per le abilità.</caption>
+  <tr><th>Nodo</th><th>Propoli per rango</th><th>Effetto</th></tr>
+  <tr><td>Apprendista</td><td>1</td><td>Da −2% a −10% a tutte le soglie di livello della run.</td></tr>
+  <tr><td>Concentrazione</td><td>2</td><td>+1 o +2 mana a ogni cambio stanza.</td></tr>
+  <tr><td>Riserva</td><td>4</td><td>Alza il tetto del mana da 10 a 11 o 12.</td></tr>
+  <tr><td>Trance</td><td>8</td><td>La prima abilità base di ogni stanza non costa mana. Le supreme si pagano comunque.</td></tr>
+</table>
+</div>
+
+<div class="scroll">
+<table>
+  <caption><strong>Occasioni</strong> — i condizionali.</caption>
+  <tr><th>Nodo</th><th>Propoli per rango</th><th>Effetto</th></tr>
+  <tr><td>Recupero</td><td>2</td><td>−10% o −20% sul costo di riportare una carta dal cimitero.</td></tr>
+  <tr><td>Sfidante</td><td>3</td><td>+1 o +2 Potenza al primo attacco di ogni scontro contro boss e miniboss.</td></tr>
+  <tr><td>Cercatore</td><td>4</td><td>+1 o +2 consumabili da ogni stanza bottino.</td></tr>
+  <tr><td>Secondo fiato</td><td>8</td><td>La prima pedina che perdi in ogni run non va al cimitero: torna nel mazzo.</td></tr>
+</table>
+</div>
+
+<h3>Come si apre un ramo</h3>
+
+<p>I nodi stanno su quattro livelli, e i livelli si aprono spendendo <em>dentro quel ramo</em>:
+il primo è aperto da subito, il secondo chiede <strong>2</strong> propoli già spesi lì, il terzo
+<strong>7</strong> e il quarto — il nodo che chiude il ramo — <strong>14</strong>. Il livello
+dell'account distribuisce i punti, il ramo decide dove possono andare: la specializzazione emerge
+da sé, senza un secondo cancello sul livello.</p>
+
+<div class="box">
+  <p><strong>Non c'è respec.</strong> I propoli spesi restano spesi. È il motivo per cui vale la
+  pena leggere le quattro tabelle qui sopra <em>prima</em> di cliccare: arrivare al nodo finale
+  di un ramo chiede 14 propoli già spesi là dentro, più gli 8 che costa lui: ventidue punti, cioè
+  sedici livelli di account — meno, se hai battuto qualche boss.</p>
+  <p>Un nodo del ramo Maestria merita un avviso a parte: <em>Apprendista</em> abbassa le soglie
+  di livello della run, non aumenta l'esperienza che incassi. È deliberato — un bonus
+  «+% esperienza» chiuderebbe un anello (più esperienza → più livelli → più propoli → più
+  esperienza) e renderebbe quel ramo obbligatorio e gli altri tre decorativi.</p>
+</div>
+
+<h2>In che ordine spendere il primo miele</h2>
+
+<p>Non è una risposta obbligata, ma le prime scelte pesano più delle altre, e questi sono i
+fatti su cui basarla:</p>
+
+<ol>
+  <li><strong>Una seconda e una terza classe</strong> (40 miele l'una). Senza almeno tre classi
+      non esistono la Formazione né le aure di fazione, cioè manca metà del gioco. È il primo
+      acquisto in assoluto.</li>
+  <li><strong>Il terzo slot della bisaccia</strong> (30). È lo sblocco più economico che cambia
+      ogni run, e costa meno di una classe.</li>
+  <li><strong>Una supreme</strong> (80), della classe che giochi di più. Costa il doppio di una
+      classe e vale per tutte le carte di quella classe, per sempre.</li>
+  <li><strong>La Reliquia del Fabbro I</strong> (80), se il tuo problema sono le carte troppo
+      basse: apre il banco che le alza.</li>
+  <li><strong>Gli slot dal quarto in su</strong> (60, 120, 240). Raddoppiano di prezzo: sono la
+      cosa da comprare quando il miele non è più il collo di bottiglia.</li>
+</ol>
+
+<h2>Da dove continuare</h2>
+
+<ul>
+  <li><a href="/guida">Come si gioca</a> — il regolamento, mazzo e mercante compresi.</li>
+  <li><a href="/campagna">La campagna</a> — dove si spende tutto questo.</li>
+  <li><a href="/strategia">Strategia</a> — cosa conviene, con i conti.</li>
+  <li><a href="/classi">Le nove classi</a> — cosa compri quando compri una classe.</li>
+</ul>
+
+</main>
+
+<footer class="site"><div class="wrap">
+  <p><a href="/game/">Gioca</a> · <a href="/guida">Come si gioca</a> ·
+     <a href="/strategia">Strategia</a> · <a href="/classi">Le nove classi</a> ·
+     <a href="/carte">Database carte</a> · <a href="/campagna">Campagna</a> ·
+     <a href="/duelli">Duelli</a> · <a href="/rifugio">Il rifugio</a> ·
+     <a href="/faq">Domande frequenti</a> ·
+     <a href="/hall-of-fame">Hall of Fame</a> · <a href="/statistiche">Statistiche</a></p>
+  <p><a href="/chi-siamo">Chi siamo</a> · <a href="/contatti">Contatti</a> ·
+     <a href="/privacy">Privacy</a> · <a href="/account/delete">Cancellazione account</a></p>
+  <p><a href="https://www.youtube.com/@accardndie" rel="noopener">YouTube</a> ·
+     <a href="https://www.instagram.com/accardndie/" rel="noopener">Instagram</a> ·
+     <a href="https://www.tiktok.com/@accardndie" rel="noopener">TikTok</a></p>
+  <p>AcCard N' Die</p>
+</div></footer>
+
+</body>
+</html>

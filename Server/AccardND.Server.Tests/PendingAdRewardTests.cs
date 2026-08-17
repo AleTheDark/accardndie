@@ -6,7 +6,7 @@ using Xunit;
 namespace AccardND.Server.Tests;
 
 /// <summary>
-/// Il triplicatore saltato a fine run non e' perso: la reward resta a moltiplicatore 1 e il
+/// Il moltiplicatore saltato a fine run non e' perso: la reward resta a moltiplicatore 1 e il
 /// server la ripropone finche' qualcuno non guarda il video. Questi test difendono proprio
 /// il caso per cui la vetrina esiste - la connessione che cade mentre il popup e' a schermo -
 /// e i due modi in cui l'offerta deve sparire: riscossa, oppure scaduta.
@@ -25,15 +25,17 @@ public sealed class PendingAdRewardTests
 
         Assert.Single(pending.rewards);
         Assert.Equal("death", pending.rewards[0].rewardType);
-        Assert.Equal(25, pending.rewards[0].baseAccountExperience);
-        Assert.Equal(50, pending.rewards[0].extraAccountExperience);
+        // 250 di run fanno 25 di base, per il 120% del capitolo 2.
+        Assert.Equal(30, pending.rewards[0].baseAccountExperience);
+        // Il video triplica: l'offerta e' il doppio della base, che sommata fa il triplo.
+        Assert.Equal(60, pending.rewards[0].extraAccountExperience);
         Assert.Equal("chapter-2", pending.rewards[0].chapterId);
         Assert.Equal(4, pending.rewards[0].roomsCleared);
         Assert.True(pending.rewards[0].hoursLeft > 0);
     }
 
     [Fact]
-    public void Tripled_reward_leaves_the_list()
+    public void Multiplied_reward_leaves_the_list()
     {
         using var server = new TestServer();
         AccountIdentity player = server.RegisterAccount("pending-adv-2");

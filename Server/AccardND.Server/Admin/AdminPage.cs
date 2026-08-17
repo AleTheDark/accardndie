@@ -15,6 +15,9 @@ public static class AdminPage
 <title>AccardND · Admin</title>
 <style>
 :root{
+  /* Dichiarato al browser: scrollbar, caselle e tastierino numerico nascono scuri
+     invece che bianchi in mezzo alla pagina. */
+  color-scheme:dark;
   --bg:#0f1216; --panel:#171b21; --panel2:#1e242c; --line:#2a323c;
   --text:#e8e6e1; --muted:#8a94a2; --gold:#d4af37; --gold2:#f0d878;
   --blue:#5aa9e6; --green:#5ad19a; --red:#e06a6a; --purple:#b18cf0;
@@ -58,6 +61,10 @@ nav{display:flex;gap:.3em;padding:.6em 1.2em;background:var(--panel);border-bott
   flex-wrap:wrap}
 nav button{background:transparent;border:1px solid transparent}
 nav button.active{border-color:var(--gold);color:var(--gold)}
+/* Banda della manutenzione: sta fuori da main perché deve seguirti in ogni scheda. */
+#maintenanceBanner{background:rgba(220,60,70,.16);border-bottom:1px solid var(--red);
+  color:#ffd9dc;padding:.7em 1.2em;font-size:13px;display:flex;align-items:center;gap:.8em;flex-wrap:wrap}
+#maintenanceBanner button{background:transparent;border:1px solid var(--red);color:#ffd9dc}
 main{padding:1.2em;max-width:1200px;margin:0 auto}
 section{margin-bottom:1.5em}
 
@@ -76,6 +83,9 @@ section{margin-bottom:1.5em}
 .legend label{display:inline-flex;align-items:center;gap:.4em;cursor:pointer;color:var(--muted)}
 .legend .sw{width:12px;height:12px;border-radius:3px;display:inline-block}
 
+/* Sotto una certa larghezza una tabella di dieci colonne non si stringe: scorre
+   dentro il suo riquadro, e le colonne meno importanti (.opt) spariscono del tutto. */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{text-align:left;padding:.55em .6em;border-bottom:1px solid var(--line)}
 th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
@@ -89,9 +99,14 @@ tbody tr:hover{background:var(--panel2)}
 
 /* Modal */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;z-index:20;padding:1em}
-.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;
-  width:min(760px,96vw);max-height:90vh;overflow:auto;padding:1.4em}
-.modal .close{position:absolute}
+.modal{--pad:1.4em;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  width:min(760px,96vw);max-height:90vh;overflow:auto;padding:var(--pad)}
+/* La barra di chiusura resta a portata anche a meta' scheda: il dettaglio giocatore e'
+   lungo, e su telefono tornare in cima per chiudere e' un viaggio. I margini negativi
+   coprono il padding laterale, altrimenti il contenuto le scorrerebbe accanto. */
+.modalbar{position:sticky;top:0;z-index:3;display:flex;justify-content:flex-end;
+  margin:calc(var(--pad)*-1) calc(var(--pad)*-1) .2em;padding:.5em var(--pad);
+  background:var(--panel)}
 .modal h2{color:var(--gold)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:.8em}
 .field{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:.6em .8em}
@@ -119,7 +134,57 @@ tbody tr:hover{background:var(--panel2)}
 .utoggle.locked{opacity:.55;cursor:not-allowed}
 .utoggle input{margin:0}
 .utoggle em{color:var(--muted);font-style:normal;font-size:11px}
-@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+
+/* Scorta consumabili modificabile */
+.stash{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:.5em}
+.sitem{display:flex;align-items:center;gap:.5em;flex-wrap:wrap;
+  background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:.5em .7em}
+.sitem.has{border-color:var(--gold)}
+.sitem .nm{flex:1 1 130px;min-width:0;font-size:13px}
+.sitem .nm em{display:block;color:var(--muted);font-style:normal;font-size:11px}
+.sitem .qty{display:flex;align-items:center;gap:.3em}
+.sitem input{width:3.4em;text-align:center;padding:.35em .2em}
+.sitem button{padding:.25em .55em;min-width:2.2em}
+
+/* --- Schermi stretti ---------------------------------------------------
+   Il pannello si guarda anche dal telefono: qui cambia solo l'impaginazione,
+   nessuna funzione sparisce. */
+@media(max-width:900px){
+  main{padding:1em .8em}
+  .modal{--pad:1.1em}
+}
+@media(max-width:780px){
+  .opt{display:none}
+}
+@media(max-width:640px){
+  .grid2{grid-template-columns:1fr}
+  header{flex-wrap:wrap;gap:.5em;padding:.6em .8em}
+  header .brand{font-size:14px}
+  header .spacer{flex:1 1 auto}
+  /* La barra delle sezioni resta su una riga sola e scorre: a capo mangerebbe
+     mezzo schermo prima ancora di vedere i dati. */
+  nav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:.2em;padding:.5em .6em}
+  nav::-webkit-scrollbar{display:none}
+  nav button{white-space:nowrap}
+  main{padding:.8em .6em}
+  section{margin-bottom:1em}
+  .kpis{grid-template-columns:1fr 1fr;gap:.5em}
+  .kpi{padding:.7em}
+  .kpi .v{font-size:20px}
+  .panel{padding:.8em .7em;border-radius:10px}
+  th,td{padding:.5em .45em;white-space:nowrap}
+  .qtitle,.qdesc,.field .v{white-space:normal}
+  .toolbar input{flex:1 1 100%;min-width:0!important}
+  /* Sotto i 16px iOS ingrandisce la pagina al focus e non la rimpicciolisce piu'. */
+  input,select{font-size:16px}
+  button{min-height:40px}
+  .sitem button{min-height:34px}
+  .overlay{padding:0}
+  .modal{--pad:.8em;width:100%;max-width:none;height:100%;max-height:none;border-radius:0}
+  .actions{gap:.4em}
+  .actions button{flex:1 1 45%}
+  .stash{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
@@ -147,13 +212,18 @@ tbody tr:hover{background:var(--panel2)}
   </header>
   <nav>
     <button data-tab="overview" class="active">Panoramica</button>
+    <button data-tab="retention">Retention</button>
     <button data-tab="players">Giocatori</button>
     <button data-tab="quests">Quest taverna</button>
     <button data-tab="runs">Run campagna</button>
     <button data-tab="matches">Partite PvP</button>
     <button data-tab="seasons">Stagioni</button>
     <button data-tab="version">Versione client</button>
+    <button data-tab="maintenance">Manutenzione</button>
   </nav>
+  <!-- Banda rossa visibile da ogni scheda: la manutenzione si accende per riavviare
+       e si dimentica accesa, e da accesa nessuno riesce ad entrare nel gioco. -->
+  <div id="maintenanceBanner" class="hidden"></div>
   <main>
     <div id="tab-overview" class="tab">
       <section class="kpis" id="kpis"></section>
@@ -172,6 +242,35 @@ tbody tr:hover{background:var(--panel2)}
       </section>
     </div>
 
+    <div id="tab-retention" class="tab hidden">
+      <section class="kpis" id="retentionKpis"></section>
+      <section class="panel">
+        <div class="toolbar">
+          <h2 style="margin:0">Coorti per giorno di registrazione</h2>
+          <span class="spacer"></span>
+          <select id="retentionRange">
+            <option value="30">30 giorni</option>
+            <option value="60" selected>60 giorni</option>
+            <option value="90">90 giorni</option>
+            <option value="180">180 giorni</option>
+          </select>
+        </div>
+        <div class="tw"><table><thead><tr>
+          <th>Giorno</th><th>Coorte</th><th>D1</th><th>D7</th><th class="opt">D30</th>
+        </tr></thead><tbody id="retentionBody"></tbody></table></div>
+        <p class="muted" style="font-size:12px;margin-bottom:0">
+          Una coorte è l'insieme degli account registrati in un giorno UTC. <b>D1</b> è la quota
+          che è tornata il giorno dopo, <b>D7</b> il settimo giorno, <b>D30</b> il trentesimo:
+          il giorno preciso, non «entro». Le coorti che non hanno ancora raggiunto quel giorno
+          mostrano «—» invece di 0%, perché contarle come zero schiaccia la media verso il basso.
+          Sotto i 20 account la percentuale resta grigia: non è una misura, in una coorte da 12
+          una persona vale 8 punti. Il conteggio legge <span class="mono">login_events</span>,
+          cioè un'autenticazione a ogni avvio dell'app — e ci sono dentro anche i tuoi account
+          di prova.
+        </p>
+      </section>
+    </div>
+
     <div id="tab-players" class="tab hidden">
       <section class="panel">
         <div class="toolbar">
@@ -179,13 +278,13 @@ tbody tr:hover{background:var(--panel2)}
           <span class="spacer"></span>
           <span class="muted" id="playersCount"></span>
         </div>
-        <table><thead><tr id="playersHead">
-          <th data-sort="name">Nome</th><th data-sort="source">Fonte</th>
-          <th data-sort="level">Liv.</th><th data-sort="exp">Exp tot.</th>
+        <div class="tw"><table><thead><tr id="playersHead">
+          <th data-sort="name">Nome</th><th class="opt" data-sort="source">Fonte</th>
+          <th data-sort="level">Liv.</th><th class="opt" data-sort="exp">Exp tot.</th>
           <th data-sort="honey">Miele</th><th data-sort="matches">Match</th>
-          <th data-sort="wins">Win</th><th data-sort="losses">Sconfitte</th>
-          <th data-sort="created">Registrato</th><th data-sort="lastLogin">Ultimo login</th>
-        </tr></thead><tbody id="playersBody"></tbody></table>
+          <th data-sort="wins">Win</th><th class="opt" data-sort="losses">Sconfitte</th>
+          <th class="opt" data-sort="created">Registrato</th><th data-sort="lastLogin">Ultimo login</th>
+        </tr></thead><tbody id="playersBody"></tbody></table></div>
       </section>
     </div>
 
@@ -198,9 +297,10 @@ tbody tr:hover{background:var(--panel2)}
           <span class="spacer"></span>
           <span class="muted" id="questRefresh"></span>
         </div>
-        <table><thead><tr>
-          <th>Quest</th><th>Obiettivo</th><th>Assegnata</th><th>Completata</th><th>Riscossa</th><th>Completamento</th>
-        </tr></thead><tbody id="questTodayBody"></tbody></table>
+        <div class="tw"><table><thead><tr>
+          <th>Quest</th><th class="opt">Obiettivo</th><th>Assegnata</th><th>Completata</th><th>Riscossa</th>
+          <th class="opt">Completamento</th>
+        </tr></thead><tbody id="questTodayBody"></tbody></table></div>
         <p class="muted" style="font-size:12px">
           "Assegnata" conta i giocatori che oggi hanno aperto la taverna: le quest partono al
           primo contatto della giornata, non a mezzanotte.
@@ -219,9 +319,9 @@ tbody tr:hover{background:var(--panel2)}
         </div>
         <div id="questChart"></div>
         <div class="legend" id="questLegend"></div>
-        <table style="margin-top:1em"><thead><tr>
+        <div class="tw" style="margin-top:1em"><table><thead><tr>
           <th>Giorno</th><th>Giocatori</th><th>Quest riscosse</th><th>Giornate complete</th><th>Miele erogato</th>
-        </tr></thead><tbody id="questHistoryBody"></tbody></table>
+        </tr></thead><tbody id="questHistoryBody"></tbody></table></div>
         <p class="muted" style="font-size:12px">
           Lo storico conta le riscossioni: i contatori sono cumulativi, quindi rivalutare oggi
           il completamento di ieri direbbe quanti hanno superato la soglia da allora.
@@ -229,14 +329,26 @@ tbody tr:hover{background:var(--panel2)}
       </section>
       <section class="panel">
         <h2>Catalogo completo</h2>
-        <table><thead><tr>
-          <th>Quest</th><th>Tipo</th><th>Obiettivo</th><th>Giorni in cui è uscita</th><th>Riscossioni totali</th>
-        </tr></thead><tbody id="questCatalogBody"></tbody></table>
+        <div class="tw"><table><thead><tr>
+          <th>Quest</th><th class="opt">Tipo</th><th>Obiettivo</th>
+          <th class="opt">Giorni in cui è uscita</th><th>Riscossioni totali</th>
+        </tr></thead><tbody id="questCatalogBody"></tbody></table></div>
       </section>
     </div>
 
     <div id="tab-runs" class="tab hidden">
       <section class="kpis" id="runKpis"></section>
+      <section class="panel">
+        <h2>Leaderboard campagna</h2>
+        <div class="tw"><table><thead><tr>
+          <th>Posizione</th><th>Giocatore</th><th>Personal record</th>
+          <th class="opt">Run registrate</th><th class="opt">Ultima run</th>
+        </tr></thead><tbody id="campaignLeaderboardBody"></tbody></table></div>
+        <p class="muted" style="font-size:12px">
+          Classifica ordinata prima per capitolo raggiunto e poi per stanza: per esempio,
+          capitolo 2 stanza 4 precede capitolo 1 stanza 15. Ogni giocatore compare una volta sola.
+        </p>
+      </section>
       <section class="panel">
         <div class="toolbar">
           <h2 style="margin:0">Run di campagna</h2>
@@ -247,10 +359,11 @@ tbody tr:hover{background:var(--panel2)}
             <option value="ended">Concluse</option>
           </select>
         </div>
-        <table><thead><tr>
-          <th>Iniziata</th><th>Giocatore</th><th>Stato</th><th>Durata</th>
-          <th>Capitolo</th><th>Stanze</th><th>Nemici</th><th>Boss</th><th>Conclusa</th>
-        </tr></thead><tbody id="runsBody"></tbody></table>
+        <div class="tw"><table><thead><tr>
+          <th>Iniziata</th><th>Giocatore</th><th>Stato</th><th class="opt">Durata</th>
+          <th>Capitolo</th><th>Stanze</th><th class="opt">Nemici</th><th class="opt">Boss</th>
+          <th class="opt">Conclusa</th><th>Azioni</th>
+        </tr></thead><tbody id="runsBody"></tbody></table></div>
         <p class="muted" style="font-size:12px">
           La riga della run nasce quando il giocatore entra in campagna e si chiude alla
           fine (morte o vittoria). Le run "non concluse" sono quelle lasciate a metà: gioco
@@ -264,18 +377,20 @@ tbody tr:hover{background:var(--panel2)}
     <div id="tab-matches" class="tab hidden">
       <section class="panel">
         <h2>Ultime partite PvP</h2>
-        <table><thead><tr>
-          <th>Quando</th><th>Giocatore A</th><th>Punti</th><th>Giocatore B</th><th>Tipo</th><th>Fine</th>
-        </tr></thead><tbody id="matchesBody"></tbody></table>
+        <div class="tw"><table><thead><tr>
+          <th>Quando</th><th>Giocatore A</th><th>Punti</th><th>Giocatore B</th><th>Tipo</th>
+          <th class="opt">Fine</th>
+        </tr></thead><tbody id="matchesBody"></tbody></table></div>
       </section>
     </div>
 
     <div id="tab-seasons" class="tab hidden">
       <section class="panel" id="seasonsList">
         <h2>Stagioni</h2>
-        <table><thead><tr>
-          <th>ID</th><th>Nome</th><th>Inizio</th><th>Fine</th><th>Attiva</th><th>Match</th><th>Giocatori</th>
-        </tr></thead><tbody id="seasonsBody"></tbody></table>
+        <div class="tw"><table><thead><tr>
+          <th class="opt">ID</th><th>Nome</th><th class="opt">Inizio</th><th class="opt">Fine</th>
+          <th>Attiva</th><th>Match</th><th>Giocatori</th>
+        </tr></thead><tbody id="seasonsBody"></tbody></table></div>
         <p class="muted" style="font-size:12px">Clicca una stagione per vedere la classifica dei giocatori.</p>
       </section>
       <div id="seasonDetail" class="hidden">
@@ -293,17 +408,19 @@ tbody tr:hover{background:var(--panel2)}
             <span class="spacer"></span>
             <span class="muted" id="seasonPlayersCount"></span>
           </div>
-          <table><thead><tr id="seasonHead">
+          <div class="tw"><table><thead><tr id="seasonHead">
             <th data-ssort="rank">#</th><th data-ssort="username">Giocatore</th>
-            <th data-ssort="tier">Tier</th><th data-ssort="mmr">MMR</th>
+            <th data-ssort="tier">Tier</th><th class="opt" data-ssort="mmr">MMR</th>
             <th data-ssort="matches">Match</th><th data-ssort="wins">Vittorie</th>
-            <th data-ssort="losses">Sconfitte</th><th data-ssort="winRatePercent">Win rate</th>
-            <th data-ssort="bestStreak">Miglior streak</th><th data-ssort="lastMatchAt">Ultima partita</th>
-          </tr></thead><tbody id="seasonBody"></tbody></table>
+            <th class="opt" data-ssort="losses">Sconfitte</th><th data-ssort="winRatePercent">Win rate</th>
+            <th class="opt" data-ssort="bestStreak">Miglior streak</th>
+            <th class="opt" data-ssort="lastMatchAt">Ultima partita</th>
+          </tr></thead><tbody id="seasonBody"></tbody></table></div>
           <p class="muted" style="font-size:12px">
-            Match, vittorie e sconfitte contano tutte le partite della stagione; la posizione
-            e il tier vengono dall'MMR ranked, quindi chi ha giocato solo amichevoli resta
-            senza posizione.
+            Match, vittorie e sconfitte contano solo le partite classificate: le amichevoli
+            in stanza (pubblica o privata) non entrano nelle statistiche dei giocatori e sono
+            indicate a parte accanto ai match. Posizione e tier vengono dall'MMR ranked,
+            quindi chi ha giocato solo amichevoli resta senza posizione.
           </p>
         </section>
       </div>
@@ -342,6 +459,48 @@ tbody tr:hover{background:var(--panel2)}
           fuori da solo, "Torna alla configurazione di avvio" ripristina il valore
           con cui è partito il server.
         </p>
+      </section>
+    </div>
+
+    <div id="tab-maintenance" class="tab hidden">
+      <section class="panel">
+        <h2>Manutenzione</h2>
+        <p class="muted" style="margin-top:-.2em">
+          Chiude il portone senza spegnere il server: nessun nuovo accesso passa e
+          chi bussa resta sulla schermata di login con l'avviso. <strong>Chi sta già
+          giocando non viene toccato</strong> — si aspetta che finisca.
+        </p>
+        <div id="maintenanceState" class="field" style="margin:.9em 0"></div>
+        <div class="row">
+          <label class="muted" style="font-size:12px">
+            Messaggio nel popup <span id="maintenanceCount"></span>
+          </label><br>
+          <input id="maintenanceMessage" placeholder="Torniamo alle 18:00" style="width:100%;margin-top:.3em">
+        </div>
+        <label style="display:inline-flex;align-items:center;gap:.5em;margin-top:.9em;cursor:pointer">
+          <input type="checkbox" id="maintenanceEnabled" style="width:auto">
+          <span>Server in manutenzione: blocca tutti gli accessi</span>
+        </label>
+        <div class="actions">
+          <button class="primary" id="maintenanceSave">Salva</button>
+        </div>
+        <p class="muted" style="font-size:12px">
+          Se lasci il messaggio vuoto il gioco mostra il proprio testo tradotto.
+          Lo stato sopravvive al riavvio del server: ricordati di spegnerlo quando
+          hai finito, o resta chiuso a tutti.
+        </p>
+      </section>
+
+      <section class="panel">
+        <h2>Si può riavviare?</h2>
+        <p class="muted" style="margin-top:-.2em">
+          Una partita PvP vive solo in memoria: al riavvio viene annullata (esito
+          neutro, nessun MMR tolto a nessuno) ma i due giocatori la perdono. Le run
+          di campagna invece reggono — proseguono offline e la ricompensa viene
+          rispedita al lancio successivo.
+        </p>
+        <div id="maintenanceDrain" class="kpis" style="margin-top:.9em"></div>
+        <p class="muted" style="font-size:12px" id="maintenanceVerdict"></p>
       </section>
     </div>
   </main>
@@ -397,17 +556,22 @@ el('logout').addEventListener('click', async ()=>{ try{ await api('/logout',{met
 
 async function showApp(){
   el('login').classList.add('hidden'); el('app').classList.remove('hidden');
+  // La banda si alza subito: dimenticare la manutenzione accesa vuol dire tenere
+  // fuori tutti, e non deve servire aprire la scheda giusta per accorgersene.
+  api('/maintenance').then(renderMaintenanceBanner).catch(()=>{});
   await loadOverview();
 }
 
 /* ---- Tabs ---- */
-const LOADERS={overview:loadOverview,players:loadPlayers,quests:loadQuests,runs:loadRuns,
-  matches:loadMatches,seasons:loadSeasons,version:loadVersion};
+const LOADERS={overview:loadOverview,retention:loadRetention,players:loadPlayers,quests:loadQuests,
+  runs:loadRuns,matches:loadMatches,seasons:loadSeasons,version:loadVersion,maintenance:loadMaintenance};
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
   b.classList.add('active');
   document.querySelectorAll('.tab').forEach(t=>t.classList.add('hidden'));
   el('tab-'+b.dataset.tab).classList.remove('hidden');
+  // Il rinfresco dei contatori del drain vale solo con la scheda aperta.
+  clearInterval(maintenanceTimer);
   const load=LOADERS[b.dataset.tab];
   if(load) load();
 }));
@@ -460,10 +624,13 @@ function renderLegend(){
     visible[i.dataset.m]=i.checked; drawChart();
   }));
 }
+// Il grafico si disegna alla larghezza del contenitore: su telefono anche piu' basso,
+// altrimenti un rettangolo da 280px di altezza si mangia tutta la schermata.
+function chartWidth(id){ return Math.max(300, Math.min(1100, el(id).clientWidth||900)); }
 function drawChart(){
   if(!seriesCache) return;
-  el('chart').innerHTML=lineChartSvg(seriesCache, METRICS.filter(m=>visible[m.key]),
-    Math.min(1100, el('chart').clientWidth||900), 280);
+  const w=chartWidth('chart');
+  el('chart').innerHTML=lineChartSvg(seriesCache, METRICS.filter(m=>visible[m.key]), w, w<520?190:280);
 }
 /* Grafico a linee condiviso da panoramica e quest: nessuna libreria, solo SVG. */
 function lineChartSvg(pts, active, W, H){
@@ -478,8 +645,8 @@ function lineChartSvg(pts, active, W, H){
   for(let g=0;g<=4;g++){ const gv=Math.round(max*g/4), gy=y(gv);
     svg+=`<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="var(--line)"/>`;
     svg+=`<text x="4" y="${gy+4}" fill="var(--muted)" font-size="10">${gv}</text>`; }
-  // etichette x (max 8)
-  const step=Math.max(1,Math.ceil(n/8));
+  // etichette x (max 8, meno se lo spazio non basta a scriverle senza sovrapporle)
+  const step=Math.max(1,Math.ceil(n/(W<520?4:8)));
   for(let i=0;i<n;i+=step){ svg+=`<text x="${x(i)}" y="${H-8}" fill="var(--muted)" font-size="10" text-anchor="middle">${pts[i].date.slice(5)}</text>`; }
   // linee
   active.forEach(m=>{
@@ -492,6 +659,52 @@ function lineChartSvg(pts, active, W, H){
 }
 function staticLegend(metrics){
   return metrics.map(m=>`<label><span class="sw" style="background:${m.color}"></span>${m.label}</label>`).join('');
+}
+
+/* ---- Retention ---- */
+/* Le soglie sono i benchmark 2026 del genere: sotto la prima il gioco non trattiene,
+   sopra la seconda regge il confronto. Sono per colonna perche' un D7 dell'8% e' buono
+   quanto un D1 del 30%, e colorarli con lo stesso metro direbbe il falso. */
+const RETENTION_BANDS={d1:[20,30],d7:[4,8],d30:[1,3]};
+/* Sotto questa coorte la percentuale si scrive ma non si colora: sarebbe un semaforo
+   acceso sul rumore. */
+const RETENTION_MIN_COHORT=20;
+
+function retentionCell(back,cohort,key){
+  if(back===null||back===undefined) return '<span class="muted">—</span>';
+  // Il colore guarda la percentuale gia' arrotondata, la stessa che si legge nella
+  // cella: con il valore esatto un 19,6% scritto "20%" uscirebbe rosso sopra la
+  // soglia dei 20, e sembrerebbe un errore del pannello.
+  const p=Math.round(back*100/cohort), band=RETENTION_BANDS[key];
+  const color = cohort<RETENTION_MIN_COHORT ? 'var(--muted)'
+    : (p<band[0] ? 'var(--red)' : (p>=band[1] ? 'var(--green)' : ''));
+  return `<span${color?` style="color:${color}"`:''}>${p}%</span>`
+    + ` <span class="muted" style="font-size:11px">${back}/${cohort}</span>`;
+}
+
+el('retentionRange').addEventListener('change',loadRetention);
+async function loadRetention(){
+  const data=await api('/retention?days='+el('retentionRange').value);
+  const s=data.summary;
+  const kpi=(label,back,of)=>of>0
+    ? [Math.round(back*100/of)+'%',label,`${back} su ${of} account maturi`]
+    : ['—',label,'nessuna coorte matura'];
+  const kpis=[
+    kpi('D1 · tornati il giorno dopo',s.d1,s.d1Of),
+    kpi('D7 · tornati al settimo giorno',s.d7,s.d7Of),
+    kpi('D30 · tornati al trentesimo',s.d30,s.d30Of),
+    [data.accounts,'Account registrati',`negli ultimi ${data.days} giorni`],
+  ];
+  el('retentionKpis').innerHTML=kpis.map(k=>
+    `<div class="kpi"><div class="v">${esc(k[0])}</div><div class="l">${esc(k[1])}</div><div class="sub">${esc(k[2])}</div></div>`).join('');
+  el('retentionBody').innerHTML=data.cohorts.map(c=>`
+    <tr>
+      <td class="mono">${esc(c.day)}</td>
+      <td>${c.cohort}</td>
+      <td>${retentionCell(c.d1,c.cohort,'d1')}</td>
+      <td>${retentionCell(c.d7,c.cohort,'d7')}</td>
+      <td class="opt">${retentionCell(c.d30,c.cohort,'d30')}</td>
+    </tr>`).join('') || `<tr><td colspan="5" class="muted">Nessuna registrazione nel periodo</td></tr>`;
 }
 
 /* ---- Players ---- */
@@ -532,11 +745,11 @@ async function loadPlayers(){
   el('playersBody').innerHTML=data.players.map(p=>`
     <tr data-id="${esc(p.playerId)}">
       <td>${esc(p.username)}${p.online?' <span class="tag win">online</span>':''}${p.nickname&&p.nickname!==p.username?`<div class="muted" style="font-size:12px;margin-top:3px">${esc(p.nickname)}</div>`:''}</td>
-      <td><span class="tag">${esc(p.source)}</span>${p.source==='external'?` <span class="tag">${esc(authLabel(p.authMethod))}</span>`:''}${p.email?`<div class="muted" style="font-size:12px;margin-top:3px">${esc(p.email)}</div>`:''}</td>
+      <td class="opt"><span class="tag">${esc(p.source)}</span>${p.source==='external'?` <span class="tag">${esc(authLabel(p.authMethod))}</span>`:''}${p.email?`<div class="muted" style="font-size:12px;margin-top:3px">${esc(p.email)}</div>`:''}</td>
       <td>${p.accountLevel}<div class="muted" style="font-size:12px">${p.accountExperience}/${p.accountExperienceToNextLevel}</div></td>
-      <td>${p.accountTotalExperience}</td>
-      <td>${p.honey}</td><td>${p.matches}</td><td>${p.wins}</td><td>${p.losses}</td>
-      <td class="muted">${fmtDay(p.createdAt)}</td>
+      <td class="opt">${p.accountTotalExperience}</td>
+      <td>${p.honey}</td><td>${p.matches}</td><td>${p.wins}</td><td class="opt">${p.losses}</td>
+      <td class="opt muted">${fmtDay(p.createdAt)}</td>
       <td class="muted">${fmtDate(p.lastLoginAt)}</td>
     </tr>`).join('') || `<tr><td colspan="10" class="muted">Nessun risultato</td></tr>`;
   el('playersBody').querySelectorAll('tr[data-id]').forEach(tr=>
@@ -545,10 +758,10 @@ async function loadPlayers(){
 
 async function openPlayer(id){
   const d=await api('/players/'+encodeURIComponent(id));
-  const a=d.account, lt=d.lifetime, sn=d.season, rk=d.ranked, ct=d.campaignTotals, tv=d.tavern;
+  const a=d.account, lt=d.lifetime, sn=d.season, rk=d.ranked, ct=d.campaignTotals, tv=d.tavern, fr=d.friendly;
   const f=(k,v)=>`<div class="field"><div class="k">${k}</div><div class="v">${v}</div></div>`;
   const sub=t=>`<div class="subh">${t}</div>`;
-  const tbl=(head,body)=>`<table><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+  const tbl=(head,body)=>`<div class="tw"><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
 
   let html=`<h2>${esc(a.username)} ${a.online?'<span class="tag win">online</span>':''}</h2>
     <div class="mono muted" style="margin-bottom:1em">${esc(a.playerId)}</div>
@@ -560,6 +773,7 @@ async function openPlayer(id){
       ${f('Miele',a.honey)}
       ${f('Livello account',a.accountLevel+' <span class="muted" style="font-size:12px">'+a.accountExperience+'/'+a.accountExperienceToNextLevel+' exp</span>')}
       ${f('Esperienza totale',a.accountTotalExperience)}
+      ${f('Punti talento',a.talentPoints+' <span class="muted" style="font-size:12px">di '+a.talentPointsEarned+' guadagnati</span>')}
       ${f('Tutorial',a.tutorialCompleted?'✔':'—')}
       ${f('Hardcore',a.hardcoreUnlocked?'✔':'—')}
       ${a.nickname?f('Nickname',esc(a.nickname)):''}
@@ -580,8 +794,10 @@ async function openPlayer(id){
   /* Taverna */
   html+=sub('Taverna · quest di oggi ('+tv.day+' UTC)');
   if(tv.quests.length){
-    html+=tbl(['Quest','Progresso','Stato'], tv.quests.map(q=>`<tr>
-      <td><div class="qtitle">${esc(q.title)}</div><div class="qdesc">${esc(q.description)}</div></td>
+    /* Le righe fuori bacheca vengono da un'estrazione precedente della stessa giornata (un
+       deploy a giornata iniziata): il giocatore non le vede e non contano per il premio. */
+    html+=tbl(['Quest','Progresso','Stato'], tv.quests.map(q=>`<tr${q.onBoard?'':' style="opacity:.5"'}>
+      <td><div class="qtitle">${esc(q.title)}${q.onBoard?'':' <span class="tag">fuori bacheca</span>'}</div><div class="qdesc">${esc(q.description)}</div></td>
       <td>${bar(q.current,q.threshold,q.completed)}<span class="muted">${q.current}/${q.threshold}</span></td>
       <td>${q.claimed?'<span class="tag win">riscossa</span>':q.completed?'<span class="tag ranked">da riscuotere</span>':'<span class="tag">in corso</span>'}</td>
     </tr>`).join(''));
@@ -589,7 +805,7 @@ async function openPlayer(id){
     html+=`<p class="muted">Non ha ancora aperto la taverna oggi: le quest gli verranno assegnate al primo accesso.</p>`;
   }
   html+=`<div class="grid2">
-      ${f('Quest completate oggi',tv.completedCount+' / '+tv.quests.length)}
+      ${f('Punti quest oggi',tv.completedBonusPoints+' / '+tv.bonusPointsRequired+` <span class="muted" style="font-size:12px">${tv.completedCount} quest completate</span>`)}
       ${f('Premio di giornata',tv.bonusClaimed?'riscosso':tv.bonusAvailable?'disponibile':'non ancora')}
       ${f('Quest riscosse in totale',tv.claimsAllTime)}
       ${f('Giornate complete',tv.bonusesAllTime)}
@@ -620,14 +836,11 @@ async function openPlayer(id){
     tbl(['Tipo','Nome','Id','Quando'], d.unlocks.map(u=>
       `<tr><td>${esc(u.type)}</td><td>${esc(u.name)}</td><td class="mono muted">${esc(u.id)}</td>
        <td class="muted">${fmtDate(u.unlockedAt)}</td></tr>`).join(''));
-  if(d.consumables.length) html+=sub('Scorta consumabili')+
-    tbl(['Oggetto','Quantità'], d.consumables.map(c=>
-      `<tr><td>${esc(c.name)}</td><td>${c.count}</td></tr>`).join(''));
-  if(d.bag.length) html+=sub('Bisaccia per la prossima run')+
-    `<div class="chips">${d.bag.map(b=>`<span class="tag">${esc(b.name)}</span>`).join('')}</div>`;
+  /* Scorta: come gli sblocchi, si ridisegna da sola a ogni modifica. */
+  html+=sub('Scorta consumabili')+`<div id="stashBox"></div>`;
 
   /* PvP */
-  if(lt||sn||rk) html+=sub('PvP');
+  if(lt||sn||rk||fr) html+=sub('PvP');
   if(rk) html+=`<div class="grid2">
       ${f('Tier',esc(rk.tier)+' '+esc(rk.division)+' <span class="muted" style="font-size:12px">'+rk.leaguePoints+' LP</span>')}
       ${f('MMR',rk.mmr+' <span class="muted" style="font-size:12px">picco '+rk.peakMmr+'</span>')}
@@ -639,6 +852,12 @@ async function openPlayer(id){
       <td>${Math.round(s.totalMatchSeconds/60)} min</td></tr>`:'';
   if(lt||sn) html+=tbl(['Ambito','Match','Vittorie','Sconfitte','Abbandoni','Win rate','Miglior streak','Streak','Tempo'],
     statsRow('Da sempre',lt)+statsRow(esc(d.seasonName||'Stagione'),sn));
+  // Le amichevoli non stanno nelle statistiche: qui e nello storico sotto sono l'unica
+  // traccia che sono state giocate.
+  if(fr) html+=`<div class="grid2">
+      ${f('Amichevoli giocate',fr.matches+` <span class="muted" style="font-size:12px">${fr.wins}V · ${fr.losses}S, fuori dalle statistiche</span>`)}
+      ${f('Ultima amichevole',fmtDate(fr.lastAt))}
+    </div>`;
   if(d.hallOfFame.length) html+=sub('Hall of Fame')+
     tbl(['Stagione','Posizione','Tier','MMR','V','S'], d.hallOfFame.map(h=>
       `<tr><td>${esc(h.seasonName)}</td><td>#${h.rank}</td><td>${esc(h.tier)} ${esc(h.division)}</td>
@@ -661,13 +880,13 @@ async function openPlayer(id){
 
   /* Storico */
   if(d.recentMatches.length){ html+=sub('Ultime partite PvP')+
-    `<table><tbody>${d.recentMatches.map(m=>{
+    `<div class="tw"><table><tbody>${d.recentMatches.map(m=>{
       const opp=m.playerA===id?m.nameB:m.nameA;
       const cls=m.result==='win'?'win':m.result==='loss'?'loss':'draw';
       return `<tr><td class="muted">${fmtDate(m.endedAt)}</td><td><span class="tag ${cls}">${m.result||'?'}</span></td>
         <td>vs ${esc(opp)}</td><td>${m.scoreA}-${m.scoreB}</td>
-        <td>${m.ranked?'<span class="tag ranked">ranked</span>':''} <span class="muted">${esc(m.endedReason)}</span></td></tr>`;
-    }).join('')}</tbody></table>`; }
+        <td>${m.ranked?'<span class="tag ranked">ranked</span>':'<span class="tag">amichevole</span>'} <span class="muted">${esc(m.endedReason)}</span></td></tr>`;
+    }).join('')}</tbody></table></div>`; }
   if(d.recentRuns.length){ html+=sub('Ultime run campagna')+
     tbl(['Iniziata','Stato','Conclusa','Modalità','Capitolo','Stanze','Nemici','Boss'], d.recentRuns.map(r=>
       `<tr><td class="muted">${fmtDate(r.startedAt)}</td><td>${runStatusTag(r)}</td>
@@ -675,12 +894,14 @@ async function openPlayer(id){
        <td>${esc(r.chapterId)||'—'}</td><td>${r.roomsCleared}</td><td>${r.enemiesDefeated}</td>
        <td>${r.bossesDefeated}</td></tr>`).join('')); }
   if(d.recentLogins.length){ html+=sub('Ultimi login')+
-    `<table><tbody>${d.recentLogins.map(l=>`<tr><td class="muted">${fmtDate(l.occurredAt)}</td><td>${esc(l.provider)}</td></tr>`).join('')}</tbody></table>`; }
-  html=`<div style="text-align:right"><button onclick="closeModal()">✕</button></div>`+html;
+    `<div class="tw"><table><tbody>${d.recentLogins.map(l=>`<tr><td class="muted">${fmtDate(l.occurredAt)}</td><td>${esc(l.provider)}</td></tr>`).join('')}</tbody></table></div>`; }
+  html=`<div class="modalbar"><button onclick="closeModal()">✕</button></div>`+html;
   el('modalBox').innerHTML=html;
+  el('modalBox').scrollTop=0;
   el('modal').classList.remove('hidden');
   el('modalBox').querySelectorAll('[data-act]').forEach(btn=>btn.addEventListener('click',()=>playerAction(a,btn.dataset.act)));
   renderUnlocks(a.playerId,d.unlockables);
+  renderStash(a.playerId,d.stash);
 }
 
 /* ---- Sblocchi a mano ----
@@ -724,6 +945,83 @@ function renderUnlocks(playerId,u){
     catch(err){ alert('Errore: '+err.message); }
   }));
 }
+/* ---- Scorta consumabili ----
+   Quantita' assolute e senza costi in miele, come gli sblocchi qui sopra. La bisaccia si
+   mostra insieme alla scorta perche' portare a zero un oggetto lo toglie anche da li'. */
+let stashPlayerId=null, stashData=null;
+
+function stashHtml(s){
+  const bag=s.bag.length
+    ? `<div class="chips">${s.bag.map(b=>`<span class="tag ranked">${esc(b.name)}</span>`).join('')}</div>`
+    : `<p class="muted" style="font-size:12px;margin:.2em 0">Bisaccia vuota: la sceglie il giocatore al Santuario.</p>`;
+  const unknown=s.unknown.length
+    ? `<p class="muted" style="font-size:12px;margin:.6em 0 0">Righe fuori catalogo:
+        ${s.unknown.map(u=>esc(u.id)+' ×'+u.count).join(', ')} — non sono modificabili qui,
+        vanno via con "Svuota scorta".</p>`
+    : '';
+  return `<p class="muted" style="font-size:12px;margin:0 0 .6em">
+      Quante copie possiede, senza pagare miele. Il gioco le legge alla prossima
+      sincronizzazione della progressione; massimo ${s.maxCount} per oggetto.</p>
+    <div class="chips" style="margin-bottom:.6em">
+      <button data-sall="1">1 di tutto</button>
+      <button data-sall="5">5 di tutto</button>
+      <button data-sall="0">Svuota scorta</button>
+    </div>
+    <div class="stash">${s.items.map(i=>`
+      <div class="sitem${i.count>0?' has':''}">
+        <div class="nm">${esc(i.name)}${i.inBag?' <span class="tag ranked">in bisaccia</span>':''}
+          <em>${i.cost} miele${i.description?' · '+esc(i.description):''}</em></div>
+        <div class="qty">
+          <button data-sitem="${esc(i.id)}" data-sdelta="-1"${i.count<=0?' disabled':''}>−</button>
+          <input type="number" inputmode="numeric" min="0" max="${s.maxCount}"
+                 value="${i.count}" data-sinput="${esc(i.id)}">
+          <button data-sitem="${esc(i.id)}" data-sdelta="1"${i.count>=s.maxCount?' disabled':''}>+</button>
+        </div>
+      </div>`).join('')}</div>
+    <div class="subh">Bisaccia per la prossima run (${s.bag.length}/${s.slots} slot)</div>
+    ${bag}${unknown}`;
+}
+
+function renderStash(playerId,s){
+  const box=el('stashBox');
+  if(!box||!s) return;
+  stashPlayerId=playerId; stashData=s;
+  box.innerHTML=stashHtml(s);
+  box.querySelectorAll('[data-sitem]').forEach(btn=>btn.addEventListener('click',()=>{
+    const item=stashData.items.find(i=>i.id===btn.dataset.sitem);
+    if(item) setStash(item.id, item.count+parseInt(btn.dataset.sdelta,10));
+  }));
+  box.querySelectorAll('[data-sinput]').forEach(inp=>inp.addEventListener('change',()=>
+    setStash(inp.dataset.sinput, parseInt(inp.value,10))));
+  box.querySelectorAll('[data-sall]').forEach(btn=>btn.addEventListener('click',()=>{
+    const count=parseInt(btn.dataset.sall,10);
+    if(count===0&&!confirm('Svuotare scorta e bisaccia di questo account?')) return;
+    postStash('/stash/all',{count});
+  }));
+}
+
+function setStash(itemId,count){
+  if(isNaN(count)){ renderStash(stashPlayerId,stashData); return; }
+  count=Math.max(0,Math.min(stashData.maxCount,count));
+  // Lo stato locale si aggiorna prima della risposta: due click di fila devono partire
+  // dal numero che si sta guardando, non da quello dell'ultima risposta arrivata.
+  const item=stashData.items.find(i=>i.id===itemId);
+  if(item) item.count=count;
+  postStash('/stash',{itemId,count});
+}
+
+async function postStash(path,body){
+  const player=stashPlayerId;
+  try{
+    renderStash(player, await api(`/players/${encodeURIComponent(player)}${path}`,
+      {method:'POST',body:JSON.stringify(body)}));
+  }catch(err){
+    alert('Errore: '+err.message);
+    // Il valore ottimistico va rimesso a posto: la scorta vera e' quella del server.
+    try{ renderStash(player, await api(`/players/${encodeURIComponent(player)}/stash`)); }catch{}
+  }
+}
+
 function closeModal(){ el('modal').classList.add('hidden'); }
 el('modal').addEventListener('click',e=>{ if(e.target===el('modal')) closeModal(); });
 
@@ -780,11 +1078,11 @@ async function loadQuests(){
       <td><div class="qtitle">${esc(q.title)} ${q.advanced?'<span class="tag ranked">avanzata</span>':''}</div>
           <div class="qdesc">${esc(q.description)}</div>
           <div class="mono muted">${esc(q.questId)}</div></td>
-      <td>${esc(q.counterLabel)} <b>×${q.threshold}</b></td>
+      <td class="opt">${esc(q.counterLabel)} <b>×${q.threshold}</b></td>
       <td>${q.assigned}</td>
       <td>${q.completed}</td>
       <td>${q.claimed}</td>
-      <td>${bar(q.completed,q.assigned,q.assigned>0&&q.completed===q.assigned)}
+      <td class="opt">${bar(q.completed,q.assigned,q.assigned>0&&q.completed===q.assigned)}
           <span class="muted">${pct(q.completed,q.assigned)}%</span></td>
     </tr>`).join('') || `<tr><td colspan="6" class="muted">Nessun giocatore ha ancora aperto la taverna oggi</td></tr>`;
 
@@ -797,14 +1095,14 @@ async function loadQuests(){
 
   el('questCatalogBody').innerHTML=data.catalog.map(q=>`<tr>
     <td><div class="qtitle">${esc(q.title)}</div><div class="qdesc">${esc(q.description)}</div></td>
-    <td>${q.advanced?'<span class="tag ranked">avanzata</span>':'<span class="tag">base</span>'}</td>
+    <td class="opt">${q.advanced?'<span class="tag ranked">avanzata</span>':'<span class="tag">base</span>'}</td>
     <td>${esc(q.counterLabel)} <b>×${q.threshold}</b></td>
-    <td>${q.daysOut}</td><td>${q.claims}</td></tr>`).join('');
+    <td class="opt">${q.daysOut}</td><td>${q.claims}</td></tr>`).join('');
 }
 function drawQuestChart(){
   if(!questHistory) return;
-  el('questChart').innerHTML=lineChartSvg(questHistory, QUEST_METRICS,
-    Math.min(1100, el('questChart').clientWidth||900), 220);
+  const w=chartWidth('questChart');
+  el('questChart').innerHTML=lineChartSvg(questHistory, QUEST_METRICS, w, w<520?170:220);
 }
 
 /* ---- Run di campagna ---- */
@@ -826,7 +1124,10 @@ function runStatusTag(r){
 }
 el('runStatus').addEventListener('change',loadRuns);
 async function loadRuns(){
-  const data=await api('/runs?limit=200&status='+el('runStatus').value);
+  const [data,leaderboard]=await Promise.all([
+    api('/runs?limit=200&status='+el('runStatus').value),
+    api('/campaign-leaderboard?limit=100')
+  ]);
   const kpis=[
     ['Run registrate',data.open+data.ended,'inizio e fine nella stessa riga'],
     ['Concluse',data.ended,'morte o vittoria arrivate al server'],
@@ -835,16 +1136,39 @@ async function loadRuns(){
   el('runKpis').innerHTML=kpis.map(k=>
     `<div class="kpi"><div class="v">${esc(k[1])}</div><div class="l">${esc(k[0])}</div><div class="sub">${esc(k[2])}</div></div>`).join('');
   el('runsBody').innerHTML=data.runs.map(r=>`
-    <tr data-id="${esc(r.playerId)}">
+    <tr data-id="${esc(r.playerId)}" data-run-id="${r.runId}">
       <td class="muted">${fmtDate(r.startedAt)}</td>
       <td>${esc(r.username)}</td>
       <td>${runStatusTag(r)}</td>
-      <td class="muted">${fmtDuration(r.durationSeconds)}</td>
+      <td class="opt muted">${fmtDuration(r.durationSeconds)}</td>
       <td>${esc(r.chapterId)||'—'}<div class="muted" style="font-size:12px">${esc(r.mode)||''}</div></td>
-      <td>${r.roomsCleared}</td><td>${r.enemiesDefeated}</td><td>${r.bossesDefeated}</td>
-      <td class="muted">${fmtDate(r.endedAt)}</td>
-    </tr>`).join('') || `<tr><td colspan="9" class="muted">Nessuna run</td></tr>`;
+      <td>${r.roomsCleared}</td><td class="opt">${r.enemiesDefeated}</td><td class="opt">${r.bossesDefeated}</td>
+      <td class="opt muted">${fmtDate(r.endedAt)}</td>
+      <td><button class="danger delete-run" type="button">Elimina</button></td>
+    </tr>`).join('') || `<tr><td colspan="10" class="muted">Nessuna run</td></tr>`;
+  el('runsBody').querySelectorAll('.delete-run').forEach(button=>
+    button.addEventListener('click',async event=>{
+      event.stopPropagation();
+      const row=button.closest('tr'), runId=row.dataset.runId;
+      if(!confirm('Eliminare definitivamente questa singola run dallo storico?')) return;
+      button.disabled=true;
+      try{
+        await api(`/runs/${encodeURIComponent(runId)}/delete`,{method:'POST'});
+        await loadRuns();
+      }catch(err){
+        button.disabled=false;
+        alert(err.message||'Impossibile eliminare la run.');
+      }
+    }));
   el('runsBody').querySelectorAll('tr[data-id]').forEach(tr=>
+    tr.addEventListener('click',()=>openPlayer(tr.dataset.id)));
+  el('campaignLeaderboardBody').innerHTML=leaderboard.players.map(p=>`
+    <tr data-id="${esc(p.playerId)}">
+      <td><b>#${p.position}</b></td><td>${esc(p.username)}</td>
+      <td><b>Cap. ${p.chapterNumber} · stanza ${p.personalRecord}</b></td><td class="opt">${p.runs}</td>
+      <td class="opt muted">${fmtDate(p.lastRunAt)}</td>
+    </tr>`).join('') || `<tr><td colspan="5" class="muted">Nessun record</td></tr>`;
+  el('campaignLeaderboardBody').querySelectorAll('tr[data-id]').forEach(tr=>
     tr.addEventListener('click',()=>openPlayer(tr.dataset.id)));
 }
 
@@ -857,8 +1181,8 @@ async function loadMatches(){
       <td style="${aw?'color:var(--green)':''}">${esc(m.nameA)}</td>
       <td><b>${m.scoreA} - ${m.scoreB}</b></td>
       <td style="${bw?'color:var(--green)':''}">${esc(m.nameB)}</td>
-      <td>${m.ranked?'<span class="tag ranked">ranked</span>':'<span class="tag">normale</span>'}</td>
-      <td class="muted">${esc(m.endedReason)}</td></tr>`;
+      <td>${m.ranked?'<span class="tag ranked">ranked</span>':'<span class="tag">amichevole</span>'}</td>
+      <td class="opt muted">${esc(m.endedReason)}</td></tr>`;
   }).join('') || `<tr><td colspan="6" class="muted">Nessuna partita</td></tr>`;
 }
 
@@ -873,8 +1197,8 @@ async function loadSeasons(){
   showSeasonList();
   const data=await api('/seasons');
   el('seasonsBody').innerHTML=data.seasons.map(s=>`<tr data-season="${s.seasonId}">
-    <td>${s.seasonId}</td><td>${esc(s.name)}</td>
-    <td class="muted">${fmtDay(s.startsAt)}</td><td class="muted">${fmtDay(s.endsAt)}</td>
+    <td class="opt">${s.seasonId}</td><td>${esc(s.name)}</td>
+    <td class="opt muted">${fmtDay(s.startsAt)}</td><td class="opt muted">${fmtDay(s.endsAt)}</td>
     <td>${s.isActive?'<span class="tag ranked">attiva</span>':'—'}</td>
     <td>${s.matches}</td><td>${s.players}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">Nessuna stagione</td></tr>`;
   el('seasonsBody').querySelectorAll('tr[data-season]').forEach(tr=>
@@ -952,13 +1276,13 @@ function renderSeasonPlayers(){
       <td>${esc(p.username)}${p.online?' <span class="tag win">online</span>':''}
           ${p.ranked&&!p.placementDone?' <span class="tag">piazzamento</span>':''}</td>
       <td>${p.ranked?esc(p.tier)+' '+esc(p.division)+` <span class="muted">${p.leaguePoints} LP</span>`:'<span class="muted">non classificato</span>'}</td>
-      <td>${p.ranked?p.mmr+` <div class="muted" style="font-size:12px">picco ${p.peakMmr}</div>`:'—'}</td>
-      <td>${p.matches}${p.rankedGames?` <span class="muted">(${p.rankedGames} ranked)</span>`:''}</td>
+      <td class="opt">${p.ranked?p.mmr+` <div class="muted" style="font-size:12px">picco ${p.peakMmr}</div>`:'—'}</td>
+      <td>${p.matches}${p.friendlyMatches?` <span class="muted">(+${p.friendlyMatches} amich.)</span>`:''}</td>
       <td style="color:var(--green)">${p.wins}</td>
-      <td>${p.losses}${p.forfeits?` <span class="muted">(${p.forfeits} abb.)</span>`:''}</td>
+      <td class="opt">${p.losses}${p.forfeits?` <span class="muted">(${p.forfeits} abb.)</span>`:''}</td>
       <td>${bar(p.wins,p.matches,p.winRatePercent>=50)}<span class="muted">${p.winRatePercent}%</span></td>
-      <td>${p.bestStreak}</td>
-      <td class="muted">${fmtDate(p.lastMatchAt)}</td>
+      <td class="opt">${p.bestStreak}</td>
+      <td class="opt muted">${fmtDate(p.lastMatchAt)}</td>
     </tr>`).join('') || `<tr><td colspan="10" class="muted">Nessun giocatore in questa stagione</td></tr>`;
   el('seasonBody').querySelectorAll('tr[data-id]').forEach(tr=>
     tr.addEventListener('click',()=>openPlayer(tr.dataset.id)));
@@ -997,6 +1321,81 @@ el('versionReset').addEventListener('click',async()=>{
   try{ renderVersion(await api('/client-version/reset',{method:'POST'})); }
   catch(err){ alert('Errore: '+err.message); }
 });
+
+/* ---- Manutenzione ---- */
+/* I contatori del drain invecchiano in fretta: finché la scheda è aperta si
+   rinfrescano da soli, così non si riavvia guardando un numero di dieci minuti fa. */
+let maintenanceTimer=null;
+
+function maintenanceSince(iso){
+  if(!iso) return '';
+  const minutes=Math.max(0,Math.round((Date.now()-new Date(iso).getTime())/60000));
+  if(minutes<1) return 'da meno di un minuto';
+  if(minutes<60) return 'da '+minutes+' min';
+  const hours=Math.floor(minutes/60);
+  return 'da '+hours+'h'+String(minutes%60).padStart(2,'0');
+}
+
+function renderMaintenanceBanner(m){
+  const banner=el('maintenanceBanner');
+  if(!m || !m.enabled){ banner.classList.add('hidden'); banner.innerHTML=''; return; }
+  banner.classList.remove('hidden');
+  banner.innerHTML='<strong>🔧 Server in manutenzione</strong>'+
+    `<span>nessuno riesce ad accedere ${esc(maintenanceSince(m.since))}</span>`+
+    (m.message?`<span class="muted">· ${esc(m.message)}</span>`:'')+
+    '<span class="spacer" style="flex:1"></span>'+
+    '<button id="maintenanceQuickOff">Riapri il server</button>';
+  el('maintenanceQuickOff').addEventListener('click',()=>saveMaintenance(false));
+}
+
+function renderMaintenance(m){
+  // Il rinfresco automatico non deve cancellare quello che si sta scrivendo:
+  // i campi sotto le dita restano com'erano.
+  const message=el('maintenanceMessage');
+  if(document.activeElement!==message) message.value=m.message||'';
+  const toggle=el('maintenanceEnabled');
+  if(document.activeElement!==toggle) toggle.checked=!!m.enabled;
+  el('maintenanceMessage').maxLength=m.maxMessageLength;
+  el('maintenanceCount').textContent='· max '+m.maxMessageLength+' caratteri';
+  el('maintenanceState').innerHTML='<div class="k">Stato attuale</div><div class="v">'+(m.enabled
+    ? `<span class="tag ranked">manutenzione attiva</span> · nessun accesso passa ${esc(maintenanceSince(m.since))}`
+    : '<span class="tag draw">server aperto</span> · gli accessi passano normalmente')+'</div>';
+
+  const drain=[
+    ['Match PvP in corso',m.liveMatches,'si perdono al riavvio'],
+    ['Stanze in attesa',m.waitingRooms,'nessuna partita iniziata'],
+    ['Collegati ora',m.onlineNow,'sessioni aperte'],
+  ];
+  el('maintenanceDrain').innerHTML=drain.map(k=>
+    `<div class="kpi"><div class="v">${esc(k[1])}</div><div class="l">${esc(k[0])}</div>`+
+    `<div class="sub">${esc(k[2])}</div></div>`).join('');
+  el('maintenanceVerdict').textContent = m.liveMatches===0
+    ? 'Nessun match in corso: puoi riavviare senza annullare partite.'
+    : (m.liveMatches===1
+      ? 'C’è 1 match in corso: riavviando ora lo annulli.'
+      : 'Ci sono '+m.liveMatches+' match in corso: riavviando ora li annulli.');
+
+  renderMaintenanceBanner(m);
+}
+
+async function loadMaintenance(){
+  renderMaintenance(await api('/maintenance'));
+  clearInterval(maintenanceTimer);
+  maintenanceTimer=setInterval(()=>{
+    api('/maintenance').then(renderMaintenance).catch(()=>{});
+  },10000);
+}
+
+async function saveMaintenance(enabled){
+  const message=el('maintenanceMessage').value.trim();
+  if(enabled && !confirm('Da adesso nessuno potrà entrare nel gioco.\n\nChi sta già giocando resta dentro finché non finisce. Procedo?')) return;
+  try{
+    renderMaintenance(await api('/maintenance',{method:'POST',
+      body:JSON.stringify({enabled,message})}));
+  }catch(err){ alert('Errore: '+err.message); }
+}
+
+el('maintenanceSave').addEventListener('click',()=>saveMaintenance(el('maintenanceEnabled').checked));
 
 /* ---- Boot ---- */
 if(token){ showApp().catch(()=>logout()); }

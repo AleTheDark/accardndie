@@ -46,6 +46,11 @@ public sealed class AdminService
         [CampaignCounters.AbilitiesUsed] = "Abilità di classe usate",
         [CampaignCounters.ItemsUsed] = "Oggetti usati",
         [CampaignCounters.ExperienceEarned] = "Esperienza guadagnata",
+        [CampaignCounters.SupremesUsed] = "Supreme attivate",
+        [CampaignCounters.QuickChallenges] = "Sfide veloci completate",
+        [CampaignCounters.MerchantPurchases] = "Affari col mercante",
+        [CampaignCounters.GoldEarned] = "Oro guadagnato",
+        [CampaignCounters.LevelsGained] = "Livelli di run guadagnati",
         [CampaignCounters.DailyCompleted] = "Giornate di taverna complete",
         ["boss_bragus"] = "Bragus sconfitto",
         ["boss_trentor"] = "Trentor sconfitto",
@@ -208,6 +213,113 @@ public sealed class AdminService
         return result;
     }
 
+    // ---- Retention (coorti per giorno di registrazione) ----------------------
+
+    /// <summary>
+    /// Quanti giocatori tornano dopo essersi registrati, per coorte: una coorte e'
+    /// l'insieme degli account creati in un giorno UTC, e il giocatore "torna al
+    /// giorno N" se in <c>login_events</c> c'e' un accesso datato esattamente N giorni
+    /// dopo la registrazione. Il giorno preciso, non "entro N giorni": e' la
+    /// definizione con cui sono scritti i benchmark del settore, e l'altra e' piu'
+    /// generosa di qualche punto.
+    ///
+    /// La misura vive su <c>login_events</c>, che ha una riga per autenticazione
+    /// riuscita: il token di sessione del client sta solo in memoria, quindi ogni
+    /// avvio dell'app produce un login. Una riconnessione a meta' sessione no, ed e'
+    /// giusto cosi' - conta il giorno, non quante volte.
+    /// </summary>
+    public object GetRetention(int days)
+    {
+        days = Math.Clamp(days, 7, 365);
+        DateTime today = DateTime.UtcNow.Date;
+        string from = today.AddDays(-(days - 1)).ToString("yyyy-MM-dd");
+
+        using SqliteConnection connection = database.Open();
+        using SqliteCommand command = connection.CreateCommand();
+        // Il giorno si ricava con substr invece che con date(): created_at e'
+        // un round-trip "O" con sette decimali di secondo, e il parser di SQLite
+        // non e' un posto dove valga la pena scoprire quanti ne accetta.
+        command.CommandText = @"
+            SELECT substr(a.created_at, 1, 10) AS day,
+                   COUNT(*) AS cohort,
+                   SUM(EXISTS (SELECT 1 FROM login_events e
+                               WHERE e.player_id = a.player_id
+                                 AND substr(e.occurred_at, 1, 10)
+                                     = date(substr(a.created_at, 1, 10), '+1 day'))) AS d1,
+                   SUM(EXISTS (SELECT 1 FROM login_events e
+                               WHERE e.player_id = a.player_id
+                                 AND substr(e.occurred_at, 1, 10)
+                                     = date(substr(a.created_at, 1, 10), '+7 day'))) AS d7,
+                   SUM(EXISTS (SELECT 1 FROM login_events e
+                               WHERE e.player_id = a.player_id
+                                 AND substr(e.occurred_at, 1, 10)
+                                     = date(substr(a.created_at, 1, 10), '+30 day'))) AS d30
+            FROM accounts a
+            WHERE substr(a.created_at, 1, 10) >= $from
+            GROUP BY day
+            ORDER BY day DESC";
+        command.Parameters.AddWithValue("$from", from);
+
+        var cohorts = new List<object>();
+        int accounts = 0;
+        int[] returned = new int[3];
+        int[] measured = new int[3];
+        int[] offsets = { 1, 7, 30 };
+
+        using (SqliteDataReader reader = command.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                string day = reader.GetString(0);
+                int cohort = reader.GetInt32(1);
+                accounts += cohort;
+
+                // Una coorte e' matura per il giorno N solo quando quel giorno e'
+                // finito. Contare come "non tornato" chi si e' registrato ieri e non
+                // ha ancora avuto il suo settimo giorno e' l'errore che schiaccia
+                // verso il basso qualsiasi media di retention: quelle coorti restano
+                // in tabella, ma con il valore a null.
+                var values = new int?[3];
+                for (int i = 0; i < offsets.Length; i++)
+                {
+                    if (!DateTime.TryParse(day, out DateTime cohortDay)
+                        || cohortDay.AddDays(offsets[i]) >= today)
+                        continue;
+                    int back = reader.GetInt32(2 + i);
+                    values[i] = back;
+                    returned[i] += back;
+                    measured[i] += cohort;
+                }
+
+                cohorts.Add(new
+                {
+                    day,
+                    cohort,
+                    d1 = values[0],
+                    d7 = values[1],
+                    d30 = values[2]
+                });
+            }
+        }
+
+        return new
+        {
+            generatedAt = DateTime.UtcNow.ToString("O"),
+            days,
+            accounts,
+            cohorts,
+            // Media pesata sulle sole coorti mature: il conteggio dei tornati e
+            // quello degli account su cui e' calcolato viaggiano insieme, cosi' il
+            // pannello puo' scrivere "12 su 48" e non solo una percentuale.
+            summary = new
+            {
+                d1 = returned[0], d1Of = measured[0],
+                d7 = returned[1], d7Of = measured[1],
+                d30 = returned[2], d30Of = measured[2]
+            }
+        };
+    }
+
     // ---- Lista giocatori ----------------------------------------------------
 
     /// <summary>La ricerca copre anche la mail dell'identita' Google: e' il modo
@@ -289,8 +401,12 @@ public sealed class AdminService
                         ORDER BY ei.last_login_at DESC LIMIT 1) AS email,
                        COALESCE(sp.account_level, 1) AS account_level,
                        COALESCE(sp.account_experience, 0) AS account_experience,
-                       COALESCE(sp.account_experience_to_next_level, 100) AS account_experience_to_next,
+                       -- La soglia si ricalcola dal livello invece di leggere la colonna: le
+                       -- righe scritte prima della curva hanno tutte 100, e la lista
+                       -- mostrerebbe un denominatore sbagliato fino al primo level-up.
+                       (100 + 25 * (COALESCE(sp.account_level, 1) - 1)) AS account_experience_to_next,
                        COALESCE(sp.account_total_experience, 0) AS account_total_experience,
+                       COALESCE(sp.talent_points, 0) AS talent_points,
                        COALESCE(st.losses, 0) AS losses,
                        n.nickname AS nickname
                 FROM accounts a
@@ -322,8 +438,9 @@ public sealed class AdminService
                     accountExperience = reader.GetInt32(11),
                     accountExperienceToNextLevel = reader.GetInt32(12),
                     accountTotalExperience = reader.GetInt32(13),
-                    losses = reader.GetInt32(14),
-                    nickname = NullableString(reader, 15),
+                    talentPoints = reader.GetInt32(14),
+                    losses = reader.GetInt32(15),
+                    nickname = NullableString(reader, 16),
                     online = presence.IsOnline(reader.GetString(0))
                 });
             }
@@ -346,8 +463,9 @@ public sealed class AdminService
                        COALESCE(sp.honey, 0), COALESCE(sp.tutorial_completed, 0),
                        COALESCE(sp.hardcore_unlocked, 0),
                        COALESCE(sp.account_level, 1), COALESCE(sp.account_experience, 0),
-                       COALESCE(sp.account_experience_to_next_level, 100),
+                       (100 + 25 * (COALESCE(sp.account_level, 1) - 1)),
                        COALESCE(sp.account_total_experience, 0),
+                       COALESCE(sp.talent_points, 0), COALESCE(sp.talent_points_earned, 0),
                        sp.updated_at, p.selected_icon_id, p.bio, n.nickname,
                        (SELECT ei.auth_method FROM external_identities ei
                         WHERE ei.player_id = a.player_id
@@ -378,12 +496,14 @@ public sealed class AdminService
                 accountExperience = reader.GetInt32(9),
                 accountExperienceToNextLevel = reader.GetInt32(10),
                 accountTotalExperience = reader.GetInt32(11),
-                progressUpdatedAt = NullableString(reader, 12),
-                selectedIconId = NullableString(reader, 13),
-                bio = NullableString(reader, 14),
-                nickname = NullableString(reader, 15),
-                authMethod = NullableString(reader, 16),
-                email = NullableString(reader, 17),
+                talentPoints = reader.GetInt32(12),
+                talentPointsEarned = reader.GetInt32(13),
+                progressUpdatedAt = NullableString(reader, 14),
+                selectedIconId = NullableString(reader, 15),
+                bio = NullableString(reader, 16),
+                nickname = NullableString(reader, 17),
+                authMethod = NullableString(reader, 18),
+                email = NullableString(reader, 19),
                 online = presence.IsOnline(playerId)
             };
         }
@@ -479,14 +599,14 @@ public sealed class AdminService
             account,
             lifetime,
             season,
+            friendly = ReadFriendlyMatches(connection, playerId),
             seasonName = seasons.ActiveSeasonName,
             ranked = ReadRankedState(connection, playerId),
             campaignTotals = ReadCampaignTotals(connection, playerId),
             counters = DescribeCounters(counterValues),
             tavern = ReadTavernState(connection, playerId, counterValues),
             rewards = ReadRewardClaims(connection, playerId),
-            consumables = ReadConsumables(connection, playerId),
-            bag = ReadBag(connection, playerId),
+            stash = BuildStashState(connection, playerId),
             achievements = ReadAchievements(connection, playerId),
             icons = ReadIcons(connection, playerId),
             campaignKills = ReadCampaignKills(connection, playerId),
@@ -529,6 +649,40 @@ public sealed class AdminService
             currentStreak = reader.GetInt32(7),
             totalMatchSeconds = reader.GetInt32(8),
             winRatePercent = matches > 0 ? (int)Math.Round(wins * 100.0 / matches) : 0
+        };
+    }
+
+    /// <summary>
+    /// Le amichevoli in stanza, contate dallo storico. Sono l'unico posto in cui restano:
+    /// non toccano player_stats ne' la ladder, quindi qui il pannello e' il solo modo di
+    /// sapere che sono state giocate. Null se non ce ne sono.
+    /// </summary>
+    private static object ReadFriendlyMatches(SqliteConnection connection, string playerId)
+    {
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT COUNT(*),
+                   SUM(CASE WHEN (player_a = $id AND winner = 0)
+                              OR (player_b = $id AND winner = 1) THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN (player_a = $id AND winner = 1)
+                              OR (player_b = $id AND winner = 0) THEN 1 ELSE 0 END),
+                   MAX(ended_at)
+            FROM match_history
+            WHERE ranked = 0 AND (player_a = $id OR player_b = $id)";
+        command.Parameters.AddWithValue("$id", playerId);
+        using SqliteDataReader reader = command.ExecuteReader();
+        if (!reader.Read())
+            return null;
+
+        int matches = reader.GetInt32(0);
+        if (matches == 0)
+            return null;
+        return new
+        {
+            matches,
+            wins = reader.GetInt32(1),
+            losses = reader.GetInt32(2),
+            lastAt = NullableString(reader, 3)
         };
     }
 
@@ -650,8 +804,16 @@ public sealed class AdminService
         SqliteConnection connection, string playerId, Dictionary<string, int> counters)
     {
         string day = TavernQuests.TodayKey();
+        // Un deploy a giornata iniziata lascia a database anche l'estrazione precedente: in
+        // gioco quelle righe non si vedono, qui si', perche' questa e' la vista di cosa c'e'
+        // davvero. Vanno pero' marcate, altrimenti un admin che confronta pannello e gioco
+        // trova due numeri diversi e pensa a un bug.
+        var onBoard = TavernQuests.DefinitionsForDay(day)
+            .Select(quest => quest.Id)
+            .ToHashSet(StringComparer.Ordinal);
         var quests = new List<object>();
         int completed = 0;
+        int completedPoints = 0;
         using (SqliteCommand command = connection.CreateCommand())
         {
             command.CommandText = @"
@@ -668,14 +830,21 @@ public sealed class AdminService
                 if (!TavernQuests.TryDescribe(questId, out TavernQuests.QuestDefinition definition))
                 {
                     quests.Add(new { questId, title = questId, description = "(non piu' in catalogo)",
-                        current = 0, threshold = 0, completed = false, claimed, claimedAt = NullableString(reader, 2) });
+                        current = 0, threshold = 0, completed = false, claimed, onBoard = false,
+                        claimedAt = NullableString(reader, 2) });
                     continue;
                 }
 
                 int gained = Math.Max(0, counters.GetValueOrDefault(definition.CounterKey) - baseline);
                 bool isCompleted = gained >= definition.Threshold;
-                if (isCompleted)
+                bool isOnBoard = onBoard.Contains(definition.Id);
+                // Il conteggio segue la bacheca che il giocatore vede, non le righe: e' quello
+                // che decide il premio di giornata.
+                if (isCompleted && isOnBoard)
+                {
                     completed++;
+                    completedPoints += definition.BonusPoints;
+                }
                 quests.Add(new
                 {
                     questId = definition.Id,
@@ -685,6 +854,7 @@ public sealed class AdminService
                     threshold = definition.Threshold,
                     completed = isCompleted,
                     claimed,
+                    onBoard = isOnBoard,
                     claimedAt = NullableString(reader, 2)
                 });
             }
@@ -704,8 +874,12 @@ public sealed class AdminService
             day,
             quests,
             completedCount = completed,
+            completedBonusPoints = completedPoints,
+            bonusPointsRequired = TavernQuests.BonusPointsRequired,
             bonusClaimed,
-            bonusAvailable = quests.Count > 0 && completed >= quests.Count,
+            // Il premio va a punti, non a quest completate: chiedere tutta la bacheca
+            // mostrerebbe "non disponibile" a un giocatore che invece puo' gia' riscuoterlo.
+            bonusAvailable = completedPoints >= TavernQuests.BonusPointsRequired,
             claimsAllTime,
             bonusesAllTime,
             honeyFromQuests = claimsAllTime * TavernQuests.QuestHoneyReward
@@ -741,38 +915,6 @@ public sealed class AdminService
                 withAd = reader.GetInt32(4),
                 lastAt = NullableString(reader, 5)
             });
-        return rows;
-    }
-
-    private static List<object> ReadConsumables(SqliteConnection connection, string playerId)
-    {
-        var rows = new List<object>();
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = @"
-            SELECT item_id, count FROM player_consumables
-            WHERE player_id = $id AND count > 0 ORDER BY item_id";
-        command.Parameters.AddWithValue("$id", playerId);
-        using SqliteDataReader reader = command.ExecuteReader();
-        while (reader.Read())
-        {
-            string itemId = reader.GetString(0);
-            rows.Add(new { id = itemId, name = ItemName(itemId), count = reader.GetInt32(1) });
-        }
-        return rows;
-    }
-
-    private static List<object> ReadBag(SqliteConnection connection, string playerId)
-    {
-        var rows = new List<object>();
-        using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT item_id FROM player_bag WHERE player_id = $id ORDER BY item_id";
-        command.Parameters.AddWithValue("$id", playerId);
-        using SqliteDataReader reader = command.ExecuteReader();
-        while (reader.Read())
-        {
-            string itemId = reader.GetString(0);
-            rows.Add(new { id = itemId, name = ItemName(itemId) });
-        }
         return rows;
     }
 
@@ -918,6 +1060,73 @@ public sealed class AdminService
     // ---- Run di campagna ----------------------------------------------------
 
     /// <summary>
+    /// Classifica amministrativa della campagna. Ogni giocatore compare una sola volta con
+    /// il proprio avanzamento massimo. Il capitolo ha priorita' sulla stanza: capitolo 2,
+    /// stanza 4 precede capitolo 1, stanza 15. Le posizioni a pari record sono uguali.
+    /// </summary>
+    public object GetCampaignLeaderboard(int limit)
+    {
+        limit = Math.Clamp(limit, 1, 200);
+        using SqliteConnection connection = database.Open();
+
+        var rows = new List<object>();
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = @"
+            WITH scored AS (
+                SELECT r.*,
+                       CASE WHEN r.chapter_id GLOB 'chapter-[0-9]*'
+                            THEN CAST(SUBSTR(r.chapter_id, 9) AS INTEGER) ELSE 0 END AS chapter_number
+                FROM campaign_runs r
+            ), best AS (
+                SELECT *, ROW_NUMBER() OVER (
+                    PARTITION BY player_id ORDER BY chapter_number DESC, rooms_cleared DESC) AS rn
+                FROM scored
+            ), totals AS (
+                SELECT player_id, COUNT(*) AS runs,
+                       MAX(COALESCE(ended_at, started_at)) AS last_run_at
+                FROM campaign_runs GROUP BY player_id
+            )
+            SELECT r.player_id, COALESCE(a.username, r.player_id), r.chapter_number,
+                   r.rooms_cleared, t.runs, t.last_run_at
+            FROM best r
+            JOIN totals t ON t.player_id = r.player_id
+            LEFT JOIN accounts a ON a.player_id = r.player_id
+            WHERE r.rn = 1
+            ORDER BY r.chapter_number DESC, r.rooms_cleared DESC,
+                     COALESCE(a.username, r.player_id) COLLATE NOCASE
+            LIMIT $limit";
+        command.Parameters.AddWithValue("$limit", limit);
+
+        using SqliteDataReader reader = command.ExecuteReader();
+        int ordinal = 0;
+        int position = 0;
+        (int Chapter, int Room)? previousRecord = null;
+        while (reader.Read())
+        {
+            ordinal++;
+            int chapterNumber = reader.GetInt32(2);
+            int personalRecord = reader.GetInt32(3);
+            var record = (chapterNumber, personalRecord);
+            if (previousRecord != record)
+                position = ordinal;
+            previousRecord = record;
+
+            rows.Add(new
+            {
+                position,
+                playerId = reader.GetString(0),
+                username = reader.GetString(1),
+                chapterNumber,
+                personalRecord,
+                runs = reader.GetInt32(4),
+                lastRunAt = NullableString(reader, 5)
+            });
+        }
+
+        return new { limit, players = rows };
+    }
+
+    /// <summary>
     /// Storico delle run di campagna, iniziate e concluse. Il filtro accetta 'ended' (solo
     /// le run arrivate a una fine), 'open' (iniziate e mai concluse: gioco chiuso a meta',
     /// crash, run ancora in corso in questo momento) e qualsiasi altro valore per tutte.
@@ -946,7 +1155,7 @@ public sealed class AdminService
         var rows = new List<object>();
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = $@"
-            SELECT r.player_id, a.username, r.started_at, r.ended_at, r.mode, r.chapter_id,
+            SELECT r.run_id, r.player_id, a.username, r.started_at, r.ended_at, r.mode, r.chapter_id,
                    r.stage_id, r.rooms_cleared, r.enemies_defeated, r.bosses_defeated,
                    r.minibosses_defeated, r.honey_reward
             FROM campaign_runs r
@@ -959,27 +1168,43 @@ public sealed class AdminService
         using SqliteDataReader reader = command.ExecuteReader();
         while (reader.Read())
         {
-            string startedAt = NullableString(reader, 2);
-            string endedAt = NullableString(reader, 3);
+            string startedAt = NullableString(reader, 3);
+            string endedAt = NullableString(reader, 4);
             rows.Add(new
             {
-                playerId = reader.GetString(0),
-                username = NullableString(reader, 1) ?? reader.GetString(0),
+                runId = reader.GetInt64(0),
+                playerId = reader.GetString(1),
+                username = NullableString(reader, 2) ?? reader.GetString(1),
                 startedAt,
                 endedAt,
                 durationSeconds = DurationSeconds(startedAt, endedAt),
-                mode = NullableString(reader, 4),
-                chapterId = NullableString(reader, 5),
-                stageId = NullableString(reader, 6),
-                roomsCleared = reader.GetInt32(7),
-                enemiesDefeated = reader.GetInt32(8),
-                bossesDefeated = reader.GetInt32(9),
-                minibossesDefeated = reader.GetInt32(10),
-                honeyReward = reader.GetInt32(11)
+                mode = NullableString(reader, 5),
+                chapterId = NullableString(reader, 6),
+                stageId = NullableString(reader, 7),
+                roomsCleared = reader.GetInt32(8),
+                enemiesDefeated = reader.GetInt32(9),
+                bossesDefeated = reader.GetInt32(10),
+                minibossesDefeated = reader.GetInt32(11),
+                honeyReward = reader.GetInt32(12)
             });
         }
 
         return new { total, open, ended, limit, offset, status, runs = rows };
+    }
+
+    /// <summary>Elimina esclusivamente la riga di storico identificata dall'id interno.</summary>
+    public (bool ok, string error) DeleteCampaignRun(long runId)
+    {
+        if (runId <= 0)
+            return (false, "Run non valida.");
+
+        using SqliteConnection connection = database.Open();
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM campaign_runs WHERE run_id = $id";
+        command.Parameters.AddWithValue("$id", runId);
+        return command.ExecuteNonQuery() == 1
+            ? (true, null)
+            : (false, "Run inesistente.");
     }
 
     /// <summary>
@@ -1212,6 +1437,10 @@ public sealed class AdminService
     /// Classifica di una stagione: tutti i giocatori che l'hanno toccata (ladder ranked,
     /// aggregati di stagione o anche solo una partita amichevole) con vittorie, sconfitte
     /// e win rate. Null se la stagione non esiste.
+    ///
+    /// Partite, vittorie, sconfitte e win rate sono quelle classificate: le amichevoli
+    /// non entrano negli aggregati, e stanno nella colonna a parte che si conta dallo
+    /// storico. Chi ha giocato solo amichevoli e' in lista con zero partite.
     /// </summary>
     public object GetSeasonDetail(int seasonId)
     {
@@ -1256,12 +1485,14 @@ public sealed class AdminService
             // le posizioni qui e quelle congelate a fine stagione coincidono.
             command.CommandText = @"
                 WITH participants AS (
-                    SELECT player_a AS player_id, ended_at FROM match_history WHERE season_id = $season
+                    SELECT player_a AS player_id, ended_at, ranked FROM match_history WHERE season_id = $season
                     UNION ALL
-                    SELECT player_b, ended_at FROM match_history WHERE season_id = $season
+                    SELECT player_b, ended_at, ranked FROM match_history WHERE season_id = $season
                 ),
                 played AS (
-                    SELECT player_id, COUNT(*) AS matches, MAX(ended_at) AS last_at
+                    SELECT player_id,
+                           SUM(CASE WHEN ranked = 0 THEN 1 ELSE 0 END) AS friendly_matches,
+                           MAX(ended_at) AS last_at
                     FROM participants GROUP BY player_id
                 ),
                 ids AS (
@@ -1273,10 +1504,11 @@ public sealed class AdminService
                 )
                 SELECT ids.player_id, COALESCE(a.username, ids.player_id),
                        r.mmr, r.games_played, r.placement_done, r.peak_mmr,
-                       COALESCE(st.matches, pl.matches, 0), COALESCE(st.wins, 0),
+                       COALESCE(st.matches, 0), COALESCE(st.wins, 0),
                        COALESCE(st.losses, 0), COALESCE(st.forfeits, 0),
                        COALESCE(st.best_streak, 0), COALESCE(st.current_streak, 0),
-                       COALESCE(st.total_match_seconds, 0), pl.last_at
+                       COALESCE(st.total_match_seconds, 0), pl.last_at,
+                       COALESCE(pl.friendly_matches, 0)
                 FROM ids
                 LEFT JOIN accounts a ON a.player_id = ids.player_id
                 LEFT JOIN ranked_state r ON r.player_id = ids.player_id AND r.season_id = $season
@@ -1323,6 +1555,9 @@ public sealed class AdminService
                     currentStreak = reader.GetInt32(11),
                     totalMatchSeconds = reader.GetInt32(12),
                     lastMatchAt = NullableString(reader, 13),
+                    // Le amichevoli non stanno negli aggregati: vengono contate a parte
+                    // dallo storico, altrimenti in questa riga non ci sarebbe traccia.
+                    friendlyMatches = reader.GetInt32(14),
                     winRatePercent = matches > 0 ? (int)Math.Round(wins * 100.0 / matches) : 0
                 });
             }
@@ -1518,6 +1753,21 @@ public sealed class AdminService
                 foreach (string classId in AdminUnlockCatalog.StarterClassIds)
                     GrantUnlockRow(connection, transaction, playerId, "class", classId);
                 GrantUnlockRow(connection, transaction, playerId, "chapter", "chapter-1");
+                // Anche i moduli del percorso: il flag da solo direbbe "onboarding finito"
+                // mentre i cancelli terrebbero il giocatore fermo alla prima lezione.
+                foreach (string moduleId in TutorialModuleCatalog.AllIds)
+                    GrantUnlockRow(
+                        connection, transaction, playerId, TutorialModuleCatalog.UnlockType, moduleId);
+            }
+            else
+            {
+                // "Rifai il tutorial" vuol dire rifarlo davvero: senza cancellare i moduli il
+                // percorso resterebbe segnato come gia' fatto, e il primo contatto col server
+                // rimetterebbe comunque il flag (vedi il backfill in EnsureProgressRow).
+                Execute(connection, transaction, @"
+                    DELETE FROM single_player_unlocks
+                    WHERE player_id = $id AND unlock_type = $type",
+                    ("$id", playerId), ("$type", TutorialModuleCatalog.UnlockType));
             }
         }
         else if (unlockType == AdminUnlockCatalog.TypeMode)
@@ -1574,16 +1824,168 @@ public sealed class AdminService
         return (true, null);
     }
 
+    // ---- Scorta consumabili (account di prova) -------------------------------
+
+    /// <summary>Tetto per riga: la scorta serve a provare gli oggetti, non a farne un magazzino.</summary>
+    private const int MaxStashCount = 99;
+
+    public object GetPlayerStash(string playerId)
+    {
+        using SqliteConnection connection = database.Open();
+        return PlayerExists(connection, playerId) ? BuildStashState(connection, playerId) : null;
+    }
+
+    /// <summary>
+    /// Catalogo consumabili con la quantita' posseduta e la bisaccia scelta. Il catalogo arriva
+    /// intero e non solo le righe presenti: dal pannello si aggiunge anche quello che il
+    /// giocatore non ha mai comprato, che e' il motivo per cui esiste questa schermata.
+    /// </summary>
+    private static object BuildStashState(SqliteConnection connection, string playerId)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        using (SqliteCommand command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT item_id, count FROM player_consumables WHERE player_id = $id";
+            command.Parameters.AddWithValue("$id", playerId);
+            using SqliteDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+                counts[reader.GetString(0)] = reader.GetInt32(1);
+        }
+
+        var bag = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using (SqliteCommand command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT item_id FROM player_bag WHERE player_id = $id ORDER BY item_id";
+            command.Parameters.AddWithValue("$id", playerId);
+            using SqliteDataReader reader = command.ExecuteReader();
+            while (reader.Read())
+                bag.Add(reader.GetString(0));
+        }
+
+        var items = SanctuaryCatalog.All
+            .Where(entry => entry.Type == SanctuaryCatalog.TypeItem)
+            .Select(entry => new
+            {
+                id = entry.Id,
+                name = entry.Name,
+                description = entry.Description,
+                cost = SanctuaryCatalog.CopyCostOf(entry),
+                count = counts.TryGetValue(entry.Id, out int owned) ? owned : 0,
+                inBag = bag.Contains(entry.Id)
+            })
+            .ToList();
+
+        // Righe fuori catalogo (oggetto rinominato o rimosso): non sono modificabili dalle voci
+        // qui sopra e sparirebbero dalla vista, quindi si mostrano a parte invece di far finta
+        // che non esistano.
+        var unknown = counts
+            .Where(pair => !SanctuaryCatalog.TryGetEntry(SanctuaryCatalog.TypeItem, pair.Key, out _))
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => new { id = pair.Key, count = pair.Value })
+            .ToList();
+
+        return new
+        {
+            items,
+            unknown,
+            maxCount = MaxStashCount,
+            slots = SanctuaryBag.ReadSlots(connection, null, playerId),
+            bag = bag.OrderBy(id => id, StringComparer.Ordinal)
+                .Select(id => new { id, name = ItemName(id) })
+                .ToList()
+        };
+    }
+
+    /// <summary>
+    /// Fissa quante copie di un consumabile ha il giocatore. Il valore e' assoluto e non un
+    /// delta: il pannello manda quello che deve risultare, cosi' due click ravvicinati non si
+    /// sommano e un rinvio della stessa richiesta non raddoppia niente.
+    /// </summary>
+    public (bool ok, string error) SetStashItem(string playerId, string itemId, int count)
+    {
+        if (!SanctuaryCatalog.TryGetEntry(
+                SanctuaryCatalog.TypeItem, (itemId ?? string.Empty).Trim(), out SanctuaryCatalog.Entry entry))
+            return (false, "Oggetto non riconosciuto.");
+        if (count < 0 || count > MaxStashCount)
+            return (false, $"Quantita fuori intervallo (0-{MaxStashCount}).");
+
+        using SqliteConnection connection = database.Open();
+        if (!PlayerExists(connection, playerId))
+            return (false, "Giocatore inesistente.");
+
+        using SqliteTransaction transaction = connection.BeginTransaction();
+        WriteStashCount(connection, transaction, playerId, entry.Id, count);
+        transaction.Commit();
+        return (true, null);
+    }
+
+    /// <summary>Stessa quantita' per ogni voce a catalogo; a zero svuota anche la bisaccia.</summary>
+    public (bool ok, string error) SetAllStash(string playerId, int count)
+    {
+        if (count < 0 || count > MaxStashCount)
+            return (false, $"Quantita fuori intervallo (0-{MaxStashCount}).");
+
+        using SqliteConnection connection = database.Open();
+        if (!PlayerExists(connection, playerId))
+            return (false, "Giocatore inesistente.");
+
+        using SqliteTransaction transaction = connection.BeginTransaction();
+        if (count == 0)
+        {
+            // Le righe fuori catalogo vanno via con le altre: lasciarle darebbe una scorta
+            // vuota nel pannello e ancora piena in gioco.
+            Execute(connection, transaction,
+                "DELETE FROM player_consumables WHERE player_id = $id", ("$id", playerId));
+            Execute(connection, transaction,
+                "DELETE FROM player_bag WHERE player_id = $id", ("$id", playerId));
+        }
+        else
+        {
+            foreach (SanctuaryCatalog.Entry entry in SanctuaryCatalog.All
+                         .Where(entry => entry.Type == SanctuaryCatalog.TypeItem))
+                WriteStashCount(connection, transaction, playerId, entry.Id, count);
+        }
+        transaction.Commit();
+        return (true, null);
+    }
+
+    /// <summary>
+    /// Scrive la riga della scorta. A zero la riga sparisce e con lei il posto in bisaccia:
+    /// e' la stessa regola del consumo in run, altrimenti la bisaccia mostrerebbe uno slot
+    /// pieno che alla run successiva parte vuoto.
+    /// </summary>
+    private static void WriteStashCount(
+        SqliteConnection connection, SqliteTransaction transaction,
+        string playerId, string itemId, int count)
+    {
+        if (count <= 0)
+        {
+            Execute(connection, transaction,
+                "DELETE FROM player_consumables WHERE player_id = $id AND item_id = $item",
+                ("$id", playerId), ("$item", itemId));
+            Execute(connection, transaction,
+                "DELETE FROM player_bag WHERE player_id = $id AND item_id = $item",
+                ("$id", playerId), ("$item", itemId));
+            return;
+        }
+
+        Execute(connection, transaction, @"
+            INSERT INTO player_consumables (player_id, item_id, count)
+            VALUES ($id, $item, $count)
+            ON CONFLICT(player_id, item_id) DO UPDATE SET count = $count",
+            ("$id", playerId), ("$item", itemId), ("$count", count));
+    }
+
     private static string CanonicalUnlockType(string type) => (type ?? string.Empty).Trim().ToLowerInvariant() switch
     {
         "class" => SanctuaryCatalog.TypeClass,
         "secondability" => SanctuaryCatalog.TypeSecondAbility,
-        "item" => SanctuaryCatalog.TypeItem,
         "slot" => SanctuaryCatalog.TypeSlot,
         "chapter" => AdminUnlockCatalog.TypeChapter,
         "chaptercleared" => AdminUnlockCatalog.TypeChapterCleared,
         "mode" => AdminUnlockCatalog.TypeMode,
         "tutorial" => AdminUnlockCatalog.TypeTutorial,
+        "tutorialmodule" => TutorialModuleCatalog.UnlockType,
         _ => null
     };
 

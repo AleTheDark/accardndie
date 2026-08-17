@@ -9,14 +9,14 @@ using UnityEngine.UI;
 namespace AccardND.PvpUi
 {
     /// <summary>Riepilogo di fine partita: esito, variazione rank e traguardi sbloccati.</summary>
-    internal sealed class PvpMatchResultOverlay
+    internal sealed class LegacyPvpMatchResultOverlay
     {
         private readonly RectTransform root;
-        private readonly RectTransform confettiRoot;
+        private readonly RectTransform resultVfxRoot;
 
         private Button tripleButton;
 
-		public PvpMatchResultOverlay(
+		public LegacyPvpMatchResultOverlay(
 			Transform parent, MatchResultData result, Action onContinue,
 			Action<MatchResultData, Action<bool>> onTripleExperience = null)
         {
@@ -27,7 +27,9 @@ namespace AccardND.PvpUi
                 landscape ? new Vector2(0.25f, 0.16f) : new Vector2(0.18f, 0.23f),
                 landscape ? new Vector2(0.75f, 0.84f) : new Vector2(0.82f, 0.77f));
             if (result.youWon)
-                confettiRoot = CreateVictoryConfetti(parent);
+                resultVfxRoot = CreateVictoryConfetti(parent);
+            else
+                resultVfxRoot = CreateDefeatPetals(parent);
 
             string headline = result.youWon
                 ? GameText.Get(GameTextKeys.PvpResult.Victory)
@@ -124,12 +126,12 @@ namespace AccardND.PvpUi
 
         public void Destroy()
         {
-            if (confettiRoot != null)
-                UnityEngine.Object.Destroy(confettiRoot.gameObject);
+            if (resultVfxRoot != null)
+                UnityEngine.Object.Destroy(resultVfxRoot.gameObject);
             UnityEngine.Object.Destroy(root.gameObject);
         }
 
-        private static RectTransform CreateVictoryConfetti(Transform parent)
+        internal static RectTransform CreateVictoryConfetti(Transform parent)
         {
             var holder = new GameObject("Victory Confetti", typeof(RectTransform), typeof(CanvasGroup), typeof(VictoryConfettiRain));
             holder.transform.SetParent(parent, false);
@@ -142,6 +144,22 @@ namespace AccardND.PvpUi
             canvasGroup.interactable = false;
 
             holder.GetComponent<VictoryConfettiRain>().Play();
+            return rect;
+        }
+
+        internal static RectTransform CreateDefeatPetals(Transform parent)
+        {
+            var holder = new GameObject("Defeat Side Petals", typeof(RectTransform), typeof(CanvasGroup), typeof(DefeatSidePetalRain));
+            holder.transform.SetParent(parent, false);
+            var rect = (RectTransform)holder.transform;
+            PvpUiFactory.Stretch(rect);
+            rect.SetAsLastSibling();
+
+            CanvasGroup canvasGroup = holder.GetComponent<CanvasGroup>();
+            canvasGroup.blocksRaycasts = false;
+            canvasGroup.interactable = false;
+
+            holder.GetComponent<DefeatSidePetalRain>().Play();
             return rect;
         }
 
@@ -205,6 +223,188 @@ namespace AccardND.PvpUi
             }
 
             return builder.ToString().TrimEnd();
+        }
+    }
+
+    internal sealed class DefeatSidePetalRain : MonoBehaviour
+    {
+        private static readonly Color[] Tints =
+        {
+            new Color(1f, 1f, 1f, 0.94f),
+            new Color(0.82f, 0.55f, 0.58f, 0.92f),
+            new Color(0.42f, 0.38f, 0.4f, 0.94f),
+            new Color(0.68f, 0.28f, 0.32f, 0.93f)
+        };
+
+        private static Sprite petalSprite;
+        private RectTransform rect;
+
+        public void Play()
+        {
+            rect = (RectTransform)transform;
+            StartCoroutine(StartRainAfterLayout());
+        }
+
+        private IEnumerator StartRainAfterLayout()
+        {
+            // Il riepilogo campagna viene attivato e popolato nello stesso frame. Aspettare
+            // il rebuild evita di calcolare traiettorie su un RectTransform ancora 0x0,
+            // caso tipico della sconfitta maturata direttamente sul campo.
+            Canvas.ForceUpdateCanvases();
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+
+            if (rect == null || rect.rect.width <= 1f || rect.rect.height <= 1f)
+            {
+                yield return new WaitForEndOfFrame();
+                Canvas.ForceUpdateCanvases();
+            }
+
+            yield return Rain();
+        }
+
+        private IEnumerator Rain()
+        {
+            // Lati molto densi, centro piu' leggero: il popup resta leggibile ma
+            // l'effetto attraversa davvero tutta la larghezza dello schermo.
+            for (int i = 0; i < 72; i++)
+            {
+                int lane = i % 5 == 0 ? 0 : (i % 2 == 0 ? -1 : 1);
+                CreatePetal(i * 0.018f, lane);
+                if (i % 9 == 0)
+                    yield return null;
+            }
+
+            while (isActiveAndEnabled)
+            {
+                float roll = UnityEngine.Random.value;
+                int lane = roll < 0.16f ? 0 : (roll < 0.58f ? -1 : 1);
+                CreatePetal(0f, lane);
+                yield return new WaitForSecondsRealtime(UnityEngine.Random.Range(0.045f, 0.105f));
+            }
+        }
+
+        private void CreatePetal(float delay, int lane)
+        {
+            var petal = new GameObject("Defeat Petal", typeof(RectTransform), typeof(Image));
+            petal.transform.SetParent(transform, false);
+            var petalRect = (RectTransform)petal.transform;
+            petalRect.anchorMin = new Vector2(0.5f, 1f);
+            petalRect.anchorMax = new Vector2(0.5f, 1f);
+            petalRect.pivot = new Vector2(0.5f, 0.5f);
+            float size = UnityEngine.Random.Range(24f, 52f);
+            petalRect.sizeDelta = new Vector2(size, size);
+
+            Image image = petal.GetComponent<Image>();
+            image.raycastTarget = false;
+            image.preserveAspect = true;
+            image.sprite = GetPetalSprite();
+            image.color = Tints[UnityEngine.Random.Range(0, Tints.Length)];
+            StartCoroutine(Fall(petalRect, image, delay, lane));
+        }
+
+        private static Sprite GetPetalSprite()
+        {
+            if (petalSprite != null)
+                return petalSprite;
+
+            Texture2D texture = Resources.Load<Texture2D>("VFX/DefeatPetal");
+            if (texture == null)
+                return null;
+
+            petalSprite = Sprite.Create(
+                texture,
+                new Rect(0f, 0f, texture.width, texture.height),
+                new Vector2(0.5f, 0.5f),
+                100f,
+                0u,
+                SpriteMeshType.Tight);
+            petalSprite.name = "Defeat Petal Runtime Sprite";
+            return petalSprite;
+        }
+
+        private IEnumerator Fall(RectTransform petal, Image image, float delay, int lane)
+        {
+            if (delay > 0f)
+                yield return new WaitForSecondsRealtime(delay);
+            if (petal == null || image == null)
+                yield break;
+
+            Rect bounds = rect.rect;
+            float edgeWidth = Mathf.Min(bounds.width * 0.14f, 180f);
+            bool center = lane == 0;
+            bool leftSide = lane < 0;
+            float startX = center
+                ? UnityEngine.Random.Range(bounds.xMin + bounds.width * 0.27f, bounds.xMax - bounds.width * 0.27f)
+                : leftSide
+                    ? UnityEngine.Random.Range(bounds.xMin + 8f, bounds.xMin + edgeWidth)
+                    : UnityEngine.Random.Range(bounds.xMax - edgeWidth, bounds.xMax - 8f);
+            float drift = center
+                ? UnityEngine.Random.Range(-55f, 55f)
+                : leftSide ? UnityEngine.Random.Range(-25f, 70f) : UnityEngine.Random.Range(-70f, 25f);
+            float startY = bounds.yMax + UnityEngine.Random.Range(10f, 160f);
+            // Termina sempre ben oltre il bordo: vale anche quando il popup campagna
+            // usa una Canvas con scaling diverso dalla Game View.
+            float endY = bounds.yMin - Mathf.Max(180f, bounds.height * 0.14f);
+            float duration = UnityEngine.Random.Range(3.1f, 5.4f);
+            float spin = UnityEngine.Random.Range(-540f, 540f);
+            float sway = UnityEngine.Random.Range(12f, 38f);
+            float phase = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+            float secondaryPhase = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+            float swayFrequency = UnityEngine.Random.Range(2.6f, 5.8f);
+            float flutterFrequency = UnityEngine.Random.Range(7.5f, 13.5f);
+            float fallExponent = UnityEngine.Random.Range(0.72f, 1.55f);
+            float gustStrength = UnityEngine.Random.Range(8f, 34f);
+            float gustStart = UnityEngine.Random.Range(0.18f, 0.62f);
+            float gustLength = UnityEngine.Random.Range(0.10f, 0.28f);
+            float tumblePhase = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+            float elapsed = 0f;
+
+            while (elapsed < duration && petal != null && image != null)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                float fallT = Mathf.Pow(t, fallExponent);
+                float slowPocket = Mathf.Sin(t * Mathf.PI * flutterFrequency + secondaryPhase) * 0.012f;
+                fallT = Mathf.Clamp01(fallT + slowPocket * (1f - t));
+
+                float gustT = Mathf.Clamp01((t - gustStart) / gustLength);
+                float gust = Mathf.Sin(gustT * Mathf.PI) * gustStrength;
+                if (lane > 0)
+                    gust = -gust;
+                else if (center)
+                    gust *= UnityEngine.Random.value > 0.5f ? 0.45f : -0.45f;
+
+                float broadSway = Mathf.Sin(t * Mathf.PI * swayFrequency + phase) * sway;
+                float fineFlutter = Mathf.Sin(t * Mathf.PI * flutterFrequency + secondaryPhase) * sway * 0.28f;
+                float x = startX + drift * t + broadSway + fineFlutter + gust;
+                float y = Mathf.Lerp(startY, endY, fallT);
+                petal.anchoredPosition = new Vector2(x, y);
+
+                float tumble = Mathf.Sin(t * Mathf.PI * flutterFrequency + tumblePhase);
+                petal.localRotation = Quaternion.Euler(tumble * 62f, spin * t * 0.28f, spin * t + tumble * 18f);
+                float squash = Mathf.Lerp(0.42f, 1f, Mathf.Abs(tumble));
+                petal.localScale = new Vector3(1f, squash, 1f) * Mathf.Lerp(0.72f, 1.08f, Mathf.Sin(t * Mathf.PI));
+
+                Color color = image.color;
+                color.a = Mathf.Clamp01(Mathf.Min(t * 8f, (1f - t) * 7f)) * 0.95f;
+                if (center)
+                {
+                    // I pochi petali centrali accompagnano l'occhio soltanto nella
+                    // meta' alta; poi sfumano per lasciare libero il contenuto.
+                    color.a *= Mathf.InverseLerp(0.62f, 0.46f, t);
+                    if (t >= 0.62f)
+                    {
+                        image.color = Color.clear;
+                        break;
+                    }
+                }
+                image.color = color;
+                yield return null;
+            }
+
+            if (petal != null)
+                Destroy(petal.gameObject);
         }
     }
 
@@ -272,6 +472,8 @@ namespace AccardND.PvpUi
 
             Rect bounds = rect.rect;
             float startX = UnityEngine.Random.Range(bounds.xMin - 60f, bounds.xMax + 60f);
+            bool center = startX >= bounds.xMin + bounds.width * 0.33f
+                && startX <= bounds.xMax - bounds.width * 0.33f;
             float endX = startX + UnityEngine.Random.Range(-140f, 140f);
             float startY = bounds.yMax + UnityEngine.Random.Range(12f, 140f);
             float endY = bounds.yMin - UnityEngine.Random.Range(80f, 180f);
@@ -294,6 +496,15 @@ namespace AccardND.PvpUi
 
                 Color color = image.color;
                 color.a = Mathf.Clamp01(Mathf.Min(t * 10f, (1f - t) * 8f)) * 0.95f;
+                if (center)
+                {
+                    color.a *= Mathf.InverseLerp(0.67f, 0.56f, t);
+                    if (t >= 0.67f)
+                    {
+                        image.color = Color.clear;
+                        break;
+                    }
+                }
                 image.color = color;
                 yield return null;
             }

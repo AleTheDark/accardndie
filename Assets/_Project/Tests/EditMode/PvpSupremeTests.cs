@@ -154,12 +154,12 @@ namespace AccardND.GameCore.Tests
             engine.UseSupreme(0, 1, 0);
 
             Assert.That(victim.PendingAttackBonus, Is.EqualTo(0));
-            Assert.That(victim.PermanentCombatBonus, Is.EqualTo(0));
-            Assert.That(actor.PermanentCombatBonus, Is.EqualTo(3), "ruba 2 + 1");
+            Assert.That(victim.PermanentCombatBonus, Is.EqualTo(1), "ruba un solo buff");
+            Assert.That(actor.PermanentCombatBonus, Is.EqualTo(2));
         }
 
         [Test]
-        public void RogueStealBuffs_StealsTwoPower_WhenTargetHasNoBuffs()
+        public void RogueStealBuffs_StealsOnePower_WhenTargetHasNoBuffs()
         {
             PvpMatchEngine engine = Mirror(HeroClass.Rogue, HeroClass.Warrior);
             PvpCardState actor = engine.ActiveCard;
@@ -167,8 +167,37 @@ namespace AccardND.GameCore.Tests
 
             engine.UseSupreme(0, 1, 0);
 
-            Assert.That(victim.PermanentCombatBonus, Is.EqualTo(-2));
-            Assert.That(actor.PermanentCombatBonus, Is.EqualTo(2), "e' un furto, non una semplice riduzione");
+            Assert.That(victim.PermanentCombatBonus, Is.EqualTo(-1));
+            Assert.That(actor.PermanentCombatBonus, Is.EqualTo(1), "e' un furto, non una semplice riduzione");
+        }
+
+        [Test]
+        public void RogueStealBuffs_AlsoTransfersTwoMana()
+        {
+            PvpMatchEngine engine = Mirror(HeroClass.Rogue, HeroClass.Warrior);
+            engine.BoardOf(1)[0].PendingAttackBonus = 1;
+            BankMana(engine, 1, 2);
+            BankMana(engine, 0, AbilityManaCosts.Supreme(HeroClass.Rogue));
+            int thiefBefore = engine.ManaOf(0);
+            int victimBefore = engine.ManaOf(1);
+
+            engine.UseSupreme(0, 1, 0);
+
+            Assert.That(engine.ManaOf(1), Is.EqualTo(victimBefore - 2));
+            Assert.That(engine.ManaOf(0), Is.EqualTo(thiefBefore - AbilityManaCosts.Supreme(HeroClass.Rogue) + 2));
+        }
+
+        [Test]
+        public void RogueStealBuffs_DoesNotStealMana_WhenFallingBackToPower()
+        {
+            PvpMatchEngine engine = Mirror(HeroClass.Rogue, HeroClass.Warrior);
+            BankMana(engine, 1, 2);
+            BankMana(engine, 0, AbilityManaCosts.Supreme(HeroClass.Rogue));
+            int victimBefore = engine.ManaOf(1);
+
+            engine.UseSupreme(0, 1, 0);
+
+            Assert.That(engine.ManaOf(1), Is.EqualTo(victimBefore));
         }
 
         // --- Mago e Cacciatore ---
@@ -233,14 +262,30 @@ namespace AccardND.GameCore.Tests
         {
             PvpMatchEngine engine = Mirror(HeroClass.Barbarian, HeroClass.Warrior);
             BankMana(engine, 0, AbilityManaCosts.Supreme(HeroClass.Barbarian));
+            PvpCardState allyWithFury = engine.BoardOf(0)[1];
+            allyWithFury.PendingAttackBonus = 3;
+            allyWithFury.PendingBonusKind = PvpPendingBonusKind.Fury;
 
-            engine.UseSupreme(0, 0, 0);
+            IReadOnlyList<PvpEvent> events = engine.UseSupreme(0, 0, 0);
 
             foreach (PvpCardState ally in engine.BoardOf(0))
             {
                 Assert.That(ally.PendingAttackBonus, Is.GreaterThan(0), $"slot {ally.Slot} non potenziato");
                 Assert.That(ally.PendingDefenseBonus, Is.GreaterThan(0), "la cornamusa vale anche in difesa");
             }
+            Assert.That(allyWithFury.PendingAttackBonus, Is.EqualTo(3),
+                "chi e' gia' infuriato resta com'e': la cornamusa accende la Furia, non la somma");
+            Assert.That(events.OfType<FuryGainedEvent>().Select(e => e.Slot),
+                Is.EquivalentTo(new[] { 0, 2 }),
+                "solo le pedine che non erano gia' infuriate ricevono l'evento");
+
+            // La regia riproduce la coda in ordine: se la Furia precede il
+            // SupremeUsed, gli alleati si infuriano prima che la cornamusa suoni.
+            var ordered = events.ToList();
+            int hornIndex = ordered.FindIndex(e => e is SupremeUsedEvent);
+            Assert.That(hornIndex, Is.GreaterThanOrEqualTo(0), "manca l'evento della suprema");
+            Assert.That(ordered.FindIndex(e => e is FuryGainedEvent), Is.GreaterThan(hornIndex),
+                "la Furia deve seguire l'animazione della cornamusa, non precederla");
         }
 
         // --- Paladino ---
@@ -277,6 +322,17 @@ namespace AccardND.GameCore.Tests
                 .Any(e => e.Reason == ManaChangeReasons.Reserve);
 
             Assert.That(hasReserve, Is.True);
+        }
+
+        [Test]
+        public void ManaReserve_CanFollowPaladinProtectionInTheSameActivation()
+        {
+            PvpMatchEngine engine = Mirror(HeroClass.Paladin, HeroClass.Warrior);
+            BankMana(engine, 0, 10);
+
+            engine.UseAbility(0, 0, 0);
+
+            Assert.DoesNotThrow(() => engine.UseSupreme(0, 0, 0));
         }
 
         // --- Sacerdote ---
@@ -372,16 +428,69 @@ namespace AccardND.GameCore.Tests
             Assert.DoesNotThrow(() => engine.Attack(1, actor.Slot));
         }
 
+        [Test]
+        public void InvisibleCards_BecomeTargetableWhenOnlyInvisibleAlliesRemain()
+        {
+            PvpMatchEngine engine = Mirror(HeroClass.Assassin, HeroClass.Warrior);
+            PvpCardState first = engine.BoardOf(0)[0];
+            PvpCardState second = engine.BoardOf(0)[1];
+            first.IsUntargetable = true;
+            second.IsUntargetable = true;
+            engine.BoardOf(0)[2].Eliminated = true;
+            AdvanceTo(engine, 1);
+
+            Assert.DoesNotThrow(() => engine.Attack(1, first.Slot),
+                "se restano solo invisibili devono diventare bersagliabili per evitare un deadlock");
+        }
+
         // --- Regole trasversali ---
 
         [Test]
-        public void NecromancerSupreme_IsRejected()
+        public void NecromancerSupreme_CostsEightAndSummonsTwoMinions()
         {
             PvpMatchEngine engine = Mirror(HeroClass.Necromancer, HeroClass.Warrior);
             BankMana(engine, 0, 10);
+            PvpCardState necromancer = engine.ActiveCard;
+            int manaBefore = engine.ManaOf(0);
 
-            var error = Assert.Throws<PvpActionException>(() => engine.UseSupreme(0, 0, 0));
-            Assert.That(error.ErrorCode, Is.EqualTo(PvpActionErrorCodes.SupremeNotAvailable));
+            engine.UseSupreme(0, 0, 0);
+
+            Assert.That(AbilityManaCosts.Supreme(HeroClass.Necromancer), Is.EqualTo(8));
+            Assert.That(necromancer.NecromancerMinions, Is.EqualTo(2));
+            Assert.That(manaBefore - engine.ManaOf(0), Is.EqualTo(8));
+        }
+
+        [Test]
+        public void AttackAgainstNecromancerMinion_RollsAndTargetsNecromancerForPresentation()
+        {
+            PvpMatchEngine engine = Mirror(HeroClass.Warrior, HeroClass.Necromancer);
+            PvpCardState necromancer = engine.BoardOf(1)[0];
+            necromancer.NecromancerMinions = 2;
+            int necromancerLives = necromancer.Lives;
+
+            IReadOnlyList<PvpEvent> events = engine.Attack(0, necromancer.Slot);
+
+            AttackResolvedEvent attack = events.OfType<AttackResolvedEvent>().Single();
+            Assert.That(attack.InterceptedByNecromancerMinion, Is.True);
+            Assert.That(attack.DefenderSlot, Is.EqualTo(necromancer.Slot));
+            Assert.That(attack.AttackerRoll.FirstRoll, Is.GreaterThan(0));
+            Assert.That(attack.DefenderRoll.FirstRoll, Is.GreaterThan(0));
+            Assert.That(necromancer.Lives, Is.EqualTo(necromancerLives));
+            Assert.That(necromancer.NecromancerMinions, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void PriestDispel_DissolvesMinionsWithoutPowerBuff()
+        {
+            PvpMatchEngine engine = Mirror(HeroClass.Priest, HeroClass.Necromancer);
+            PvpCardState necromancer = engine.BoardOf(1)[0];
+            necromancer.NecromancerMinions = 2;
+            BankMana(engine, 0, AbilityManaCosts.Supreme(HeroClass.Priest));
+
+            engine.UseSupreme(0, 1, necromancer.Slot);
+
+            Assert.That(necromancer.NecromancerMinions, Is.Zero);
+            Assert.That(engine.BoardOf(1).All(card => card.PermanentCombatBonus == 0), Is.True);
         }
 
         [Test]
@@ -393,6 +502,18 @@ namespace AccardND.GameCore.Tests
 
             var error = Assert.Throws<PvpActionException>(() => engine.UseSupreme(0, 0, 0));
             Assert.That(error.ErrorCode, Is.EqualTo(PvpActionErrorCodes.AbilityRequiresAction));
+        }
+
+        [Test]
+        public void PrimaryAbility_CanChainAfterANonAttackSupreme()
+        {
+            PvpMatchEngine engine = Mirror(HeroClass.Priest, HeroClass.Warrior);
+            BankMana(engine, 0, 10);
+
+            engine.UseSupreme(0, 1, 0); // Purificazione
+
+            Assert.DoesNotThrow(() => engine.UseAbility(0, 0, 1)); // Benedizione
+            Assert.That(engine.ActiveCard.AbilityUsed, Is.True);
         }
 
         [Test]

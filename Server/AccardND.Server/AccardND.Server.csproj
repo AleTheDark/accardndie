@@ -16,6 +16,12 @@
       LinkBase="Shared\NetProtocol" />
   </ItemGroup>
 
+  <!-- La verifica dell'ID token Google si prova firmando un token con una chiave di
+       prova: serve raggiungere il metodo interno che accetta le chiavi dall'esterno. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="AccardND.Server.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Update="serverconfig.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Update="cardcatalog.json" CopyToOutputDirectory="PreserveNewest" />

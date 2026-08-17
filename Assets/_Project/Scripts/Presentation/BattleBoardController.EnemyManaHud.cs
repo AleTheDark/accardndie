@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
@@ -15,11 +16,11 @@ public sealed partial class BattleBoardController
 
 	private Image enemyManaRuneImage;
 	private Image enemyManaRuneAuraImage;
-	private Image enemyManaRuneOutlineImage;
 	private Text enemyManaRuneText;
 	private int enemyManaDisplayedValue = -1;
 	private Coroutine enemyManaValueTweenRoutine;
 	private int enemyManaDeltaCalloutIndex;
+	private readonly HashSet<GameObject> enemyManaDeltaCallouts = new HashSet<GameObject>();
 	private static readonly Color EnemyManaDeltaColor = new Color(1f, 0.32f, 0.16f);
 
 	/// <summary>
@@ -50,23 +51,25 @@ public sealed partial class BattleBoardController
 			"Enemy Mana Rune Value",
 			((Component)enemyManaRuneImage).transform,
 			font,
-			46,
+			55,
 			(FontStyle)1,
 			(TextAnchor)4);
 		enemyManaRuneText.color = Color.white;
 		enemyManaRuneText.raycastTarget = false;
 		enemyManaRuneText.resizeTextForBestFit = true;
 		enemyManaRuneText.resizeTextMinSize = 14;
-		enemyManaRuneText.resizeTextMaxSize = 44;
+		enemyManaRuneText.resizeTextMaxSize = 55;
+		enemyManaRuneText.text = Mathf.Max(0, BattleCpuManaCurrent).ToString();
 
 		RectTransform valueRect = enemyManaRuneText.rectTransform;
 		valueRect.anchorMin = Vector2.zero;
 		valueRect.anchorMax = Vector2.one;
-		valueRect.offsetMin = new Vector2(6f, 10.3f);
-		valueRect.offsetMax = new Vector2(-6f, -1.7f);
+		valueRect.offsetMin = new Vector2(6f, 14f);
+		valueRect.offsetMax = new Vector2(-6f, 2f);
+		valueRect.SetAsLastSibling();
 
 		Outline outline = ((Component)enemyManaRuneText).gameObject.AddComponent<Outline>();
-		outline.effectColor = new Color(0.12f, 0.01f, 0.01f, 0.95f);
+		outline.effectColor = new Color(0.02f, 0.05f, 0.12f, 0.9f);
 		outline.effectDistance = new Vector2(1.6f, -1.6f);
 		outline.useGraphicAlpha = true;
 
@@ -83,21 +86,13 @@ public sealed partial class BattleBoardController
 		enemyManaRuneAuraImage.sprite = BuildManaAuraSprite();
 		enemyManaRuneAuraImage.raycastTarget = false;
 		RectTransform auraRect = enemyManaRuneAuraImage.rectTransform;
-		auraRect.anchorMin = auraRect.anchorMax = new Vector2(0f, 1f);
+		auraRect.anchorMin = auraRect.anchorMax = new Vector2(0.5f, 0.5f);
 		auraRect.pivot = new Vector2(0.5f, 0.5f);
-		auraRect.anchoredPosition = new Vector2(41.5f, -43f);
-		auraRect.sizeDelta = new Vector2(103f, 103f);
+		auraRect.anchoredPosition = new Vector2(1.627f, 4.712f);
+		auraRect.sizeDelta = new Vector2(75.2543f, 74.5754f);
+		auraRect.localScale = Vector3.one * 1.9762f;
 		auraRect.SetAsFirstSibling();
 
-		enemyManaRuneOutlineImage = CreateImage("Enemy Mana Rune Circular Outline", enemyManaRuneImage.transform, new Color(1f, 0.28f, 0.08f, 0.92f));
-		enemyManaRuneOutlineImage.sprite = BuildManaRingSprite();
-		enemyManaRuneOutlineImage.raycastTarget = false;
-		RectTransform outlineRect = enemyManaRuneOutlineImage.rectTransform;
-		outlineRect.anchorMin = outlineRect.anchorMax = new Vector2(0f, 1f);
-		outlineRect.pivot = new Vector2(0.5f, 0.5f);
-		outlineRect.anchoredPosition = new Vector2(41.5f, -41.5f);
-		outlineRect.sizeDelta = new Vector2(92f, 92f);
-		outlineRect.SetSiblingIndex(1);
 		((MonoBehaviour)this).StartCoroutine(EnemyManaRuneAuraRoutine());
 	}
 
@@ -114,11 +109,7 @@ public sealed partial class BattleBoardController
 				Mathf.Lerp(0.07f, 0.2f, sparkle),
 				Mathf.Lerp(0.025f, 0.07f, sparkle),
 				Mathf.Lerp(0.27f, 0.5f, pulse) + sparkle * 0.06f);
-			enemyManaRuneAuraImage.rectTransform.localScale = Vector3.one * Mathf.Lerp(0.93f, 1.1f, pulse);
-			if (enemyManaRuneOutlineImage != null)
-			{
-				enemyManaRuneOutlineImage.color = new Color(1f, 0.28f, 0.08f, Mathf.Lerp(0.74f, 1f, pulse));
-			}
+			enemyManaRuneAuraImage.rectTransform.localScale = Vector3.one * (1.9762f * Mathf.Lerp(0.93f, 1.1f, pulse));
 			yield return null;
 		}
 	}
@@ -143,10 +134,47 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		bool visible = BattleManaHudEnabled;
-		if (((Component)enemyManaRuneImage).gameObject.activeSelf != visible)
+		// Bragus non possiede una riserva mana. Nella debug di Seraphel, inoltre,
+		// la runa nemica deve apparire insieme al reveal del boss e non durante lo
+		// schieramento del giocatore sul fondale Lux ancora vuoto.
+		bool waitingForSeraphelReveal = debugForceFirstRoomSeraphel
+			&& !seraphelBossPresentationActive;
+		bool visible = BattleManaHudEnabled
+			&& !waitingForCampaignBossReveal
+			&& !deploymentDraftActive
+			&& (pvpPresentationActive || roundNumber > 0)
+			&& !bragusBossPresentationActive
+			&& !waitingForSeraphelReveal
+			&& (!IsTutorialWarriorDuelActive
+				|| tutorialMageDuelActive
+				|| tutorialWarriorDuelStep >= TutorialWarriorDuelStep.Mana);
+		// Il dado dei boss e' figlio del contenitore della runa. Bragus non usa mana,
+		// ma il contenitore deve restare attivo per poter mostrare il suo dado Vigore.
+		bool showBragusDice = bragusBossPresentationActive;
+		bool showEnemyHudContainer = visible || showBragusDice;
+		if (((Component)enemyManaRuneImage).gameObject.activeSelf != showEnemyHudContainer)
 		{
-			((Component)enemyManaRuneImage).gameObject.SetActive(visible);
+			((Component)enemyManaRuneImage).gameObject.SetActive(showEnemyHudContainer);
+		}
+		enemyManaRuneImage.enabled = visible;
+		if (enemyManaRuneText != null)
+			((Component)enemyManaRuneText).gameObject.SetActive(visible);
+		if (enemyManaRuneAuraImage != null)
+			((Component)enemyManaRuneAuraImage).gameObject.SetActive(visible);
+
+		// Il dado Vigore della CPU fa parte dello stesso blocco informativo della runa:
+		// non deve anticiparla durante schieramento/reveal né restare visibile quando
+		// la riserva mana nemica è nascosta.
+		if (cpuHud != null && (Object)(object)cpuHud.DiceImage != (Object)null)
+		{
+			bool showCpuDice = (visible || showBragusDice)
+				&& (Object)(object)cpuHud.DiceImage.sprite != (Object)null
+				&& (!IsTutorialWarriorDuelActive
+					|| tutorialMageDuelActive
+					|| tutorialWarriorDuelStep >= TutorialWarriorDuelStep.Vigor);
+			((Component)cpuHud.DiceImage).gameObject.SetActive(showCpuDice);
+			if ((Object)(object)cpuHud.DiceText != (Object)null)
+				((Component)cpuHud.DiceText).gameObject.SetActive(showCpuDice);
 		}
 		if (!visible || enemyManaRuneText == null)
 		{
@@ -174,6 +202,19 @@ public sealed partial class BattleBoardController
 			((MonoBehaviour)this).StopCoroutine(enemyManaValueTweenRoutine);
 		}
 		enemyManaValueTweenRoutine = ((MonoBehaviour)this).StartCoroutine(EnemyManaValueTweenRoutine(target));
+	}
+
+	private void SetPresentedEnemyManaValue(int value)
+	{
+		if (enemyManaValueTweenRoutine != null)
+		{
+			((MonoBehaviour)this).StopCoroutine(enemyManaValueTweenRoutine);
+			enemyManaValueTweenRoutine = null;
+		}
+
+		enemyManaDisplayedValue = Mathf.Max(0, value);
+		if (enemyManaRuneText != null)
+			enemyManaRuneText.text = enemyManaDisplayedValue.ToString();
 	}
 
 	private System.Collections.IEnumerator EnemyManaValueTweenRoutine(int target)
@@ -225,6 +266,8 @@ public sealed partial class BattleBoardController
 		label.raycastTarget = false;
 		label.horizontalOverflow = HorizontalWrapMode.Overflow;
 		label.verticalOverflow = VerticalWrapMode.Overflow;
+		GameObject labelObject = ((Component)label).gameObject;
+		enemyManaDeltaCallouts.Add(labelObject);
 
 		Outline outline = ((Component)label).gameObject.AddComponent<Outline>();
 		outline.effectColor = new Color(0.12f, 0.01f, 0.01f, 0.95f);
@@ -242,18 +285,24 @@ public sealed partial class BattleBoardController
 		rect.sizeDelta = new Vector2(180f, 64f);
 
 		float lane = (enemyManaDeltaCalloutIndex++ % 3) * 12f;
-		float x = 105f + lane;
-		const float startY = -150f;
-		const float endY = -260f;
 		const float duration = 0.8f;
 
 		float elapsed = 0f;
-		while (elapsed < duration && label != null)
+		while (elapsed < duration && label != null && enemyManaRuneImage != null)
 		{
 			elapsed += Time.unscaledDeltaTime;
 			float progress = Mathf.Clamp01(elapsed / duration);
 			float rise = Mathf.SmoothStep(0f, 1f, progress);
-			rect.anchoredPosition = new Vector2(x, Mathf.Lerp(startY, endY, rise));
+
+			// Calcolato dalla posizione corrente della runa a ogni frame: il callout
+			// resta agganciato anche dopo cambi di layout, risoluzione o orientamento.
+			RectTransform runeRect = enemyManaRuneImage.rectTransform;
+			RectTransform safeRect = safeAreaRoot;
+			Vector3 runeCenterLocal = safeRect.InverseTransformPoint(
+				runeRect.TransformPoint(runeRect.rect.center));
+			float x = runeCenterLocal.x - safeRect.rect.xMin + lane;
+			float runeYFromTop = runeCenterLocal.y - safeRect.rect.yMax;
+			rect.anchoredPosition = new Vector2(x, runeYFromTop - Mathf.Lerp(0f, 110f, rise));
 
 			Color color = EnemyManaDeltaColor;
 			color.a = progress < 0.34f ? 1f : 1f - Mathf.InverseLerp(0.34f, 1f, progress);
@@ -263,8 +312,28 @@ public sealed partial class BattleBoardController
 
 		if (label != null)
 		{
-			Object.Destroy(((Component)label).gameObject);
+			enemyManaDeltaCallouts.Remove(labelObject);
+			Object.Destroy(labelObject);
 		}
+	}
+
+	/// <summary>
+	/// StopAllCoroutines non esegue la coda delle coroutine interrotte. I callout sono
+	/// quindi tracciati esplicitamente, cosi' nessun testo puo' sopravvivere a un cambio
+	/// stanza, al ritorno all'hub o all'avvio di una nuova avventura.
+	/// </summary>
+	private void ClearEnemyManaDeltaCallouts()
+	{
+		foreach (GameObject callout in enemyManaDeltaCallouts)
+		{
+			if (callout == null)
+				continue;
+
+			callout.SetActive(false);
+			Object.Destroy(callout);
+		}
+		enemyManaDeltaCallouts.Clear();
+		enemyManaDeltaCalloutIndex = 0;
 	}
 }
 }

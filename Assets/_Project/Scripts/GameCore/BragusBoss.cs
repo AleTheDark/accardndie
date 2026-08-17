@@ -4,7 +4,7 @@ namespace AccardND.GameCore
 {
     public readonly struct BragusDefenseResult
     {
-        public BragusDefenseResult(int attackerTotal, int defenseRoll, int defenseTotal, int damage, int hitPointsBefore, int hitPointsAfter, int counterRoll, int counterTotal, int targetDefenseTotal)
+        public BragusDefenseResult(int attackerTotal, int defenseRoll, int defenseTotal, int damage, int hitPointsBefore, int hitPointsAfter, int counterRoll, int counterTotal, int targetDefenseTotal, VigorRollResult targetDefenseRoll)
         {
             AttackerTotal = attackerTotal;
             DefenseRoll = defenseRoll;
@@ -15,6 +15,7 @@ namespace AccardND.GameCore
             CounterRoll = counterRoll;
             CounterTotal = counterTotal;
             TargetDefenseTotal = targetDefenseTotal;
+            TargetDefenseRoll = targetDefenseRoll;
         }
 
         public int AttackerTotal { get; }
@@ -26,6 +27,7 @@ namespace AccardND.GameCore
         public int CounterRoll { get; }
         public int CounterTotal { get; }
         public int TargetDefenseTotal { get; }
+        public VigorRollResult TargetDefenseRoll { get; }
         public bool Counterattacks => Damage == 0;
         public bool CounterDefeatsAttacker => Counterattacks && CounterTotal > TargetDefenseTotal;
     }
@@ -36,7 +38,7 @@ namespace AccardND.GameCore
         public const int DefaultHitPoints = 45;
         public const int DefaultVigorDieSides = 8;
 
-        private readonly IRandomSource random;
+        private readonly CombatDiceRoller dice;
 
         public BragusBoss(IRandomSource random)
             : this(random, DefaultHitPoints)
@@ -45,7 +47,7 @@ namespace AccardND.GameCore
 
         public BragusBoss(IRandomSource random, int maxHitPoints)
         {
-            this.random = random ?? throw new ArgumentNullException(nameof(random));
+            dice = new CombatDiceRoller(random);
             if (maxHitPoints < 1)
                 throw new ArgumentOutOfRangeException(nameof(maxHitPoints));
 
@@ -57,6 +59,12 @@ namespace AccardND.GameCore
         public int HitPoints { get; private set; }
         public bool IsDefeated => HitPoints <= 0;
 
+        /// <summary>Rimette il boss come l'aveva lasciato una battaglia salvata a meta'.</summary>
+        public void Restore(int hitPoints)
+        {
+            HitPoints = Math.Clamp(hitPoints, 0, MaxHitPoints);
+        }
+
         public BragusDefenseResult ApplyResolvedDefense(
             int attackerTotal,
             int defenseRoll,
@@ -64,7 +72,8 @@ namespace AccardND.GameCore
             CombatCard attacker,
             int attackerDefenseStrength,
             int attackerDefenseDieSides,
-            bool counterTargetDefenseAdvantage = false)
+            bool counterTargetDefenseAdvantage = false,
+            int targetHighRollChancePercent = 0)
         {
             if (attackerTotal < 1)
                 throw new ArgumentOutOfRangeException(nameof(attackerTotal));
@@ -89,15 +98,26 @@ namespace AccardND.GameCore
             int counterRoll = 0;
             int counterTotal = 0;
             int targetDefenseTotal = 0;
+            VigorRollResult targetDefenseRoll = default;
             if (damage == 0)
             {
                 counterRoll = RollVigor(DefaultVigorDieSides, CounterattackMatchupAgainst(attacker.HeroClass));
-                int targetRoll = random.NextInclusive(1, attackerDefenseDieSides);
+                int firstTargetRoll = dice.Roll(attackerDefenseDieSides, targetHighRollChancePercent);
+                int secondTargetRoll = 0;
+                int targetRoll = firstTargetRoll;
                 if (counterTargetDefenseAdvantage)
                 {
-                    int secondTargetRoll = random.NextInclusive(1, attackerDefenseDieSides);
+                    secondTargetRoll = dice.Roll(attackerDefenseDieSides, targetHighRollChancePercent);
                     targetRoll = Math.Max(targetRoll, secondTargetRoll);
                 }
+                targetDefenseRoll = new VigorRollResult(
+                    attackerDefenseDieSides,
+                    firstTargetRoll,
+                    secondTargetRoll,
+                    counterTargetDefenseAdvantage,
+                    targetRoll,
+                    counterTargetDefenseAdvantage ? MatchupResult.Advantage : MatchupResult.Neutral,
+                    counterTargetDefenseAdvantage ? VigorSelectionMode.Highest : VigorSelectionMode.Single);
                 counterTotal = CardStrength + counterRoll;
                 targetDefenseTotal = attackerDefenseStrength + targetRoll;
             }
@@ -111,16 +131,17 @@ namespace AccardND.GameCore
                 HitPoints,
                 counterRoll,
                 counterTotal,
-                targetDefenseTotal);
+                targetDefenseTotal,
+                targetDefenseRoll);
         }
 
         private int RollVigor(int dieSides, MatchupResult matchup)
         {
-            int first = random.NextInclusive(1, dieSides);
+            int first = dice.Roll(dieSides);
             if (matchup == MatchupResult.Neutral)
                 return first;
 
-            int second = random.NextInclusive(1, dieSides);
+            int second = dice.Roll(dieSides);
             return matchup == MatchupResult.Advantage ? Math.Max(first, second) : Math.Min(first, second);
         }
 

@@ -85,6 +85,8 @@ namespace AccardND.NetProtocol
         public const string RankedData = "ranked.data";
         public const string LeaderboardGet = "leaderboard.get";
         public const string LeaderboardData = "leaderboard.data";
+        public const string AdventureLeaderboardGet = "adventure.leaderboard.get";
+        public const string AdventureLeaderboardData = "adventure.leaderboard.data";
         public const string MatchResult = "match.result";
 
         public const string ProfileGet = "profile.get";
@@ -117,14 +119,16 @@ namespace AccardND.NetProtocol
         public const string SinglePlayerProgressData = "singleplayer.progress.data";
         public const string SinglePlayerPurchaseUnlock = "singleplayer.unlock.purchase";
         public const string SinglePlayerClaimTutorialReward = "singleplayer.reward.tutorial";
+        public const string SinglePlayerClaimTutorialModule = "singleplayer.reward.tutorial_module";
         public const string SinglePlayerClaimDeathReward = "singleplayer.reward.death";
         public const string SinglePlayerClaimAdMultiplier = "singleplayer.reward.ad_multiplier";
         public const string SinglePlayerClaimLevelRewards = "singleplayer.reward.levels";
         public const string SinglePlayerRewardResult = "singleplayer.reward.result";
         public const string SinglePlayerPendingAdRewardsGet = "singleplayer.reward.pending_ads.get";
         public const string SinglePlayerPendingAdRewardsData = "singleplayer.reward.pending_ads.data";
+        public const string SinglePlayerPendingAdRewardDismiss = "singleplayer.reward.pending_ads.dismiss";
+        public const string SinglePlayerPendingAdRewardDismissed = "singleplayer.reward.pending_ads.dismissed";
         public const string SinglePlayerClearChapter = "singleplayer.chapter.cleared";
-        public const string SinglePlayerChooseClass = "singleplayer.class.choose";
 
         /// <summary>
         /// Inizio di una run di campagna. Serve solo allo storico: la reward di fine run
@@ -139,16 +143,26 @@ namespace AccardND.NetProtocol
         public const string SanctuaryBuyItem = "sanctuary.item.buy";
         public const string SanctuarySetBag = "sanctuary.bag.set";
 
+        public const string IapGet = "iap.get";
+        public const string IapData = "iap.data";
+        public const string IapRedeem = "iap.redeem";
+        public const string IapRedeemResult = "iap.redeem.result";
+
         public const string TavernGet = "tavern.get";
         public const string TavernData = "tavern.data";
         public const string TavernClaimQuest = "tavern.quest.claim";
         public const string TavernClaimBonus = "tavern.bonus.claim";
+
+        public const string TalentsGet = "talents.get";
+        public const string TalentsData = "talents.data";
+        public const string TalentsBuy = "talents.buy";
     }
 
     public static class ErrorCodes
     {
         public const string NotAuthenticated = "not_authenticated";
         public const string InvalidMessage = "invalid_message";
+        public const string ServerError = "server_error";
         public const string InvalidCredentials = "invalid_credentials";
 
         /// <summary>Build più vecchia della versione target: si aggiorna, non si riprova.</summary>
@@ -166,5 +180,23 @@ namespace AccardND.NetProtocol
         public const string RewardClaimNotFound = "reward_claim_not_found";
         public const string AdAlreadyUsed = "ad_already_used";
         public const string RequirementsNotMet = "requirements_not_met";
+        public const string RankedLoadoutRequirements = "ranked_loadout_requirements";
+
+        /// <summary>Ricevuta d'acquisto assente, malformata o con firma non valida.</summary>
+        public const string InvalidPurchase = "invalid_purchase";
+    }
+
+    /// <summary>Chiavi di presentazione trasportate dal server, mai frasi localizzate.</summary>
+    public static class ServerTextKeys
+    {
+        public const string SessionUsedElsewhere = "server.session.used_elsewhere";
+        public const string MatchOpponentLeft = "server.match.opponent_left";
+        public const string MatchOpponentTimeout = "server.match.opponent_timeout";
+        public const string FriendInvalid = "server.friend.invalid";
+        public const string FriendNotAdded = "server.friend.not_added";
+        public const string FriendOffline = "server.friend.offline";
+        public const string FriendBusy = "server.friend.busy";
+
+        public static string Error(string code) => $"server.error.{code}";
     }
 }

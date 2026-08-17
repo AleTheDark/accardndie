@@ -96,8 +96,19 @@ public sealed class ClientConnection
         }
     }
 
-    public Task SendErrorAsync(string code, string message, CancellationToken cancellation = default) =>
-        SendAsync(MessageTypes.Error, new ErrorMessage { code = code, message = message }, cancellation);
+    public Task SendErrorAsync(
+        string code,
+        string message,
+        CancellationToken cancellation = default,
+        string localizationKey = null) =>
+        SendAsync(MessageTypes.Error, new ErrorMessage
+        {
+            code = code,
+            localizationKey = string.IsNullOrWhiteSpace(localizationKey)
+                ? ServerTextKeys.Error(code)
+                : localizationKey,
+            message = message
+        }, cancellation);
 
     /// <summary>Riceve la prossima busta; null quando il client chiude la connessione.</summary>
     public async Task<Envelope> ReceiveAsync(CancellationToken cancellation)

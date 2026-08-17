@@ -47,8 +47,8 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)parent == (Object)null)
 			yield break;
 
-		int startSides = Mathf.Max(3, startDieSides);
-		int endSides = Mathf.Max(3, endDieSides);
+		int startSides = Mathf.Max(2, startDieSides);
+		int endSides = Mathf.Max(2, endDieSides);
 		MageConstellationGeometry startGeometry = CreateDieConstellationGeometry(startSides);
 		MageConstellationGeometry endGeometry = CreateDieConstellationGeometry(endSides);
 		Vector2 center = WorldToLocalPoint(parent, target.View.RectTransform.position);
@@ -479,11 +479,11 @@ public sealed partial class BattleBoardController
 
 	private static int LowerVigorDieOnce(int dieSides)
 	{
-		if (dieSides <= 3)
-			return 3;
+		if (dieSides <= 2)
+			return 2;
 		return dieSides switch
 		{
-			4 => 3,
+			4 => 2,
 			6 => 4,
 			8 => 6,
 			10 => 8,

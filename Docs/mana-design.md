@@ -139,7 +139,7 @@ combinazioni semplicemente illegali invece che costose.
 | Cacciatore | `MarkTarget` | preparazione | 1 |
 | Sacerdote | `BlessAlly` | buff alleato | 1 |
 | Barbaro | `GainRage` | buff su se' | 2 |
-| Assassino | `InhibitEnemy` | malus | 2 |
+| Assassino | `InhibitEnemy` | malus | 3 |
 | Mago | `WeakenEnemyVigor` | malus | 2 |
 | Paladino | `ProtectAlly` | difensiva | 2 |
 | Guerriero | `DoubleVigorSum` | attacco | 3 |

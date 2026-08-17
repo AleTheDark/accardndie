@@ -174,6 +174,7 @@ namespace AccardND.GameCore.Pvp
         public const string Loss = "loss";
         public const string Spend = "spend";
         public const string Reserve = "reserve";
+        public const string Theft = "theft";
         public const string RoundFloor = "round_floor";
     }
 
@@ -265,6 +266,22 @@ namespace AccardND.GameCore.Pvp
         public int Lives { get; }
     }
 
+    public sealed class NecromancerMinionsChangedEvent : PvpEvent
+    {
+        public NecromancerMinionsChangedEvent(int player, int slot, int remaining, bool deathBuff = false)
+        {
+            Player = player;
+            Slot = slot;
+            Remaining = remaining;
+            DeathBuff = deathBuff;
+        }
+
+        public int Player { get; }
+        public int Slot { get; }
+        public int Remaining { get; }
+        public bool DeathBuff { get; }
+    }
+
     public sealed class ProtectionTriggeredEvent : PvpEvent
     {
         public ProtectionTriggeredEvent(int paladinPlayer, int paladinSlot, bool redirected)
@@ -298,7 +315,9 @@ namespace AccardND.GameCore.Pvp
             bool defenderEliminated,
             bool becameSpirit,
             bool overkill,
-            bool isCounter)
+            bool isCounter,
+            bool interceptedByNecromancerMinion = false,
+            HeroClass attackerHeroClass = default)
         {
             AttackerPlayer = attackerPlayer;
             AttackerSlot = attackerSlot;
@@ -317,6 +336,8 @@ namespace AccardND.GameCore.Pvp
             BecameSpirit = becameSpirit;
             Overkill = overkill;
             IsCounter = isCounter;
+            InterceptedByNecromancerMinion = interceptedByNecromancerMinion;
+            AttackerHeroClass = attackerHeroClass;
         }
 
         public int AttackerPlayer { get; }
@@ -338,6 +359,8 @@ namespace AccardND.GameCore.Pvp
         /// del difensore, che perde entrambe le vite in un colpo solo.</summary>
         public bool Overkill { get; }
         public bool IsCounter { get; }
+        public bool InterceptedByNecromancerMinion { get; }
+        public HeroClass AttackerHeroClass { get; }
     }
 
     public sealed class AttachmentAppliedEvent : PvpEvent

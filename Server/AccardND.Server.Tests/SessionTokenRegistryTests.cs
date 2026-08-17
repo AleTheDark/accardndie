@@ -66,4 +66,49 @@ public sealed class SessionTokenRegistryTests
         Assert.NotNull(registry.Resolve(playing));
         Assert.False(registry.WasSuperseded(playing));
     }
+
+    [Fact]
+    public void ASessionSurvivesARestartOfTheServer()
+    {
+        using var server = new TestServer();
+        AccountIdentity account = server.RegisterAccount("apettona");
+        string token = server.CreateSessionTokens().Issue(account);
+
+        // Un deploy: processo nuovo, stesso database. Prima di questo, ogni
+        // pubblicazione sbatteva fuori chiunque fosse collegato.
+        SessionTokenRegistry afterDeploy = server.RestartAndCreateSessionTokens();
+
+        Assert.Equal(account.PlayerId, afterDeploy.Resolve(token)?.PlayerId);
+        Assert.Equal(account.Username, afterDeploy.Resolve(token)?.Username);
+    }
+
+    [Fact]
+    public void ARevokedSession_IsStillRememberedAfterARestart()
+    {
+        using var server = new TestServer();
+        AccountIdentity account = server.RegisterAccount("apettona");
+        SessionTokenRegistry before = server.CreateSessionTokens();
+        string kicked = before.Issue(account);
+        before.Revoke(kicked);
+
+        // È proprio dopo un deploy che il client rimasto indietro riprova col token
+        // vecchio: se il ricordo non sopravvivesse, si sentirebbe dire "sessione
+        // scaduta", rifarebbe il login completo e sloggherebbe chi sta giocando.
+        SessionTokenRegistry afterDeploy = server.RestartAndCreateSessionTokens();
+
+        Assert.Null(afterDeploy.Resolve(kicked));
+        Assert.True(afterDeploy.WasSuperseded(kicked));
+    }
+
+    [Fact]
+    public void TheDatabaseNeverHoldsTheTokenItself_OnlyItsFingerprint()
+    {
+        using var server = new TestServer();
+        string token = server.CreateSessionTokens().Issue(server.RegisterAccount("apettona"));
+
+        // Il token è un bearer: chi legge il database non deve poterlo rigiocare.
+        Assert.Equal(0, server.QueryScalar<int>(
+            $"SELECT COUNT(*) FROM session_tokens WHERE token_hash = '{token.Replace("'", "''")}'"));
+        Assert.Equal(1, server.QueryScalar<int>("SELECT COUNT(*) FROM session_tokens"));
+    }
 }

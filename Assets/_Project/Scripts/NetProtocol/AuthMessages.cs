@@ -86,6 +86,19 @@ namespace AccardND.NetProtocol
 
         /// <summary>Dove si scarica la versione nuova (store o sito). Può essere vuoto.</summary>
         public string updateUrl;
+
+        /// <summary>
+        /// L'accesso è stato rifiutato perché il server è in manutenzione. Come
+        /// <see cref="requiresUpdate"/> non è un errore da riprovare in ciclo: il
+        /// client si ferma sul login e mostra l'avviso.
+        /// </summary>
+        public bool maintenance;
+
+        /// <summary>
+        /// Avviso scritto dall'admin nel pannello (es. un orario di rientro). Può
+        /// essere vuoto: in quel caso il client usa il proprio testo localizzato.
+        /// </summary>
+        public string maintenanceMessage;
     }
 
     [Serializable]
@@ -109,6 +122,8 @@ namespace AccardND.NetProtocol
     [Serializable]
     public sealed class SessionKickedMessage
     {
+        public string localizationKey;
+        public string[] localizationArguments;
         public string message;
     }
 
@@ -127,6 +142,8 @@ namespace AccardND.NetProtocol
     public sealed class ErrorMessage
     {
         public string code;
+        public string localizationKey;
+        public string[] localizationArguments;
         public string message;
     }
 }

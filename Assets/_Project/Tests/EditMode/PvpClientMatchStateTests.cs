@@ -165,6 +165,35 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void AbilityReplay_PriestClearsAllTargetMaluses()
+        {
+            var client = new PvpClientMatchState();
+            client.ApplyMatchStart(new MatchStart { opponentName = "x", yourPlayerIndex = 0 });
+            client.Apply(new MatchEventDto
+            {
+                type = "CardDeployed", player = 0, slot = 0, cardId = "priest",
+                cardName = "Priest", heroClass = (int)HeroClass.Priest, strength = 5, lives = 2
+            });
+            PvpClientCard card = client.Boards[0].Single();
+            card.Inhibited = true;
+            card.Marked = true;
+            card.DiePenaltySteps = 2;
+            card.PermanentBonus = -3;
+
+            client.Apply(new MatchEventDto
+            {
+                type = "AbilityUsed", player = 0, slot = 0, ability = (int)HeroClass.Priest,
+                targetPlayer = 0, targetSlot = 0, magnitude = 2
+            });
+
+            Assert.That(card.Inhibited, Is.False);
+            Assert.That(card.Marked, Is.False);
+            Assert.That(card.DiePenaltySteps, Is.Zero);
+            Assert.That(card.PermanentBonus, Is.Zero);
+            Assert.That(card.PendingBonus, Is.EqualTo(2));
+        }
+
+        [Test]
         public void AbilityReplay_WarriorButtonStaysUnavailableAfterArmedAttack()
         {
             var client = new PvpClientMatchState();
@@ -239,7 +268,8 @@ namespace AccardND.GameCore.Tests
                 defenderEliminated: false,
                 becameSpirit: false,
                 overkill: false,
-                isCounter: false);
+                isCounter: false,
+                attackerHeroClass: HeroClass.Hunter);
 
             MatchEventDto dto = PvpEventMapper.ToDto(gameEvent);
 
@@ -248,6 +278,19 @@ namespace AccardND.GameCore.Tests
             Assert.That(dto.defenderRollFirst, Is.EqualTo(1));
             Assert.That(dto.attackerTotal, Is.EqualTo(9));
             Assert.That(dto.defenderTotal, Is.EqualTo(9));
+            Assert.That(dto.heroClass, Is.EqualTo((int)HeroClass.Hunter),
+                "la regia deve riconoscere la Volley AoE anche senza ricostruire l'attaccante dallo snapshot");
+        }
+
+        [Test]
+        public void AttachmentAppliedMapping_TargetsTheSourcePlayersBoard()
+        {
+            MatchEventDto dto = PvpEventMapper.ToDto(
+                new AttachmentAppliedEvent(player: 1, sourceSlot: 0, targetSlot: 2, bonus: 3));
+
+            Assert.That(dto.player, Is.EqualTo(1));
+            Assert.That(dto.targetPlayer, Is.EqualTo(1));
+            Assert.That(dto.targetSlot, Is.EqualTo(2));
         }
 
         [Test]

@@ -18,10 +18,20 @@ namespace AccardND.Network
         private PvpServerClient client;
         private PvpServerMessageDispatcher dispatcher;
         private ServerSinglePlayerProgressRepository repository;
+
+        /// <summary>
+        /// Tenuto da parte per poter rigiocare l'outbox al ritorno della rete: il
+        /// repository non lo espone, e le mutazioni rimaste su disco sono sue.
+        /// </summary>
+        private ServerSinglePlayerProgressClient progressClient;
         private Task<ServerSinglePlayerProgressRepository> ensureTask;
         private bool authenticated;
 
         public bool IsReady => authenticated && repository != null && client is { IsConnected: true };
+
+        /// <summary>C'e' un tentativo di aggancio ancora in volo.</summary>
+        public bool IsConnecting => ensureTask is { IsCompleted: false };
+
         public event Action Reconnected;
 
         /// <summary>
@@ -32,7 +42,20 @@ namespace AccardND.Network
         {
             if (IsReady)
                 return Task.FromResult(repository);
-            return ensureTask ??= ConnectAndAuthenticateAsync();
+            // Si condivide soltanto un tentativo ancora in volo. Un tentativo concluso non
+            // va mai riusato ne' tenuto: quello fallito e' nato con una sessione che nel
+            // frattempo puo' essere tornata, e riproporlo voleva dire rispondere "server
+            // assente" per sempre - fino a un giro dall'arena, l'unica schermata che
+            // rilascia il link. Era esattamente il motivo per cui la taverna si apriva
+            // vuota e si sbloccava solo passando dal PvP.
+            if (ensureTask is { IsCompleted: false })
+                return ensureTask;
+
+            Task<ServerSinglePlayerProgressRepository> attempt = ConnectAndAuthenticateAsync();
+            // Un tentativo che si conclude subito (nessuna sessione da adottare) non lascia
+            // niente dietro di se': il prossimo che chiede riparte pulito.
+            ensureTask = attempt.IsCompleted ? null : attempt;
+            return attempt;
         }
 
         /// <summary>Quanto si aspetta che una riconnessione in corso vada a buon fine prima di ripiegare sul locale.</summary>
@@ -45,43 +68,39 @@ namespace AccardND.Network
                 // Un blip di rete non deve buttare la campagna in modalita' locale: se
                 // la sessione si sta riaprendo da sola, conviene darle il tempo di
                 // farlo invece di dichiarare il server assente.
-                float deadline = Time.realtimeSinceStartup + ReconnectWaitSeconds;
-                while (!AccountServerSession.IsReady
-                       && AccountServerSession.IsReconnecting
-                       && Time.realtimeSinceStartup < deadline)
-                {
-                    await PvpAsync.NextFrameAsync();
-                }
+                await AccountServerSession.WaitUntilReadyAsync(ReconnectWaitSeconds);
 
-                if (AccountServerSession.TryGet(
+                if (!AccountServerSession.TryGet(
                         out PvpServerClient sharedClient,
                         out PvpServerMessageDispatcher sharedDispatcher,
                         out _))
                 {
-                    client = sharedClient;
-                    dispatcher = sharedDispatcher;
-                    authenticated = true;
-                    var progressClient = new ServerSinglePlayerProgressClient(dispatcher);
-                    await progressClient.PendingMutationsReplayed;
-                    repository = new ServerSinglePlayerProgressRepository(
-                        progressClient);
-                    await repository.RefreshAsync();
-                    return repository;
+                    // Nessuna sessione: non si crea piu' un account ospite legato al
+                    // dispositivo. Gli account nascono solo dal login Google, quindi
+                    // senza sessione la progressione resta locale.
+                    return null;
                 }
 
-                // Nessuna sessione: non si crea piu' un account ospite legato al
-                // dispositivo. Gli account nascono solo dal login Google, quindi
-                // senza sessione la progressione resta locale.
-                return null;
+                client = sharedClient;
+                // Il repository si ricostruisce solo se manca o se sotto e' cambiata la
+                // sessione. Rifarlo a ogni caduta di rete vorrebbe dire ripagare a ogni
+                // schermata il replay dell'outbox e una RefreshAsync in piu', quando il
+                // socket e' semplicemente tornato quello di prima.
+                if (repository == null || !ReferenceEquals(dispatcher, sharedDispatcher))
+                {
+                    dispatcher = sharedDispatcher;
+                    progressClient = new ServerSinglePlayerProgressClient(dispatcher);
+                    await progressClient.PendingMutationsReplayed;
+                    repository = new ServerSinglePlayerProgressRepository(progressClient);
+                    await repository.RefreshAsync();
+                }
+                authenticated = true;
+                return repository;
             }
             catch (Exception exception)
             {
                 Debug.LogWarning($"[SP] Connessione progressione non riuscita: {exception.Message}");
                 return null;
-            }
-            finally
-            {
-                ensureTask = null;
             }
         }
 
@@ -100,11 +119,16 @@ namespace AccardND.Network
                 // continua a mostrare per tutta la sessione i valori locali predefiniti.
                 if (repository == null)
                 {
+                    // EnsureRepositoryAsync costruisce il client, che rigioca l'outbox da se'.
                     if (await EnsureRepositoryAsync() == null)
                         return;
                 }
                 else
                 {
+                    // Prima le mutazioni rimaste su disco, poi la fotografia: al contrario
+                    // il banner mostrerebbe uno stato vecchio di una reward appena versata.
+                    if (progressClient != null)
+                        await progressClient.ReplayPendingMutationsAsync();
                     await repository.RefreshAsync();
                 }
 
@@ -130,6 +154,7 @@ namespace AccardND.Network
             // resta disponibile per il PvP o per la richiesta successiva.
             authenticated = false;
             repository = null;
+            progressClient = null;
             ensureTask = null;
             client = null;
             dispatcher = null;

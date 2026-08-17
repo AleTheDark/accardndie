@@ -265,7 +265,7 @@ namespace AccardND.GameCore.Tests
         [Test]
         public void PriestBlessing_AddsBonusToNextAttackOnly()
         {
-            // P0: Priest, Priest, Warrior -> famiglie Magic+Might: nessuna aura.
+            // P0: Priest, Priest, Warrior -> fazioni Magic+Might: nessuna aura.
             var loadout0 = UniformLoadout("p0", HeroClass.Priest, 5);
             loadout0[2] = Card(HeroClass.Warrior, 5, "p0-war");
             var engine = BattleReadyEngine(loadout0, UniformLoadout("p1", HeroClass.Warrior, 5), out _);
@@ -285,6 +285,54 @@ namespace AccardND.GameCore.Tests
             var attack = engine.Attack(0, 0).OfType<AttackResolvedEvent>().First(e => !e.IsCounter);
             Assert.That(attack.AttackerTotal, Is.EqualTo(5 + 3 + 2), "forza + dado + benedizione");
             Assert.That(attack.DefenderTotal, Is.EqualTo(5 + 3));
+        }
+
+        [Test]
+        public void PriestBlessing_CleansesEveryMalusFromBlessedAlly()
+        {
+            var loadout0 = UniformLoadout("p0", HeroClass.Priest, 5);
+            loadout0[2] = Card(HeroClass.Warrior, 5, "p0-war");
+            var engine = BattleReadyEngine(loadout0, UniformLoadout("p1", HeroClass.Hunter, 5), out _);
+            PvpCardState ally = engine.BoardOf(0)[2];
+            PvpCardState enemyHunter = engine.BoardOf(1)[0];
+            ally.InhibitedTurns = 1;
+            ally.WasInhibited = true;
+            ally.PendingVigorStepPenalty = 2;
+            ally.PermanentCombatBonus = -3;
+            enemyHunter.MarkedTarget = ally;
+
+            engine.UseAbility(0, 0, 2);
+
+            Assert.That(ally.InhibitedTurns, Is.Zero);
+            Assert.That(ally.WasInhibited, Is.False);
+            Assert.That(ally.PendingVigorStepPenalty, Is.Zero);
+            Assert.That(ally.PermanentCombatBonus, Is.Zero);
+            Assert.That(enemyHunter.MarkedTarget, Is.Null);
+            Assert.That(ally.PendingAttackBonus, Is.EqualTo(2));
+            Assert.That(ally.PendingBonusKind, Is.EqualTo(PvpPendingBonusKind.Blessing));
+        }
+
+        [Test]
+        public void MarkedChampion_AttackingDoesNotApplyOrConsumeTheMark()
+        {
+            var engine = BattleReadyEngine(
+                UniformLoadout("p0", HeroClass.Warrior, 5),
+                UniformLoadout("p1", HeroClass.Hunter, 5),
+                out _);
+            PvpCardState markedAttacker = engine.ActiveCard;
+            PvpCardState enemyHunter = engine.BoardOf(1)[0];
+            enemyHunter.MarkedTarget = markedAttacker;
+
+            var attack = engine.Attack(markedAttacker.Owner, enemyHunter.Slot)
+                .OfType<AttackResolvedEvent>()
+                .First(e => !e.IsCounter);
+
+            Assert.That(attack.AttackerTotal, Is.EqualTo(5 + 3),
+                "il Marchio sull'attaccante non deve modificare il suo totale");
+            Assert.That(attack.DefenderTotal, Is.EqualTo(5 + 3),
+                "il difensore non deve ricevere il bonus del Marchio posto sull'attaccante");
+            Assert.That(enemyHunter.MarkedTarget, Is.SameAs(markedAttacker),
+                "il Marchio si consuma solo quando la pedina marchiata difende");
         }
 
         [Test]
@@ -346,7 +394,7 @@ namespace AccardND.GameCore.Tests
         [Test]
         public void CunningAura_AttacksWithAdvantageAgainstEnemiesWithBonusOrMalus()
         {
-            // P0: Rogue, Assassin, Hunter -> aura famiglia Astuzia.
+            // P0: Rogue, Assassin, Hunter -> aura fazione Astuzia.
             var loadout0 = UniformLoadout("p0", HeroClass.Rogue, 5);
             loadout0[1] = Card(HeroClass.Assassin, 5, "p0-assassin");
             loadout0[2] = Card(HeroClass.Hunter, 5, "p0-hunter");
@@ -371,12 +419,15 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
-        public void RogueAura_RerollsFirstDefenderTwoOncePerExchange()
+        public void RogueAura_RerollsTheDefenderDieUpToTheRoundThreshold()
         {
+            // Round 1: dado D4, quindi il Ladro ritira solo l'1.
+            // Guerriero contro Ladro e' vantaggio: l'attaccante tira due dadi (3 e 2,
+            // tiene 3 -> totale 8), il difensore tira 1 (totale 6) e lo ritira in 4.
             var random = QueueFor(
                 IdentityShuffles(),
                 DeploymentAndInitiatives(new[] { 20, 19, 18 }, new[] { 6, 5, 4 }),
-                new[] { 3, 2, 6 },
+                new[] { 3, 2, 1, 4 },
                 Enumerable.Repeat(3, 100));
             var engine = new PvpMatchEngine(
                 UniformLoadout("p0", HeroClass.Warrior, 5),
@@ -389,10 +440,110 @@ namespace AccardND.GameCore.Tests
             Assert.That(events.OfType<BattleStartedEvent>().Single().AuraPlayer1, Is.EqualTo(PvpAuraType.Rogue));
 
             var attack = engine.Attack(0, 0).OfType<AttackResolvedEvent>().Single();
-            Assert.That(attack.DefenderRoll.FirstRoll, Is.EqualTo(6));
-            Assert.That(attack.DefenderRoll.FirstRollBeforeReroll, Is.EqualTo(2));
+            Assert.That(attack.DefenderRoll.FirstRollBeforeReroll, Is.EqualTo(1));
+            Assert.That(attack.DefenderRoll.FirstRoll, Is.EqualTo(4));
             Assert.That(attack.DefenderRoll.HasSecondRoll, Is.False);
-            Assert.That(attack.DefenderLostLife, Is.False);
+            Assert.That(attack.DefenderLostLife, Is.False, "il reroll porta la difesa a 9 contro 8");
+        }
+
+        [Test]
+        public void RogueAura_DoesNotRerollADefenderDieAboveTheRoundThreshold()
+        {
+            // Stessa scena, ma il difensore tira 2: al round 1 la soglia e' 1, quindi
+            // il 2 resta e la carta incassa il colpo.
+            var random = QueueFor(
+                IdentityShuffles(),
+                DeploymentAndInitiatives(new[] { 20, 19, 18 }, new[] { 6, 5, 4 }),
+                new[] { 3, 2, 2 },
+                Enumerable.Repeat(3, 100));
+            var engine = new PvpMatchEngine(
+                UniformLoadout("p0", HeroClass.Warrior, 5),
+                UniformLoadout("p1", HeroClass.Rogue, 5),
+                PvpMatchRules.CreateDefault(),
+                random);
+            var events = new List<PvpEvent>(engine.Start());
+            events.AddRange(DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 }));
+
+            Assert.That(events.OfType<BattleStartedEvent>().Single().AuraPlayer1, Is.EqualTo(PvpAuraType.Rogue));
+
+            var attack = engine.Attack(0, 0).OfType<AttackResolvedEvent>().Single();
+            Assert.That(attack.DefenderRoll.FirstRollBeforeReroll, Is.Zero);
+            Assert.That(attack.DefenderRoll.FirstRoll, Is.EqualTo(2));
+            Assert.That(attack.DefenderLostLife, Is.True);
+        }
+
+        [Test]
+        public void RogueReroll_ThresholdFollowsTheVigorDieOfTheRound()
+        {
+            // In PvP non ci sono livelli: la soglia di rilancio del Ladro segue il dado
+            // Vigore del round (D4 -> 1, D6 -> 2, D8 -> 3), cioe' il round fa da livello.
+            // Duello 1 contro 1 con una vita sola: ogni round si chiude al primo colpo
+            // andato a segno e la coda dei dadi resta leggibile.
+            var rules = new PvpMatchRules(
+                handSize: 6,
+                formationSize: 1,
+                decisiveHandSize: 1,
+                roundsToWin: 2,
+                cardLives: 1,
+                vigorDieByRound: new[] { 4, 6, 8 },
+                initiativeDieSides: 20,
+                rogueRerollsOnes: true,
+                barbarianRageBonus: 2,
+                hunterMarkBonus: 2,
+                priestBlessingBonus: 2);
+            var random = QueueFor(
+                IdentityShuffles(),
+                new[] { 20, 1, 10, 1 }, // iniziative round 1: muove prima P0
+                new[] { 2, 3 },         // R1 P0: il 2 e' sopra la soglia 1, nessun reroll
+                new[] { 2, 4 },         // R1 P1: parata
+                new[] { 1, 3, 4 },      // R1 P0: l'1 diventa 4 e uccide
+                new[] { 5, 1, 15, 1 },  // iniziative round 2: muove prima P1
+                new[] { 3, 4 },         // R2 P1: il 3 e' sopra la soglia 2, nessun reroll
+                new[] { 1, 5, 1 },      // R2 P0: ritira ma non basta
+                new[] { 2, 3, 6 },      // R2 P1: il 2 diventa 6 e uccide
+                new[] { 15, 1, 5, 1 },  // iniziative round 3: muove prima P0
+                new[] { 4, 5 },         // R3 P0: il 4 e' sopra la soglia 3, nessun reroll
+                new[] { 4, 5 },         // R3 P1: parata
+                new[] { 3, 5, 8 });     // R3 P0: il 3 diventa 8 e uccide
+            var engine = new PvpMatchEngine(
+                UniformLoadout("p0", HeroClass.Rogue, 5),
+                UniformLoadout("p1", HeroClass.Rogue, 5),
+                rules,
+                random);
+            engine.Start();
+
+            // Round 1, D4: si ritira solo l'1.
+            DeployAll(engine, new[] { 0 }, new[] { 0 });
+            Assert.That(engine.MatchRound, Is.EqualTo(1));
+            AssertReroll(NextAttack(engine), before: 0, after: 2, "round 1: il 2 non si ritira");
+            NextAttack(engine);
+            AssertReroll(NextAttack(engine), before: 1, after: 4, "round 1: l'1 si ritira");
+
+            // Round 2, D6: la soglia sale a 2.
+            Assert.That(engine.MatchRound, Is.EqualTo(2));
+            DeployAll(engine, new[] { 0 }, new[] { 0 });
+            AssertReroll(NextAttack(engine), before: 0, after: 3, "round 2: il 3 non si ritira");
+            NextAttack(engine);
+            AssertReroll(NextAttack(engine), before: 2, after: 6, "round 2: il 2 si ritira");
+
+            // Round 3, D8: la soglia sale a 3.
+            Assert.That(engine.MatchRound, Is.EqualTo(3));
+            DeployAll(engine, new[] { 0 }, new[] { 0 });
+            AssertReroll(NextAttack(engine), before: 0, after: 4, "round 3: il 4 non si ritira");
+            NextAttack(engine);
+            AssertReroll(NextAttack(engine), before: 3, after: 8, "round 3: il 3 si ritira");
+
+            Assert.That(engine.Phase, Is.EqualTo(PvpMatchPhase.Finished));
+            Assert.That(engine.MatchWinner, Is.EqualTo(0));
+        }
+
+        private static AttackResolvedEvent NextAttack(PvpMatchEngine engine) =>
+            engine.Attack(engine.ActivePlayer, 0).OfType<AttackResolvedEvent>().Single();
+
+        private static void AssertReroll(AttackResolvedEvent attack, int before, int after, string message)
+        {
+            Assert.That(attack.AttackerRoll.FirstRollBeforeReroll, Is.EqualTo(before), message);
+            Assert.That(attack.AttackerRoll.FirstRoll, Is.EqualTo(after), message);
         }
 
         [Test]
@@ -409,11 +560,11 @@ namespace AccardND.GameCore.Tests
             engine.Attack(0, 1);
             engine.Pass(0);
 
-            // Il Warrior P0 (slot 2) attacca il bersaglio indebolito: D4 -> D3 in difesa.
+            // Il Warrior P0 (slot 2) attacca il bersaglio indebolito: D4 -> D2 in difesa.
             // Mage(P0) vs Warrior: Magic batte Might = vantaggio, quindi passiamo al turno del Warrior...
             // slot 2 è Warrior: matchup neutro.
             var attack = engine.Attack(0, 0).OfType<AttackResolvedEvent>().First(e => !e.IsCounter);
-            Assert.That(attack.DefenderDieSides, Is.EqualTo(3));
+            Assert.That(attack.DefenderDieSides, Is.EqualTo(2));
             Assert.That(attack.AttackerDieSides, Is.EqualTo(4));
             // La penalità si consuma con lo scambio.
             Assert.That(engine.BoardOf(1)[0].PendingVigorStepPenalty, Is.EqualTo(0));
@@ -438,15 +589,15 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
-        public void MageAbility_StackedPenaltyLowersD6ToD3AndStopsAtMinimum()
+        public void MageAbility_StackedPenaltyLowersD6ToD2AndStopsAtMinimum()
         {
             Assert.That(PvpVigorScale.StepsToMinimum(6), Is.EqualTo(2));
-            Assert.That(PvpVigorScale.LowerBySteps(6, 2), Is.EqualTo(3));
-            Assert.That(PvpVigorScale.LowerBySteps(6, 3), Is.EqualTo(3));
+            Assert.That(PvpVigorScale.LowerBySteps(6, 2), Is.EqualTo(2));
+            Assert.That(PvpVigorScale.LowerBySteps(6, 3), Is.EqualTo(2));
         }
 
         [Test]
-        public void BarbarianFury_TriggersOnFailedKillAndBoostsDefense()
+        public void BarbarianFury_StacksOnDefeatAndBoostsDefense()
         {
             var loadout0 = UniformLoadout("p0", HeroClass.Barbarian, 5);
             loadout0[2] = Card(HeroClass.Priest, 5, "p0-priest"); // niente aura (Might+Magic)
@@ -459,16 +610,49 @@ namespace AccardND.GameCore.Tests
                 loadout0, UniformLoadout("p1", HeroClass.Warrior, 5), PvpMatchRules.CreateDefault(), random);
             engine.Start();
             DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 });
+            engine.BoardOf(0)[0].PendingAttackBonus = 2;
+            engine.BoardOf(0)[0].PendingBonusKind = PvpPendingBonusKind.Fury;
 
             var events = engine.Attack(0, 0);
             var fury = events.OfType<FuryGainedEvent>().Single();
             Assert.That(fury.Amount, Is.EqualTo(2));
-            Assert.That(engine.BoardOf(0)[0].PendingAttackBonus, Is.EqualTo(2));
-            Assert.That(engine.BoardOf(0)[0].PendingDefenseBonus, Is.EqualTo(2), "la Furia vale anche in difesa");
+            Assert.That(engine.BoardOf(0)[0].PendingAttackBonus, Is.EqualTo(4));
+            Assert.That(engine.BoardOf(0)[0].PendingDefenseBonus, Is.EqualTo(4), "la Furia cumulata vale anche in difesa");
+        }
+
+        /// <summary>
+        /// La regia del client riproduce gli eventi nell'ordine in cui il motore li
+        /// accoda: se la Furia precede l'AttackResolved, il Barbaro anima la passiva
+        /// prima ancora dell'attacco che la fa scattare (in campagna arriva dopo).
+        /// </summary>
+        [Test]
+        public void BarbarianFury_IsAnnouncedAfterTheAttackThatTriggersIt()
+        {
+            // Tutto Barbarian di qua cosi' chiunque sia l'attivo si infuria, difensori
+            // piu' forti di la': con tutti i dadi a 3 fa 5+3 contro 7+3 e l'attacco fallisce.
+            var random = QueueFor(
+                IdentityShuffles(),
+                DeploymentAndInitiatives(new[] { 20, 19, 18 }, new[] { 6, 5, 4 }),
+                Enumerable.Repeat(3, 100));
+            var engine = new PvpMatchEngine(
+                UniformLoadout("p0", HeroClass.Barbarian, 5),
+                UniformLoadout("p1", HeroClass.Priest, 7),
+                PvpMatchRules.CreateDefault(),
+                random);
+            engine.Start();
+            DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 });
+
+            List<PvpEvent> events = engine.Attack(0, 0).ToList();
+            int attackIndex = events.FindIndex(e => e is AttackResolvedEvent);
+            int furyIndex = events.FindIndex(e => e is FuryGainedEvent);
+            Assert.That(attackIndex, Is.GreaterThanOrEqualTo(0), "manca l'evento del confronto");
+            Assert.That(furyIndex, Is.GreaterThanOrEqualTo(0), "manca l'evento della Furia");
+            Assert.That(furyIndex, Is.GreaterThan(attackIndex),
+                "la Furia deve seguire l'attacco fallito, non precederlo");
         }
 
         [Test]
-        public void BarbarianFury_TriggersOnSuccessfulDefense()
+        public void BarbarianFury_IsDischargedOnSuccessfulDefense()
         {
             var loadout1 = UniformLoadout("p1", HeroClass.Barbarian, 5);
             loadout1[2] = Card(HeroClass.Priest, 5, "p1-priest"); // niente aura Barbarian
@@ -481,14 +665,14 @@ namespace AccardND.GameCore.Tests
                 UniformLoadout("p0", HeroClass.Warrior, 5), loadout1, PvpMatchRules.CreateDefault(), random);
             engine.Start();
             DeployAll(engine, new[] { 0, 0, 0 }, new[] { 0, 0, 0 });
+            engine.BoardOf(1)[0].PendingAttackBonus = 2;
+            engine.BoardOf(1)[0].PendingBonusKind = PvpPendingBonusKind.Fury;
 
             var events = engine.Attack(0, 0);
-            var fury = events.OfType<FuryGainedEvent>().Single();
-            Assert.That(fury.Player, Is.EqualTo(1));
-            Assert.That(fury.Slot, Is.EqualTo(0));
-            Assert.That(fury.Amount, Is.EqualTo(2));
-            Assert.That(engine.BoardOf(1)[0].PendingAttackBonus, Is.EqualTo(2));
-            Assert.That(engine.BoardOf(1)[0].PendingDefenseBonus, Is.EqualTo(2));
+            Assert.That(events.OfType<FuryGainedEvent>(), Is.Empty);
+            Assert.That(engine.BoardOf(1)[0].PendingAttackBonus, Is.Zero);
+            Assert.That(engine.BoardOf(1)[0].PendingDefenseBonus, Is.Zero);
+            Assert.That(engine.BoardOf(1)[0].PendingBonusKind, Is.EqualTo(PvpPendingBonusKind.None));
         }
 
         [Test]
@@ -629,6 +813,13 @@ namespace AccardND.GameCore.Tests
             // P0 slot 2 passa; il turno arriva allo Spirito (iniziativa 6) che agisce e poi svanisce.
             engine.Pass(0);
             Assert.That(engine.ActiveCard.IsSpirit, Is.True);
+
+            var supremeError = Assert.Throws<PvpActionException>(() => engine.UseSupreme(1, 0, 0));
+            Assert.That(supremeError.ErrorCode, Is.EqualTo(PvpActionErrorCodes.SpiritActionForbidden));
+
+            var attachmentError = Assert.Throws<PvpActionException>(() => engine.Attach(1, 1));
+            Assert.That(attachmentError.ErrorCode, Is.EqualTo(PvpActionErrorCodes.SpiritActionForbidden));
+
             var expiry = engine.Pass(1);
             Assert.That(expiry.OfType<SpiritExpiredEvent>().Single().Slot, Is.EqualTo(0));
             Assert.That(engine.BoardOf(1)[0].Eliminated, Is.True);

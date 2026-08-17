@@ -112,7 +112,6 @@ public sealed partial class BattleBoardController
 	private void EnterMerchantDebugRoom()
 	{
 		currentRoomType = RoomType.Merchant;
-		currentMonsterTier = 0;
 		pendingScenarioId = "god_merchant";
 		pendingRoomDifficulty = RoomDifficulty.Hard;
 		if (!LoadCampaignRoomScenario())

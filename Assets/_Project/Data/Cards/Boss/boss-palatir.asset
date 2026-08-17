@@ -19,4 +19,4 @@ MonoBehaviour:
   strength: 7
   hasHeroClass: 0
   heroClass: 0
-  rulesText: "Scudi Di Famiglia: Palatir ha tre scudi orbitanti Might, Cunning e Magic. Finche almeno uno scudo e attivo non perde HP. Ogni scudo si rompe solo con un attacco riuscito di una famiglia che ha vantaggio su quello scudo. Distrutti tutti gli scudi, Palatir puo perdere HP."
+  rulesText: "Scudi Di Fazione: Palatir ha tre scudi orbitanti Might, Cunning e Magic. Finche almeno uno scudo e attivo non perde HP. Ogni scudo si rompe solo con un attacco riuscito di una fazione che ha vantaggio su quello scudo. Distrutti tutti gli scudi, Palatir puo perdere HP."

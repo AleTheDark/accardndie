@@ -51,6 +51,10 @@ namespace AccardND.GameCore.Pvp
         /// </summary>
         public bool IsUntargetable { get; internal set; }
 
+        /// <summary>Sgherri della suprema del Necromante. Sono guardie virtuali:
+        /// non occupano slot e non entrano mai nella timeline.</summary>
+        public int NecromancerMinions { get; internal set; }
+
         public bool IsActive => !Eliminated;
 
         /// <summary>La Furia del Barbarian vale anche in difesa; la Benedizione no.</summary>

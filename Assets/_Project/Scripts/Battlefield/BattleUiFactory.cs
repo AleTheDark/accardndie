@@ -158,6 +158,7 @@ namespace AccardND.Battlefield
         [SerializeField] private bool captureLateText = true;
         [SerializeField] private bool localizeDefaultText;
         [SerializeField] private string localizationKey;
+        [SerializeField] private bool uppercaseLocalizedText;
 
         private Text text;
         private bool applied;
@@ -190,7 +191,9 @@ namespace AccardND.Battlefield
                 binding.localizeDefaultText = true;
             }
 
-            binding.localizationKey = GameTextKeys.RuntimeUi(binding.key);
+            binding.localizationKey = !string.IsNullOrWhiteSpace(binding.defaultText)
+                ? GameText.AutoKey(binding.defaultText)
+                : GameTextKeys.RuntimeUi(binding.key);
 
             binding.ApplyOverrides();
             binding.RefreshLocalizedText();
@@ -213,6 +216,28 @@ namespace AccardND.Battlefield
             binding.localizationKey = semanticLocalizationKey?.Trim() ?? string.Empty;
             binding.defaultText = fallbackDefaultText ?? string.Empty;
             binding.localizeDefaultText = !string.IsNullOrWhiteSpace(binding.localizationKey);
+            binding.uppercaseLocalizedText = false;
+            binding.RefreshLocalizedText();
+            return binding;
+        }
+
+        /// <summary>
+        /// Variante per etichette che fanno dell'uppercase parte dello stile. La
+        /// trasformazione viene riapplicata a ogni cambio locale, non solo alla creazione.
+        /// </summary>
+        public static EditableRuntimeText BindLocalizedUppercase(
+            Text target,
+            string semanticLocalizationKey,
+            string fallbackDefaultText)
+        {
+            EditableRuntimeText binding = BindLocalized(
+                target,
+                semanticLocalizationKey,
+                fallbackDefaultText);
+            if (binding == null)
+                return null;
+
+            binding.uppercaseLocalizedText = true;
             binding.RefreshLocalizedText();
             return binding;
         }
@@ -223,7 +248,9 @@ namespace AccardND.Battlefield
             if (string.IsNullOrWhiteSpace(key))
                 key = BuildKey(transform);
             if (string.IsNullOrWhiteSpace(localizationKey))
-                localizationKey = GameTextKeys.RuntimeUi(key);
+                localizationKey = !string.IsNullOrWhiteSpace(defaultText)
+                    ? GameText.AutoKey(defaultText)
+                    : GameTextKeys.RuntimeUi(key);
 
             ApplyOverrides();
             GameText.LocaleChanged -= RefreshLocalizedText;
@@ -242,6 +269,8 @@ namespace AccardND.Battlefield
                 return;
 
             defaultText = text.text;
+            localizationKey = GameText.AutoKey(defaultText);
+            RefreshLocalizedText();
         }
 
         public void ApplyOverrides()
@@ -278,7 +307,12 @@ namespace AccardND.Battlefield
 
             text ??= GetComponent<Text>();
             if (text != null)
-                text.text = GameText.GetOrFallbackSilent(localizationKey, defaultText);
+            {
+                string localized = GameText.GetOrFallbackSilent(localizationKey, defaultText);
+                text.text = uppercaseLocalizedText
+                    ? localized.ToUpperInvariant()
+                    : localized;
+            }
         }
 
         private static EditableTextOverrideDatabase LoadDatabase()

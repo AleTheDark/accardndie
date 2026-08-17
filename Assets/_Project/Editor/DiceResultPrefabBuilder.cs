@@ -32,7 +32,6 @@ namespace AccardND.Editor
             };
         }
 
-        [MenuItem("Accard N' Die/Dice/Generate Missing Result Prefabs")]
         public static void GenerateMissingResultPrefabs()
         {
             EnsureOutputFolder();
@@ -66,7 +65,6 @@ namespace AccardND.Editor
             Debug.Log($"[Accard N' Die] Creati {created} prefab risultato in {OutputFolder}.");
         }
 
-        [MenuItem("Accard N' Die/Dice/Orient Result Prefabs Except D4-D6")]
         public static void OrientGeneratedResultPrefabsExceptD4D6()
         {
             EnsureOutputFolder();

@@ -349,10 +349,12 @@ namespace AccardND.PvpUi
             string file = key switch
             {
                 "nabbo" => "rank_nabbo_v1",
-                "apprendista" => "rank_apprendista_v1",
-                "esperto" => "rank_esperto_v1",
+                "apprendista" or "bronze" or "bronzo" => "rank_apprendista_v1",
+                "platino" or "platinum" => "rank_platino_v1",
+                "esperto" or "diamond" or "diamante" => "rank_esperto_v1",
+                "gold" or "oro" => "rank_gold_v1",
                 "divino" => "rank_divino_v1",
-                "onnipotente" => "rank_onnipotente_v1",
+                "onnipotente" or "master" => "rank_onnipotente_v1",
                 _ => "rank_nabbo_v1"
             };
             return Resources.Load<Sprite>($"UI/MultiplayerRestyle/Ranks/{file}");
@@ -423,6 +425,7 @@ namespace AccardND.PvpUi
         public sealed class StatRow
         {
             public RectTransform Root;
+            public Text Caption;
             public Text Value;
         }
 
@@ -455,7 +458,7 @@ namespace AccardND.PvpUi
             separatorRect.anchorMax = new Vector2(0.97f, 0f);
             separatorRect.offsetMin = Vector2.zero;
             separatorRect.offsetMax = new Vector2(0f, 1f);
-            return new StatRow { Root = row, Value = valueText };
+            return new StatRow { Root = row, Caption = caption, Value = valueText };
         }
 
         /// <summary>Linguetta di navigazione. Lo stato attivo si applica con <see cref="SetTabActive"/>.</summary>

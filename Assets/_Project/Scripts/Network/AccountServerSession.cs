@@ -61,6 +61,34 @@ namespace AccardND.Network
         public static bool IsReconnecting => dispatcher is { IsReconnecting: true };
         public static string PlayerId => identity?.playerId;
 
+        /// <summary>Notifica i sistemi locali prima del login imposto da una sessione morta.</summary>
+        public static event Action ReturningToLoginForExpiredSession;
+
+        internal static void NotifyReturningToLoginForExpiredSession() =>
+            ReturningToLoginForExpiredSession?.Invoke();
+
+        /// <summary>
+        /// Aspetta che la sessione condivisa sia in piedi. true appena lo è, false quando
+        /// non c'è più niente da aspettare: nessuna sessione da adottare, oppure una
+        /// riconnessione che si è arresa (da lì si riparte solo dal login).
+        ///
+        /// Vive qui perché la politica d'attesa deve essere una sola. Prima ogni schermata
+        /// aveva la sua e la taverna era la più impaziente di tutte: mollava al primo colpo
+        /// e restava vuota anche quando bastava un frame in più.
+        /// </summary>
+        public static async Task<bool> WaitUntilReadyAsync(float waitSeconds = 12f)
+        {
+            float deadline = Time.realtimeSinceStartup + Mathf.Max(0f, waitSeconds);
+            while (true)
+            {
+                if (IsReady)
+                    return true;
+                if (!IsReconnecting || Time.realtimeSinceStartup >= deadline)
+                    return false;
+                await PvpAsync.NextFrameAsync();
+            }
+        }
+
         public static bool TryGet(
             out PvpServerClient sharedClient,
             out PvpServerMessageDispatcher sharedDispatcher,
@@ -129,11 +157,14 @@ namespace AccardND.Network
                 return;
 
             var kick = PvpServerClient.ParsePayload<SessionKickedMessage>(envelope);
-            pendingKickMessage = string.IsNullOrWhiteSpace(kick?.message)
-                ? GameText.GetOrFallbackSilent(
-                    GameTextKeys.Account.SessionUsedElsewhere,
-                    "Il tuo account è stato usato su un altro dispositivo.")
-                : kick.message;
+            pendingKickMessage = GameText.GetRemote(
+                kick?.localizationKey,
+                string.IsNullOrWhiteSpace(kick?.message)
+                    ? GameText.GetOrFallbackSilent(
+                        GameTextKeys.Account.SessionUsedElsewhere,
+                        "Il tuo account è stato usato su un altro dispositivo.")
+                    : kick.message,
+                kick?.localizationArguments);
             Debug.LogWarning($"[Net] Sessione chiusa dal server: {pendingKickMessage}");
 
             // Stacca subito la riconnessione automatica: senza, il client rientrerebbe
@@ -232,6 +263,15 @@ namespace AccardND.Network
             if (SessionKickPending)
                 return false;
 
+            if (auth is { maintenance: true })
+            {
+                // Il server ha chiuso il portone mentre giocavamo: rifare il login
+                // Google darebbe lo stesso rifiuto. Si molla subito e il giocatore
+                // torna al login, dove legge l'avviso di manutenzione.
+                Debug.LogWarning($"[Net] Sessione chiusa, server in manutenzione: {auth.error}");
+                return false;
+            }
+
             if (auth is { requiresUpdate: true })
             {
                 // Il server ha alzato la versione richiesta mentre giocavamo: rifare il
@@ -300,6 +340,10 @@ namespace AccardND.Network
         /// </summary>
         public static void Invalidate()
         {
+            // Prima si spegne la riconnessione, poi si butta via tutto: un tentativo già
+            // in volo, trovandosi senza token, ripiegherebbe sul login Google completo e
+            // sloggherebbe il dispositivo su cui il giocatore sta rientrando adesso.
+            dispatcher?.ConfigureReconnect(null, null);
             client?.Dispose();
             client = null;
             dispatcher = null;
@@ -323,6 +367,74 @@ namespace AccardND.Network
             Invalidate();
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        // --- Prove di rete (solo editor e build di sviluppo) ---
+        //
+        // Esistono perché in editor il server sta sulla stessa macchina: staccare il
+        // Wi-Fi non interrompe niente, e senza questi comandi l'unico modo di provare
+        // riconnessione e ripresa era spegnere il server e rimetterlo su a mano, che
+        // prova un'altra cosa ancora (il riavvio, non la caduta).
+
+        /// <summary>
+        /// Stronca il socket. La sessione si riapre da sola dopo un attimo: è il caso
+        /// del tunnel o dell'ascensore.
+        /// </summary>
+        public static void DebugDropConnection()
+        {
+            if (client == null)
+            {
+                Debug.LogWarning("[Net] Nessuna sessione da far cadere: fai prima il login.");
+                return;
+            }
+            Debug.Log("[Net] Caduta di rete simulata.");
+            client.SimulateConnectionLoss();
+        }
+
+        /// <summary>
+        /// Rete assente a oltranza: il socket cade e ogni tentativo di riapertura
+        /// fallisce finché non si rimette a false. Serve a vedere il badge, il backoff
+        /// che si allunga e le mutazioni che si accodano su disco.
+        /// </summary>
+        public static bool DebugNetworkOutage
+        {
+            get => PvpServerClient.SimulatedOutage;
+            set
+            {
+                PvpServerClient.SimulatedOutage = value;
+                Debug.Log(value
+                    ? "[Net] Rete assente simulata: resta giù finché non la riaccendi."
+                    : "[Net] Rete simulata di nuovo disponibile.");
+                if (value)
+                    client?.SimulateConnectionLoss();
+            }
+        }
+
+        /// <summary>
+        /// Finge un token non più valido: alla prima caduta il riaggancio viene
+        /// rifiutato e non c'è nessun accesso Google da rigiocare, quindi si arriva
+        /// dritti al badge "sessione scaduta" e da lì al login. È la strada che porta
+        /// al popup di ripresa della campagna.
+        /// </summary>
+        public static void DebugExpireSession()
+        {
+            if (client == null)
+            {
+                Debug.LogWarning("[Net] Nessuna sessione da far scadere: fai prima il login.");
+                return;
+            }
+            Debug.Log("[Net] Sessione scaduta simulata.");
+            sessionToken = "token-di-prova-non-valido";
+            refreshGoogleAuthentication = null;
+            client.SimulateConnectionLoss();
+        }
+
+        /// <summary>Scrive nel log com'è messa la sessione adesso.</summary>
+        public static void DebugLogState() =>
+            Debug.Log(
+                $"[Net] pronta={IsReady} riconnessione={IsReconnecting} rete assente simulata={DebugNetworkOutage} " +
+                $"giocatore={PlayerId ?? "(nessuno)"} match da riprendere={HasPendingMatchResume}");
+#endif
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetSession()
         {
@@ -338,6 +450,11 @@ namespace AccardND.Network
             Disconnected = null;
             Reconnected = null;
             ReconnectFailed = null;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            // Un "rete assente" lasciato acceso nel play mode precedente non deve
+            // accogliere il prossimo avvio con un login che non parte.
+            PvpServerClient.SimulatedOutage = false;
+#endif
         }
     }
 
@@ -378,6 +495,12 @@ namespace AccardND.Network
         /// </summary>
         private bool sessionLost;
 
+        /// <summary>
+        /// Il badge sta offrendo il rientro, non un'attesa: è l'unica condizione in cui
+        /// toccarlo deve portare al login.
+        /// </summary>
+        private bool badgeOffersReturnToLogin;
+
         internal static void Ensure()
         {
             if (instance != null)
@@ -399,10 +522,9 @@ namespace AccardND.Network
         private void HandleSessionLost() => sessionLost = true;
 
         /// <summary>
-        /// Su Android l'app continua a girare in secondo piano (runInBackground), quindi
-        /// la riconnessione automatica lavora anche a telefono bloccato: qui si segna che
-        /// il giocatore non è davanti allo schermo, così un token scaduto non si trasforma
-        /// in un accesso nuovo che slogga l'altro dispositivo.
+        /// Segna quando il giocatore non è davanti allo schermo. Su mobile il player viene
+        /// sospeso in background; al rientro questo stato torna falso prima che l'eventuale
+        /// riconnessione possa trasformare un token scaduto in un nuovo accesso.
         /// </summary>
         private void OnApplicationPause(bool paused) => ApplicationPaused = paused;
 
@@ -466,17 +588,32 @@ namespace AccardND.Network
                 sessionLost = false;
 
             bool reconnecting = !AccountServerSession.IsReady && AccountServerSession.IsReconnecting;
-            connectionBadge.SetActive(sessionLost || reconnecting);
+            // Sessione inutilizzabile e nessuno la sta riaprendo: da qui non si torna da
+            // soli. Prima lo diceva solo la resa esplicita della riconnessione, e in tutti
+            // gli altri casi il giocatore restava in campagna con taverna e Santuario
+            // chiusi, senza un indizio e con una sola via d'uscita: passare dall'arena,
+            // l'unica schermata che rifà il login per conto suo.
+            bool sessionUnusable = !AccountServerSession.IsReady && !reconnecting;
+            // Sulla schermata di login non c'è niente da annunciare: è già il posto dove
+            // si rientra, e dopo un logout volontario il badge sarebbe solo un allarme.
+            bool onLoginScene = SceneManager.GetActiveScene().name == LoginSceneName;
+            badgeOffersReturnToLogin = sessionLost || sessionUnusable;
+
+            connectionBadge.SetActive(!onLoginScene && (badgeOffersReturnToLogin || reconnecting));
             if (!connectionBadge.activeSelf)
                 return;
 
-            connectionBadgeText.text = sessionLost
-                ? "SESSIONE SCADUTA · TOCCA PER RIENTRARE"
-                : "RETE ASSENTE · RICONNESSIONE…";
-            connectionBadgeText.fontSize = sessionLost ? 18 : 20;
-            connectionBadgeBackground.color = sessionLost ? SessionLostColor : ReconnectingColor;
+            connectionBadgeText.text = badgeOffersReturnToLogin
+                ? GameText.GetOrFallbackSilent(
+                    GameTextKeys.Account.BadgeSessionExpired,
+                    "SESSIONE SCADUTA · TOCCA PER RIENTRARE")
+                : GameText.GetOrFallbackSilent(
+                    GameTextKeys.Account.BadgeReconnecting,
+                    "RETE ASSENTE · RICONNESSIONE…");
+            connectionBadgeText.fontSize = badgeOffersReturnToLogin ? 18 : 20;
+            connectionBadgeBackground.color = badgeOffersReturnToLogin ? SessionLostColor : ReconnectingColor;
             // Durante la riconnessione non c'è niente da toccare: sta già succedendo.
-            connectionBadgeButton.interactable = sessionLost;
+            connectionBadgeButton.interactable = badgeOffersReturnToLogin;
         }
 
         /// <summary>
@@ -560,32 +697,22 @@ namespace AccardND.Network
             label.fontSize = 24;
             label.alignment = TextAnchor.MiddleCenter;
             label.color = Color.white;
-            label.text = QuitClosesApplication
-                ? GameText.GetOrFallbackSilent(GameTextKeys.Account.CloseGame, "CHIUDI IL GIOCO")
-                : GameText.GetOrFallbackSilent(GameTextKeys.Account.ReturnToLogin, "TORNA AL LOGIN");
+            // Dopo un kick il giocatore deve poter rientrare subito: il nuovo login
+            // sostituisce sul server l'altra eventuale sessione dello stesso account.
+            label.text = GameText.GetOrFallbackSilent(
+                GameTextKeys.Account.ReturnToLogin,
+                "TORNA AL LOGIN");
         }
 
         /// <summary>
-        /// Nel browser una scheda non si chiude da sola: lì l'equivalente onesto di
-        /// "chiudi l'app" è tornare alla schermata di login.
+        /// Torna al login: un nuovo accesso sostituisce la sessione attiva sul server.
         /// </summary>
-        private static bool QuitClosesApplication =>
-            Application.platform != RuntimePlatform.WebGLPlayer;
-
         private void QuitAfterKick()
         {
-            if (!QuitClosesApplication)
-            {
-                if (kickedOverlay != null)
-                    kickedOverlay.SetActive(false);
-                SceneManager.LoadScene(LoginSceneName);
-                return;
-            }
-
-            Application.Quit();
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-#endif
+            if (kickedOverlay != null)
+                kickedOverlay.SetActive(false);
+            AccountServerSession.NotifyReturningToLoginForExpiredSession();
+            SceneManager.LoadScene(LoginSceneName);
         }
 
         private static void StretchFull(RectTransform rect)
@@ -603,11 +730,13 @@ namespace AccardND.Network
         /// </summary>
         private void ReturnToLogin()
         {
-            if (!sessionLost)
+            if (!badgeOffersReturnToLogin)
                 return;
+            badgeOffersReturnToLogin = false;
             sessionLost = false;
             connectionBadge.SetActive(false);
             AccountServerSession.Invalidate();
+            AccountServerSession.NotifyReturningToLoginForExpiredSession();
             SceneManager.LoadScene(LoginSceneName);
         }
 

@@ -193,9 +193,6 @@ public static class StatsPageEndpoints
         body.Append(PvpSection(dossier.Stats));
         body.Append(CampaignSection(dossier.Progress));
         body.Append(AchievementsSection(dossier.Achievements));
-        body.Append("<p class=\"box\">Vuoi che tutto questo sparisca? La cancellazione "
-            + "dell'account si chiede da <a href=\"/account/delete\">questa pagina</a>: "
-            + "e' immediata e definitiva.</p>");
         return body.ToString();
     }
 
@@ -247,10 +244,10 @@ public static class StatsPageEndpoints
         section.Append(Stat(profile.iconsUnlocked + "/" + profile.iconsTotal, "Icone sbloccate"));
         section.Append("</div>");
 
-        // Barra del livello: accountExperienceToNextLevel e' quanta ne manca, non
-        // quanta ne serve in tutto, quindi la somma con quella gia' fatta e' il
-        // denominatore giusto.
-        int toNext = progress.accountExperience + Math.Max(0, progress.accountExperienceToNextLevel);
+        // Barra del livello: accountExperienceToNextLevel e' quanta ne serve in tutto per
+        // salire, quindi e' gia' il denominatore. Qui ci si sommava sopra l'esperienza gia'
+        // fatta, e la barra mostrava "45 / 145" su un livello che ne chiedeva 100.
+        int toNext = Math.Max(0, progress.accountExperienceToNextLevel);
         if (toNext > 0)
         {
             section.Append("<p class=\"lead\">Livello " + progress.accountLevel + " — "
@@ -287,9 +284,8 @@ public static class StatsPageEndpoints
         }
         else
         {
-            section.Append("<div class=\"tier\">" + Encode(profile.tier)
-                + (string.IsNullOrEmpty(profile.division) ? "" : " " + Encode(profile.division))
-                + "</div>");
+            section.Append("<div class=\"tier\">"
+                + SiteLayout.RankBadge(profile.tier, profile.division) + "</div>");
             section.Append("<p>" + profile.leaguePoints + " punti lega"
                 + (profile.globalRank > 0
                     ? " — posizione " + profile.globalRank + " su " + profile.globalPlayers
@@ -481,53 +477,18 @@ public static class StatsPageEndpoints
     // ---- Infrastruttura -------------------------------------------------------
 
     /// <summary>
+    /// Stessa impalcatura delle pagine statiche (nav, main, footer) e stesso
+    /// foglio di stile: da fuori questa deve sembrare una pagina del sito come le
+    /// altre, non un pannello di servizio. noindex perche' e' dietro un accesso e
+    /// non ha niente da far indicizzare.
+    ///
     /// Testata e corpo viaggiano separati perche' finiscono in due posti diversi:
     /// il titolo (e la riga che lo accompagna) sta nella fascia illustrata a tutta
     /// larghezza, il resto nella colonna di testo.
     /// </summary>
     private static IResult Html(string heading, string body) =>
-        Results.Content(Layout(heading, body), "text/html; charset=utf-8");
-
-    /// <summary>
-    /// Stessa impalcatura delle pagine statiche (nav, main, footer) e stesso
-    /// foglio di stile: da fuori questa deve sembrare una pagina del sito come le
-    /// altre, non un pannello di servizio. noindex perche' e' dietro un accesso e
-    /// non ha niente da far indicizzare.
-    /// </summary>
-    private static string Layout(string heading, string body) =>
-        "<!doctype html><html lang=\"it\"><head><meta charset=\"utf-8\">"
-        + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-        + "<meta name=\"robots\" content=\"noindex\">"
-        + "<title>Le tue statistiche — Accard N' Die</title>"
-        + "<link rel=\"stylesheet\" href=\"/site.css\">"
-        + "<link rel=\"apple-touch-icon\" href=\"/media/apple-touch-icon.png\">"
-        + "<script src=\"/site.js\" defer></script>"
-        + "</head><body>"
-        // Stessa barra delle pagine statiche, pulsante "Menu" compreso: sul telefono
-        // le sezioni si aprono da li' invece di occupare tre righe. Il pulsante parte
-        // hidden e lo accende site.js; senza JavaScript restano i link in chiaro.
-        // Se cambia la nav del sito, va cambiata anche qui: sono due copie, e si vede.
-        + "<nav class=\"nav\"><div class=\"wrap\">"
-        + "<a class=\"brand\" href=\"/\">Accard N' Die</a>"
-        + "<button class=\"menu-toggle\" type=\"button\" aria-expanded=\"false\""
-        + " aria-controls=\"menu-links\" hidden>Menu</button>"
-        + "<div class=\"menu-links\" id=\"menu-links\">"
-        + "<a href=\"/guida.html\">Come si gioca</a>"
-        + "<a href=\"/classi.html\">Le nove classi</a>"
-        + "<a href=\"/carte.html\">Database carte</a>"
-        + "<a href=\"" + PagePath + "\" aria-current=\"page\">Statistiche</a>"
-        + "<a href=\"/privacy.html\">Privacy</a>"
-        + "</div>"
-        + "<a class=\"nav-play\" data-play data-play-label=\"Scarica\" href=\"/game/\">Gioca</a>"
-        + "</div></nav>"
-        + "<header class=\"band band-testata\"><div class=\"wrap\">" + heading + "</div></header>"
-        + "<main class=\"wrap\">" + body + "</main>"
-        + "<footer class=\"site\"><div class=\"wrap\">"
-        + "<p><a href=\"/game/\">Gioca</a> · <a href=\"/guida.html\">Come si gioca</a> · "
-        + "<a href=\"/privacy.html\">Privacy</a> · "
-        + "<a href=\"/account/delete\">Cancellazione account</a></p>"
-        + "<p>Accard N' Die</p>"
-        + "</div></footer></body></html>";
+        SiteLayout.Page(
+            "Le tue statistiche — AcCard N' Die", heading, body, PagePath, noIndex: true);
 
     private static void NoStore(HttpContext context) =>
         context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";

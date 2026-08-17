@@ -13,6 +13,7 @@ namespace AccardND.GameData
         public int instanceId;
         public int permanentItemBonus;
         public bool hasRubySeal;
+        public int merchantUpgradeCount;
     }
 
     /// <summary>Un consumabile posseduto in uno snapshot salvato.</summary>
@@ -26,13 +27,23 @@ namespace AccardND.GameData
     /// <summary>
     /// Stato serializzabile di una run di campagna (save/resume). Contiene solo dati:
     /// niente riferimenti a UnityEngine.Object, così è (de)serializzabile con JsonUtility.
-    /// Il punto di salvataggio previsto è la schermata "scelta della via", dove lo stato
-    /// del combattimento è smontato e questi dati sono coerenti.
+    /// I punti di salvataggio sono due: la schermata "scelta della via", dove il
+    /// combattimento è smontato, e il confine fra due turni di una battaglia in corso
+    /// (vedi <see cref="battle"/>).
     /// </summary>
     [Serializable]
     public sealed class CampaignRunSave
     {
-        public const int CurrentVersion = 1;
+        /// <summary>
+        /// La v2 ha aggiunto la battaglia in corso. I salvataggi v1 restano validi e si
+        /// leggono come "nessuna battaglia": chi aggiorna il gioco a metà campagna
+        /// riprende dalla scelta della via, non perde la run.
+        /// </summary>
+        public const int CurrentVersion = 2;
+
+        /// <summary>La prima versione, senza snapshot di battaglia.</summary>
+        public const int MinimumSupportedVersion = 1;
+
 		public const int DefaultPlayerMana = 3;
 
         public int version = CurrentVersion;
@@ -48,6 +59,19 @@ namespace AccardND.GameData
         public int minibossesDefeated;
         public int diceRolled;
         public int abilitiesUsed;
+
+        // Contatori introdotti con le quest di taverna su supreme, sfide veloci, mercante,
+        // oro e livelli. Restano a zero nei save creati prima: una run ripresa parte da li'
+        // invece di rifiutare il salvataggio.
+        public int supremesUsed;
+        public int quickChallengesCompleted;
+        public int merchantPurchases;
+        public int goldEarned;
+        public int levelsGained;
+
+        // Oggetti usati nella run, bisaccia e non. Nei save creati prima resta a zero: una run
+        // ripresa riparte da li' invece di rifiutare il salvataggio.
+        public int itemsUsed;
 
 		// Riserva globale del giocatore. Il valore iniziale mantiene compatibili i save v1
 		// creati prima dell'introduzione del mana in campagna.
@@ -77,11 +101,31 @@ namespace AccardND.GameData
         public string adventureChapterId;
         public bool merchantRoomsBlockedUntilMonster;
         public bool rewardRoomsBlockedUntilMonster;
-        public int nextMonsterTierBonus;
+
+        // Talenti una-tantum gia' spesi in questa run. Senza salvarli, uscire e riprendere
+        // la run li riarmerebbe, e un talento "una volta per run" diventerebbe una volta per
+        // ogni volta che si riapre il gioco.
+        public bool freeMerchantUpgradeUsed;
+
+        /// <summary>Il "Secondo fiato" ha gia' salvato una pedina in questa run.</summary>
+        public bool secondWindUsed;
+		public int nextMonsterDifficultyIncrease;
         public bool nextDoorChoiceRevealed;
+        public bool nextMonsterRewardHalved;
 
         // Consumabili posseduti (mappati dal controller in fase di wiring)
         public List<CampaignConsumableSave> consumables = new List<CampaignConsumableSave>();
+
+        /// <summary>
+        /// La battaglia in corso, se il salvataggio è stato preso durante uno scontro.
+        /// Null (o con <c>roundNumber</c> a zero) quando la run è ferma alla scelta della
+        /// via, che resta il caso normale.
+        /// </summary>
+        public CampaignBattleSave battle;
+
+        /// <summary>true se questo salvataggio riporta a metà scontro.</summary>
+        public bool HasBattle => battle != null && battle.roundNumber > 0
+            && (battle.playerPawns.Count > 0 || battle.cpuPawns.Count > 0);
     }
 
     /// <summary>
@@ -106,6 +150,12 @@ namespace AccardND.GameData
             save.minibossesDefeated = progress.MinibossesDefeated;
             save.diceRolled = progress.DiceRolled;
             save.abilitiesUsed = progress.AbilitiesUsed;
+            save.supremesUsed = progress.SupremesUsed;
+            save.quickChallengesCompleted = progress.QuickChallengesCompleted;
+            save.merchantPurchases = progress.MerchantPurchases;
+            save.goldEarned = progress.GoldEarned;
+            save.levelsGained = progress.LevelsGained;
+            save.itemsUsed = progress.ItemsUsed;
         }
 
         public static void ReadProgress(CampaignRunSave save, RunProgressState progress)
@@ -116,7 +166,9 @@ namespace AccardND.GameData
             progress.RestoreProgress(save.playerLevel, save.currentExperience,
                 save.totalExperience, save.availableExperience, save.roomsCleared,
                 save.enemiesDefeated, save.minibossesDefeated,
-                save.diceRolled, save.abilitiesUsed, save.gold);
+                save.diceRolled, save.abilitiesUsed, save.gold,
+                save.supremesUsed, save.quickChallengesCompleted, save.merchantPurchases,
+                save.goldEarned, save.levelsGained, save.itemsUsed);
         }
 
         public static void WriteDeck(CampaignRunSave save, CampaignDeckState deck)
@@ -133,7 +185,8 @@ namespace AccardND.GameData
                     zone = (int)card.Zone,
                     instanceId = card.InstanceId,
                     permanentItemBonus = card.PermanentItemBonus,
-                    hasRubySeal = card.HasRubySeal
+                    hasRubySeal = card.HasRubySeal,
+                    merchantUpgradeCount = card.MerchantUpgradeCount
                 });
             }
             save.nextInstanceId = deck.NextInstanceId;
@@ -163,7 +216,8 @@ namespace AccardND.GameData
                         (CampaignCardZone)card.zone,
                         card.instanceId,
                         card.permanentItemBonus,
-                        card.hasRubySeal));
+                        card.hasRubySeal,
+                        card.merchantUpgradeCount));
                 }
             }
             deck.RestoreFrom(entries, save.nextInstanceId);

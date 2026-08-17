@@ -52,6 +52,17 @@ namespace AccardND.Network
             return true;
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>
+        /// Finge che la rete non ci sia: finché resta acceso ogni tentativo di
+        /// connessione fallisce. Serve a guardare in faccia il backoff, il badge e la
+        /// coda delle mutazioni senza dover staccare davvero il Wi-Fi - cosa che in
+        /// editor, con il server sulla stessa macchina, non si può nemmeno fare.
+        /// Non esiste nelle build di produzione.
+        /// </summary>
+        public static bool SimulatedOutage { get; set; }
+#endif
+
         public static T ParsePayload<T>(Envelope envelope) where T : class =>
             envelope?.payload != null ? JsonUtility.FromJson<T>(envelope.payload) : null;
 
@@ -87,6 +98,10 @@ namespace AccardND.Network
 
         public async Task ConnectAsync(string url)
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (SimulatedOutage)
+                throw new InvalidOperationException("Rete assente (simulata dal menu di debug).");
+#endif
             if (IsConnected)
                 return;
 
@@ -118,6 +133,16 @@ namespace AccardND.Network
         private void PumpIncoming()
         {
         }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>
+        /// Stronca il socket come farebbe un tunnel o un cambio di rete. Abort e non
+        /// Dispose di proposito: il receive loop muore come in una caduta vera e la
+        /// notizia passa dalla strada normale (PollDisconnected), quindi si prova il
+        /// percorso di produzione e non una scorciatoia.
+        /// </summary>
+        public void SimulateConnectionLoss() => socket?.Abort();
+#endif
 
         private async Task ReceiveLoopAsync(ClientWebSocket owner, CancellationToken cancellation)
         {
@@ -184,6 +209,10 @@ namespace AccardND.Network
 
         public async Task ConnectAsync(string url)
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (SimulatedOutage)
+                throw new InvalidOperationException("Rete assente (simulata dal menu di debug).");
+#endif
             if (IsConnected)
                 return;
 
@@ -223,6 +252,19 @@ namespace AccardND.Network
             AccardNdWsSend(socketId, BuildEnvelopeJson(type, payload, requestId));
             return Task.CompletedTask;
         }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>
+        /// Chiude la WebSocket del browser lasciando acceso il flag "era aperta": è
+        /// esattamente lo stato di una caduta vera, e la caduta viene notata da
+        /// PollDisconnected come sempre.
+        /// </summary>
+        public void SimulateConnectionLoss()
+        {
+            if (socketId >= 0)
+                AccardNdWsClose(socketId);
+        }
+#endif
 
         /// <summary>Nel browser i messaggi vengono raccolti in JS: qui li tiro in coda a ogni frame.</summary>
         private void PumpIncoming()

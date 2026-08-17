@@ -18,4 +18,4 @@ MonoBehaviour:
   backgroundLandscape: {fileID: 0}
   roomType: 2
   difficulty: 0
-  bossId: zakhar
+  bossId: boss-seraphel

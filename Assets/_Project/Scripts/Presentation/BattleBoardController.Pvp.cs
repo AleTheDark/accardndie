@@ -23,6 +23,7 @@ public sealed partial class BattleBoardController
         None,
         Attack,
         Ability,
+        Supreme,
         Attachment
     }
 
@@ -36,8 +37,13 @@ public sealed partial class BattleBoardController
     private readonly Dictionary<BattleCardState, int> pvpCardLives = new();
     private readonly Dictionary<BattleCardState, string> pvpCardIds = new();
     private PvpPresentationTargetMode pvpTargetMode = PvpPresentationTargetMode.None;
+    private int pvpPendingWarriorAbilityTargetSlot = -1;
     private readonly List<string> pvpTimelineOrderKeys = new();
     private Coroutine pvpTimelineSlideRoutine;
+    private string pvpCountdownTurnKey = string.Empty;
+    private string pvpCountdownAutoSkipKey = string.Empty;
+    private float pvpCountdownDeadline;
+    private int pvpCountdownLastSecond = -1;
 
     // Regia: gli eventi del server vengono recitati in sequenza dalle stesse
     // animazioni della campagna, poi lo stato autoritativo riallinea la scena.
@@ -45,12 +51,23 @@ public sealed partial class BattleBoardController
     private readonly Dictionary<string, Queue<PvpDeploymentPose>> pvpDeploymentPoses = new();
     private Coroutine pvpRegiaRoutine;
     private bool pvpDeploymentIntroPlayed;
+    private RectTransform pvpRoundResultOverlay;
+    private bool pvpRoundResultConfirmed;
+
+    /// <summary>
+    /// Vero mentre una pedina sta entrando in campo. Lo stato autorevole arriva
+    /// prima della recita - con l'ultimo schieramento e' gia' in battaglia - e
+    /// senza questo freno il tavolo passerebbe al layout di combattimento sotto
+    /// alla pedina che sta ancora atterrando.
+    /// </summary>
+    private bool pvpDeploymentPresentationActive;
     private string pvpHandSignature = string.Empty;
     private int pvpPendingDeployHandIndex = -1;
     private string pvpPendingDeployCardName = string.Empty;
     private int pvpPendingPaladinRedirectPlayer = -1;
     private int pvpPendingPaladinRedirectSlot = -1;
     private int pvpArenaBackgroundRound = -1;
+    private PvpTurnEdgeVfx pvpTurnEdgeVfx;
 
     // Selezione del round decisivo: il giocatore sceglie N carte fra tutte quelle
     // del loadout (indici loadout). Restano selezionate finché non conferma.
@@ -60,14 +77,18 @@ public sealed partial class BattleBoardController
 
     private readonly struct PvpDeploymentPose
     {
-        public PvpDeploymentPose(Vector3 position, Quaternion rotation)
+        public PvpDeploymentPose(Vector3 position, Quaternion rotation, Vector2 size)
         {
             Position = position;
             Rotation = rotation;
+            Size = size;
         }
 
         public Vector3 Position { get; }
         public Quaternion Rotation { get; }
+
+        /// <summary>Misura della carta in mano: al morph serve da dove partire.</summary>
+        public Vector2 Size { get; }
     }
 
     public void ShowPvpMatch(
@@ -76,6 +97,10 @@ public sealed partial class BattleBoardController
         AccardND.Battlefield.IBattlePresentationActions actions)
     {
 		SetTurnCoinSuppressed(suppressed: true);
+		// ShowPvpMatch viene riusato anche per resume e rematch: parti sempre da una
+		// superficie pulita, senza fidarti che il precedente percorso di uscita sia
+		// arrivato fino in fondo.
+		ClearPvpPresentationAllocations();
         pvpPresentationActive = true;
         pvpState = state;
         pvpLoadout = myLoadout;
@@ -84,10 +109,20 @@ public sealed partial class BattleBoardController
         pvpPendingDeployHandIndex = -1;
         pvpPendingDeployCardName = string.Empty;
         pvpArenaBackgroundRound = -1;
+        ResetPvpTimelineCountdown();
         ClearPendingPaladinRedirect();
         ResetPvpDecisiveSelection();
         StopPvpRegia();
-        pvpDeploymentIntroPlayed = false;
+        DestroyPvpRoundResultOverlay();
+        // ShowPvpMatch viene chiamato anche dopo un resume, quando lo stato e' gia'
+        // stato ricostruito dal log ma gli eventi di presentazione non vengono
+        // riaccodati. In quel caso l'intro non partira' piu': lasciando il flag a
+        // false BuildPvpHand crea correttamente le carte, ma le tiene a alpha zero
+        // per sempre. Una schermata aperta gia' in Deployment e' necessariamente
+        // uno stato ripristinato; un match nuovo viene invece mostrato in Waiting e
+        // azzera il flag al successivo RoundStarted come prima.
+        pvpDeploymentIntroPlayed = state != null
+            && state.Phase == PvpClientPhase.Deployment;
         ClearPvpHand();
         pvpCardSlots.Clear();
         pvpCardLives.Clear();
@@ -105,7 +140,8 @@ public sealed partial class BattleBoardController
         if ((Object)(object)campaignModeSelectionPanel != (Object)null)
             campaignModeSelectionPanel.SetActive(false);
 
-		SetAccountHubHudActive(false);
+        SetAccountHubHudActive(false);
+		PlayPvpArenaMusic(state?.MatchRound ?? 1);
 
         SetBattlefieldSurfaceVisible(true);
         // La label formazione è parte della chrome campagna: nel PvP resta vuota.
@@ -139,10 +175,42 @@ public sealed partial class BattleBoardController
 
     public void HidePvpMatch()
     {
-        if (!pvpPresentationActive)
-            return;
-
+        StopPvpArenaMusic();
         pvpPresentationActive = false;
+        ClearPvpPresentationAllocations();
+
+        SetMessage("Multiplayer chiuso.");
+        deploymentDraftActive = false;
+        SetTurnBanner(playerTurn: true, "PREPARAZIONE");
+        if ((Object)(object)playerTitleText != (Object)null)
+			playerTitleText.text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.YourFormation, "LA TUA FORMAZIONE");
+        SetBattlefieldSurfaceVisible(false);
+        RefreshScenarioBackground();
+        // Il tavolo lo spegne (ShowPvpMatch) e nessuno lo riaccendeva: chiusa la
+        // partita si torna in arena, e l'arena l'header ce l'ha - lo accende
+        // StartPvpMode quando ci entri dal menu. Chi va altrove (Hub, campagna)
+        // decide dopo di noi e sovrascrive.
+        SetAccountHubHudActive(true);
+    }
+
+    /// <summary>
+    /// Rilascia tutto lo stato e tutte le viste create dalla presentazione PvP.
+    /// Deve restare idempotente: uscita stanza, ritorno all'Hub e OnDestroy possono
+    /// attraversare lo stesso percorso nello stesso frame.
+    /// </summary>
+    private void ClearPvpPresentationAllocations()
+    {
+		// Non affidarsi alla coda delle coroutine: uscita stanza, disconnessione e
+		// rematch possono interrompere la regia in qualunque frame.
+		ClearDraftEntranceState();
+		ClearManaDeltaCallouts();
+		ClearEnemyManaDeltaCallouts();
+		ClearRuntimeSessionVisuals();
+		DestroySafeAreaChildrenEndingWith("-deployment-morph");
+		if ((Object)(object)pvpTurnEdgeVfx != (Object)null)
+			Object.Destroy(pvpTurnEdgeVfx.gameObject);
+		pvpTurnEdgeVfx = null;
+
         pvpState = null;
         pvpLoadout = null;
         pvpActions = null;
@@ -150,8 +218,12 @@ public sealed partial class BattleBoardController
         pvpPendingDeployHandIndex = -1;
         pvpPendingDeployCardName = string.Empty;
         pvpArenaBackgroundRound = -1;
+        pvpDeploymentIntroPlayed = false;
+        ResetPvpTimelineCountdown();
         ResetPvpDecisiveSelection();
         StopPvpRegia();
+        StopTimelineSlideAnimation();
+        DestroyPvpRoundResultOverlay();
 
         ClearPvpHand();
         DestroyCardViews(playerCards);
@@ -164,15 +236,26 @@ public sealed partial class BattleBoardController
         pvpCardLives.Clear();
         pvpCardIds.Clear();
         pvpDeploymentPoses.Clear();
+        pvpTimelineOrderKeys.Clear();
         ClearInitiativeTimeline();
-        SetMessage("Multiplayer chiuso.");
-        deploymentDraftActive = false;
-        SetTurnBanner(playerTurn: true, "PREPARAZIONE");
-        if ((Object)(object)playerTitleText != (Object)null)
-            playerTitleText.text = "LA TUA FORMAZIONE";
-        SetBattlefieldSurfaceVisible(false);
-        RefreshScenarioBackground();
     }
+
+    public void PlayPvpVictorySfx()
+    {
+        PlaySfx(victorySfx);
+    }
+
+    /// <summary>
+    /// true quando in PvP le pedine locali stanno nella disposizione a carosello
+    /// (attiva al centro e rialzata) e non nella griglia di schieramento. È la
+    /// condizione che dice al layout chi comanda sulle pose delle pedine.
+    /// </summary>
+    private bool IsPvpCombatCarouselActive =>
+        pvpPresentationActive
+        && pvpState != null
+        && pvpState.Phase == PvpClientPhase.Battle
+        && !pvpDeploymentPresentationActive
+        && playerCards.Any(card => card != null && !card.Eliminated);
 
     /// <summary>
     /// true mentre è in corso una partita PvP vera: il tavolo è a schermo e il match
@@ -182,9 +265,8 @@ public sealed partial class BattleBoardController
         pvpPresentationActive && pvpState != null && pvpState.Phase != PvpClientPhase.Finished;
 
     /// <summary>
-    /// Resa confermata dal giocatore. Il verdetto lo dà il server — è lui a chiudere
-    /// il match e a registrare sconfitta e vittoria — qui si spegne solo l'input,
-    /// perché da questo momento non c'è più niente da giocare.
+    /// Resa confermata dal giocatore. Il server registra il verdetto, mentre il client
+    /// chiude subito il PvP e torna all'Hub anche se la rete o il backend non rispondono.
     /// </summary>
     private void SurrenderPvpMatch()
     {
@@ -248,9 +330,14 @@ public sealed partial class BattleBoardController
         // nella posizione dello schieramento: replichiamo le stesse fasi.
         deploymentDraftActive = pvpState.Phase == PvpClientPhase.Deployment
             || pvpState.Phase == PvpClientPhase.DecisiveSelection
-            || pvpState.Phase == PvpClientPhase.Waiting;
+            || pvpState.Phase == PvpClientPhase.Waiting
+            || pvpDeploymentPresentationActive;
         inputLocked = !IsPvpLocalActionTurn();
         gameFinished = pvpState.Phase == PvpClientPhase.Finished;
+		if (gameFinished)
+		{
+			StopPvpArenaMusic();
+		}
         roundNumber = pvpState.MatchRound;
         RefreshPvpArenaBackground(roundNumber);
         selectedPlayerIndex = pvpState.ActiveSlot;
@@ -269,15 +356,107 @@ public sealed partial class BattleBoardController
         RefreshPvpHud();
         RefreshPvpMessage();
         RefreshPvpTurnBanner();
+        RefreshPvpTurnEdgeVfx();
+        // In battaglia il PvP usa la stessa gestione a carosello della campagna
+        // (pedina attiva centrale e rialzata, rotazione al cambio turno): se ne
+        // occupa ApplyResponsiveLayout, che conserva le pose correnti mentre
+        // riscrive la griglia e fa partire da lì la rotazione.
         ApplyResponsiveLayout();
-        // ApplyResponsiveLayout assegna prima gli slot lineari. In battaglia il PvP
-        // passa poi alla stessa gestione a carosello della campagna: pedina attiva
-        // centrale e rialzata, con rotazione della formazione al cambio turno.
-        if (pvpState.Phase == PvpClientPhase.Battle && playerCards.Any(card => card != null && !card.Eliminated))
-            RefreshCombatPawnCarousel(animate: true);
         RefreshPvpTimeline();
+        // Il ventaglio va disegnato sopra un layout gia' ricostruito: i layout
+        // group si ricalcolano su Canvas.willRenderCanvases, e senza forzarli
+        // adesso appiattirebbero l'inclinazione appena assegnata.
+        Canvas.ForceUpdateCanvases();
         ApplyHandFan();
         ConfigurePvpActionOverlays();
+    }
+
+    private void RefreshPvpTurnEdgeVfx()
+    {
+        if ((Object)(object)safeAreaRoot == (Object)null || pvpState == null)
+            return;
+
+        if ((Object)(object)pvpTurnEdgeVfx == (Object)null)
+        {
+            pvpTurnEdgeVfx = PvpTurnEdgeVfx.Create(safeAreaRoot);
+            // Rimane sopra il fondale e il velo del tavolo, ma dietro carte e HUD.
+            pvpTurnEdgeVfx.transform.SetSiblingIndex(
+                Mathf.Min(2, safeAreaRoot.childCount - 1));
+        }
+
+        bool battleTurn = pvpPresentationActive
+            && pvpState.Phase == PvpClientPhase.Battle
+            && !gameFinished;
+        pvpTurnEdgeVfx.SetTurn(battleTurn, pvpState.IsMyBattleTurn);
+    }
+
+    private void UpdatePvpTimelineCountdown()
+    {
+        if ((Object)(object)timelineCountdownText == (Object)null)
+            return;
+
+        int duration = configuration != null ? configuration.Pvp.TurnTimerSeconds : 0;
+        bool timedPhase = pvpPresentationActive && pvpState != null
+            && (pvpState.Phase == PvpClientPhase.Deployment
+                || pvpState.Phase == PvpClientPhase.Battle
+                || pvpState.Phase == PvpClientPhase.DecisiveSelection);
+        if (!timedPhase || duration <= 0)
+        {
+            StopPvpTimerSfx();
+            ((Component)timelineCountdownText).gameObject.SetActive(false);
+            pvpCountdownTurnKey = string.Empty;
+            return;
+        }
+
+        string turnKey = $"{pvpState.MatchRound}:{pvpState.Phase}:{pvpState.Cycle}:"
+            + $"{pvpState.DeployPlayer}:{pvpState.ActivePlayer}:{pvpState.ActiveSlot}";
+        if (turnKey != pvpCountdownTurnKey)
+        {
+            pvpCountdownTurnKey = turnKey;
+            pvpCountdownAutoSkipKey = string.Empty;
+            pvpCountdownDeadline = Time.unscaledTime + duration;
+            pvpCountdownLastSecond = -1;
+        }
+
+        int remaining = Mathf.Max(0, Mathf.CeilToInt(pvpCountdownDeadline - Time.unscaledTime));
+        bool warnLocalPlayer = IsPvpLocalActionTurn() && remaining > 0 && remaining <= 5;
+        if (warnLocalPlayer)
+            StartPvpTimerSfx();
+        else
+            StopPvpTimerSfx();
+        if (remaining != pvpCountdownLastSecond)
+        {
+            pvpCountdownLastSecond = remaining;
+            timelineCountdownText.text = remaining.ToString();
+            timelineCountdownText.color = remaining <= 5
+                ? new Color(1f, 0.25f, 0.2f)
+                : new Color(0.95f, 0.79f, 0.34f);
+        }
+
+        if (!((Component)timelineCountdownText).gameObject.activeSelf)
+            ((Component)timelineCountdownText).gameObject.SetActive(true);
+
+        if (remaining == 0
+            && pvpState.Phase == PvpClientPhase.Battle
+            && pvpState.IsMyBattleTurn
+            && pvpCountdownAutoSkipKey != turnKey)
+        {
+            // Usa lo stesso percorso del pulsante Salta, così il server rimane
+            // autoritativo e il comando viene inviato una sola volta per turno.
+            pvpCountdownAutoSkipKey = turnKey;
+            ActivatePvpSkip();
+        }
+    }
+
+    private void ResetPvpTimelineCountdown()
+    {
+        StopPvpTimerSfx();
+        pvpCountdownTurnKey = string.Empty;
+        pvpCountdownAutoSkipKey = string.Empty;
+        pvpCountdownDeadline = 0f;
+        pvpCountdownLastSecond = -1;
+        if ((Object)(object)timelineCountdownText != (Object)null)
+            ((Component)timelineCountdownText).gameObject.SetActive(false);
     }
 
     private void RefreshPvpArenaBackground(int matchRound)
@@ -381,6 +560,7 @@ public sealed partial class BattleBoardController
                 existing.AbilityArmed = source.AbilityArmed;
                 existing.AbilityUsed = source.AbilityUsed;
                 existing.AbilityUsedThisTurn = source.AbilityUsedThisTurn;
+                existing.IsUntargetable = source.Untargetable;
                 existing.MightAuraCombatBonus = source.MightAuraBonus;
                 existing.PermanentCombatBonus = source.PermanentBonus - source.MightAuraBonus + source.Strength - existing.Definition.Strength;
                 existing.PendingAttackBonus = source.PendingBonus;
@@ -407,6 +587,7 @@ public sealed partial class BattleBoardController
                 AbilityArmed = source.AbilityArmed,
                 AbilityUsed = source.AbilityUsed,
                 AbilityUsedThisTurn = source.AbilityUsedThisTurn,
+                IsUntargetable = source.Untargetable,
                 PermanentCombatBonus = source.PermanentBonus - source.MightAuraBonus + source.Strength - definition.Strength,
                 MightAuraCombatBonus = source.MightAuraBonus,
                 PendingAttackBonus = source.PendingBonus,
@@ -424,6 +605,13 @@ public sealed partial class BattleBoardController
                 view.Button.onClick.AddListener(new UnityAction(() => HandlePvpOpponentCardClick(capturedSlot)));
 
             destination.Add(card);
+
+            // Nel resume il server ricostruisce le morti dal replay, ma gli eventi
+            // non vengono animati. Ripristina quindi subito anche il residuo visivo;
+            // la classe del killer puo' non essere disponibile e in quel caso la
+            // view usa correttamente la death crack generica.
+            if (card.Eliminated)
+                view.RestoreDefeatedState();
         }
     }
 
@@ -625,7 +813,7 @@ public sealed partial class BattleBoardController
             ((Component)confirmActionButton).gameObject.SetActive(!pvpDecisiveSubmitted);
             confirmActionButton.interactable = ready;
             if ((Object)(object)confirmActionButtonText != (Object)null)
-                confirmActionButtonText.text = "CONFERMA SCELTA";
+				confirmActionButtonText.text = GameText.GetOrFallbackSilent(GameTextKeys.PvpLoadout.Save, "CONFERMA SCELTA");
         }
         if ((Object)(object)cancelActionButton != (Object)null)
             ((Component)cancelActionButton).gameObject.SetActive(!pvpDecisiveSubmitted && pvpDecisiveSelection.Count > 0);
@@ -661,6 +849,7 @@ public sealed partial class BattleBoardController
             return false;
 
         pvpDecisiveSubmitted = true;
+        StopPvpTimerSfx();
         int[] indices = pvpDecisiveSelection.ToArray();
         pvpActions?.SubmitDecisive(indices);
         RefreshPvpDecisiveSelectionUi(required);
@@ -711,6 +900,7 @@ public sealed partial class BattleBoardController
         pvpPendingDeployCardName = (Object)(object)definition != (Object)null
             ? definition.DisplayName
             : definitionId;
+        ShowDeploymentMatchupHints(definition);
 
         for (int index = 0; index < pvpHandViews.Count; index++)
         {
@@ -770,7 +960,9 @@ public sealed partial class BattleBoardController
         int confirmedIndex = pvpPendingDeployHandIndex;
         pvpPendingDeployHandIndex = -1;
         pvpPendingDeployCardName = string.Empty;
+        ClearTargetHints();
         RefreshPvpDeploymentPendingUi();
+        StopPvpTimerSfx();
         pvpActions?.Deploy(confirmedIndex);
         return true;
     }
@@ -782,6 +974,7 @@ public sealed partial class BattleBoardController
 
         pvpPendingDeployHandIndex = -1;
         pvpPendingDeployCardName = string.Empty;
+        ClearTargetHints();
         foreach (PrototypeCardView handView in pvpHandViews)
         {
             if ((Object)(object)handView == (Object)null)
@@ -897,8 +1090,17 @@ public sealed partial class BattleBoardController
             RefreshPersistentStatus(card);
             card.View.SetInitiative(card.Initiative);
             card.View.SetSelected(IsPvpActiveLocalCard(card));
-            Color? targetHintColor = PvpTargetHintColor(card);
-            card.View.SetTargetHint(targetHintColor.HasValue, targetHintColor.GetValueOrDefault());
+            MatchupResult? deploymentMatchup = PvpDeploymentMatchup(card);
+            if (deploymentMatchup.HasValue)
+            {
+                // Lo stesso renderer MatchupResult usato dallo schieramento campagna.
+                card.View.SetTargetHint(deploymentMatchup);
+            }
+            else
+            {
+                Color? targetHintColor = PvpTargetHintColor(card);
+                card.View.SetTargetHint(targetHintColor.HasValue, targetHintColor.GetValueOrDefault());
+            }
             card.View.SetTurnAura(IsPvpActiveCard(card), card.BelongsToPlayer);
             int lives = pvpCardLives.TryGetValue(card, out int value) ? value : card.Eliminated ? 0 : 2;
             card.View.SetLifeIcons(lives, 2);
@@ -910,10 +1112,11 @@ public sealed partial class BattleBoardController
     {
         if (pvpState == null
             || !pvpState.IsMyBattleTurn
-            || pvpTargetMode != PvpPresentationTargetMode.Attack
+            || (pvpTargetMode != PvpPresentationTargetMode.Attack && pvpTargetMode != PvpPresentationTargetMode.Supreme)
             || card == null
             || card.BelongsToPlayer
-            || card.Eliminated)
+            || card.Eliminated
+            || IsShieldedByInvisibility(card))
         {
             return null;
         }
@@ -921,6 +1124,9 @@ public sealed partial class BattleBoardController
         BattleCardState active = FindPvpLocalCard(pvpState.ActiveSlot);
         if (active == null)
             return null;
+
+        if (pvpTargetMode == PvpPresentationTargetMode.Supreme)
+            return new Color(0.65f, 0.28f, 1f, 1f);
 
         MatchupResult matchup = ClassMatchup.Compare(active.Card.HeroClass, card.Card.HeroClass);
         int localPlayer = pvpState.MyIndex;
@@ -937,6 +1143,28 @@ public sealed partial class BattleBoardController
             MatchupResult.Disadvantage => new Color(1f, 0.22f, 0.18f, 1f),
             _ => new Color(1f, 0.82f, 0.18f, 1f)
         };
+    }
+
+    private MatchupResult? PvpDeploymentMatchup(BattleCardState card)
+    {
+        if (pvpState == null
+            || pvpState.Phase != PvpClientPhase.Deployment
+            || !pvpState.IsMyDeployTurn
+            || pvpPendingDeployHandIndex < 0
+            || pvpPendingDeployHandIndex >= pvpState.Hand.Count
+            || card == null
+            || card.BelongsToPlayer
+            || card.Eliminated)
+        {
+            return null;
+        }
+
+        CardDefinition selected = FindPvpDefinition(
+            pvpState.Hand[pvpPendingDeployHandIndex].DefinitionId);
+        if ((Object)(object)selected == (Object)null)
+            return null;
+
+        return DeploymentMatchup(selected, card);
     }
 
     private void ConfigurePvpActionOverlays()
@@ -970,7 +1198,18 @@ public sealed partial class BattleBoardController
         bool canUseAbility = BattlePresentationViewStateMapper.HasActivatableAbility(active.Card.HeroClass)
             && !active.AbilityUsed
             && !active.AbilityArmed;
-        bool canAttach = active.Card.Strength >= 2 && active.Card.Strength < 5;
+        bool canAttach = !active.IsSpirit && active.Card.Strength >= 2 && active.Card.Strength < 5;
+        // Riserva, Cornamusa, Purificazione ed Evoca Sgherri sono istantanee:
+        // niente selezione bersaglio.
+        // Riserva resta disponibile anche dopo la Protezione del Paladino.
+        bool supremeImplemented = AbilityManaCosts.IsSupremeImplemented(active.Card.HeroClass);
+        bool canUseTargetedSupreme = supremeImplemented
+            && active.Card.HeroClass == HeroClass.Rogue
+            && !active.Eliminated;
+        bool canUseInstantSupreme = supremeImplemented
+            && active.Card.HeroClass != HeroClass.Rogue
+            && !active.Eliminated;
+        bool canUseSupreme = !active.IsSpirit && (canUseInstantSupreme || canUseTargetedSupreme);
         // Lo skip resta disponibile anche dopo un'abilita': permette di chiudere
         // volontariamente l'attivazione quando non si vuole o non si puo' attaccare.
         bool canSkip = true;
@@ -981,13 +1220,23 @@ public sealed partial class BattleBoardController
                 canUseAbility ? ability : null, canUseAbility ? new UnityAction(ActivatePvpAbility) : null,
                 canAttach ? attachment : null, canAttach ? new UnityAction(ActivatePvpAttachment) : null,
                 skip, new UnityAction(ActivatePvpSkip),
+				canUseSupreme ? LoadSpriteResource("UI/ability_secondary_button") : null,
+				canUseSupreme
+					? (canUseTargetedSupreme ? new UnityAction(ActivatePvpTargetedSupreme) : new UnityAction(ActivatePvpInstantSupreme))
+					: null,
 				attackMana: -ManaActionPolicy.AttackCost(ManaRules.CreateDefault()),
 				abilityMana: canUseAbility ? -ManaActionPolicy.PrimaryCost(active.Card.HeroClass) : null,
 				skipMana: ManaActionPolicy.ActivationReward(
-					ManaRules.CreateDefault(), true, active.AbilityUsedThisTurn));
+					ManaRules.CreateDefault(), true, active.AbilityUsedThisTurn),
+				supremeMana: canUseSupreme
+					? -pvpState.SupremeCostFor(pvpState.MyIndex, active.Card.HeroClass)
+					: null);
             active.View.SetAbilityActionInteractable(
                 !canUseAbility
                 || BattlePlayerManaCurrent >= ManaActionPolicy.PrimaryCost(active.Card.HeroClass));
+            active.View.SetSupremeActionInteractable(
+                !canUseSupreme
+                || BattlePlayerManaCurrent >= pvpState.SupremeCostFor(pvpState.MyIndex, active.Card.HeroClass));
         }
         else if (canUseAbility && canAttach)
         {
@@ -1034,9 +1283,12 @@ public sealed partial class BattleBoardController
 				BattlePlayerManaCurrent));
 			return;
 		}
-        pvpTargetMode = pvpTargetMode == PvpPresentationTargetMode.Attack
-            ? PvpPresentationTargetMode.None
-            : PvpPresentationTargetMode.Attack;
+        bool enteringTargetMode = pvpTargetMode != PvpPresentationTargetMode.Attack;
+        pvpTargetMode = enteringTargetMode
+            ? PvpPresentationTargetMode.Attack
+            : PvpPresentationTargetMode.None;
+        if (enteringTargetMode)
+            PlayActionTargetingSfx();
         RenderPvpMatch();
     }
 
@@ -1058,12 +1310,19 @@ public sealed partial class BattleBoardController
 		}
         if (active != null && active.Card.HeroClass == HeroClass.Warrior)
         {
-            pvpActions?.UseAbility(false, pvpState.ActiveSlot);
-            pvpTargetMode = PvpPresentationTargetMode.None;
+            // Come in campagna, Colpo pesante non viene attivato (e pagato) alla
+            // pressione del pulsante: prima si sceglie un nemico valido. Dopo la
+            // conferma autorevole dell'abilita' il client inoltra automaticamente
+            // l'attacco allo stesso bersaglio.
+            pvpTargetMode = PvpPresentationTargetMode.Ability;
+            pvpPendingWarriorAbilityTargetSlot = -1;
+			PlayActionTargetingSfx();
+			RenderPvpMatch();
             return;
         }
 
         pvpTargetMode = PvpPresentationTargetMode.Ability;
+		PlayActionTargetingSfx();
 		if (active.Card.HeroClass == HeroClass.Paladin)
 			suppressPaladinTargetSelectionUntilFrame = Time.frameCount + 1;
         RenderPvpMatch();
@@ -1072,6 +1331,52 @@ public sealed partial class BattleBoardController
     private void ActivatePvpAttachment()
     {
         pvpTargetMode = PvpPresentationTargetMode.Attachment;
+		PlayActionTargetingSfx();
+        RenderPvpMatch();
+    }
+
+    private void ActivatePvpInstantSupreme()
+    {
+        if (pvpState == null || !pvpState.IsMyBattleTurn)
+            return;
+
+        BattleCardState active = FindPvpLocalCard(pvpState.ActiveSlot);
+        if (active == null
+            || active.Card.HeroClass == HeroClass.Rogue
+            || !AbilityManaCosts.IsSupremeImplemented(active.Card.HeroClass))
+            return;
+
+        int cost = pvpState.SupremeCostFor(pvpState.MyIndex, active.Card.HeroClass);
+        if (BattlePlayerManaCurrent < cost)
+        {
+            ShowNoManaCallout(active);
+            return;
+        }
+
+        // Queste supreme sono istantanee e non hanno bersaglio: torna subito allo stato base.
+        // Questo ripulisce anche una selezione rimasta aperta da un input precedente.
+        pvpTargetMode = PvpPresentationTargetMode.None;
+        ClearTargetHints();
+        active.View?.ClearActionOverlay();
+        RenderPvpMatch();
+        StopPvpTimerSfx();
+        pvpActions?.UseSupreme(false, pvpState.ActiveSlot);
+    }
+
+    private void ActivatePvpTargetedSupreme()
+    {
+        if (pvpState == null || !pvpState.IsMyBattleTurn)
+            return;
+        BattleCardState active = FindPvpLocalCard(pvpState.ActiveSlot);
+        if (active == null || active.Card.HeroClass != HeroClass.Rogue)
+            return;
+        int cost = pvpState.SupremeCostFor(pvpState.MyIndex, active.Card.HeroClass);
+        if (BattlePlayerManaCurrent < cost)
+        {
+            ShowNoManaCallout(active);
+            return;
+        }
+        pvpTargetMode = PvpPresentationTargetMode.Supreme;
         RenderPvpMatch();
     }
 
@@ -1090,6 +1395,7 @@ public sealed partial class BattleBoardController
 		SetMessage(GameText.GetOrFallbackSilent(
 			GameTextKeys.PvpError.TurnEndedWaiting,
 			"Turno concluso. In attesa del server..."));
+        StopPvpTimerSfx();
         pvpActions?.Pass();
     }
 
@@ -1106,6 +1412,7 @@ public sealed partial class BattleBoardController
 
         if (pvpState != null && pvpState.IsMyBattleTurn && pvpTargetMode == PvpPresentationTargetMode.Attachment)
         {
+            StopPvpTimerSfx();
             pvpActions?.Attach(slot);
             pvpTargetMode = PvpPresentationTargetMode.None;
             return;
@@ -1113,6 +1420,7 @@ public sealed partial class BattleBoardController
 
         if (pvpState != null && pvpState.IsMyBattleTurn && pvpTargetMode == PvpPresentationTargetMode.Ability)
         {
+            StopPvpTimerSfx();
             pvpActions?.UseAbility(false, slot);
             pvpTargetMode = PvpPresentationTargetMode.None;
             return;
@@ -1131,6 +1439,10 @@ public sealed partial class BattleBoardController
         {
             if (pvpTargetMode == PvpPresentationTargetMode.Ability)
             {
+                StopPvpTimerSfx();
+                BattleCardState active = FindPvpLocalCard(pvpState.ActiveSlot);
+                if (active?.Card.HeroClass == HeroClass.Warrior)
+                    pvpPendingWarriorAbilityTargetSlot = slot;
                 pvpActions?.UseAbility(true, slot);
                 pvpTargetMode = PvpPresentationTargetMode.None;
                 return;
@@ -1138,7 +1450,21 @@ public sealed partial class BattleBoardController
 
             if (pvpTargetMode == PvpPresentationTargetMode.Attack)
             {
+                if (IsShieldedByInvisibility(card))
+                {
+                    SetMessage("Quel bersaglio non e raggiungibile: e invisibile.");
+                    return;
+                }
+                StopPvpTimerSfx();
                 pvpActions?.Attack(slot);
+                pvpTargetMode = PvpPresentationTargetMode.None;
+                return;
+            }
+
+            if (pvpTargetMode == PvpPresentationTargetMode.Supreme)
+            {
+                StopPvpTimerSfx();
+                pvpActions?.UseSupreme(true, slot);
                 pvpTargetMode = PvpPresentationTargetMode.None;
                 return;
             }
@@ -1152,11 +1478,34 @@ public sealed partial class BattleBoardController
         if (cpuHud == null || pvpState == null)
             return;
 
+        int localScore = pvpState.Wins[pvpState.MyIndex];
+        int opponentScore = pvpState.Wins[OpponentIndex()];
+        string opponentName = string.IsNullOrWhiteSpace(pvpState.OpponentName)
+            ? "AVVERSARIO"
+            : pvpState.OpponentName.ToUpperInvariant();
+
+        if (playerHud != null)
+        {
+            string localName = ResolvePlayerHudDisplayName();
+            string localRank = GetCachedPvpLeagueLabel();
+            RefreshCombatantHud(
+                playerHud,
+                isPlayer: true,
+                localName.ToUpperInvariant(),
+                localRank.ToUpperInvariant(),
+                $"{PvpActiveCount(playerCards)}/{playerCards.Count} ATTIVI",
+                playerCards.Count == 0 ? 0f : (float)PvpActiveCount(playerCards) / playerCards.Count,
+                Mathf.Max(1, pvpState.VigorDieSides),
+                playerCards.Count,
+                0,
+                PvpDefeatedCount(playerCards));
+        }
+
         RefreshCombatantHud(
             cpuHud,
             isPlayer: false,
-            string.IsNullOrWhiteSpace(pvpState.OpponentName) ? "AVVERSARIO" : pvpState.OpponentName.ToUpperInvariant(),
-            $"G{OpponentIndex()}",
+            opponentName,
+            $"ROUND {pvpState.MatchRound}  ·  {localScore}-{opponentScore}",
             $"{PvpActiveCount(cpuCards)}/{cpuCards.Count} ATTIVI",
             cpuCards.Count == 0 ? 0f : (float)PvpActiveCount(cpuCards) / cpuCards.Count,
             Mathf.Max(1, pvpState.VigorDieSides),
@@ -1166,10 +1515,10 @@ public sealed partial class BattleBoardController
 
 		RefreshManaHud();
 		RefreshEnemyManaHud();
-		RefreshCombatHudRefactor();
+        RefreshCombatHudRefactor();
 
         if ((Object)(object)topInfoText != (Object)null)
-            topInfoText.text = $"PVP  |  ROUND {pvpState.MatchRound}  |  VIGORE D{pvpState.VigorDieSides}  |  TU {pvpState.Wins[pvpState.MyIndex]} - {pvpState.Wins[OpponentIndex()]} {pvpState.OpponentName.ToUpperInvariant()}";
+            topInfoText.text = $"{opponentName}   ROUND {pvpState.MatchRound}   {localScore}-{opponentScore}";
     }
 
     private void RefreshPvpTimeline()
@@ -1195,9 +1544,15 @@ public sealed partial class BattleBoardController
                 .ToList();
             int activeOrder = CurrentPvpDeploymentOrder(deploymentTokens);
             float timelineTileSize = GetTimelineTileSize(deploymentTokens.Count);
-            foreach (PvpClientDeploymentToken token in deploymentTokens)
+            // Mantiene il primo schieramento (iniziativa piu' bassa) in fondo.
+            for (int index = deploymentTokens.Count - 1; index >= 0; index--)
             {
-                AddPvpTimelineTile(token.Player, token.Initiative, token.Order == activeOrder, timelineTileSize);
+                PvpClientDeploymentToken token = deploymentTokens[index];
+                PvpClientCard deployedCard = pvpState.Boards[token.Player]
+                    .FirstOrDefault(card => card.Initiative == token.Initiative);
+                CardDefinition deployedDefinition = deployedCard != null ? FindPvpDefinition(deployedCard.CardId) : null;
+                AddPvpTimelineTile(token.Player, token.Initiative, token.Order == activeOrder, timelineTileSize,
+                    deployedDefinition: deployedDefinition, label: $"{deploymentTokens.Count - token.Order}\u00B0");
                 pvpTimelineOrderKeys.Add($"deploy:{token.Player}:{token.Order}:{token.Initiative}");
             }
             ResizeTimelineTiles(deploymentTokens.Count);
@@ -1496,7 +1851,8 @@ public sealed partial class BattleBoardController
         }
     }
 
-    private void AddPvpTimelineTile(int player, int initiative, bool active, float timelineTileSize, BattleCardState inspectedState = null)
+    private void AddPvpTimelineTile(int player, int initiative, bool active, float timelineTileSize,
+        BattleCardState inspectedState = null, CardDefinition deployedDefinition = null, string label = null)
     {
         bool belongsToPlayer = player == pvpState.MyIndex;
         Image tile = CreateImage("PVP Timeline", (Transform)(object)initiativeTimelineRoot,
@@ -1504,30 +1860,39 @@ public sealed partial class BattleBoardController
                 : belongsToPlayer ? new Color(0.04f, 0.42f, 0.48f, 0.95f) : new Color(0.5f, 0.1f, 0.12f, 0.95f));
         LayoutElement layout = ((Component)tile).gameObject.AddComponent<LayoutElement>();
         ConfigureTimelineTileLayout(layout, timelineTileSize);
-        if (inspectedState != null)
+        if (inspectedState != null || deployedDefinition != null)
         {
             Outline factionOutline = ((Component)tile).gameObject.AddComponent<Outline>();
             factionOutline.effectColor = belongsToPlayer ?new Color(0.1f, 0.82f, 1f, 0.95f) : new Color(1f, 0.16f, 0.12f, 0.95f);
             factionOutline.effectDistance = new Vector2(2.2f, -2.2f);
             Image portrait = CreateImage("Portrait", ((Component)tile).transform, Color.white);
-            portrait.sprite = inspectedState.Definition.Artwork;
+            portrait.sprite = inspectedState != null ? inspectedState.Definition.Artwork : deployedDefinition.Artwork;
             portrait.preserveAspect = false;
             portrait.raycastTarget = false;
             SetRect(portrait.rectTransform, new Vector2(0.045f, 0.045f), new Vector2(0.955f, 0.955f));
-            tile.raycastTarget = true;
-            Button button = ((Component)tile).gameObject.AddComponent<Button>();
-            button.targetGraphic = (Graphic)(object)tile;
-            ((UnityEvent)button.onClick).AddListener((UnityAction)delegate
+            if (inspectedState != null)
             {
-                if (CanInspectBattleCard(inspectedState))
+                tile.raycastTarget = true;
+                Button button = ((Component)tile).gameObject.AddComponent<Button>();
+                button.targetGraphic = (Graphic)(object)tile;
+                ((UnityEvent)button.onClick).AddListener((UnityAction)delegate
                 {
-                    ShowCardInspection(inspectedState);
-                }
-            });
+                    if (CanInspectBattleCard(inspectedState))
+                    {
+                        ShowCardInspection(inspectedState);
+                    }
+                });
+            }
             return;
         }
-        Text text = CreateText("Turn", ((Component)tile).transform, AccardND.Battlefield.MmoUiTheme.BodyFont, 18, FontStyle.Bold, TextAnchor.MiddleCenter);
-        text.text = belongsToPlayer ? "TU" : "AVV";
+        int fontSize = string.IsNullOrEmpty(label) ? 18 : 35;
+        Text text = CreateText("Turn", ((Component)tile).transform, AccardND.Battlefield.MmoUiTheme.BodyFont, fontSize, FontStyle.Bold, TextAnchor.MiddleCenter);
+        text.text = string.IsNullOrEmpty(label) ? (belongsToPlayer ? "TU" : "AVV") : label;
+        if (!string.IsNullOrEmpty(label))
+        {
+            text.resizeTextForBestFit = false;
+            text.fontSize = 35;
+        }
         Stretch(text.rectTransform, 2f);
     }
 
@@ -1573,6 +1938,21 @@ public sealed partial class BattleBoardController
                     pvpDeploymentIntroPlayed = false;
                     ResetPvpDecisiveSelection();
                     RenderPvpMatch();
+					PlayPvpArenaMusic(pvpState?.MatchRound ?? 1);
+                    break;
+                }
+
+                case "RoundEnded":
+                {
+                    // AttackResolved e' davanti a questo evento nella coda: il popup
+                    // compare quindi soltanto dopo duello ed esplosione della pedina.
+                    // Il risultato finale ha gia' il proprio overlay dedicato.
+                    if (pvpState != null && pvpState.Phase != PvpClientPhase.Finished)
+                    {
+                        ShowPvpRoundResultOverlay(battleEvent);
+                        yield return new WaitUntil(() => pvpRoundResultConfirmed || !pvpPresentationActive);
+                        DestroyPvpRoundResultOverlay();
+                    }
                     break;
                 }
 
@@ -1593,17 +1973,74 @@ public sealed partial class BattleBoardController
 
                 case "CardDeployed":
                 {
+                    // Come in campagna: ogni nuova pedina ricentra la fila, e le
+                    // compagne gia' in campo devono scivolare nella posizione
+                    // nuova invece di saltarci dentro. La pedina che sta entrando
+                    // resta fuori dal glide, la sua animazione ha gia' un padrone.
+                    // Il tavolo resta nello schieramento per tutta la recita, anche
+                    // se lo stato autorevole e' gia' oltre: con l'ultima pedina lo
+                    // e' sempre, ed e' li' che il carosello di battaglia partiva
+                    // sopra la scivolata e sopra il morph.
+                    pvpDeploymentPresentationActive = true;
+                    Dictionary<RectTransform, Vector2> deployedPawnPoses =
+                        CaptureBattlefieldPawnPoses(playerRow, cpuRow);
                     RenderPvpMatch();
                     Canvas.ForceUpdateCanvases();
+                    BattleCardState deployedPawn = FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
+                    if (deployedPawn != null && (Object)(object)deployedPawn.View != (Object)null)
+                        deployedPawnPoses.Remove(deployedPawn.View.RectTransform);
+                    StartBattlefieldPawnGlide(deployedPawnPoses);
                     PlayPawnEnteringBattlefieldSfx(FindPvpDefinition(battleEvent.CardId));
-                    PlayPvpDeploymentAnimation(battleEvent);
+                    // L'attesa segue l'animazione che e' partita davvero: il morph
+                    // dura piu' della scoperta, e troncarlo significherebbe far
+                    // cominciare l'evento dopo sopra una pedina ancora in volo.
                     yield return WaitForCardInspectionPause(
-                        Mathf.Max(0.2f, configuration.Animation.CardDeployDuration * 0.7f));
+                        Mathf.Max(0.2f, PlayPvpDeploymentAnimation(battleEvent)));
+                    // Il tempo del morph e' nominale e il frame che lo crea non ci
+                    // rientra: si passa alla battaglia a pedina davvero posata.
+                    while (IsRoutineAlive(deploymentMorphCoroutine, deploymentMorphFrame))
+                        yield return null;
+                    // L'ultima pedina lascia lo stato gia' in Battle, ma il relativo
+                    // BattleStarted e' ancora in coda. Teniamo quindi il layout nella
+                    // posa di schieramento: il callout dell'aura (anche "NO AURA")
+                    // fara' da ponte e soltanto dopo consegnera' le pedine al carosello.
+                    // Anticipare End qui produceva un frame di salto soprattutto quando
+                    // l'ultima pedina era quella locale e arrivava dal morph della mano.
+                    if (pvpState == null || pvpState.Phase == PvpClientPhase.Deployment)
+                        EndPvpDeploymentPresentation();
+                    break;
+                }
+
+                case "BattleStarted":
+                {
+                    // Come in campagna, prima porta la formazione nella posa di
+                    // combattimento e soltanto a movimento concluso annuncia
+                    // l'aura. Un'attesa fissa qui non basta: la durata effettiva
+                    // della transizione dipende dalla configurazione animazioni e
+                    // puo' essere ribersagliata da un ricalcolo del layout.
+                    EndPvpDeploymentPresentation();
+                    while (IsRoutineAlive(
+                        playerBattlefieldRowTransitionCoroutine,
+                        playerRowTransitionFrame))
+                    {
+                        yield return null;
+                    }
+                    ShowPvpBattleStartAuraCallouts();
+                    yield return new WaitForSecondsRealtime(2.8f);
                     break;
                 }
 
                 case "AttackResolved":
                 {
+                    if (TryTakePendingAreaSupremeAttacks(
+                            battleEvent,
+                            out HeroClass areaSupremeClass,
+                            out List<BattlePresentationEvent> areaAttacks))
+                    {
+                        yield return PlayPvpAreaSupremeRoutine(areaSupremeClass, areaAttacks);
+                        RenderPvpMatch();
+                        break;
+                    }
                     yield return PlayPvpDuelRoutine(battleEvent);
                     RenderPvpMatch();
                     break;
@@ -1611,15 +2048,10 @@ public sealed partial class BattleBoardController
 
                 case "ProtectionTriggered":
                 {
-                    if (battleEvent.Redirected)
-                    {
-                        pvpPendingPaladinRedirectPlayer = battleEvent.Player;
-                        pvpPendingPaladinRedirectSlot = battleEvent.Slot;
-                    }
-                    else
-                    {
-                        ClearPendingPaladinRedirect();
-                    }
+                    // Sia il reindirizzamento sia la parata su se stesso devono alzare
+                    // lo scudo prima del duello che ne risolve l'effetto.
+                    pvpPendingPaladinRedirectPlayer = battleEvent.Player;
+                    pvpPendingPaladinRedirectSlot = battleEvent.Slot;
                     break;
                 }
 
@@ -1627,33 +2059,94 @@ public sealed partial class BattleBoardController
                 {
                     yield return PlayPvpAbilityUsedRoutine(battleEvent);
                     RenderPvpMatch();
+                    if (battleEvent.AbilityClass == HeroClass.Warrior
+                        && pvpState != null
+                        && battleEvent.Player == pvpState.MyIndex
+                        && pvpPendingWarriorAbilityTargetSlot >= 0)
+                    {
+                        int targetSlot = pvpPendingWarriorAbilityTargetSlot;
+                        pvpPendingWarriorAbilityTargetSlot = -1;
+                        pvpActions?.Attack(targetSlot);
+                    }
                     break;
                 }
 
-				case "ManaChanged":
-				{
+                case "ManaChanged":
+                {
 					if (pvpState != null && battleEvent.ManaDelta != 0)
 					{
-						if (battleEvent.Player == pvpState.MyIndex)
+						// La Riserva viene presentata un punto alla volta dagli impatti
+						// del martello, non come un unico +N anticipato.
+						bool paladinReserve = battleEvent.ManaReason == ManaChangeReasons.Reserve;
+						if (!paladinReserve && battleEvent.Player == pvpState.MyIndex)
 						{
 							PlayManaDeltaCallout(battleEvent.ManaDelta);
 						}
-						else
+						else if (!paladinReserve)
 						{
 							PlayEnemyManaDeltaCallout(battleEvent.ManaDelta);
 						}
 					}
-					RenderPvpMatch();
-					break;
-				}
+					if (battleEvent.AbilityClass != HeroClass.Priest)
+						RenderPvpMatch();
+                    break;
+                }
+
+                case "TurnSkipped":
+                {
+                    // Il server salta il turno senza richiedere input: il callout
+                    // localizzato esce direttamente dalla pedina coinvolta.
+                    BattleCardState skippedCard = FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
+                    skippedCard?.View?.PlaySkipActionCallout();
+                    yield return new WaitForSecondsRealtime(0.78f);
+                    break;
+                }
 
                 case "SupremeUsed":
                 {
-                    RenderPvpMatch();
+					BattleCardState preRenderCaster = FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
+					List<PrototypeCardView> dispelTargets = battleEvent.AbilityClass == HeroClass.Priest
+						? CampaignDispelTargets(preRenderCaster).Select(target => target.View).Where(view => view != null).ToList()
+						: null;
+                    // Nessuna suprema deve lasciare il client in una modalita' di
+                    // targeting; per Riserva e' essenziale, perche' non ha target.
+                    pvpTargetMode = PvpPresentationTargetMode.None;
+                    ClearTargetHints();
+					// Per Purificazione mantieni i badge nello stato precedente fino
+					// all'arrivo dei raggi; il render autorevole avviene sull'impatto.
+					if (battleEvent.AbilityClass != HeroClass.Priest)
+						RenderPvpMatch();
                     Canvas.ForceUpdateCanvases();
-                    BattleCardState caster = FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
+                    BattleCardState caster = battleEvent.AbilityClass == HeroClass.Priest
+						? preRenderCaster
+						: FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
+					if (battleEvent.AbilityClass == HeroClass.Paladin)
+						PlayManaRuneEnergyBurst(enemy: pvpState != null && battleEvent.Player != pvpState.MyIndex);
                     bool playCallout = pvpState == null || battleEvent.Player != pvpState.MyIndex;
-                    yield return PlaySupremePresentationRoutine(caster, playCallout);
+					int manaStrikes = battleEvent.AbilityClass == HeroClass.Paladin
+						? battleEvent.AbilityMagnitude
+						: 1;
+					if (battleEvent.AbilityClass == HeroClass.Warrior && caster != null)
+						WarriorSupremeVfx.Activate(caster.View, battleEvent.AbilityMagnitude);
+					if (battleEvent.AbilityClass == HeroClass.Rogue && caster?.View != null && battleAnimationPlayer != null)
+					{
+						BattleCardState rogueTarget = FindPvpCardForPlayerSlot(battleEvent.TargetPlayer, battleEvent.TargetSlot);
+						if (rogueTarget?.View != null)
+							yield return battleAnimationPlayer.PlayRogueSupremeBlackHand(caster.View, rogueTarget.View);
+					}
+					IReadOnlyList<PrototypeCardView> mageMeteorTargets = null;
+					if (battleEvent.AbilityClass == HeroClass.Mage && caster != null)
+					{
+						IEnumerable<BattleCardState> opposingCards = caster.BelongsToPlayer ? cpuCards : playerCards;
+						mageMeteorTargets = opposingCards
+							.Where(target => target != null && target.View != null)
+							.Select(target => target.View)
+							.ToList();
+					}
+					yield return PlaySupremePresentationRoutine(caster, playCallout, manaStrikes, dispelTargets,
+						_ => RenderPvpMatch(), mageMeteorTargets);
+					if (battleEvent.AbilityClass == HeroClass.Priest && (dispelTargets == null || dispelTargets.Count == 0))
+						RenderPvpMatch();
                     break;
                 }
 
@@ -1661,16 +2154,9 @@ public sealed partial class BattleBoardController
                 {
                     RenderPvpMatch();
                     Canvas.ForceUpdateCanvases();
-                    BattleCardState barbarian = FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
-                    if (barbarian != null
-                        && (Object)(object)barbarian.View != (Object)null)
-                    {
-                        barbarian.View.PlayAbilityActionCallout();
-                        if ((Object)(object)battleAnimationPlayer != (Object)null)
-                        {
-                            yield return battleAnimationPlayer.PlayBarbarianFury(barbarian.View);
-                        }
-                    }
+                    // La cornamusa produce un evento per alleato: vanno presentati
+                    // tutti insieme, altrimenti il party si infuria uno alla volta.
+                    yield return PlayPvpFuryBurstRoutine(TakeConsecutiveFuryEvents(battleEvent));
                     break;
                 }
 
@@ -1692,6 +2178,7 @@ public sealed partial class BattleBoardController
                             fallen.View,
                             target.View,
                             AttachmentTargetLineColor);
+						target.View.PlayAttachmentEquipEffect();
                     }
                     if (fallen != null && (Object)(object)fallen.View != (Object)null)
                         yield return fallen.View.PlayDefeatAnimation(killerHeroClass: fallen.Card.HeroClass);
@@ -1705,6 +2192,7 @@ public sealed partial class BattleBoardController
                     BattleCardState revived = FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
                     if (revived != null && (Object)(object)revived.View != (Object)null)
                     {
+                        revived.View.ResetState();
                         revived.View.SetAlpha(1f);
                         if ((Object)(object)battleAnimationPlayer != (Object)null)
                             yield return battleAnimationPlayer.PlayNecromancerReviveSkullConvergence(revived.View);
@@ -1746,6 +2234,11 @@ public sealed partial class BattleBoardController
         deploymentOrder.Clear();
 
         RenderPvpMatch();
+		// La coroutine condivisa dei dadi riattiva gia' la moneta, ma il PvP
+		// chiude esplicitamente l'intro nello stato visibile: in questo modo un
+		// render o una sincronizzazione arrivati nello stesso frame non possono
+		// lasciarla soppressa durante il primo turno di schieramento.
+		SetTurnCoinSuppressed(suppressed: false);
     }
 
     private IEnumerator PlayPvpAbilityUsedRoutine(BattlePresentationEvent battleEvent)
@@ -1781,7 +2274,10 @@ public sealed partial class BattleBoardController
 			|| (Object)(object)target.View == (Object)null)
 			yield break;
         if (battleEvent.AbilityClass == HeroClass.Assassin)
-            yield return battleAnimationPlayer.PlayAssassinInhibitSmoke(target.View);
+            yield return battleAnimationPlayer.PlayAssassinSmokeBomb(
+                caster.View,
+                target.View,
+                () => target.InhibitedTurns > 0);
         else if (battleEvent.AbilityClass == HeroClass.Mage)
         {
             int baseDieSides = pvpState != null ? pvpState.VigorDieSides : configuration.Gameplay.VigorDieSides;
@@ -1920,6 +2416,167 @@ public sealed partial class BattleBoardController
         }
     }
 
+    /// <summary>
+    /// Raccoglie l'evento di Furia corrente e tutti quelli che lo seguono senza
+    /// interruzioni. La cornamusa ne accoda uno per alleato: vanno presentati come
+    /// un'unica ondata, non in fila indiana.
+    /// </summary>
+    private List<BattlePresentationEvent> TakeConsecutiveFuryEvents(BattlePresentationEvent first)
+    {
+        var furyEvents = new List<BattlePresentationEvent> { first };
+        while (pvpPendingEvents.Count > 0
+            && string.Equals(pvpPendingEvents.Peek()?.Type, "FuryGained", System.StringComparison.Ordinal))
+        {
+            furyEvents.Add(pvpPendingEvents.Dequeue());
+        }
+        return furyEvents;
+    }
+
+    /// <summary>
+    /// Accende la Furia su tutte le pedine coinvolte nello stesso istante: callout
+    /// simultanei, un solo suono e le animazioni avviate in parallelo.
+    /// </summary>
+    private IEnumerator PlayPvpFuryBurstRoutine(List<BattlePresentationEvent> furyEvents)
+    {
+        if (furyEvents == null || furyEvents.Count == 0)
+            yield break;
+
+        var running = new List<Coroutine>();
+        bool anyPlayed = false;
+        foreach (BattlePresentationEvent furyEvent in furyEvents)
+        {
+            BattleCardState barbarian = FindPvpCardForPlayerSlot(furyEvent.Player, furyEvent.Slot);
+            if (barbarian == null || (Object)(object)barbarian.View == (Object)null)
+                continue;
+            // In PvP la vista viene ricostruita gia' con il bonus applicato:
+            // usiamo l'evento autorevole per non perdere il +N della Furia.
+            barbarian.View.PlayStrengthIncreaseCallout(furyEvent.Amount);
+            barbarian.View.PlayAbilityActionCallout();
+            anyPlayed = true;
+            if ((Object)(object)battleAnimationPlayer != (Object)null)
+                running.Add(StartCoroutine(battleAnimationPlayer.PlayBarbarianFury(barbarian.View)));
+        }
+        if (!anyPlayed)
+            yield break;
+
+        // Un solo suono anche con tre pedine: la cornamusa e' un colpo solo.
+        PlayBarbarianFurySfx();
+        // Le coroutine girano gia' in parallelo: l'attesa finisce con la piu' lunga.
+        foreach (Coroutine routine in running)
+            yield return routine;
+    }
+
+    private bool TryTakePendingAreaSupremeAttacks(
+        BattlePresentationEvent firstAttack,
+        out HeroClass supremeClass,
+        out List<BattlePresentationEvent> attacks)
+    {
+        supremeClass = default;
+        attacks = null;
+        if (firstAttack == null || !firstAttack.HasHeroClass
+            || (firstAttack.HeroClass != HeroClass.Mage && firstAttack.HeroClass != HeroClass.Hunter))
+            return false;
+
+        supremeClass = firstAttack.HeroClass;
+
+        BattlePresentationEvent[] pending = pvpPendingEvents.ToArray();
+        int supremeIndex = -1;
+        for (int index = 0; index < pending.Length; index++)
+        {
+            BattlePresentationEvent candidate = pending[index];
+            if (candidate.Type == "SupremeUsed" && candidate.AbilityClass == supremeClass
+                && candidate.Player == firstAttack.Player && candidate.Slot == firstAttack.Slot)
+            {
+                supremeIndex = index;
+                break;
+            }
+            if (candidate.Type is "TurnEnded" or "RoundEnded")
+                break;
+        }
+        if (supremeIndex < 0)
+            return false;
+
+        attacks = new List<BattlePresentationEvent> { firstAttack };
+        var deferred = new List<BattlePresentationEvent>();
+        for (int index = 0; index <= supremeIndex; index++)
+        {
+            BattlePresentationEvent candidate = pvpPendingEvents.Dequeue();
+            if (candidate.Type == "AttackResolved" && candidate.Player == firstAttack.Player
+                && candidate.Slot == firstAttack.Slot)
+                attacks.Add(candidate);
+            else if (candidate.Type != "SupremeUsed")
+                deferred.Add(candidate);
+        }
+        BattlePresentationEvent[] remaining = pvpPendingEvents.ToArray();
+        pvpPendingEvents.Clear();
+        foreach (BattlePresentationEvent candidate in deferred)
+            pvpPendingEvents.Enqueue(candidate);
+        foreach (BattlePresentationEvent candidate in remaining)
+            pvpPendingEvents.Enqueue(candidate);
+        return true;
+    }
+
+    private IEnumerator PlayPvpAreaSupremeRoutine(
+        HeroClass supremeClass,
+        IReadOnlyList<BattlePresentationEvent> attacks)
+    {
+        if (attacks == null || attacks.Count == 0)
+            yield break;
+        BattlePresentationEvent first = attacks[0];
+        BattleCardState caster = FindPvpCardForPlayerSlot(first.Player, first.Slot);
+        if (caster?.View == null || battleAnimationPlayer == null)
+            yield break;
+
+        var targets = new List<BattleCardState>();
+        var hits = new List<bool>();
+        caster.View.PlaySupremeActionCallout();
+        if (supremeClass == HeroClass.Mage)
+            PlayMageSupremeSfx();
+        PlayRollingDiceSfx();
+        VigorRollResult casterRoll = BattlePresentationAnimationPlayer.BuildRoll(
+            first.AttackerDieSides, first.AttackerRollFirst, first.AttackerRollSecond,
+            first.AttackerRollHasSecond, first.AttackerRollSelected, first.AttackerRollSelectionMode,
+            first.AttackerRollFirstBeforeReroll, first.AttackerRollSecondBeforeReroll);
+        caster.View.PlayVigorRoll(diceCatalog, first.AttackerDieSides, TrackDiceRoll(casterRoll),
+            SupremeAbilityText.Name(supremeClass).ToUpperInvariant(),
+            configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+
+        foreach (BattlePresentationEvent attack in attacks)
+        {
+            BattleCardState target = FindPvpCardForPlayerSlot(attack.TargetPlayer, attack.TargetSlot);
+            if (target?.View == null)
+                continue;
+            targets.Add(target);
+            hits.Add(attack.DefenderEliminated);
+            VigorRollResult defenseRoll = BattlePresentationAnimationPlayer.BuildRoll(
+                attack.DefenderDieSides, attack.DefenderRollFirst, attack.DefenderRollSecond,
+                attack.DefenderRollHasSecond, attack.DefenderRollSelected, attack.DefenderRollSelectionMode,
+                attack.DefenderRollFirstBeforeReroll, attack.DefenderRollSecondBeforeReroll);
+            target.View.PlayVigorRoll(diceCatalog, attack.DefenderDieSides, TrackDiceRoll(defenseRoll),
+                GameText.Get(GameTextKeys.Combat.RollResistance),
+                configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
+        }
+        yield return WaitForCardInspectionPause(
+            configuration.Animation.DiceRollDuration + configuration.Animation.DiceResultHold);
+        if (targets.Count == 0)
+            yield break;
+
+        if (supremeClass == HeroClass.Hunter)
+        {
+			yield return battleAnimationPlayer.PlayHunterVolleySupreme(
+				caster.View,
+				targets.Select(target => target.View).ToList(),
+				hits,
+				() => PlayClassAbilitySfx(HeroClass.Hunter),
+				() => battleSfx?.PlayAttackResult(HeroClass.Hunter, hit: true));
+        }
+        else
+        {
+            yield return battleAnimationPlayer.PlayMageFireballSupreme(
+                caster.View, targets.Select(target => target.View).ToList());
+        }
+    }
+
     private IEnumerator PlayPvpDuelRoutine(BattlePresentationEvent battleEvent)
     {
         BattleCardState attacker = FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
@@ -1952,17 +2609,31 @@ public sealed partial class BattleBoardController
             battleEvent.DefenderRollSecondBeforeReroll);
 
         ClearPvpActionSelectionForDuel();
+        // La contrattacca va annunciata anche quando il confronto risulta
+        // impossibile. Prima il ramo qui sotto usciva anticipatamente e il
+        // giocatore vedeva soltanto il precedente "BLOCCATO" del Paladino.
+        if (battleEvent.IsCounter)
+        {
+            attacker.View.PlayCounterattackActionCallout();
+            yield return new WaitForSecondsRealtime(0.78f);
+        }
         if (battleEvent.Certainty == CombatCertainty.Impossible)
         {
             ShowPvpAttackSummary(battleEvent, attacker, defender, attackerRoll, defenderRoll);
+            // Il server chiude gia' l'attivazione come skip e assegna l'eventuale
+            // mana. L'esito viaggia pero' come AttackResolved, non TurnSkipped:
+            // mostra qui lo stesso callout dello skip automatico.
+            if (!battleEvent.IsCounter)
+                attacker.View?.PlaySkipActionCallout();
             ClearPendingPaladinRedirect();
+            yield return new WaitForSecondsRealtime(0.78f);
             yield break;
         }
 
         RectTransform duelRoot = (Object)(object)safeAreaRoot != (Object)null ? safeAreaRoot : canvasRect;
         Vector3 attackerPoint = PvpDuelWorldPoint(duelRoot, 0.30f);
         Vector3 defenderPoint = PvpDuelWorldPoint(duelRoot, 0.58f);
-		if (pvpState != null && battleEvent.Player != pvpState.MyIndex)
+		if (!battleEvent.IsCounter && pvpState != null && battleEvent.Player != pvpState.MyIndex)
 			attacker.View.PlayAttackActionCallout();
         yield return battleAnimationPlayer.PlayTargetLine(
             attacker.View,
@@ -1984,23 +2655,135 @@ public sealed partial class BattleBoardController
             battleEvent.AttackerDieSides,
             battleEvent.DefenderDieSides,
             battleEvent.Player == pvpState.MyIndex ? "ATTACCO" : "ATTACCO AVV",
-            battleEvent.TargetPlayer == pvpState.MyIndex ? "TUA DIFESA" : "DIFESA",
-            battleEvent.DefenderEliminated,
+            battleEvent.InterceptedByNecromancerMinion
+                ? "SGHERRO · DIFESA"
+                : battleEvent.TargetPlayer == pvpState.MyIndex ? "TUA DIFESA" : "DIFESA",
+            battleEvent.DefenderEliminated && !battleEvent.InterceptedByNecromancerMinion,
             attackerPoint,
             defenderPoint,
             () =>
             {
                 ShowPvpAttackSummary(battleEvent, attacker, defender, attackerRoll, defenderRoll);
-                PlayPvpAttackResolvedSfx(battleEvent);
             },
             () => SetMessagePanelHiddenForDuel(hidden: true),
-            () => SetMessagePanelHiddenForDuel(hidden: false),
+            () =>
+            {
+                SetMessagePanelHiddenForDuel(hidden: false);
+            },
             defenderHit: battleEvent.DefenderLostLife || battleEvent.DefenderEliminated,
             attackerTotal: battleEvent.AttackerTotal,
             defenderTotal: battleEvent.DefenderTotal,
-            attackerHeroClass: battleEvent.HasHeroClass ? battleEvent.HeroClass : attacker.Card.HeroClass);
+            attackerHeroClass: battleEvent.HasHeroClass ? battleEvent.HeroClass : attacker.Card.HeroClass,
+            attackerStrengthStart: DisplayStrength(attacker),
+            defenderStrengthStart: DisplayStrength(defender),
+            // Le due cose che il PvP non faceva e la campagna si': il difensore
+            // che para lo annuncia, e chi muore si porta dietro la sua tessera
+            // sulla timeline invece di lasciarla accesa.
+            onDefenderBlocked: () =>
+            {
+                if (defender.Card.HeroClass == HeroClass.Paladin
+                    && AuraFor(defender) == BattleAuraType.Paladin)
+                {
+                    defender.View.PlayCounterattackActionCallout();
+                    return;
+                }
+
+                ShowSuccessfulDefenseCallout(defender);
+            },
+            playDefeat: (_, killerHeroClass) => PlayTimelineAwareDefeatAnimation(defender, killerHeroClass),
+            onAttackStarted: () => PlayPvpAttackSfx(battleEvent),
+            onDefeatStarted: () => PlayPvpDefeatSfx(battleEvent));
         yield return new WaitWhile(() =>
             (Object)(object)battleAnimationPlayer != (Object)null && battleAnimationPlayer.IsBusy);
+        if (battleEvent.InterceptedByNecromancerMinion)
+        {
+            yield return AccardND.Battlefield.NecromancerMinionVfx.PlayCombatStrength(
+                defender.View?.RectTransform,
+                battleEvent.DefenderTotal,
+                minionSurvived: !battleEvent.DefenderLostLife);
+            if (battleEvent.DefenderLostLife)
+                AccardND.Battlefield.NecromancerMinionVfx.RemoveOne(defender.View?.RectTransform);
+        }
+    }
+
+    private void ShowPvpRoundResultOverlay(BattlePresentationEvent battleEvent)
+    {
+        DestroyPvpRoundResultOverlay();
+        pvpRoundResultConfirmed = false;
+
+        RectTransform parent = (Object)(object)safeAreaRoot != (Object)null ? safeAreaRoot : canvasRect;
+        Image blocker = CreateImage("Pvp Round Result Overlay", parent, new Color(0f, 0f, 0f, 0.72f));
+        blocker.raycastTarget = true;
+        pvpRoundResultOverlay = blocker.rectTransform;
+        Stretch(pvpRoundResultOverlay);
+        pvpRoundResultOverlay.SetAsLastSibling();
+
+        Image panel = CreateImage("Round Result Panel", pvpRoundResultOverlay, MmoUiTheme.Panel);
+        panel.sprite = MmoUiTheme.GetPanelSprite();
+        panel.type = Image.Type.Sliced;
+        panel.raycastTarget = true;
+        SetPvpRoundOverlayRect(panel.rectTransform, 0.12f, 0.31f, 0.88f, 0.69f);
+
+        bool localWon = battleEvent.Winner == pvpState.MyIndex;
+        string localName = PlayerPrefs.GetString(PlayerHudNamePrefsKey, "TU");
+        if (string.IsNullOrWhiteSpace(localName))
+            localName = "TU";
+        string opponentName = string.IsNullOrWhiteSpace(pvpState.OpponentName)
+            ? "AVVERSARIO"
+            : pvpState.OpponentName;
+        int localScore = pvpState.MyIndex == 0 ? battleEvent.WinsPlayer0 : battleEvent.WinsPlayer1;
+        int opponentScore = pvpState.MyIndex == 0 ? battleEvent.WinsPlayer1 : battleEvent.WinsPlayer0;
+        int completedRound = Mathf.Max(1, pvpState.MatchRound - 1);
+
+        Font overlayFont = MmoUiTheme.BodyFont;
+        Text title = CreateText("Round Result Title", panel.transform, MmoUiTheme.LoreFont, 50, FontStyle.Normal, TextAnchor.MiddleCenter);
+        title.text = localWon
+            ? $"HAI VINTO IL {OrdinalRoundName(completedRound)} ROUND"
+            : $"HAI PERSO IL {OrdinalRoundName(completedRound)} ROUND";
+        title.color = localWon ? MmoUiTheme.Good : MmoUiTheme.Bad;
+        MmoUiTheme.StyleAsScreenTitle(title);
+        SetPvpRoundOverlayRect(title.rectTransform, 0.08f, 0.62f, 0.92f, 0.92f);
+
+        Text score = CreateText("Round Score", panel.transform, MmoUiTheme.BodyBoldFont, 40, FontStyle.Normal, TextAnchor.MiddleCenter);
+        score.text = $"{localName}  {localScore}  -  {opponentScore}  {opponentName}";
+        score.color = MmoUiTheme.Gold;
+        SetPvpRoundOverlayRect(score.rectTransform, 0.08f, 0.38f, 0.92f, 0.62f);
+
+        Button continueButton = CreateButton("Pvp Round Continue Blue", panel.transform, overlayFont, "CONTINUA");
+        Image continueImage = continueButton.GetComponent<Image>();
+        Sprite blueCta = Resources.Load<Sprite>("UI/CampaignRestyle/campaign_cta_blue");
+        if ((Object)(object)blueCta != (Object)null)
+        {
+            continueImage.sprite = blueCta;
+            continueImage.type = Image.Type.Sliced;
+            continueImage.color = Color.white;
+        }
+        continueButton.onClick.AddListener(() => pvpRoundResultConfirmed = true);
+        SetPvpRoundOverlayRect((RectTransform)continueButton.transform, 0.25f, 0.10f, 0.75f, 0.34f);
+    }
+
+    private static string OrdinalRoundName(int round) => round switch
+    {
+        1 => "PRIMO",
+        2 => "SECONDO",
+        3 => "TERZO",
+        _ => $"{Mathf.Max(1, round)}°"
+    };
+
+    private static void SetPvpRoundOverlayRect(RectTransform rect, float xMin, float yMin, float xMax, float yMax)
+    {
+        rect.anchorMin = new Vector2(xMin, yMin);
+        rect.anchorMax = new Vector2(xMax, yMax);
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+    }
+
+    private void DestroyPvpRoundResultOverlay()
+    {
+        pvpRoundResultConfirmed = true;
+        if ((Object)(object)pvpRoundResultOverlay != (Object)null)
+            Object.Destroy(pvpRoundResultOverlay.gameObject);
+        pvpRoundResultOverlay = null;
     }
 
     private static Vector3 PvpDuelWorldPoint(RectTransform root, float normalizedX)
@@ -2055,6 +2838,16 @@ public sealed partial class BattleBoardController
             return;
         }
 
+        if (battleEvent.InterceptedByNecromancerMinion)
+        {
+            string outcome = battleEvent.DefenderLostLife
+                ? $"Lo sgherro di {defender.Card.Name} viene eliminato."
+                : $"Lo sgherro di {defender.Card.Name} para l'attacco e sopravvive.";
+            AppendLog($"SGHERRO - {attacker.Card.Name} {battleEvent.AttackerTotal} contro {battleEvent.DefenderTotal}. {outcome}");
+            SetBattlefieldMessage(outcome);
+            return;
+        }
+
         int attackerTotal = battleEvent.AttackerTotal != 0
             ? battleEvent.AttackerTotal
             : attacker.Card.Strength + attackerRoll.SelectedRoll;
@@ -2077,7 +2870,7 @@ public sealed partial class BattleBoardController
         SetBattlefieldMessage((battleEvent.Overkill ? "OVERKILL!\n" : string.Empty) + explanation);
     }
 
-    private void PlayPvpAttackResolvedSfx(BattlePresentationEvent battleEvent)
+    private void PlayPvpAttackSfx(BattlePresentationEvent battleEvent)
     {
         if (battleEvent == null)
             return;
@@ -2087,26 +2880,122 @@ public sealed partial class BattleBoardController
             battleSfx?.PlayAttackResult(
                 battleEvent.HeroClass,
                 hit);
-        if (battleEvent.DefenderEliminated && !battleEvent.BecameSpirit)
+    }
+
+    private void PlayPvpDefeatSfx(BattlePresentationEvent battleEvent)
+    {
+        if (battleEvent != null
+            && battleEvent.DefenderLostLife
+            && !battleEvent.DefenderEliminated
+            && battleEvent.DefenderRemainingLives == 1
+            && !battleEvent.InterceptedByNecromancerMinion)
+        {
+            battleSfx?.PlayLoseFirstHp();
+            return;
+        }
+
+        // L'esplosione visiva parte per ogni pedina eliminata, anche quando il
+        // server la converte subito in spirito: il relativo SFX deve seguirla.
+        if (battleEvent != null && battleEvent.DefenderEliminated)
             battleSfx?.PlayDeath();
     }
 
-    private void PlayPvpDeploymentAnimation(BattlePresentationEvent battleEvent)
+    /// <summary>
+    /// Schieramento visto dal campo. Le carte tue si trasformano in pedina con
+    /// lo stesso morph della campagna - era l'ultimo pezzo in cui i due modi
+    /// mostravano due animazioni diverse per lo stesso gesto - mentre quelle
+    /// dell'avversario, che non hai mai avuto in mano, si scoprono e basta.
+    /// Restituisce quanto dura, cosi' chi accoda gli eventi non parte prima.
+    /// </summary>
+    private float PlayPvpDeploymentAnimation(BattlePresentationEvent battleEvent)
     {
         BattleCardState card = FindPvpCardForPlayerSlot(battleEvent.Player, battleEvent.Slot);
         if (card == null || (Object)(object)card.View == (Object)null)
-            return;
+            return 0f;
 
         if (pvpState != null
             && battleEvent.Player == pvpState.MyIndex
             && TryPopPvpDeploymentPose(battleEvent.CardId, out PvpDeploymentPose pose))
         {
+            CardDefinition definition = FindPvpDefinition(battleEvent.CardId);
+            if ((Object)(object)definition != (Object)null)
+            {
+                deploymentMorphCoroutine = ((MonoBehaviour)this).StartCoroutine(PlayDeploymentMorph(
+                    definition,
+                    pose.Position,
+                    pose.Rotation,
+                    pose.Size,
+                    card.View,
+                    configuration.Animation.CardDeployDuration));
+                return configuration.Animation.CardDeployDuration;
+            }
+
             card.View.PlayDeploymentAnimation(pose.Position, pose.Rotation, configuration.Animation.CardDeployDuration);
+            return configuration.Animation.CardDeployDuration;
         }
-        else
+
+        card.View.PlayRevealAnimation(configuration.Animation.CpuCardRevealDuration);
+        return configuration.Animation.CpuCardRevealDuration;
+    }
+
+    /// <summary>
+    /// Chiude la recita di uno schieramento. Se nel frattempo lo stato e' passato
+    /// alla battaglia - succede sull'ultima pedina, che e' l'ultimo evento del
+    /// suo turno - il tavolo ci arriva adesso: la fila scende alla posa di
+    /// combattimento con la stessa transizione della campagna e il carosello
+    /// prende le pedine da dove sono, invece di contendersele con la scivolata
+    /// dello schieramento mentre la pedina appena posata sta ancora atterrando.
+    /// </summary>
+    private void EndPvpDeploymentPresentation()
+    {
+        if (!pvpDeploymentPresentationActive)
+            return;
+
+        pvpDeploymentPresentationActive = false;
+        if (pvpState == null
+            || pvpState.Phase == PvpClientPhase.Deployment
+            || (Object)(object)playerRow == (Object)null)
         {
-            card.View.PlayRevealAnimation(configuration.Animation.CpuCardRevealDuration);
+            return;
         }
+
+        // La scivolata dello schieramento ha finito il suo lavoro: quel che resta
+        // della corsa lo eredita il carosello, che parte dalla posa corrente.
+        StopBattlefieldPawnGlide();
+        Vector2 startAnchorMin = playerRow.anchorMin;
+        Vector2 startAnchorMax = playerRow.anchorMax;
+        Vector2 startSize = playerRow.sizeDelta;
+        Vector2 startPosition = playerRow.anchoredPosition;
+        RenderPvpMatch();
+        StartPlayerBattlefieldRowTransition(startAnchorMin, startAnchorMax, startSize, startPosition);
+    }
+
+    /// <summary>
+    /// Presenta sempre l'esito della composizione delle due formazioni. Anche
+    /// l'assenza di aura ha lo stesso tempo di regia. Il chiamante aspetta prima
+    /// che le pedine abbiano raggiunto la posa di combattimento, come in campagna.
+    /// </summary>
+    private void ShowPvpBattleStartAuraCallouts()
+    {
+        ShowPvpBattleStartAuraCallout(playerCards, playerAura, playerOwned: true);
+        ShowPvpBattleStartAuraCallout(cpuCards, cpuAura, playerOwned: false);
+    }
+
+    private void ShowPvpBattleStartAuraCallout(
+        IEnumerable<BattleCardState> formation,
+        BattleAuraType aura,
+        bool playerOwned)
+    {
+        BattleCardState source = formation?.FirstOrDefault(card => card?.View != null);
+        if (source == null)
+            return;
+
+        bool hasAura = aura != BattleAuraType.None;
+        source.View.PlayFormationCallout(
+            hasAura ? AuraActivationLabel(aura) : "NO AURA",
+            hasAura ? AuraColor(aura) : Color.white,
+            safeAreaRoot,
+            playerOwned);
     }
 
     private void CapturePvpDeploymentPose(string definitionId, PrototypeCardView view)
@@ -2119,7 +3008,10 @@ public sealed partial class BattleBoardController
             poses = new Queue<PvpDeploymentPose>();
             pvpDeploymentPoses[definitionId] = poses;
         }
-        poses.Enqueue(new PvpDeploymentPose(view.RectTransform.position, view.RectTransform.rotation));
+        poses.Enqueue(new PvpDeploymentPose(
+            view.RectTransform.position,
+            ((Transform)view.RectTransform).rotation,
+            RectSizeInSafeArea(view.RectTransform)));
     }
 
     private bool TryPopPvpDeploymentPose(string definitionId, out PvpDeploymentPose pose)
@@ -2176,6 +3068,7 @@ public sealed partial class BattleBoardController
             pvpRegiaRoutine = null;
         }
         pvpPendingEvents.Clear();
+        pvpDeploymentPresentationActive = false;
         ClearPendingPaladinRedirect();
     }
 

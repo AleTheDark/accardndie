@@ -14,7 +14,6 @@ namespace AccardND.Editor
             EditorApplication.delayCall += () => EnsureConfiguration();
         }
 
-        [MenuItem("Accard N' Die/Open Game Configuration", priority = 1)]
         public static void OpenConfiguration()
         {
             GameConfiguration configuration = EnsureConfiguration();
@@ -22,7 +21,6 @@ namespace AccardND.Editor
             EditorGUIUtility.PingObject(configuration);
         }
 
-        [MenuItem("Accard N' Die/Validate Game Configuration", priority = 2)]
         private static void ValidateConfiguration()
         {
             GameConfiguration configuration = EnsureConfiguration();

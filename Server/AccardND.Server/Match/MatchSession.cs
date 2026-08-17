@@ -41,7 +41,16 @@ public sealed class MatchSession
     private bool paused;
     private string endedReason = "normal";
 
-    public MatchSession(Room room, ServerConfig config, MatchResultRecorder resultRecorder)
+    /// <param name="unlockedSupremesOf">
+    /// Le supreme sbloccate da un account. Serve solo alle classificate: li' si possono usare
+    /// soltanto quelle, mentre in amichevole si usa tutto. Lasciarlo null - come fanno i test,
+    /// che non hanno un catalogo di sblocchi da consultare - vuol dire nessun limite.
+    /// </param>
+    public MatchSession(
+        Room room,
+        ServerConfig config,
+        MatchResultRecorder resultRecorder,
+        Func<AccountIdentity, IReadOnlyCollection<HeroClass>> unlockedSupremesOf = null)
     {
         ArgumentNullException.ThrowIfNull(room);
         ArgumentNullException.ThrowIfNull(config);
@@ -57,7 +66,23 @@ public sealed class MatchSession
             ToCombatCards(room.HostLoadout),
             ToCombatCards(room.GuestLoadout),
             config.ToMatchRules(room.Mode),
-            new SeededRandomSource(RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue)));
+            new SeededRandomSource(RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue)),
+            allowedSupremes: AllowedSupremes(unlockedSupremesOf));
+    }
+
+    /// <summary>
+    /// Il permesso sulle supreme, giocatore per giocatore: gli sblocchi veri in classificata,
+    /// null (nessun limite) in amichevole. Si legge una volta sola, alla creazione del match:
+    /// una supreme comprata a partita in corso non entra a meta' strada, ed e' giusto cosi' -
+    /// le regole di una partita non cambiano mentre la giochi.
+    /// </summary>
+    private IReadOnlyList<IReadOnlyCollection<HeroClass>> AllowedSupremes(
+        Func<AccountIdentity, IReadOnlyCollection<HeroClass>> unlockedSupremesOf)
+    {
+        if (!ranked || unlockedSupremesOf == null)
+            return null;
+
+        return new[] { unlockedSupremesOf(identities[0]), unlockedSupremesOf(identities[1]) };
     }
 
     public bool IsFinished => engine.Phase == PvpMatchPhase.Finished;

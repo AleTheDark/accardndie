@@ -20,8 +20,25 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	private Vector2 playerRowTransitionTargetAnchorMin;
+	private Vector2 playerRowTransitionTargetAnchorMax;
+	private Vector2 playerRowTransitionTargetSize;
+	private Vector2 playerRowTransitionTargetPosition;
+	private bool playerRowTransitionRetargeted;
+	private int playerRowTransitionFrame = -1;
+	private Coroutine battlefieldPawnGlideCoroutine;
+
+	/// <summary>
+	/// Il morph della carta che diventa pedina. Chi fa cominciare la battaglia
+	/// deve aspettarlo: il suo tempo e' nominale, ma il frame che lo crea non
+	/// viene contato e sull'ultima carta lo sfora quasi sempre.
+	/// </summary>
+	private Coroutine deploymentMorphCoroutine;
+	private int deploymentMorphFrame = -1;
+
 	private void BeginFormationDraft()
 	{
+		waitingForCampaignBossReveal = !pvpPresentationActive && currentRoomType == RoomType.Boss;
 		// La moneta del turno compare solo quando tutte le iniziative hanno
 		// terminato il volo nella timeline.
 		SetTurnCoinSuppressed(suppressed: true);
@@ -33,7 +50,9 @@ public sealed partial class BattleBoardController
 		selectedPlayerDeploymentIndices.Clear();
 		selectedCpuDeploymentCards.Clear();
 		selectedPlayerDeploymentInitiatives.Clear();
+		selectedPlayerDeploymentTokens.Clear();
 		selectedCpuDeploymentInitiatives.Clear();
+		selectedCpuDeploymentTokens.Clear();
 		deploymentOrder.Clear();
 		foreach (PrototypeCardView playerDeploymentPreviewView in playerDeploymentPreviewViews)
 		{
@@ -118,23 +137,25 @@ public sealed partial class BattleBoardController
 				{
 					return;
 				}
-				// Durante lo schieramento la mano e' swipe-only: un click o un
-				// rilascio sotto la meta' dello schermo non seleziona nulla.
-				if (deploymentDraftActive)
-				{
-					return;
-				}
+				// Il selettore swipe sopprime il click quando ha gia' gestito il
+				// rilascio. Se invece il gesto non viene riconosciuto, il Button
+				// resta un percorso di fallback valido anche nello schieramento.
 				ToggleDraftCard(capturedIndex);
 			});
 			prototypeCardView.ClearDragHandlers();
 			ConfigureCampaignDeploymentHandSwipe(prototypeCardView, capturedIndex);
-			prototypeCardView.SetInteractable(campaignDeck == null || currentRoomType != RoomType.Monster);
+			// La mano resta completamente non interagibile finche' l'animazione di
+			// ingresso non e' terminata e lo stato di gioco non abilita la scelta.
+			prototypeCardView.SetInteractable(interactable: false);
 			prototypeCardView.SetAlpha(0f);
 			draftViews.Add(prototypeCardView);
 		}
 		if ((Object)(object)playerTitleText != (Object)null)
 		{
-			playerTitleText.text = $"SCEGLI {configuration.Gameplay.FormationSize} CARTE";
+			playerTitleText.text = GameText.GetOrFallbackSilent(
+				GameTextKeys.Campaign.ChooseFormationCards,
+				"SCEGLI {0} CARTE",
+				configuration.Gameplay.FormationSize);
 		}
 		bool flag = campaignDeck != null && (currentRoomType == RoomType.Monster || currentRoomType == RoomType.Boss);
 		if (flag)
@@ -147,7 +168,7 @@ public sealed partial class BattleBoardController
 		((Component)confirmActionButton).gameObject.SetActive(!flag);
 		if ((Object)(object)confirmActionButtonText != (Object)null)
 		{
-			confirmActionButtonText.text = "CONFERMA";
+			confirmActionButtonText.text = GameText.GetOrFallbackSilent(GameTextKeys.Common.Confirm, "CONFERMA");
 		}
 		confirmActionButton.interactable = false;
 		RefreshInitiativeDisplay();
@@ -384,7 +405,7 @@ public sealed partial class BattleBoardController
 
 	private void ToggleDraftCard(int index)
 	{
-		if (!draftActive || index < 0 || index >= draftViews.Count)
+		if (!draftActive || inputLocked || index < 0 || index >= draftViews.Count)
 		{
 			return;
 		}
@@ -402,6 +423,7 @@ public sealed partial class BattleBoardController
 			if (deploymentToken.BelongsToPlayer)
 			{
 				pendingDeploymentIndex = index;
+				ShowDeploymentMatchupHints(draftCandidates[index]);
 				for (int i = 0; i < draftViews.Count; i++)
 				{
 					bool flag = selectedDraftCards.Contains(i);
@@ -500,14 +522,8 @@ public sealed partial class BattleBoardController
 		}
 		else
 		{
-			for (int i = 0; i < formationSize; i++)
-			{
-				deploymentOrder.Add(new DeploymentToken(belongsToPlayer: true, RollUniqueInitiative(initiativeDieSides, usedInitiatives), random.NextInclusive(1, 10000)));
-			}
-			for (int j = 0; j < cpuDeploymentCount; j++)
-			{
-				deploymentOrder.Add(new DeploymentToken(belongsToPlayer: false, RollUniqueInitiative(initiativeDieSides, usedInitiatives), random.NextInclusive(1, 10000)));
-			}
+			RollDeploymentInitiatives(formationSize, cpuDeploymentCount, initiativeDieSides, usedInitiatives);
+			AvoidRepeatedCampaignRetryInitiatives(formationSize, cpuDeploymentCount, initiativeDieSides, usedInitiatives);
 		}
 		deploymentOrder.Sort(delegate(DeploymentToken left, DeploymentToken right)
 		{
@@ -538,6 +554,136 @@ public sealed partial class BattleBoardController
 		ProcessNextDeploymentToken();
 	}
 
+	private void RollDeploymentInitiatives(int formationSize, int cpuDeploymentCount, int initiativeDieSides, HashSet<int> usedInitiatives)
+	{
+		usedInitiatives.Clear();
+		deploymentOrder.Clear();
+		for (int i = 0; i < formationSize; i++)
+		{
+			// L'indice del ciclo e' il "1º/2º/3º dado d'iniziativa" dei talenti: qui i
+			// tiri sono ancora nell'ordine in cui escono, e questa e' l'unica riga in
+			// cui quell'identita' esiste. Subito dopo il sort la perde per sempre.
+			DeploymentToken token = new DeploymentToken(belongsToPlayer: true, RollUniqueInitiative(initiativeDieSides, usedInitiatives), random.NextInclusive(1, 10000));
+			ApplyInitiativeTalentsToDeploymentToken(token, i);
+			deploymentOrder.Add(token);
+		}
+		for (int i = 0; i < cpuDeploymentCount; i++)
+		{
+			deploymentOrder.Add(new DeploymentToken(belongsToPlayer: false, RollUniqueInitiative(initiativeDieSides, usedInitiatives), random.NextInclusive(1, 10000)));
+		}
+	}
+
+	private void AvoidRepeatedCampaignRetryInitiatives(int formationSize, int cpuDeploymentCount, int initiativeDieSides, HashSet<int> usedInitiatives)
+	{
+		int[] previous = campaignRetryPreviousPlayerInitiatives;
+		campaignRetryPreviousPlayerInitiatives = null;
+		if (previous == null || previous.Length != formationSize)
+		{
+			return;
+		}
+
+		const int maxRerolls = 32;
+		for (int attempt = 0; attempt < maxRerolls && PlayerInitiativesMatch(previous); attempt++)
+		{
+			RollDeploymentInitiatives(formationSize, cpuDeploymentCount, initiativeDieSides, usedInitiatives);
+		}
+
+		if (!PlayerInitiativesMatch(previous))
+		{
+			return;
+		}
+
+		// Garantisce il vincolo anche con una sorgente casuale deterministica che
+		// continui a restituire la stessa sequenza (utile anche nei test).
+		int playerIndex = deploymentOrder.FindIndex(token => token.BelongsToPlayer);
+		if (playerIndex < 0)
+		{
+			return;
+		}
+		DeploymentToken playerToken = deploymentOrder[playerIndex];
+		usedInitiatives.Remove(playerToken.Initiative);
+		for (int initiative = 1; initiative <= initiativeDieSides; initiative++)
+		{
+			if (initiative != playerToken.Initiative && usedInitiatives.Add(initiative))
+			{
+				// Cambia il numero, non il dado: il token sostituito e' sempre il
+				// primo del giocatore, quindi si porta dietro i suoi talenti.
+				DeploymentToken replacement = new DeploymentToken(true, initiative, playerToken.TieBreaker)
+				{
+					TalentInitiativeBonus = playerToken.TalentInitiativeBonus,
+					OpensTheFight = playerToken.OpensTheFight,
+				};
+				deploymentOrder[playerIndex] = replacement;
+				break;
+			}
+		}
+	}
+
+	/// <summary>
+	/// Porta in battaglia il dado dello schieramento tutto intero: bonus dei talenti,
+	/// "Apertura" e - soprattutto - il tie-breaker con cui la timeline ha gia' sciolto
+	/// le parita' davanti al giocatore.
+	///
+	/// Il tie-breaker e' la parte che sembra un dettaglio e non lo e'. I tiri sono unici,
+	/// ma il bonus dei talenti no: un +3 su un 5 pareggia il 8 di chiunque altro, e a
+	/// quel punto l'ordine lo decide il tie-breaker. Ritirarlo a battaglia iniziata
+	/// significa rigiocarsi a testa o croce due pedine che il giocatore ha appena visto
+	/// sistemarsi nella timeline.
+	/// </summary>
+	private static void ApplyDeploymentTokenToCard(BattleCardState card, IReadOnlyList<DeploymentToken> tokens, int deploymentIndex)
+	{
+		if (card == null || tokens == null || deploymentIndex < 0 || deploymentIndex >= tokens.Count)
+		{
+			return;
+		}
+		DeploymentToken token = tokens[deploymentIndex];
+		if (token == null)
+		{
+			return;
+		}
+		card.InitiativeTalentBonus = token.TalentInitiativeBonus;
+		card.OpensTheFight = token.OpensTheFight;
+		card.TieBreaker = token.TieBreaker;
+	}
+
+	/// <summary>
+	/// Attacca al dado i talenti del ramo Iniziativa. <paramref name="dieSlot"/> e' la
+	/// posizione del tiro nella sequenza del giocatore (0 = 1º dado), non la posizione
+	/// nella fila: e' quello che il ramo dei talenti chiama "1º/2º/3º dado".
+	/// </summary>
+	private void ApplyInitiativeTalentsToDeploymentToken(DeploymentToken token, int dieSlot)
+	{
+		if (token == null || !token.BelongsToPlayer)
+		{
+			return;
+		}
+		token.TalentInitiativeBonus = TalentRunModifiers.InitiativeBonus(dieSlot, ActiveTalents);
+		token.OpensTheFight = ActiveTalents.opensEveryFight && dieSlot == 0;
+	}
+
+	/// <summary>
+	/// L'ordine di discesa in campo a talenti applicati: si schiera dal numero piu'
+	/// basso, e chi ha "Apertura" scende per ultimo perche' in battaglia agisce per primo.
+	/// </summary>
+	private static int CompareDeploymentTokensByEffectiveInitiative(DeploymentToken left, DeploymentToken right)
+	{
+		if (left.OpensTheFight != right.OpensTheFight)
+		{
+			return left.OpensTheFight ?1 : -1;
+		}
+		int compared = left.EffectiveInitiative.CompareTo(right.EffectiveInitiative);
+		return (compared == 0) ?left.TieBreaker.CompareTo(right.TieBreaker) : compared;
+	}
+
+	private bool PlayerInitiativesMatch(int[] previous)
+	{
+		return deploymentOrder
+			.Where(token => token.BelongsToPlayer)
+			.Select(token => token.Initiative)
+			.OrderBy(initiative => initiative)
+			.SequenceEqual(previous);
+	}
+
 	private void BuildCpuDeploymentHand()
 	{
 		cpuDeploymentHand.Clear();
@@ -559,16 +705,21 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		int monsterPoolCount = (from card in cardDatabase.Cards
-			where (Object)(object)card != (Object)null && card.Category == CardCategory.Monster && card.CanEnterCombat
+		RoomDifficultyRules rules = RoomDifficultyRules.For(pendingRoomDifficulty);
+		List<CardDefinition> allowedCards = cardDatabase.Cards
+			.Where(card => (Object)(object)card != (Object)null
+				&& (card.Category != CardCategory.Monster
+					|| (card.CanEnterCombat && card.Strength <= rules.MaximumMonsterCardStrength)))
+			.ToList();
+		int monsterPoolCount = (from card in allowedCards
+			where card.Category == CardCategory.Monster && card.CanEnterCombat
 			select card.Id into id
 			where !string.IsNullOrWhiteSpace(id)
 			select id).Distinct().Count();
 		cpuDeploymentHand.AddRange(formationDraftService.DrawCandidates(
-			cardDatabase.Cards,
+			allowedCards,
 			Mathf.Min(configuration.DeckBuilding.CombatHandSize, monsterPoolCount)));
 
-		RoomDifficultyRules rules = RoomDifficultyRules.For(pendingRoomDifficulty);
 		int formationSize = configuration.Gameplay.FormationSize;
 		List<List<CardDefinition>> validFormations = BuildFormationCandidates(cpuDeploymentHand, formationSize)
 			.Where(formation =>
@@ -582,7 +733,8 @@ public sealed partial class BattleBoardController
 			List<CardDefinition> allMonsters = cardDatabase.Cards
 				.Where(card => (Object)(object)card != (Object)null
 					&& card.Category == CardCategory.Monster
-					&& card.CanEnterCombat)
+					&& card.CanEnterCombat
+					&& card.Strength <= rules.MaximumMonsterCardStrength)
 				.ToList();
 			validFormations = BuildFormationCandidates(allMonsters, formationSize)
 				.Where(formation =>
@@ -615,6 +767,7 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		pendingDeploymentIndex = -1;
+		ClearTargetHints();
 		if ((Object)(object)cancelActionButton != (Object)null)
 		{
 			((Component)cancelActionButton).gameObject.SetActive(false);
@@ -649,6 +802,7 @@ public sealed partial class BattleBoardController
 				draftViews[i].SetInteractable(!selectedDraftCards.Contains(i));
 			}
 			SetMessage("Scegli una carta dalla tua mano da schierare.");
+			NotifyAdventureTutorial(AdventureTutorialAction.PlayerDeploymentTurnStarted);
 			ShowAdventureTutorialDeploymentChoiceSpotlight();
 		}
 		else
@@ -686,15 +840,27 @@ public sealed partial class BattleBoardController
 			yield break;
 		}
 		CardDefinition cardDefinition = ChooseAdaptiveCpuDeploymentCard();
+		token.DeployedCard = cardDefinition;
 		selectedCpuDeploymentCards.Add(cardDefinition);
 		selectedCpuDeploymentInitiatives.Add(token.Initiative);
+		selectedCpuDeploymentTokens.Add(token);
 		cpuDeploymentHand.Remove(cardDefinition);
 		bool deployingBragus = IsBragusBossDefinition(cardDefinition);
+		bool deployingJurinashor = IsJurinashorBossDefinition(cardDefinition);
 		bool deployingTrentor = IsTrentorBossDefinition(cardDefinition);
+		bool deployingSeraphel = IsSeraphelBossDefinition(cardDefinition);
 		bool deployingComposableGolem = IsComposableGolemDefinition(cardDefinition);
-		bool deployingBackdropBoss = deployingBragus || deployingTrentor;
+		bool deployingBoss = deployingComposableGolem
+			|| IsMedusaBossDefinition(cardDefinition)
+			|| deployingBragus
+			|| deployingJurinashor
+			|| deployingTrentor
+			|| IsPalatirBossDefinition(cardDefinition)
+			|| deployingSeraphel;
+		bool deployingBackdropBoss = deployingBragus || deployingJurinashor || deployingTrentor || deployingSeraphel;
 		bool backdropBossDeploysLast = deployingBackdropBoss
 			&& currentDeploymentIndex + 1 >= deploymentOrder.Count;
+		Dictionary<RectTransform, Vector2> battlefieldPawnPoses = CaptureBattlefieldPawnPoses(cpuRow);
 		PrototypeCardView prototypeCardView = null;
 		if (deployingBackdropBoss)
 		{
@@ -716,19 +882,33 @@ public sealed partial class BattleBoardController
 			// Ripristina sempre lo scenario corrente anche se una precedente sessione
 			// aveva lasciato attiva la presentazione di Bragus o Trentor.
 			bragusBossPresentationActive = false;
+			jurinashorBossPresentationActive = false;
 			trentorBossPresentationActive = false;
+			seraphelBossPresentationActive = false;
 			RefreshScenarioBackground();
 		}
 		if (deployingBackdropBoss)
 		{
 			bragusBossPresentationActive = deployingBragus;
+			jurinashorBossPresentationActive = deployingJurinashor;
 			trentorBossPresentationActive = deployingTrentor;
+			seraphelBossPresentationActive = deployingSeraphel;
+			if (deployingSeraphel)
+				PrepareSeraphelRevealHud();
 			if (!backdropBossDeploysLast)
 				TransitionToScenarioBackground();
 			if (deployingBragus)
 				PlayMusic(bossBragusSoundtrack);
 		}
+		if (deployingBoss && waitingForCampaignBossReveal)
+		{
+			waitingForCampaignBossReveal = false;
+			SetCombatHudRefactorVisible(combatChromeVisible);
+			RefreshPlayerHud();
+			RefreshCpuHud();
+		}
 		Canvas.ForceUpdateCanvases();
+		StartBattlefieldPawnGlide(battlefieldPawnPoses);
 		PlayPawnEnteringBattlefieldSfx(cardDefinition);
 		if (prototypeCardView != null)
 		{
@@ -761,6 +941,14 @@ public sealed partial class BattleBoardController
 	private IEnumerator ContinueDeploymentAfterDelay(float delay)
 	{
 		yield return WaitForCardInspectionPause(delay);
+		// Sull'ultima carta il token successivo e' la battaglia, che si porta via
+		// la preview e fa scendere la fila. Se il morph e' ancora in volo si
+		// ritrova il bersaglio spostato sotto: la pedina si posa in un punto e
+		// quella vera e' gia' altrove. Si aspetta che abbia finito davvero.
+		while (IsRoutineAlive(deploymentMorphCoroutine, deploymentMorphFrame))
+		{
+			yield return null;
+		}
 		ProcessNextDeploymentToken();
 	}
 
@@ -816,9 +1004,11 @@ public sealed partial class BattleBoardController
 		}
 		float duration = Mathf.Clamp(configuration.Animation.CardDeployDuration * 0.38f, 0.16f, 0.28f);
 		float elapsed = 0f;
+		bool firstFrame = true;
 		while (elapsed < duration)
 		{
-			elapsed += Time.unscaledDeltaTime;
+			elapsed += firstFrame ?0f : AnimationDeltaTime();
+			firstFrame = false;
 			float t = Mathf.Clamp01(elapsed / duration);
 			float eased = 1f - Mathf.Pow(1f - t, 3f);
 			foreach (KeyValuePair<PrototypeCardView, HandRedealPose> pair in startPoses)
@@ -862,8 +1052,17 @@ public sealed partial class BattleBoardController
 			return minimumReachable <= difficultyRules.MaximumFormationPower
 				&& maximumReachable >= difficultyRules.MinimumFormationPower;
 		}).ToList();
-		IReadOnlyList<CardDefinition> candidates = legalCards.Count > 0 ? legalCards : cpuDeploymentHand;
-		CardDefinition result = cpuDeploymentHand[0];
+		IReadOnlyList<CardDefinition> candidates = legalCards;
+		if (candidates.Count == 0)
+		{
+			// Nessuna carta in mano tiene la formazione dentro la banda di potenza della
+			// stanza: si schiera comunque, ma la deviazione va tracciata perche' e' il
+			// sintomo di una mano generata male, non una scelta della CPU.
+			candidates = cpuDeploymentHand;
+			AppendLog($"SCHIERAMENTO CPU - nessuna carta rispetta la banda {difficultyRules.DisplayName} " +
+				$"({difficultyRules.MinimumFormationPower}-{difficultyRules.MaximumFormationPower}): si ripiega sulla mano completa.");
+		}
+		CardDefinition result = candidates[0];
 		int num = int.MinValue;
 		foreach (CardDefinition item in candidates)
 		{
@@ -894,16 +1093,30 @@ public sealed partial class BattleBoardController
 			ClearDeploymentTimeline();
 			Font builtinResource = AccardND.Battlefield.MmoUiTheme.BodyFont;
 			float timelineTileSize = GetTimelineTileSize(deploymentOrder.Count);
-			for (int i = 0; i < deploymentOrder.Count; i++)
+			// I dadi minori sono in fondo alla timeline e il loro turno parte da li'.
+			for (int i = deploymentOrder.Count - 1; i >= 0; i--)
 			{
 				DeploymentToken deploymentToken = deploymentOrder[i];
 				bool flag = i == currentDeploymentIndex;
 				Image image = CreateImage(deploymentToken.BelongsToPlayer ?"Deploy TU" : "Deploy CPU", (Transform)(object)initiativeTimelineRoot, flag ?new Color(0.72f, 0.48f, 0.12f, 0.98f) : (deploymentToken.BelongsToPlayer ?new Color(0.04f, 0.42f, 0.48f, 0.95f) : new Color(0.5f, 0.1f, 0.12f, 0.95f)));
 				LayoutElement layoutElement = ((Component)image).gameObject.AddComponent<LayoutElement>();
 				ConfigureTimelineTileLayout(layoutElement, timelineTileSize);
-				Text text = CreateText("Token", ((Component)image).transform, builtinResource, 18, (FontStyle)1, (TextAnchor)4);
-				text.text = deploymentToken.BelongsToPlayer ?"TU" : "CPU";
-				Stretch(text.rectTransform, 2f);
+				if (deploymentToken.DeployedCard != null)
+				{
+					Image portrait = CreateImage("Portrait", ((Component)image).transform, Color.white);
+					portrait.sprite = deploymentToken.DeployedCard.Artwork;
+					portrait.preserveAspect = false;
+					portrait.raycastTarget = false;
+					SetRect(portrait.rectTransform, new Vector2(0.045f, 0.045f), new Vector2(0.955f, 0.955f));
+				}
+				else
+				{
+					Text text = CreateText("Token", ((Component)image).transform, builtinResource, 35, (FontStyle)1, (TextAnchor)4);
+					text.text = $"{deploymentOrder.Count - i}\u00B0";
+					text.resizeTextForBestFit = false;
+					text.fontSize = 35;
+					Stretch(text.rectTransform, 2f);
+				}
 			}
 			ResizeTimelineTiles(deploymentOrder.Count);
 			if (adventureScriptedTutorialActive && adventureScriptedTutorialStep < 2)
@@ -1060,6 +1273,9 @@ public sealed partial class BattleBoardController
 			rectTransform.sizeDelta = new Vector2(GetTimelineTileSize(), GetTimelineTileSize());
 			rectTransform.localScale = Vector3.one * 0.58f;
 		}
+		// I dadi sono in posa col numero tirato: e' qui che i talenti entrano in scena,
+		// prima che la timeline diventi 1º, 2º, 3º.
+		yield return RevealDeploymentInitiativeTalents(rectByToken, GetTimelineTileSize(deploymentOrder.Count));
 		foreach (RectTransform rectTransform in diceRects)
 		{
 			if ((Object)(object)rectTransform != (Object)null)
@@ -1195,6 +1411,9 @@ public sealed partial class BattleBoardController
 			rectTransform.localScale = Vector3.one * 0.58f;
 		}
 
+		// I dadi sono in posa col numero tirato: e' qui che i talenti entrano in scena,
+		// prima che la timeline diventi 1º, 2º, 3º.
+		yield return RevealDeploymentInitiativeTalents(rectByToken, GetTimelineTileSize(deploymentOrder.Count));
 		foreach (RectTransform rectTransform in diceRects)
 		{
 			if ((Object)(object)rectTransform != (Object)null)
@@ -1251,6 +1470,223 @@ public sealed partial class BattleBoardController
 		}
 	}
 
+	/// <summary>
+	/// Il momento in cui i talenti d'iniziativa si vedono. I dadi sono appena atterrati
+	/// nella timeline col numero tirato: qui si accende il "+N" su quelli potenziati e,
+	/// se il bonus basta a scavalcare il vicino, li si guarda scambiarsi di posto. Solo
+	/// dopo la timeline diventa 1º, 2º, 3º: l'ordine che il giocatore legge alla fine e'
+	/// quello vero, e l'ha visto formarsi invece di trovarselo ribaltato a battaglia
+	/// iniziata.
+	/// </summary>
+	private IEnumerator RevealDeploymentInitiativeTalents(IReadOnlyDictionary<DeploymentToken, RectTransform> rectByToken, float tileSize)
+	{
+		if (rectByToken == null || rectByToken.Count == 0 || (Object)(object)safeAreaRoot == (Object)null)
+		{
+			yield break;
+		}
+		Dictionary<DeploymentToken, RectTransform> badgeByToken = new Dictionary<DeploymentToken, RectTransform>();
+		List<RectTransform> badgeRects = new List<RectTransform>();
+		foreach (DeploymentToken token in deploymentOrder)
+		{
+			if (token.TalentInitiativeBonus <= 0 && !token.OpensTheFight)
+			{
+				continue;
+			}
+			if (!rectByToken.TryGetValue(token, out RectTransform dieRect) || (Object)(object)dieRect == (Object)null)
+			{
+				continue;
+			}
+			RectTransform badgeRect = CreateDeploymentTalentBadge(token, dieRect, tileSize);
+			if ((Object)(object)badgeRect != (Object)null)
+			{
+				badgeByToken[token] = badgeRect;
+				badgeRects.Add(badgeRect);
+			}
+		}
+		if (badgeRects.Count == 0)
+		{
+			yield break;
+		}
+		AppendLog("TALENTI INIZIATIVA - " + DescribeDeploymentInitiativeTalents());
+		yield return PlayDeploymentTalentBadgePop(badgeRects);
+		List<DeploymentToken> reordered = new List<DeploymentToken>(deploymentOrder);
+		reordered.Sort(CompareDeploymentTokensByEffectiveInitiative);
+		if (!reordered.SequenceEqual(deploymentOrder))
+		{
+			deploymentOrder.Clear();
+			deploymentOrder.AddRange(reordered);
+			yield return SlideDeploymentDiceToNewOrder(rectByToken, badgeByToken);
+		}
+		else
+		{
+			yield return WaitForCardInspectionPause(0.35f);
+		}
+		foreach (RectTransform badgeRect in badgeRects)
+		{
+			if ((Object)(object)badgeRect != (Object)null)
+			{
+				Object.Destroy((Object)(object)((Component)badgeRect).gameObject);
+			}
+		}
+	}
+
+	private string DescribeDeploymentInitiativeTalents()
+	{
+		List<string> parts = new List<string>();
+		foreach (DeploymentToken token in deploymentOrder)
+		{
+			if (token.TalentInitiativeBonus <= 0 && !token.OpensTheFight)
+			{
+				continue;
+			}
+			string opens = token.OpensTheFight ?" (Apertura)" : string.Empty;
+			parts.Add($"dado {token.Initiative} +{token.TalentInitiativeBonus} = {token.EffectiveInitiative}{opens}");
+		}
+		return string.Join(", ", parts);
+	}
+
+	private RectTransform CreateDeploymentTalentBadge(DeploymentToken token, RectTransform dieRect, float tileSize)
+	{
+		float size = Mathf.Max(28f, tileSize);
+		Image background = CreateImage("Talent Initiative Badge", (Transform)(object)safeAreaRoot, new Color(0.72f, 0.48f, 0.12f, 0.96f));
+		RectTransform badgeRect = background.rectTransform;
+		badgeRect.anchorMin = new Vector2(0.5f, 0.5f);
+		badgeRect.anchorMax = new Vector2(0.5f, 0.5f);
+		badgeRect.pivot = new Vector2(0.5f, 0.5f);
+		badgeRect.sizeDelta = new Vector2(size * (token.OpensTheFight ?2.15f : 1.05f), size * 0.62f);
+		// Alla sinistra del dado: la timeline sta sul bordo, sopra e sotto ci sono gli
+		// altri dadi e il badge coprirebbe proprio i vicini che deve far scavalcare.
+		badgeRect.anchoredPosition = dieRect.anchoredPosition + new Vector2((0f - size) * 0.95f, 0f);
+		background.raycastTarget = false;
+		Outline outline = ((Component)background).gameObject.AddComponent<Outline>();
+		outline.effectColor = new Color(1f, 0.86f, 0.25f, 0.9f);
+		outline.effectDistance = new Vector2(2f, -2f);
+		string label = token.OpensTheFight
+			? (token.TalentInitiativeBonus > 0 ?$"+{token.TalentInitiativeBonus} APERTURA" : "APERTURA")
+			: $"+{token.TalentInitiativeBonus}";
+		Text text = CreateText("Value", ((Component)background).transform, AccardND.Battlefield.MmoUiTheme.BodyFont, 26, (FontStyle)1, (TextAnchor)4);
+		text.text = label;
+		text.color = Color.white;
+		text.resizeTextForBestFit = true;
+		text.resizeTextMinSize = 12;
+		text.resizeTextMaxSize = 28;
+		text.raycastTarget = false;
+		Stretch(text.rectTransform, 2f);
+		((Transform)badgeRect).localScale = Vector3.zero;
+		return badgeRect;
+	}
+
+	private IEnumerator PlayDeploymentTalentBadgePop(List<RectTransform> badgeRects)
+	{
+		const float popDuration = 0.28f;
+		float elapsed = 0f;
+		while (elapsed < popDuration)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			float t = Mathf.Clamp01(elapsed / popDuration);
+			// Sfora l'uno e rientra: il badge deve farsi notare, e' l'unica cosa che
+			// spiega il riordino che sta per succedere.
+			float scale = Mathf.LerpUnclamped(0f, 1f, 1f - Mathf.Pow(1f - t, 3f)) * (1f + Mathf.Sin(t * Mathf.PI) * 0.22f);
+			foreach (RectTransform badgeRect in badgeRects)
+			{
+				if ((Object)(object)badgeRect != (Object)null)
+				{
+					((Transform)badgeRect).localScale = Vector3.one * scale;
+				}
+			}
+			yield return null;
+		}
+		foreach (RectTransform badgeRect in badgeRects)
+		{
+			if ((Object)(object)badgeRect != (Object)null)
+			{
+				((Transform)badgeRect).localScale = Vector3.one;
+			}
+		}
+		yield return WaitForCardInspectionPause(0.75f);
+	}
+
+	/// <summary>
+	/// Lo scambio vero e proprio: ogni dado scivola alla sua nuova casella con una
+	/// pancia laterale, cosi' due dadi che si scambiano non si attraversano.
+	/// </summary>
+	private IEnumerator SlideDeploymentDiceToNewOrder(
+		IReadOnlyDictionary<DeploymentToken, RectTransform> rectByToken,
+		IReadOnlyDictionary<DeploymentToken, RectTransform> badgeByToken)
+	{
+		Vector2[] targetPositions = GetDeploymentTimelineTargetPositions(deploymentOrder.Count);
+		List<RectTransform> rects = new List<RectTransform>();
+		List<RectTransform> badges = new List<RectTransform>();
+		List<Vector2> badgeOffsets = new List<Vector2>();
+		List<Vector2> starts = new List<Vector2>();
+		List<Vector2> targets = new List<Vector2>();
+		for (int i = 0; i < deploymentOrder.Count && i < targetPositions.Length; i++)
+		{
+			DeploymentToken token = deploymentOrder[i];
+			if (!rectByToken.TryGetValue(token, out RectTransform rectTransform) || (Object)(object)rectTransform == (Object)null)
+			{
+				continue;
+			}
+			rects.Add(rectTransform);
+			starts.Add(rectTransform.anchoredPosition);
+			targets.Add(targetPositions[i]);
+			// Il badge non e' figlio del dado (il dado 3D si disegna per conto suo):
+			// viaggia agganciato allo scarto che aveva quando e' comparso.
+			RectTransform badgeRect = badgeByToken != null && badgeByToken.TryGetValue(token, out RectTransform found) ?found : null;
+			badges.Add(badgeRect);
+			badgeOffsets.Add((Object)(object)badgeRect != (Object)null
+				? badgeRect.anchoredPosition - rectTransform.anchoredPosition
+				: Vector2.zero);
+		}
+		if (rects.Count == 0)
+		{
+			yield break;
+		}
+		bool vertical = IsTimelineVerticalLayout();
+		Vector2 bulge = vertical ?Vector2.left : Vector2.up;
+		float bulgeDistance = Mathf.Max(18f, GetTimelineTileSize(deploymentOrder.Count) * 0.55f);
+		const float slideDuration = 0.5f;
+		float elapsed = 0f;
+		while (elapsed < slideDuration)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			float t = Mathf.Clamp01(elapsed / slideDuration);
+			float eased = 1f - Mathf.Pow(1f - t, 3f);
+			for (int i = 0; i < rects.Count; i++)
+			{
+				if ((Object)(object)rects[i] == (Object)null)
+				{
+					continue;
+				}
+				float direction = Mathf.Sign((targets[i] - starts[i]).y);
+				if (Mathf.Approximately(direction, 0f))
+				{
+					direction = 1f;
+				}
+				Vector2 arc = bulge * (Mathf.Sin(t * Mathf.PI) * bulgeDistance * direction);
+				Vector2 pose = Vector2.LerpUnclamped(starts[i], targets[i], eased) + arc;
+				rects[i].anchoredPosition = pose;
+				if ((Object)(object)badges[i] != (Object)null)
+				{
+					badges[i].anchoredPosition = pose + badgeOffsets[i];
+				}
+			}
+			yield return null;
+		}
+		for (int i = 0; i < rects.Count; i++)
+		{
+			if ((Object)(object)rects[i] != (Object)null)
+			{
+				rects[i].anchoredPosition = targets[i];
+			}
+			if ((Object)(object)badges[i] != (Object)null)
+			{
+				badges[i].anchoredPosition = targets[i] + badgeOffsets[i];
+			}
+		}
+		yield return WaitForCardInspectionPause(0.45f);
+	}
+
 	private Vector2[] GetDeploymentTimelineTargetPositions(int count)
 	{
 		Vector2[] positions = new Vector2[Mathf.Max(0, count)];
@@ -1266,7 +1702,10 @@ public sealed partial class BattleBoardController
 		Vector2[] localPositions = GetTimelineLocalPositions(count, tileSize);
 		for (int i = 0; i < count; i++)
 		{
-			Vector3 worldPosition = ((Transform)initiativeTimelineRoot).TransformPoint(localPositions[i]);
+			// La timeline di schieramento procede ancora dal tiro piu' basso al piu'
+			// alto, ma visivamente i risultati bassi devono stare in basso.
+			int visualIndex = IsTimelineVerticalLayout() ? count - 1 - i : i;
+			Vector3 worldPosition = ((Transform)initiativeTimelineRoot).TransformPoint(localPositions[visualIndex]);
 			positions[i] = (Object)(object)safeAreaRoot != (Object)null
 				?(Vector2)((Transform)safeAreaRoot).InverseTransformPoint(worldPosition)
 				: (Vector2)worldPosition;
@@ -1297,10 +1736,14 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		pendingDeploymentIndex = -1;
+		ClearTargetHints();
+		Dictionary<RectTransform, Vector2> battlefieldPawnPoses = CaptureBattlefieldPawnPoses(playerRow);
 		DeploymentToken deploymentToken = deploymentOrder[currentDeploymentIndex];
+		deploymentToken.DeployedCard = draftCandidates[num];
 		selectedDraftCards.Add(num);
 		selectedPlayerDeploymentIndices.Add(num);
 		selectedPlayerDeploymentInitiatives.Add(deploymentToken.Initiative);
+		selectedPlayerDeploymentTokens.Add(deploymentToken);
 		PrototypeCardView prototypeCardView = draftViews[num];
 		Vector3 position = ((Component)prototypeCardView).transform.position;
 		Quaternion rotation = ((Component)prototypeCardView).transform.rotation;
@@ -1341,6 +1784,7 @@ public sealed partial class BattleBoardController
 		inputLocked = true;
 		ApplyResponsiveLayout();
 		Canvas.ForceUpdateCanvases();
+		StartBattlefieldPawnGlide(battlefieldPawnPoses);
 		ApplyHandFan();
 		if (selectedPlayerDeploymentIndices.Count >= configuration.Gameplay.FormationSize)
 		{
@@ -1351,7 +1795,7 @@ public sealed partial class BattleBoardController
 			StartHandRedealAnimation(handStartPoses);
 		}
 		PlayPawnEnteringBattlefieldSfx(draftCandidates[num]);
-		((MonoBehaviour)this).StartCoroutine(PlayDeploymentMorph(draftCandidates[num], position, rotation, startSize, prototypeCardView2, configuration.Animation.CardDeployDuration));
+		deploymentMorphCoroutine = ((MonoBehaviour)this).StartCoroutine(PlayDeploymentMorph(draftCandidates[num], position, rotation, startSize, prototypeCardView2, configuration.Animation.CardDeployDuration));
 		currentDeploymentIndex++;
 		((MonoBehaviour)this).StartCoroutine(ContinueDeploymentAfterDelay(configuration.Animation.CardDeployDuration));
 	}
@@ -1400,7 +1844,13 @@ public sealed partial class BattleBoardController
 		PrototypeCardView cardFace = PrototypeCardView.Create((Transform)(object)overlayRect, definition, configuration);
 		PrototypeCardView tokenFace = PrototypeCardView.CreateBattlefieldPreview((Transform)(object)overlayRect, definition, configuration);
 		PrepareMorphFace(cardFace, 1f);
-		PrepareMorphFace(tokenFace, 0f);
+		// La pedina sta sotto e resta piena: incrociare le due opacita' faceva
+		// scendere l'insieme sotto l'opaco a meta' strada (due meta' trasparenti
+		// non fanno un intero), ed era il lampo che si vedeva sulla carta che si
+		// trasforma. Cosi' la carta si dissolve scoprendo la pedina, e sul campo
+		// non compare mai un buco.
+		PrepareMorphFace(tokenFace, 1f);
+		((Transform)tokenFace.RectTransform).SetAsFirstSibling();
 		Canvas.ForceUpdateCanvases();
 		RectTransform rectTransform = finalPreview.RectTransform;
 		Vector2 startPosition = WorldToSafeAreaPosition(startWorldPosition);
@@ -1416,28 +1866,78 @@ public sealed partial class BattleBoardController
 		CanvasGroup overlayGroup = overlayRoot.GetComponent<CanvasGroup>();
 		overlayGroup.alpha = 1f;
 		float elapsed = 0f;
-		float safeDuration = Mathf.Max(0.001f, duration);
-		while (elapsed < safeDuration)
+		// Un margine sul tempo dello schieramento: il morph e il timer che fa
+		// proseguire la deployment partono insieme e durano uguale, e chiudere in
+		// pareggio significa giocarsi l'ultima carta ai dadi. Chiudendo prima, la
+		// pedina e' gia' posata quando la battaglia comincia.
+		float safeDuration = Mathf.Max(0.001f, duration * 0.92f);
+		bool firstFrame = true;
+		// L'ultimo giro scrive la posa esatta di arrivo e non cede il frame: la
+		// pedina definitiva prende il posto dell'overlay mentre i due coincidono
+		// al pixel, e lo scambio non si vede.
+		//
+		// La pulizia sta nel finally perche' questo morph corre alla pari con il
+		// timer che fa proseguire lo schieramento: sull'ultima carta la battaglia
+		// puo' cominciare - e portarsi via la preview - mentre l'overlay e'
+		// ancora in volo. Se la coroutine muore li' senza smontarlo, l'overlay
+		// resta appeso al Safe Area e la pedina si vede sdoppiata.
+		try
 		{
-			elapsed += Time.unscaledDeltaTime;
-			float num = Mathf.Clamp01(elapsed / safeDuration);
-			float num2 = Mathf.SmoothStep(0f, 1f, num);
-			float num3 = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((num - 0.28f) / 0.58f));
-			overlayRect.anchoredPosition = Vector2.LerpUnclamped(startPosition, targetPosition, num2);
-			overlayRect.sizeDelta = Vector2.LerpUnclamped(startSize, targetSize, num3);
-			((Transform)overlayRect).localRotation = Quaternion.SlerpUnclamped(Quaternion.Inverse(((Transform)safeAreaRoot).rotation) * startWorldRotation, Quaternion.identity, num2);
-			((Transform)overlayRect).localScale = Vector3.one * Mathf.LerpUnclamped(1.03f, 1f, num2);
-			cardFace.SetAlpha(1f - num3);
-			tokenFace.SetAlpha(num3);
-			finalPreview.SetAlpha(Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((num - 0.72f) / 0.28f)));
-			overlayGroup.alpha = Mathf.Lerp(1f, 0f, Mathf.Clamp01((num - 0.9f) / 0.1f));
-			yield return null;
+			while (true)
+			{
+				if ((Object)(object)overlayRoot == (Object)null || (Object)(object)finalPreview == (Object)null)
+				{
+					break;
+				}
+				deploymentMorphFrame = Time.frameCount;
+				// Il frame che ha creato le due facce e ricalcolato il layout e' il
+				// piu' lungo della sequenza: contarne il delta faceva nascere il
+				// morph gia' a un quinto di strada.
+				elapsed += firstFrame ?0f : AnimationDeltaTime();
+				firstFrame = false;
+				float num = Mathf.Clamp01(elapsed / safeDuration);
+				float num2 = Mathf.SmoothStep(0f, 1f, num);
+				float num3 = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((num - 0.28f) / 0.58f));
+				overlayRect.anchoredPosition = Vector2.LerpUnclamped(startPosition, targetPosition, num2);
+				overlayRect.sizeDelta = Vector2.LerpUnclamped(startSize, targetSize, num3);
+				((Transform)overlayRect).localRotation = Quaternion.SlerpUnclamped(Quaternion.Inverse(((Transform)safeAreaRoot).rotation) * startWorldRotation, Quaternion.identity, num2);
+				((Transform)overlayRect).localScale = Vector3.one * Mathf.LerpUnclamped(1.03f, 1f, num2);
+				cardFace.SetAlpha(1f - num3);
+				// La pedina definitiva sale sotto l'overlay, che resta opaco: del suo
+				// corpo non si vede nulla, ma il bordo di selezione che sborda si
+				// accende in dissolvenza invece di comparire di colpo allo scambio.
+				finalPreview.SetAlpha(Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((num - 0.72f) / 0.28f)));
+				if (num >= 1f)
+				{
+					break;
+				}
+				yield return null;
+			}
 		}
-		finalPreview.SetAlpha(1f);
-		((Transform)finalPreview.RectTransform).localScale = Vector3.one;
-		((Transform)finalPreview.RectTransform).localRotation = Quaternion.identity;
-		finalPreview.SetLayoutIgnored(ignored: true);
-		Object.Destroy((Object)(object)overlayRoot);
+		finally
+		{
+			// Object.Destroy rimuove l'overlay soltanto a fine frame. Se prima
+			// rendiamo visibile la pedina definitiva, entrambe vengono disegnate
+			// sovrapposte per un frame e producono un lampo. E' piu' evidente per
+			// le carte laterali della mano, che arrivano anche da una rotazione.
+			// Spegni l'overlay subito: la distruzione differita diventa invisibile.
+			if ((Object)(object)overlayGroup != (Object)null)
+			{
+				overlayGroup.alpha = 0f;
+			}
+			if ((Object)(object)finalPreview != (Object)null)
+			{
+				finalPreview.SetAlpha(1f);
+				((Transform)finalPreview.RectTransform).localScale = Vector3.one;
+				((Transform)finalPreview.RectTransform).localRotation = Quaternion.identity;
+				finalPreview.SetLayoutIgnored(ignored: true);
+			}
+			if ((Object)(object)overlayRoot != (Object)null)
+			{
+				Object.Destroy((Object)(object)overlayRoot);
+			}
+			deploymentMorphCoroutine = null;
+		}
 	}
 
 	private static void PrepareMorphFace(PrototypeCardView view, float alpha)
@@ -1488,6 +1988,7 @@ public sealed partial class BattleBoardController
 		if (pendingDeploymentIndex >= 0)
 		{
 			pendingDeploymentIndex = -1;
+			ClearTargetHints();
 			foreach (PrototypeCardView draftView in draftViews)
 			{
 				bool flag = selectedDraftCards.Contains(draftViews.IndexOf(draftView));
@@ -1675,7 +2176,9 @@ public sealed partial class BattleBoardController
 		((Component)confirmActionButton).gameObject.SetActive(false);
 		if ((Object)(object)playerTitleText != (Object)null)
 		{
-			playerTitleText.text = ((campaignDeck != null) ?string.Empty : "LA TUA FORMAZIONE");
+			playerTitleText.text = campaignDeck != null
+				? string.Empty
+				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.YourFormation, "LA TUA FORMAZIONE");
 		}
 		DestroyCardViews(playerCards);
 		DestroyCardViews(cpuCards);
@@ -1687,6 +2190,7 @@ public sealed partial class BattleBoardController
 			if (battleCardState != null && deploymentInitiativesReady && num2 < selectedPlayerDeploymentInitiatives.Count)
 			{
 				battleCardState.Initiative = selectedPlayerDeploymentInitiatives[num2];
+				ApplyDeploymentTokenToCard(battleCardState, selectedPlayerDeploymentTokens, num2);
 			}
 			else if (battleCardState == null)
 			{
@@ -1705,6 +2209,7 @@ public sealed partial class BattleBoardController
 				if (battleCardState2 != null && deploymentInitiativesReady && num3 < selectedCpuDeploymentInitiatives.Count)
 				{
 					battleCardState2.Initiative = selectedCpuDeploymentInitiatives[num3];
+					ApplyDeploymentTokenToCard(battleCardState2, selectedCpuDeploymentTokens, num3);
 				}
 				else if (battleCardState2 == null)
 				{
@@ -1717,7 +2222,6 @@ public sealed partial class BattleBoardController
 			Vector2 playerRowStartSize = animatePlayerRowToBattlePosition ?playerRow.sizeDelta : Vector2.zero;
 			Vector2 playerRowStartPosition = animatePlayerRowToBattlePosition ?playerRow.anchoredPosition : Vector2.zero;
 			ApplyResponsiveLayout();
-			ApplyReverseDeploymentPawnOrder();
 			if (animatePlayerRowToBattlePosition)
 			{
 				StartPlayerBattlefieldRowTransition(
@@ -1779,6 +2283,10 @@ public sealed partial class BattleBoardController
 			campaignDeck.ReturnHandToDeck();
 		}
 
+		// Le pedine che stanno ancora scivolando qui vengono distrutte e rifatte:
+		// la scivolata non ha piu' niente da portare a destinazione, e lasciarla
+		// viva significa solo un'altra mano sulle pedine nuove.
+		StopBattlefieldPawnGlide();
 		DestroyPrototypeViews(draftViews);
 		draftViews.Clear();
 		DestroyPrototypeViews(playerDeploymentPreviewViews);
@@ -1790,7 +2298,9 @@ public sealed partial class BattleBoardController
 		((Component)confirmActionButton).gameObject.SetActive(false);
 		if ((Object)(object)playerTitleText != (Object)null)
 		{
-			playerTitleText.text = campaignDeck != null ?string.Empty : "LA TUA FORMAZIONE";
+			playerTitleText.text = campaignDeck != null
+				? string.Empty
+				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.YourFormation, "LA TUA FORMAZIONE");
 		}
 
 		DestroyCardViews(playerCards);
@@ -1808,7 +2318,10 @@ public sealed partial class BattleBoardController
 				index,
 				index < campaignFormation.Count ?campaignFormation[index] : null);
 			if (state != null && index < selectedPlayerDeploymentInitiatives.Count)
+			{
 				state.Initiative = selectedPlayerDeploymentInitiatives[index];
+				ApplyDeploymentTokenToCard(state, selectedPlayerDeploymentTokens, index);
+			}
 		}
 
 		List<CardDefinition> cpuFormation = new List<CardDefinition>(selectedCpuDeploymentCards);
@@ -1819,7 +2332,10 @@ public sealed partial class BattleBoardController
 		{
 			BattleCardState state = AddCard(cpuCards, cpuRow, cpuFormation[index], belongsToPlayer: false, index);
 			if (state != null && index < selectedCpuDeploymentInitiatives.Count)
+			{
 				state.Initiative = selectedCpuDeploymentInitiatives[index];
+				ApplyDeploymentTokenToCard(state, selectedCpuDeploymentTokens, index);
+			}
 		}
 
 		bool animatePlayerRowToBattlePosition = (Object)(object)playerRow != (Object)null;
@@ -1828,7 +2344,6 @@ public sealed partial class BattleBoardController
 		Vector2 playerRowStartSize = animatePlayerRowToBattlePosition ?playerRow.sizeDelta : Vector2.zero;
 		Vector2 playerRowStartPosition = animatePlayerRowToBattlePosition ?playerRow.anchoredPosition : Vector2.zero;
 		ApplyResponsiveLayout();
-		ApplyReverseDeploymentPawnOrder();
 		if (animatePlayerRowToBattlePosition)
 		{
 			StartPlayerBattlefieldRowTransition(
@@ -1841,7 +2356,7 @@ public sealed partial class BattleBoardController
 		StartBattle();
 	}
 
-	private void StartPlayerBattlefieldRowTransition(Vector2 startAnchorMin, Vector2 startAnchorMax, Vector2 startSize, Vector2 startPosition)
+	private void StartPlayerBattlefieldRowTransition(Vector2 startAnchorMin, Vector2 startAnchorMax, Vector2 startSize, Vector2 startPosition, float delay = 0f)
 	{
 		if ((Object)(object)playerRow == (Object)null)
 		{
@@ -1851,24 +2366,48 @@ public sealed partial class BattleBoardController
 		{
 			((MonoBehaviour)this).StopCoroutine(playerBattlefieldRowTransitionCoroutine);
 		}
-		Vector2 targetAnchorMin = playerRow.anchorMin;
-		Vector2 targetAnchorMax = playerRow.anchorMax;
-		Vector2 targetSize = playerRow.sizeDelta;
-		Vector2 targetPosition = playerRow.anchoredPosition;
-		if (Vector2.Distance(startAnchorMin, targetAnchorMin) < 0.001f && Vector2.Distance(startAnchorMax, targetAnchorMax) < 0.001f)
+		playerRowTransitionTargetAnchorMin = playerRow.anchorMin;
+		playerRowTransitionTargetAnchorMax = playerRow.anchorMax;
+		playerRowTransitionTargetSize = playerRow.sizeDelta;
+		playerRowTransitionTargetPosition = playerRow.anchoredPosition;
+		if (Vector2.Distance(startAnchorMin, playerRowTransitionTargetAnchorMin) < 0.001f
+			&& Vector2.Distance(startAnchorMax, playerRowTransitionTargetAnchorMax) < 0.001f)
 		{
 			playerBattlefieldRowTransitionCoroutine = null;
 			return;
 		}
+		playerRowTransitionRetargeted = false;
+		playerRowTransitionFrame = Time.frameCount;
 		playerRow.anchorMin = startAnchorMin;
 		playerRow.anchorMax = startAnchorMax;
 		playerRow.sizeDelta = startSize;
 		playerRow.anchoredPosition = startPosition;
-		playerBattlefieldRowTransitionCoroutine = ((MonoBehaviour)this).StartCoroutine(PlayPlayerBattlefieldRowTransition(
-			targetAnchorMin,
-			targetAnchorMax,
-			targetSize,
-			targetPosition));
+		playerBattlefieldRowTransitionCoroutine = ((MonoBehaviour)this).StartCoroutine(PlayPlayerBattlefieldRowTransition(delay));
+	}
+
+	/// <summary>
+	/// Un ricalcolo di layout mentre la fila e' in volo le riscrive ancore e
+	/// misure ai valori finali: il tween, che aveva gia' catturato i suoi
+	/// estremi, il frame dopo la riportava indietro. Qui il valore appena
+	/// calcolato diventa il nuovo bersaglio e la fila torna alla posa
+	/// interpolata, cosi' la corsa prosegue da dove era invece di rimbalzare.
+	/// </summary>
+	private void RetargetPlayerBattlefieldRowTransition(Vector2 poseAnchorMin, Vector2 poseAnchorMax, Vector2 poseSize, Vector2 posePosition)
+	{
+		if (!IsRoutineAlive(playerBattlefieldRowTransitionCoroutine, playerRowTransitionFrame)
+			|| (Object)(object)playerRow == (Object)null)
+		{
+			return;
+		}
+		playerRowTransitionTargetAnchorMin = playerRow.anchorMin;
+		playerRowTransitionTargetAnchorMax = playerRow.anchorMax;
+		playerRowTransitionTargetSize = playerRow.sizeDelta;
+		playerRowTransitionTargetPosition = playerRow.anchoredPosition;
+		playerRow.anchorMin = poseAnchorMin;
+		playerRow.anchorMax = poseAnchorMax;
+		playerRow.sizeDelta = poseSize;
+		playerRow.anchoredPosition = posePosition;
+		playerRowTransitionRetargeted = true;
 	}
 
 	private void StopPlayerBattlefieldRowTransition()
@@ -1880,14 +2419,19 @@ public sealed partial class BattleBoardController
 		}
 	}
 
-	private IEnumerator PlayPlayerBattlefieldRowTransition(Vector2 targetAnchorMin, Vector2 targetAnchorMax, Vector2 targetSize, Vector2 targetPosition)
+	private IEnumerator PlayPlayerBattlefieldRowTransition(float delay)
 	{
+		if (delay > 0f)
+			yield return new WaitForSecondsRealtime(delay);
+
 		float duration = Mathf.Clamp(configuration.Animation.CardDeployDuration * 0.55f, 0.22f, 0.42f);
 		Vector2 startAnchorMin = playerRow.anchorMin;
 		Vector2 startAnchorMax = playerRow.anchorMax;
 		Vector2 startSize = playerRow.sizeDelta;
 		Vector2 startPosition = playerRow.anchoredPosition;
+		playerRowTransitionRetargeted = false;
 		float elapsed = 0f;
+		bool firstFrame = true;
 		while (elapsed < duration)
 		{
 			if ((Object)(object)playerRow == (Object)null)
@@ -1895,20 +2439,156 @@ public sealed partial class BattleBoardController
 				playerBattlefieldRowTransitionCoroutine = null;
 				yield break;
 			}
-			elapsed += Time.unscaledDeltaTime;
+			playerRowTransitionFrame = Time.frameCount;
+			if (playerRowTransitionRetargeted)
+			{
+				// Il bersaglio e' cambiato sotto: si riparte dalla posa attuale
+				// sul tempo che resta, senza salti e senza allungare la corsa.
+				duration = Mathf.Max(duration - elapsed, 0.08f);
+				elapsed = 0f;
+				startAnchorMin = playerRow.anchorMin;
+				startAnchorMax = playerRow.anchorMax;
+				startSize = playerRow.sizeDelta;
+				startPosition = playerRow.anchoredPosition;
+				playerRowTransitionRetargeted = false;
+				firstFrame = true;
+			}
+			// Il frame che fa partire (o ribersaglia) la corsa e' quello del
+			// ricalcolo di layout: contarne il delta significherebbe saltare in
+			// avanti appena cominciata.
+			elapsed += firstFrame ?0f : AnimationDeltaTime();
+			firstFrame = false;
 			float t = Mathf.Clamp01(elapsed / duration);
 			float eased = 1f - Mathf.Pow(1f - t, 3f);
-			playerRow.anchorMin = Vector2.LerpUnclamped(startAnchorMin, targetAnchorMin, eased);
-			playerRow.anchorMax = Vector2.LerpUnclamped(startAnchorMax, targetAnchorMax, eased);
-			playerRow.sizeDelta = Vector2.LerpUnclamped(startSize, targetSize, eased);
-			playerRow.anchoredPosition = Vector2.LerpUnclamped(startPosition, targetPosition, eased);
+			playerRow.anchorMin = Vector2.LerpUnclamped(startAnchorMin, playerRowTransitionTargetAnchorMin, eased);
+			playerRow.anchorMax = Vector2.LerpUnclamped(startAnchorMax, playerRowTransitionTargetAnchorMax, eased);
+			playerRow.sizeDelta = Vector2.LerpUnclamped(startSize, playerRowTransitionTargetSize, eased);
+			playerRow.anchoredPosition = Vector2.LerpUnclamped(startPosition, playerRowTransitionTargetPosition, eased);
 			yield return null;
 		}
-		playerRow.anchorMin = targetAnchorMin;
-		playerRow.anchorMax = targetAnchorMax;
-		playerRow.sizeDelta = targetSize;
-		playerRow.anchoredPosition = targetPosition;
+		playerRow.anchorMin = playerRowTransitionTargetAnchorMin;
+		playerRow.anchorMax = playerRowTransitionTargetAnchorMax;
+		playerRow.sizeDelta = playerRowTransitionTargetSize;
+		playerRow.anchoredPosition = playerRowTransitionTargetPosition;
 		playerBattlefieldRowTransitionCoroutine = null;
+	}
+
+	/// <summary>
+	/// Fotografa dove stanno le pedine gia' in campo. Ogni nuovo schieramento
+	/// ricentra la fila, e senza una posa di partenza le pedine precedenti si
+	/// teletrasportano nel frame in cui la nuova comincia il suo morph. Chi sta
+	/// gia' animando il proprio ingresso resta fuori: la sua posizione ha
+	/// gia' un padrone.
+	/// </summary>
+	private static Dictionary<RectTransform, Vector2> CaptureBattlefieldPawnPoses(params RectTransform[] rows)
+	{
+		Dictionary<RectTransform, Vector2> poses = new Dictionary<RectTransform, Vector2>();
+		if (rows == null)
+		{
+			return poses;
+		}
+		foreach (RectTransform row in rows)
+		{
+			if ((Object)(object)row == (Object)null)
+			{
+				continue;
+			}
+			for (int index = 0; index < ((Transform)row).childCount; index++)
+			{
+				RectTransform child = ((Transform)row).GetChild(index) as RectTransform;
+				if ((Object)(object)child == (Object)null || !((Component)child).gameObject.activeSelf)
+				{
+					continue;
+				}
+				PrototypeCardView view = ((Component)child).GetComponent<PrototypeCardView>();
+				if ((Object)(object)view != (Object)null && (view.IsPlayingMotion || view.IsDragging))
+				{
+					continue;
+				}
+				poses[child] = child.anchoredPosition;
+			}
+		}
+		return poses;
+	}
+
+	private void StartBattlefieldPawnGlide(IReadOnlyDictionary<RectTransform, Vector2> startPoses)
+	{
+		if (startPoses == null || startPoses.Count == 0)
+		{
+			return;
+		}
+		if (battlefieldPawnGlideCoroutine != null)
+		{
+			((MonoBehaviour)this).StopCoroutine(battlefieldPawnGlideCoroutine);
+		}
+		battlefieldPawnGlideCoroutine = ((MonoBehaviour)this).StartCoroutine(PlayBattlefieldPawnGlide(startPoses));
+	}
+
+	/// <summary>
+	/// Lascia le pedine dove sono adesso. Serve a chi prende il loro comando a
+	/// meta' corsa: la posa finale non va scritta, o l'animazione che subentra
+	/// partirebbe da un salto.
+	/// </summary>
+	private void StopBattlefieldPawnGlide()
+	{
+		if (battlefieldPawnGlideCoroutine != null)
+		{
+			((MonoBehaviour)this).StopCoroutine(battlefieldPawnGlideCoroutine);
+			battlefieldPawnGlideCoroutine = null;
+		}
+	}
+
+	private IEnumerator PlayBattlefieldPawnGlide(IReadOnlyDictionary<RectTransform, Vector2> startPoses)
+	{
+		Dictionary<RectTransform, Vector2> moved = new Dictionary<RectTransform, Vector2>();
+		foreach (KeyValuePair<RectTransform, Vector2> pose in startPoses)
+		{
+			if ((Object)(object)pose.Key == (Object)null)
+			{
+				continue;
+			}
+			Vector2 target = pose.Key.anchoredPosition;
+			if (Vector2.Distance(pose.Value, target) < 0.5f)
+			{
+				continue;
+			}
+			moved[pose.Key] = target;
+			pose.Key.anchoredPosition = pose.Value;
+		}
+		if (moved.Count == 0)
+		{
+			battlefieldPawnGlideCoroutine = null;
+			yield break;
+		}
+		float duration = Mathf.Clamp(configuration.Animation.CardDeployDuration * 0.45f, 0.18f, 0.32f);
+		float elapsed = 0f;
+		bool firstFrame = true;
+		while (elapsed < duration)
+		{
+			// La scivolata nasce nel frame che ha ricalcolato il layout e creato
+			// la nuova pedina: quel frame e' lungo, e il suo delta - contato
+			// subito - farebbe cominciare la corsa gia' a un quarto di strada.
+			elapsed += firstFrame ?0f : AnimationDeltaTime();
+			firstFrame = false;
+			float t = Mathf.Clamp01(elapsed / duration);
+			float eased = 1f - Mathf.Pow(1f - t, 3f);
+			foreach (KeyValuePair<RectTransform, Vector2> pair in moved)
+			{
+				if ((Object)(object)pair.Key != (Object)null)
+				{
+					pair.Key.anchoredPosition = Vector2.LerpUnclamped(startPoses[pair.Key], pair.Value, eased);
+				}
+			}
+			yield return null;
+		}
+		foreach (KeyValuePair<RectTransform, Vector2> pair in moved)
+		{
+			if ((Object)(object)pair.Key != (Object)null)
+			{
+				pair.Key.anchoredPosition = pair.Value;
+			}
+		}
+		battlefieldPawnGlideCoroutine = null;
 	}
 
 	private static void ClearCardRowChildren(RectTransform row)
@@ -1939,7 +2619,7 @@ public sealed partial class BattleBoardController
 		}
 	}
 
-	private static void RestoreBattlefieldCardVisibility(IEnumerable<BattleCardState> cards)
+	private void RestoreBattlefieldCardVisibility(IEnumerable<BattleCardState> cards)
 	{
 		foreach (BattleCardState card in cards)
 		{
@@ -1947,7 +2627,7 @@ public sealed partial class BattleBoardController
 		}
 	}
 
-	private static void RestoreBattlefieldPreviewVisibility(PrototypeCardView view)
+	private void RestoreBattlefieldPreviewVisibility(PrototypeCardView view)
 	{
 		if (!((Object)(object)view == (Object)null))
 		{

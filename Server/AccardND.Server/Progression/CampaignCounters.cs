@@ -37,11 +37,32 @@ public static class CampaignCounters
     /// <summary>Abilita' di classe attivate dalle pedine del giocatore.</summary>
     public const string AbilitiesUsed = "abilities_used";
 
-    /// <summary>Consumabili della bisaccia davvero usati in run.</summary>
+    /// <summary>
+    /// Consumabili davvero usati in run, da qualunque parte arrivino: bisaccia, bottino delle
+    /// stanze o acquisto al mercante usato sul posto.
+    /// </summary>
     public const string ItemsUsed = "items_used";
 
     /// <summary>Esperienza guadagnata nelle run, al lordo di quella spesa dal mercante.</summary>
     public const string ExperienceEarned = "experience_earned";
+
+    /// <summary>Supreme attivate dalle pedine del giocatore.</summary>
+    public const string SupremesUsed = "supremes_used";
+
+    /// <summary>Sfide veloci portate a termine. Chi rinuncia non la conta.</summary>
+    public const string QuickChallenges = "quick_challenges";
+
+    /// <summary>Acquisti conclusi al mercante, carte e oggetti insieme.</summary>
+    public const string MerchantPurchases = "merchant_purchases";
+
+    /// <summary>
+    /// Oro guadagnato avventurandosi. Non comprende vendite e rimborsi del mercante:
+    /// contarli renderebbe la quest completabile comprando e rivendendo la stessa carta.
+    /// </summary>
+    public const string GoldEarned = "gold_earned";
+
+    /// <summary>Livelli di run guadagnati, sommati su tutte le run.</summary>
+    public const string LevelsGained = "levels_gained";
 
     /// <summary>Giornate di taverna chiuse in pieno: e' la prova del Sacerdote.</summary>
     public const string DailyCompleted = "daily_completed";
@@ -115,8 +136,17 @@ public static class CampaignCounters
         [MinibossesDefeated] = 20,
         [DiceRolled] = 3000,
         [AbilitiesUsed] = 600,
-        [ItemsUsed] = 20,
-        [ExperienceEarned] = 5000
+        // Non e' piu' limitato dai pochi slot della bisaccia: bottino e mercante possono
+        // aggiungerne parecchi lungo una run lunga.
+        [ItemsUsed] = 60,
+        [ExperienceEarned] = 5000,
+        [SupremesUsed] = 400,
+        [QuickChallenges] = 40,
+        [MerchantPurchases] = 80,
+        [GoldEarned] = 8000,
+        // Il livello massimo di run e' 6: piu' di una decina di passaggi di livello in una
+        // sola run vuol dire che il sommario non descrive una partita giocata.
+        [LevelsGained] = 12
     };
 
     /// <summary>
@@ -141,6 +171,11 @@ public static class CampaignCounters
         IncrementCapped(connection, transaction, playerId, AbilitiesUsed, request.abilitiesUsed);
         IncrementCapped(connection, transaction, playerId, ItemsUsed, request.itemsUsed);
         IncrementCapped(connection, transaction, playerId, ExperienceEarned, request.experienceEarned);
+        IncrementCapped(connection, transaction, playerId, SupremesUsed, request.supremesUsed);
+        IncrementCapped(connection, transaction, playerId, QuickChallenges, request.quickChallengesCompleted);
+        IncrementCapped(connection, transaction, playerId, MerchantPurchases, request.merchantPurchases);
+        IncrementCapped(connection, transaction, playerId, GoldEarned, request.goldEarned);
+        IncrementCapped(connection, transaction, playerId, LevelsGained, request.levelsGained);
         Increment(connection, transaction, playerId, RunsEnded, 1);
 
         if (request.defeatedBossIds == null)

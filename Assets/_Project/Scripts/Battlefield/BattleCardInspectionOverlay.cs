@@ -77,14 +77,14 @@ namespace AccardND.Battlefield
                 string rules = string.IsNullOrWhiteSpace(definition.RulesText)
                     ? "Abilita:\nNessuna abilita di combattimento."
                     : "Abilita:\n" + definition.RulesText;
-                return $"Potenza: {definition.Strength}\nFamiglia: Nessuna\nClasse: Nessuna\n\nVantaggio contro Nessuno\nSvantaggio contro Nessuno\n\n{rules}";
+                return $"Potenza: {definition.Strength}\nFazione: Nessuna\nClasse: Nessuna\n\nVantaggio contro Nessuno\nSvantaggio contro Nessuno\n\n{rules}";
             }
 
             ClassFamily family = HeroClassFamily.Of(definition.HeroClass);
             var lines = new List<string>
             {
                 $"Potenza: {definition.Strength}",
-                "Famiglia: " + CardRulesGlossary.ClassFamilyName(family),
+                "Fazione: " + CardRulesGlossary.ClassFamilyName(family),
                 "Classe: " + CardRulesGlossary.HeroClassName(definition.HeroClass),
                 string.Empty,
                 "Vantaggio contro " + CardRulesGlossary.ClassFamilyName(StrongAgainst(family)),
@@ -97,7 +97,7 @@ namespace AccardND.Battlefield
             if (!isBossOrMiniboss)
             {
                 lines.Add(string.Empty);
-                lines.Add("Aura di Famiglia: " + CardRulesGlossary.ClassFamilyName(family) + "\n" + CardRulesGlossary.FamilyAuraDescription(family));
+                lines.Add("Aura di Fazione: " + CardRulesGlossary.ClassFamilyName(family) + "\n" + CardRulesGlossary.FamilyAuraDescription(family));
                 lines.Add("Aura di Classe: " + CardRulesGlossary.HeroClassName(definition.HeroClass) + "\n" + CardRulesGlossary.ClassAuraDescription(definition.HeroClass, configuration?.ClassBalance));
                 lines.Add(CardRulesGlossary.AbilityTitle(definition.HeroClass) + ":\n" + CardRulesGlossary.AbilityDescription(definition.HeroClass, configuration.ClassBalance));
             }

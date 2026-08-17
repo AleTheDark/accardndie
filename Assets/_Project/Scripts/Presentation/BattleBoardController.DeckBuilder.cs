@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -17,7 +18,15 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
-	private static readonly HeroClass[] StarterHeroClasses =
+	private const float DeckBuilderBagItemSize = 222.4f;
+
+	/// <summary>
+	/// Le classi che il vecchio tutorial monolitico consegnava gratis. Il percorso a moduli
+	/// regala il solo Guerriero e fa comprare Mago e Ladro, ma chi aveva finito quel tutorial
+	/// se le tiene: il server continua a rimettergliele in lista, e questa scorciatoia serve a
+	/// non farle sparire dal costruttore di mazzo mentre la progressione si sincronizza.
+	/// </summary>
+	private static readonly HeroClass[] LegacyTutorialHeroClasses =
 	{
 		HeroClass.Mage,
 		HeroClass.Warrior,
@@ -26,8 +35,19 @@ public sealed partial class BattleBoardController
 
 	private void BeginInitialDeckBuilding()
 	{
+		// Una nuova avventura deve partire da una presentazione pulita anche se la run
+		// precedente e' stata abbandonata durante un callout o una transizione.
+		ResetGlobalRunPresentationState();
+		ClearRuntimeSessionVisuals();
+		deckBuilderPreparingBag = false;
+		deckBuilderBagSaving = false;
+		deckBuilderSelectedBagItems.Clear();
+		if (singlePlayerProgressService?.Progress?.bagItems != null)
+			deckBuilderSelectedBagItems.AddRange(singlePlayerProgressService.Progress.bagItems.Where(itemId => !string.IsNullOrWhiteSpace(itemId)));
+		ClearDeckBuilderBagViews();
+		ClearDeckBuilderSelectedBagViews();
 		EnsureSelectedDeckBuilderClassIsUnlocked();
-		initialDeckBuilder = new InitialDeckBuilder(GetUnlockedCombatCards(), random, configuration.DeckBuilding.ToRules());
+		initialDeckBuilder = new InitialDeckBuilder(GetUnlockedCombatCards(), random, configuration.DeckBuilding.ToRules(ActiveTalents));
 		deckBuilderPanel.SetActive(true);
 		SetAccountHubHudActive(true);
 		SetDeckBuilderAccountHeaderMode(true);
@@ -199,7 +219,14 @@ public sealed partial class BattleBoardController
 			EnsureSelectedDeckBuilderClassIsUnlocked();
 			RefreshDeckBuilderLayout();
 			DeckBuildingConfiguration deckBuilding = configuration.DeckBuilding;
-			deckBuilderStatusText.text = DeckBuilderPromptText(initialDeckBuilder.Deck.Count, deckBuilding.DeckSize);
+			deckBuilderStatusText.text = deckBuilderPreparingBag
+				? $"BISACCIA {deckBuilderSelectedBagItems.Count}/{Mathf.Max(0, sanctuaryData?.bagSlots ?? 0)}"
+				: DeckBuilderPromptText(initialDeckBuilder.Deck.Count, deckBuilding.DeckSize);
+			if ((Object)(object)deckBuilderBagEffectText != (Object)null)
+			{
+				deckBuilderBagEffectText.gameObject.SetActive(
+					deckBuilderPreparingBag && !string.IsNullOrWhiteSpace(deckBuilderBagEffectText.text));
+			}
 			int num = deckBuilding.ChosenStrengthBaseCost + deckBuilderSelectedStrength;
 			if ((Object)(object)deckBuilderRandomBuyText != (Object)null)
 			{
@@ -226,19 +253,36 @@ public sealed partial class BattleBoardController
 			{
 				deckBuilderStrengthBuyText.text = num.ToString();
 			}
-			RefreshDeckBuilderCardPreviews();
+			if (deckBuilderPreparingBag)
+				RefreshDeckBuilderBagItems();
+			else
+			{
+				RefreshDeckBuilderCardPreviews();
+				RefreshDeckBuilderSelectedBagItems();
+			}
+			((Component)deckBuilderClassGridRoot).gameObject.SetActive(!deckBuilderPreparingBag && !initialDeckBuilder.CanStartCampaign);
 			startCampaignButton.interactable = initialDeckBuilder.CanStartCampaign;
 			((Component)startCampaignButton).gameObject.SetActive(initialDeckBuilder.CanStartCampaign);
+			prepareBagButton.interactable = initialDeckBuilder.CanStartCampaign && !deckBuilderBagSaving;
+			((Component)prepareBagButton).gameObject.SetActive(initialDeckBuilder.CanStartCampaign);
 		}
 	}
 
 	private static string DeckBuilderPromptText(int deckCount, int deckSize)
 	{
 		if (deckCount <= 0)
-			return "SCEGLI IL TUO CAMPIONE";
+			return GameText.GetOrFallbackSilent(GameTextKeys.Campaign.DeckBuilderChooseChampion, "SCEGLI IL TUO CAMPIONE");
 		if (deckCount == 1)
-			return "SCEGLI IL VICE CAMPIONE";
-		return $"ORA COMPLETA IL MAZZO {deckCount}/{deckSize}";
+			return GameText.GetOrFallbackSilent(GameTextKeys.Campaign.DeckBuilderChooseViceChampion, "SCEGLI IL VICE CAMPIONE");
+		return GameText.GetLocalizedFallback(
+			GameTextKeys.Campaign.DeckBuilderComplete,
+			"ORA COMPLETA IL MAZZO {0}/{1}",
+			"NOW COMPLETE THE DECK {0}/{1}",
+			"VERVOLLSTÄNDIGE JETZT DEIN DECK {0}/{1}",
+			"AHORA COMPLETA TU MAZO {0}/{1}",
+			"COMPLÉTEZ MAINTENANT VOTRE DECK {0}/{1}",
+			deckCount,
+			deckSize);
 	}
 
 	private void RefreshDeckBuilderLayout()
@@ -273,20 +317,35 @@ public sealed partial class BattleBoardController
 		SetRect(deckBuilderStatusText.rectTransform,
 			compact ? new Vector2(0.08f, 0.79f) : new Vector2(0.18f, 0.776f),
 			compact ? new Vector2(0.92f, 0.852f) : new Vector2(0.82f, 0.84f));
-		deckBuilderStatusText.fontSize = compact ? 31 : 25;
+		deckBuilderStatusText.fontSize = 40;
 		deckBuilderStatusText.resizeTextMaxSize = deckBuilderStatusText.fontSize;
-		deckBuilderStatusText.resizeTextMinSize = compact ?23 : 18;
+		deckBuilderStatusText.resizeTextMinSize = 30;
 
 		SetRect(deckBuilderCardsRoot,
 			compact ? new Vector2(0.06f, 0.43f) : new Vector2(wide ? 0.12f : 0.08f, 0.405f),
-			compact ? new Vector2(0.94f, 0.79f) : new Vector2(wide ? 0.88f : 0.92f, 0.77f));
+			deckBuilderPreparingBag
+				? new Vector2(compact ? 0.94f : wide ? 0.88f : 0.92f, 0.69f)
+				: compact ? new Vector2(0.94f, 0.79f) : new Vector2(wide ? 0.88f : 0.92f, 0.77f));
 		ResizeDeckBuilderCardGrid();
+		SetRect(deckBuilderBagEffectText.rectTransform,
+			compact ? new Vector2(0.08f, 0.695f) : new Vector2(0.1f, 0.695f),
+			compact ? new Vector2(0.92f, 0.785f) : new Vector2(0.9f, 0.765f));
 		SetRect(deckBuilderCardsText.rectTransform,
 			compact ? new Vector2(0.1f, 0.535f) : new Vector2(0.22f, 0.545f),
 			compact ? new Vector2(0.9f, 0.665f) : new Vector2(0.78f, 0.665f));
 		deckBuilderCardsText.fontSize = compact ? 28 : 24;
 		deckBuilderCardsText.resizeTextMaxSize = deckBuilderCardsText.fontSize;
 		deckBuilderCardsText.resizeTextMinSize = compact ?22 : 17;
+		SetRect(deckBuilderSelectedBagRoot,
+			compact ? new Vector2(0.08f, 0.18f) : new Vector2(0.08f, 0.17f),
+			compact ? new Vector2(0.92f, 0.39f) : new Vector2(0.92f, 0.39f));
+		SetRect(deckBuilderSelectedBagEmptyText.rectTransform,
+			compact ? new Vector2(0.08f, 0.18f) : new Vector2(0.08f, 0.17f),
+			new Vector2(0.92f, 0.39f));
+		deckBuilderSelectedBagEmptyText.fontSize = 40;
+		deckBuilderSelectedBagEmptyText.resizeTextMaxSize = 40;
+		deckBuilderSelectedBagEmptyText.resizeTextMinSize = 30;
+		ResizeDeckBuilderSelectedBagGrid();
 
 		SetRect(deckBuilderClassGridRoot,
 			compact ? new Vector2(0.07f, 0.155f) : new Vector2(wide ? 0.28f : 0.22f, 0.125f),
@@ -359,9 +418,12 @@ public sealed partial class BattleBoardController
 		SetRect(deckBuilderToastRect,
 			compact ? new Vector2(0.08f, 0.34f) : new Vector2(0.19f, 0.35f),
 			compact ? new Vector2(0.92f, 0.45f) : new Vector2(0.81f, 0.45f));
+		SetRect(prepareBagButtonRect,
+			compact ? new Vector2(0.08f, 0.045f) : new Vector2(0.18f, 0.045f),
+			compact ? new Vector2(0.48f, 0.135f) : new Vector2(0.48f, 0.14f));
 		SetRect(startCampaignButtonRect,
-			compact ? new Vector2(0.31f, 0.045f) : new Vector2(0.37f, 0.045f),
-			compact ? new Vector2(0.69f, 0.135f) : new Vector2(0.63f, 0.14f));
+			compact ? new Vector2(0.52f, 0.045f) : new Vector2(0.52f, 0.045f),
+			compact ? new Vector2(0.92f, 0.135f) : new Vector2(0.82f, 0.14f));
 	}
 
 	private static void PlaceDeckBuilderChoice(RectTransform button, Text costText, float centerX, float width, float yMin, float yMax, bool compact)
@@ -436,10 +498,16 @@ public sealed partial class BattleBoardController
 		ResizeDeckBuilderCardGrid();
 		bool flag = initialDeckBuilder.Deck.Count > 0;
 		((Component)deckBuilderCardsText).gameObject.SetActive(!flag);
-		deckBuilderCardsText.text = (flag ?string.Empty : "Scegli una classe: la prima carta sara' il tuo campione di valore 10.");
+		deckBuilderCardsText.text = flag
+			? string.Empty
+			: GameText.GetOrFallbackSilent(
+				GameTextKeys.Campaign.DeckBuilderEmptyDeckHint,
+				"Scegli una classe: la prima carta sara' il tuo campione di valore 10.");
 		if (!flag)
 		{
-			deckBuilderCardsText.text = "Scegli una classe: la prima carta sara' il tuo campione di valore 10.";
+			deckBuilderCardsText.text = GameText.GetOrFallbackSilent(
+				GameTextKeys.Campaign.DeckBuilderEmptyDeckHint,
+				"Scegli una classe: la prima carta sara' il tuo campione di valore 10.");
 		}
 		foreach (CardDefinition card in initialDeckBuilder.Deck)
 		{
@@ -462,7 +530,19 @@ public sealed partial class BattleBoardController
 		GridLayoutGroup component = ((Component)deckBuilderCardsRoot).GetComponent<GridLayoutGroup>();
 		if ((Object)(object)component == (Object)null)
 			return;
+		if (deckBuilderPreparingBag)
+		{
+			component.constraint = GridLayoutGroup.Constraint.FixedRowCount;
+			component.constraintCount = 1;
+			component.spacing = new Vector2(8f, 0f);
+			component.cellSize = new Vector2(DeckBuilderBagItemSize, DeckBuilderBagItemSize);
+			LayoutRebuilder.ForceRebuildLayoutImmediate(deckBuilderCardsRoot);
+			return;
+		}
 
+		component.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+		component.constraintCount = 3;
+		component.spacing = new Vector2(12f, 12f);
 		int rows = Mathf.Max(1, Mathf.CeilToInt((float)configuration.DeckBuilding.DeckSize / 3f));
 		Rect rect = deckBuilderCardsRoot.rect;
 		float availableWidth = Mathf.Max(1f, rect.width - component.spacing.x * 2f);
@@ -471,11 +551,14 @@ public sealed partial class BattleBoardController
 		component.cellSize = new Vector2(cardSize, cardSize);
 	}
 
-	private void StartBuiltCampaign()
+	private async void StartBuiltCampaign()
 	{
 		if (initialDeckBuilder != null && initialDeckBuilder.CanStartCampaign)
 		{
+			if (deckBuilderPreparingBag && !await SaveDeckBuilderBagSelection())
+				return;
 			campaignDeck = new CampaignDeckState(initialDeckBuilder.Deck);
+			ApplyForgeTemperTalent();
 			LoadCampaignConsumablesFromBag();
 			initialDeckBuilder = null;
 			ResetScenarioRuleState();
@@ -518,18 +601,31 @@ public sealed partial class BattleBoardController
 	{
 		ProgressionConfiguration progression = configuration.Progression;
 		int startingVigorDieSides = debugForceFirstRoomMedusa ? 12 : configuration.Gameplay.VigorDieSides;
+		TalentLoadoutSave talents = ActiveTalents;
+		ResetTalentRunState();
+
+		// Il ramo Maestria abbassa le soglie, non regala esperienza: la run si sale prima ma
+		// l'exp incassata resta quella di chiunque altro, ed e' cosi' che l'exp account non
+		// si autoalimenta. Vedi TalentRunModifiers.
 		var progress = new RunProgressState(
-			progression.ExperienceThresholdsByLevel,
+			TalentRunModifiers.ApplyLevelThresholds(
+				progression.ExperienceThresholdsByLevel, talents),
 			progression.MonsterRoomClearExperience,
 			progression.MaximumLevel,
 			progression.RoomsPerMasterLevel,
 			progression.BuildVigorDiceByLevel(startingVigorDieSides));
 
+		int startingGold = TalentRunModifiers.StartingGold(talents);
+		if (startingGold > 0)
+			progress.AddGold(startingGold);
+
 		bool bossDebugCombat = IsComposableGolemDebugSession
 			|| debugForceFirstRoomMedusa
 			|| debugForceFirstRoomTrentor
 			|| debugForceFirstRoomBragus
-			|| debugForceFirstRoomPalatir;
+			|| debugForceFirstRoomJurinashor
+			|| debugForceFirstRoomPalatir
+			|| debugForceFirstRoomSeraphel;
 		if (bossDebugCombat)
 		{
 			int debugLevel = Math.Min(MinibossGolemDebugPlayerLevel, progression.MaximumLevel);
@@ -542,6 +638,255 @@ public sealed partial class BattleBoardController
 		}
 
 		return progress;
+	}
+
+	private async void ToggleDeckBuilderBagMode()
+	{
+		if (initialDeckBuilder == null || !initialDeckBuilder.CanStartCampaign || deckBuilderBagSaving)
+			return;
+
+		if (deckBuilderPreparingBag)
+		{
+			if (!await SaveDeckBuilderBagSelection())
+				return;
+			deckBuilderPreparingBag = false;
+			ApplyMerchantCampaignCta(prepareBagButton, "UI/CampaignRestyle/campaign_cta_orange");
+			prepareBagButton.GetComponentInChildren<Text>().text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.PrepareBag, "PREPARA BISACCIA");
+			ClearDeckBuilderBagViews();
+			RefreshDeckBuilderView();
+			return;
+		}
+
+		deckBuilderBagSaving = true;
+		prepareBagButton.interactable = false;
+		try
+		{
+			if (!await EnsureServerProgressAsync())
+			{
+				ShowDeckBuilderToast("Bisaccia non disponibile: serve la connessione al server.");
+				return;
+			}
+			sanctuaryData = await serverProgress.GetSanctuaryAsync();
+			deckBuilderSelectedBagItems.Clear();
+			if (sanctuaryData?.bag != null)
+				deckBuilderSelectedBagItems.AddRange(sanctuaryData.bag);
+			deckBuilderPreparingBag = true;
+			DestroyPrototypeViews(deckBuilderCardViews);
+			ApplyMerchantCampaignCta(prepareBagButton, "UI/CampaignRestyle/campaign_cta_back_red");
+			prepareBagButton.GetComponentInChildren<Text>().text = GameText.GetOrFallbackSilent(GameTextKeys.Common.Back, "INDIETRO");
+		}
+		catch (Exception exception)
+		{
+			ShowDeckBuilderToast("Bisaccia non disponibile: " + exception.Message);
+		}
+		finally
+		{
+			deckBuilderBagSaving = false;
+			RefreshDeckBuilderView();
+		}
+	}
+
+	private void RefreshDeckBuilderBagItems()
+	{
+		ClearDeckBuilderBagViews();
+		ClearDeckBuilderSelectedBagViews();
+		DestroyPrototypeViews(deckBuilderCardViews);
+		((Component)deckBuilderCardsText).gameObject.SetActive(false);
+		deckBuilderSelectedBagEmptyText.gameObject.SetActive(false);
+		if (sanctuaryData?.stash == null)
+			return;
+
+		if (!sanctuaryData.stash.Any(item => item != null && item.count > 0))
+		{
+			RectTransform source = deckBuilderCardsText.rectTransform;
+			RectTransform empty = deckBuilderSelectedBagEmptyText.rectTransform;
+			empty.anchorMin = source.anchorMin;
+			empty.anchorMax = source.anchorMax;
+			empty.offsetMin = source.offsetMin;
+			empty.offsetMax = source.offsetMax;
+			deckBuilderSelectedBagEmptyText.gameObject.SetActive(true);
+			return;
+		}
+
+		Font bagFont = startCampaignButton.GetComponentInChildren<Text>().font;
+
+		foreach (var stash in sanctuaryData.stash.Where(item => item != null && item.count > 0))
+		{
+			string itemId = stash.itemId;
+			bool selected = deckBuilderSelectedBagItems.Contains(itemId);
+			Button itemButton = CreateImageButton("Bag " + itemId, (Transform)(object)deckBuilderCardsRoot,
+				bagFont, ShopItemSprite(itemId), string.Empty);
+			Image image = itemButton.GetComponent<Image>();
+			image.color = selected ? new Color(1f, 0.78f, 0.28f, 1f) : Color.white;
+			Text quantity = CreateText("Quantity", itemButton.transform, bagFont, 25, FontStyle.Bold, TextAnchor.LowerRight);
+			quantity.text = selected ? $"✓  x{stash.count}" : $"x{stash.count}";
+			quantity.color = selected ? new Color(1f, 0.9f, 0.35f) : Color.white;
+			SetRect(quantity.rectTransform, new Vector2(0.08f, 0.05f), new Vector2(0.92f, 0.28f));
+			itemButton.onClick.AddListener(() => ToggleDeckBuilderBagItem(itemId));
+			deckBuilderBagItemViews.Add(itemButton.gameObject);
+		}
+	}
+
+	private void RefreshDeckBuilderSelectedBagItems()
+	{
+		ClearDeckBuilderSelectedBagViews();
+		bool visible = initialDeckBuilder != null && initialDeckBuilder.CanStartCampaign && !deckBuilderPreparingBag;
+		if ((Object)(object)deckBuilderSelectedBagRoot == (Object)null || (Object)(object)deckBuilderSelectedBagEmptyText == (Object)null)
+			return;
+
+		bool hasConsumableStock = sanctuaryData?.stash?.Any(item => item != null && item.count > 0) == true;
+		bool showNoStockHint = visible && sanctuaryData?.stash != null && !hasConsumableStock;
+		deckBuilderSelectedBagRoot.gameObject.SetActive(visible && deckBuilderSelectedBagItems.Count > 0);
+		deckBuilderSelectedBagEmptyText.gameObject.SetActive(showNoStockHint);
+		Text prepareBagLabel = prepareBagButton.GetComponentInChildren<Text>(true);
+		if ((Object)(object)prepareBagLabel != (Object)null)
+		{
+			SetRect(prepareBagLabel.rectTransform, new Vector2(0.08f, 0.08f), new Vector2(0.92f, 0.92f));
+		}
+		if (!visible || deckBuilderSelectedBagItems.Count == 0)
+			return;
+
+		Font bagFont = startCampaignButton.GetComponentInChildren<Text>().font;
+		foreach (string itemId in deckBuilderSelectedBagItems)
+		{
+			Image item = CreateImage("Selected Bag " + itemId, deckBuilderSelectedBagRoot, Color.white);
+			item.sprite = ShopItemSprite(itemId);
+			item.preserveAspect = true;
+			item.raycastTarget = false;
+			LayoutElement itemLayout = item.gameObject.AddComponent<LayoutElement>();
+			itemLayout.flexibleWidth = 0f;
+			itemLayout.flexibleHeight = 0f;
+			Text check = CreateText("Selected", item.transform, bagFont, 26, FontStyle.Bold, TextAnchor.LowerRight);
+			check.text = "\u2713";
+			check.color = new Color(1f, 0.9f, 0.35f);
+			check.raycastTarget = false;
+			SetRect(check.rectTransform, new Vector2(0.62f, 0.02f), new Vector2(0.98f, 0.36f));
+			deckBuilderSelectedBagViews.Add(item.gameObject);
+		}
+		ResizeDeckBuilderSelectedBagGrid();
+	}
+
+	private void ResizeDeckBuilderSelectedBagGrid()
+	{
+		if ((Object)(object)deckBuilderSelectedBagRoot == (Object)null)
+			return;
+		GridLayoutGroup grid = ((Component)deckBuilderSelectedBagRoot).GetComponent<GridLayoutGroup>();
+		if ((Object)(object)grid == (Object)null)
+			return;
+
+		Canvas.ForceUpdateCanvases();
+		const int columns = 3;
+		int rows = Mathf.Max(1, Mathf.CeilToInt(deckBuilderSelectedBagRoot.childCount / (float)columns));
+		grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+		grid.constraintCount = columns;
+		grid.spacing = new Vector2(8f, 8f);
+
+		Rect rect = deckBuilderSelectedBagRoot.rect;
+		float availableWidth = Mathf.Max(1f, rect.width - grid.spacing.x * (columns - 1));
+		float availableHeight = Mathf.Max(1f, rect.height - grid.spacing.y * (rows - 1));
+		float itemSize = Mathf.Min(DeckBuilderBagItemSize, availableWidth / columns, availableHeight / rows);
+		grid.cellSize = new Vector2(itemSize, itemSize);
+		for (int i = 0; i < deckBuilderSelectedBagRoot.childCount; i++)
+		{
+			LayoutElement itemLayout = deckBuilderSelectedBagRoot.GetChild(i).GetComponent<LayoutElement>();
+			if ((Object)(object)itemLayout == (Object)null)
+				continue;
+			itemLayout.minWidth = itemSize;
+			itemLayout.minHeight = itemSize;
+			itemLayout.preferredWidth = itemSize;
+			itemLayout.preferredHeight = itemSize;
+		}
+		LayoutRebuilder.ForceRebuildLayoutImmediate(deckBuilderSelectedBagRoot);
+	}
+
+	private void ToggleDeckBuilderBagItem(string itemId)
+	{
+		ShowDeckBuilderBagItemEffect(itemId);
+		if (deckBuilderSelectedBagItems.Remove(itemId))
+		{
+			RefreshDeckBuilderView();
+			return;
+		}
+		int slots = Mathf.Max(0, sanctuaryData?.bagSlots ?? 0);
+		if (deckBuilderSelectedBagItems.Count >= slots)
+		{
+			ShowDeckBuilderToast($"Bisaccia piena: hai {slots} slot.");
+			return;
+		}
+		deckBuilderSelectedBagItems.Add(itemId);
+		RefreshDeckBuilderView();
+	}
+
+	private void ShowDeckBuilderBagItemEffect(string itemId)
+	{
+		if ((Object)(object)deckBuilderBagEffectText == (Object)null
+			|| !TryParseSanctuaryItemId(itemId, out CampaignConsumableType itemType))
+			return;
+
+		deckBuilderBagEffectText.text =
+			$"<b>{CampaignConsumableName(itemType).ToUpperInvariant()}</b> — {CampaignConsumableDescription(itemType)}";
+		deckBuilderBagEffectText.gameObject.SetActive(deckBuilderPreparingBag);
+	}
+
+	private async System.Threading.Tasks.Task<bool> SaveDeckBuilderBagSelection()
+	{
+		if (deckBuilderBagSaving)
+			return false;
+		deckBuilderBagSaving = true;
+		prepareBagButton.interactable = false;
+		try
+		{
+			sanctuaryData = await serverProgress.SetSanctuaryBagAsync(deckBuilderSelectedBagItems.ToArray());
+			SyncDeckBuilderBagToProgress();
+			return true;
+		}
+		catch (Exception exception)
+		{
+			ShowDeckBuilderToast("Bisaccia non salvata: " + exception.Message);
+			return false;
+		}
+		finally
+		{
+			deckBuilderBagSaving = false;
+			prepareBagButton.interactable = true;
+		}
+	}
+
+	private void SyncDeckBuilderBagToProgress()
+	{
+		if (singlePlayerProgressService?.Progress == null)
+			return;
+		SinglePlayerProgressSave snapshot = JsonUtility.FromJson<SinglePlayerProgressSave>(
+			JsonUtility.ToJson(singlePlayerProgressService.Progress));
+		snapshot.bagItems = new List<string>(deckBuilderSelectedBagItems);
+		singlePlayerProgressService.ApplyAuthoritative(snapshot);
+		if (serverProgress?.Progress != null)
+		{
+			SinglePlayerProgressSave serverSnapshot = JsonUtility.FromJson<SinglePlayerProgressSave>(
+				JsonUtility.ToJson(serverProgress.Progress));
+			serverSnapshot.bagItems = new List<string>(deckBuilderSelectedBagItems);
+			serverProgress.ApplyAuthoritative(serverSnapshot);
+		}
+	}
+
+	private void ClearDeckBuilderBagViews()
+	{
+		foreach (GameObject view in deckBuilderBagItemViews)
+			if ((Object)(object)view != (Object)null)
+				Destroy(view);
+		deckBuilderBagItemViews.Clear();
+	}
+
+	private void ClearDeckBuilderSelectedBagViews()
+	{
+		foreach (GameObject view in deckBuilderSelectedBagViews)
+			if ((Object)(object)view != (Object)null)
+				Destroy(view);
+		deckBuilderSelectedBagViews.Clear();
+		if ((Object)(object)deckBuilderSelectedBagRoot != (Object)null)
+			deckBuilderSelectedBagRoot.gameObject.SetActive(false);
+		if ((Object)(object)deckBuilderSelectedBagEmptyText != (Object)null)
+			deckBuilderSelectedBagEmptyText.gameObject.SetActive(false);
 	}
 
 	private List<CardDefinition> GetUnlockedCombatCards()
@@ -589,7 +934,7 @@ public sealed partial class BattleBoardController
 
 	private bool IsHeroClassUnlockedForCampaign(HeroClass heroClass)
 	{
-		if (Array.IndexOf(StarterHeroClasses, heroClass) >= 0 && singlePlayerProgressService.TutorialCompleted)
+		if (Array.IndexOf(LegacyTutorialHeroClasses, heroClass) >= 0 && singlePlayerProgressService.TutorialCompleted)
 			return true;
 
 		return singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Class, HeroClassUnlockId(heroClass));

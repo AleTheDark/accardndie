@@ -20,8 +20,10 @@ sysinfo.txt
 output*
 WebGLBuild/
 webgl.zip
+publish-linux/
 .utmp/
 _Recovery/
+_Recovery_fuori_da_assets/
 tmp/
 nul+
 

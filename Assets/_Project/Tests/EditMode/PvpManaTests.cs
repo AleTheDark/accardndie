@@ -104,14 +104,15 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
-        public void Attacking_GainsOneManaAtEndOfActivation()
+        public void Attacking_PaysOneAndRecoversOneAtEndOfActivation()
         {
             PvpMatchEngine engine = WarriorMirror();
             int before = engine.ManaOf(0);
 
             engine.Attack(0, 0);
 
-            Assert.That(engine.ManaOf(0), Is.EqualTo(before + 1));
+            Assert.That(engine.ManaOf(0), Is.EqualTo(before),
+				"il costo dell'attacco e il recupero di fine attivazione si compensano");
         }
 
         [Test]
@@ -319,6 +320,9 @@ namespace AccardND.GameCore.Tests
                 e.Player == 0
                 && e.Delta == 3
                 && e.Reason == ManaChangeReasons.Skip), Is.True);
+			Assert.That(events.OfType<ManaChangedEvent>().Any(e =>
+				e.Player == 0 && e.Reason == ManaChangeReasons.Spend), Is.False,
+				"un attacco impossibile e' uno skip e non deve spendere mana");
         }
 
         /// <summary>

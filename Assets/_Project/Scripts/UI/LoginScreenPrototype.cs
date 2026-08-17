@@ -33,9 +33,18 @@ namespace AccardND.UI
         private Button loginButton;
         private Button nicknameConfirmButton;
         private GameObject updateOverlay;
+        private Text updateTitleText;
         private Text updateMessageText;
         private Button updateActionButton;
+        private Text updateActionLabel;
         private string updateUrl;
+
+        /// <summary>
+        /// true quando l'avviso a schermo è quello di manutenzione e non quello di
+        /// aggiornamento: i due riusano lo stesso riquadro, ma il bottone fa cose
+        /// opposte (riprovare l'accesso / andare a scaricare la build nuova).
+        /// </summary>
+        private bool maintenanceBlocking;
         private bool busy;
         private PvpServerClient serverClient;
         private TaskCompletionSource<string> pendingNickname;
@@ -173,9 +182,10 @@ namespace AccardND.UI
         }
 
         /// <summary>
-        /// Avviso di aggiornamento: nasce spento e copre tutta la schermata quando il
-        /// server rifiuta la versione. Da qui non si prosegue, quindi non ha un tasto
-        /// per chiuderlo: l'unica azione è andare a prendere la build nuova.
+        /// Avviso bloccante: nasce spento e copre tutta la schermata quando il server
+        /// rifiuta l'accesso, per versione vecchia o per manutenzione. Da qui non si
+        /// prosegue, quindi non ha un tasto per chiuderlo: l'unica azione è quella
+        /// che risolve il blocco (scaricare la build nuova, o riprovare più tardi).
         /// </summary>
         private void BuildUpdateOverlay(Transform canvasParent)
         {
@@ -191,7 +201,8 @@ namespace AccardND.UI
             panel.color = new Color(0.16f, 0.09f, 0.24f, 0.98f);
             SetRect(panel.rectTransform, Vector2.zero, new Vector2(660f, 540f));
 
-            CreateTitle(panel.transform, GameText.Get(GameTextKeys.Login.UpdateTitle), new Vector2(0f, 185f), 42);
+            updateTitleText = CreateTitle(
+                panel.transform, GameText.Get(GameTextKeys.Login.UpdateTitle), new Vector2(0f, 185f), 42);
 
             updateMessageText = CreateText(
                 panel.transform,
@@ -204,7 +215,8 @@ namespace AccardND.UI
             SetRect(updateMessageText.rectTransform, new Vector2(0f, 45f), new Vector2(570f, 200f));
 
             updateActionButton = CreateButton(panel.transform, "Update", GameText.Get(GameTextKeys.Login.UpdateNow), new Vector2(0f, -150f), 30);
-            updateActionButton.onClick.AddListener(OpenUpdateUrl);
+            updateActionLabel = updateActionButton.GetComponentInChildren<Text>();
+            updateActionButton.onClick.AddListener(OnOverlayAction);
 
             updateOverlay.SetActive(false);
         }
@@ -219,6 +231,12 @@ namespace AccardND.UI
             serverClient?.Dispose();
             serverClient = null;
             signedInAccessToken = null;
+            maintenanceBlocking = false;
+
+            if (updateTitleText != null)
+                updateTitleText.text = GameText.Get(GameTextKeys.Login.UpdateTitle);
+            if (updateActionLabel != null)
+                updateActionLabel.text = GameText.Get(GameTextKeys.Login.UpdateNow);
 
             updateUrl = auth?.updateUrl;
             string required = string.IsNullOrWhiteSpace(auth?.requiredVersion)
@@ -243,6 +261,72 @@ namespace AccardND.UI
                 updateOverlay.SetActive(true);
 
             // busy resta true: da questa schermata non si entra in nessun caso.
+        }
+
+        /// <summary>
+        /// Il server è in manutenzione: nessuno entra finché non riapre. Si resta sul
+        /// login come per la versione vecchia, ma qui il blocco è temporaneo, quindi
+        /// il bottone riprova invece di mandare allo store. Il messaggio arriva dal
+        /// pannello admin quando ce n'è uno; altrimenti vale il testo tradotto.
+        /// </summary>
+        private void ShowMaintenance(AuthResponse auth)
+        {
+            serverClient?.Dispose();
+            serverClient = null;
+            signedInAccessToken = null;
+            maintenanceBlocking = true;
+            updateUrl = null;
+
+            if (updateTitleText != null)
+                updateTitleText.text = GameText.Get(GameTextKeys.Login.MaintenanceTitle);
+            if (updateMessageText != null)
+            {
+                string custom = auth?.maintenanceMessage;
+                updateMessageText.text = string.IsNullOrWhiteSpace(custom)
+                    ? GameText.Get(GameTextKeys.Login.MaintenanceMessage)
+                    : custom.Trim();
+            }
+
+            if (updateActionLabel != null)
+                updateActionLabel.text = GameText.Get(GameTextKeys.Login.MaintenanceRetry);
+            if (updateActionButton != null)
+                updateActionButton.gameObject.SetActive(true);
+
+            SetNicknameUiVisible(false);
+            if (loginButton != null)
+                loginButton.gameObject.SetActive(false);
+            SetStatus(GameText.Get(GameTextKeys.Login.MaintenanceStatus));
+            if (updateOverlay != null)
+                updateOverlay.SetActive(true);
+
+            // busy resta true: si esce da qui solo dal bottone "Riprova".
+        }
+
+        /// <summary>
+        /// Unico bottone per due avvisi che si escludono a vicenda: con la
+        /// manutenzione si riprova, con la versione vecchia si va a scaricare.
+        /// </summary>
+        private void OnOverlayAction()
+        {
+            if (maintenanceBlocking)
+                RetryAfterMaintenance();
+            else
+                OpenUpdateUrl();
+        }
+
+        private async void RetryAfterMaintenance()
+        {
+            maintenanceBlocking = false;
+            if (updateOverlay != null)
+                updateOverlay.SetActive(false);
+            if (loginButton != null)
+                loginButton.gameObject.SetActive(true);
+
+            // ShowMaintenance aveva lasciato busy alzato per sbarrare la schermata:
+            // senza abbassarlo qui StartOnlineFlowAsync uscirebbe subito e il tasto
+            // non farebbe niente.
+            busy = false;
+            await StartOnlineFlowAsync();
         }
 
         private void OpenUpdateUrl()
@@ -340,6 +424,12 @@ namespace AccardND.UI
             });
 
             AuthResponse auth = await WaitForMessageAsync<AuthResponse>(MessageTypes.AuthResponse, 12f);
+            if (auth is { maintenance: true })
+            {
+                ShowMaintenance(auth);
+                return false;
+            }
+
             if (auth is { requiresUpdate: true })
             {
                 ShowUpdateRequired(auth);
@@ -761,11 +851,13 @@ namespace AccardND.UI
             return anonymousButtonSprite;
         }
 
-        private static void CreateTitle(Transform parent, string value, Vector2 position, int size)
+        /// <summary>Restituisce il titolo creato: l'avviso bloccante ne cambia il testo a runtime.</summary>
+        private static Text CreateTitle(Transform parent, string value, Vector2 position, int size)
         {
             Text text = CreateText(parent, "Title", value, size, TextAnchor.MiddleCenter, MmoUiTheme.Gold);
             MmoUiTheme.StyleAsScreenTitle(text);
             SetRect(text.rectTransform, position, new Vector2(560f, 64f));
+            return text;
         }
 
         private static void CreateSubtitle(Transform parent, string value, Vector2 position, int size)

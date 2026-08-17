@@ -3,6 +3,7 @@ using System.Collections;
 using System.Linq;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -48,12 +49,73 @@ public sealed partial class BattleBoardController
 		// Il vecchio pannello "Player HUD" non viene piu' creato: il Combat HUD
 		// moderno legge direttamente stato, esperienza e dado Vigore.
 		playerHud = null;
-		cpuHud = CreateCombatantHud("CPU HUD", font, "CPU MASTER");
-		ConfigureCombatantHudTooltips(cpuHud, isPlayer: false);
+		cpuHud = CreateMinimalCpuHud(font);
+		ConfigureMinimalCpuHud();
 		CreateHudTooltip(font);
 		CreateManaHudView(font);
 		CreateEnemyManaHudView(font);
 		CreateCombatHudRefactor(font);
+	}
+
+	private CombatantHud CreateMinimalCpuHud(Font font)
+	{
+		Image panel = CreateImage("CPU HUD", (Transform)(object)safeAreaRoot, Color.clear);
+		SetRect(panel.rectTransform, new Vector2(0.735f, 0.815f), new Vector2(0.985f, 0.985f));
+		panel.raycastTarget = false;
+
+		Image diceImage = CreateImage("CPU HUD Dice Icon", ((Component)panel).transform, Color.white);
+		diceImage.preserveAspect = true;
+		ConfigureHudStat(diceImage,
+			CreateText("CPU HUD Dice Value", diceImage.transform, font, 40, FontStyle.Bold, TextAnchor.MiddleCenter),
+			new Vector2(0.66f, 0.52f), new Vector2(0.81f, 0.88f));
+
+		return new CombatantHud
+		{
+			Rect = panel.rectTransform,
+			DiceImage = diceImage,
+			DiceText = ((Component)diceImage).GetComponentInChildren<Text>()
+		};
+	}
+
+	private void ConfigureMinimalCpuHud()
+	{
+		if (cpuHud == null || (Object)(object)cpuHud.Rect == (Object)null)
+		{
+			return;
+		}
+
+		Image panel = ((Component)cpuHud.Rect).GetComponent<Image>();
+		if ((Object)(object)panel != (Object)null)
+		{
+			panel.enabled = false;
+		}
+
+		if ((Object)(object)cpuHud.DiceImage != (Object)null && (Object)(object)cpuHud.DiceText != (Object)null)
+		{
+			RectTransform diceValueRect = cpuHud.DiceText.rectTransform;
+			diceValueRect.SetParent(cpuHud.DiceImage.transform, false);
+			Stretch(diceValueRect, 3f);
+			cpuHud.DiceText.fontSize = 40;
+			cpuHud.DiceText.fontStyle = FontStyle.Bold;
+			cpuHud.DiceText.alignment = TextAnchor.MiddleCenter;
+			cpuHud.DiceText.resizeTextForBestFit = false;
+			cpuHud.DiceText.color = Color.white;
+			Outline diceOutline = ((Component)cpuHud.DiceText).GetComponent<Outline>();
+			if ((Object)(object)diceOutline == (Object)null)
+			{
+				diceOutline = ((Component)cpuHud.DiceText).gameObject.AddComponent<Outline>();
+			}
+			diceOutline.effectColor = new Color(0.02f, 0.02f, 0.05f, 0.95f);
+			diceOutline.effectDistance = new Vector2(1.5f, -1.5f);
+			diceOutline.useGraphicAlpha = true;
+		}
+
+		for (int i = cpuHud.Rect.childCount - 1; i >= 0; i--)
+		{
+			Transform child = cpuHud.Rect.GetChild(i);
+			bool keepVisible = child == cpuHud.DiceImage.transform;
+			child.gameObject.SetActive(keepVisible);
+		}
 	}
 
 	private CombatantHud CreateCombatantHud(string name, Font font, string displayName)
@@ -199,7 +261,7 @@ public sealed partial class BattleBoardController
 
 	private static void ConfigureCpuHudPresentation(CombatantHud hud)
 	{
-		if (hud == null)
+		if (hud == null || (Object)(object)hud.NameText == (Object)null)
 		{
 			return;
 		}
@@ -219,10 +281,8 @@ public sealed partial class BattleBoardController
 		SetRect(hud.NameText.rectTransform, new Vector2(0.16f, 0.62f), new Vector2(0.58f, 0.9f));
 		SetRect(hud.LevelText.rectTransform, new Vector2(0.16f, 0.36f), new Vector2(0.62f, 0.58f));
 		SetRect(hud.ExperienceText.rectTransform, new Vector2(0.16f, 0.1f), new Vector2(0.72f, 0.32f));
-		SetRect(hud.DiceImage.rectTransform, new Vector2(0.62f, 0.18f), new Vector2(0.85f, 0.9f));
-		MatchBattleResourceIconSize(hud.DiceImage.rectTransform);
-		hud.DiceImage.rectTransform.localScale = new Vector3(1.5f, 1.5f, 1f);
-		SetRect(hud.DiceText.rectTransform, new Vector2(0.855f, 0.36f), new Vector2(0.97f, 0.76f));
+		// Posizione e dimensione del dado CPU sono gestite insieme alle altre tre
+		// risorse, così le due colonne restano sempre speculari al centro.
 	}
 
 	private static void MatchBattleResourceIconSize(RectTransform rect)
@@ -360,6 +420,8 @@ public sealed partial class BattleBoardController
 
 	private int EffectivePlayerHudVigorDieSides()
 	{
+		if (tutorialMageDuelActive)
+			return 6;
 		if (runProgress == null)
 		{
 			return 0;
@@ -390,24 +452,42 @@ public sealed partial class BattleBoardController
 		string campaignScenarioLabel = CurrentCampaignScenarioHudLabel();
 		string scenarioLabel = CurrentScenarioHudLabel();
 		string progressLabel = !string.IsNullOrWhiteSpace(campaignScenarioLabel)
-			?$"GROTTA: {campaignScenarioLabel}"
+			?GameText.Format(GameTextKeys.Combat.CpuHudCave, campaignScenarioLabel)
 			:(string.IsNullOrWhiteSpace(scenarioLabel) || SameHudLabel(scenarioLabel, encounterLabel)
-				?"AREA: GROTTA"
-				:$"AREA: {scenarioLabel}");
+				?GameText.Get(GameTextKeys.Combat.CpuHudAreaCave)
+				:GameText.Format(GameTextKeys.Combat.CpuHudArea, scenarioLabel));
 		RefreshCombatantHud(
 			cpuHud,
 			isPlayer: false,
-			$"STANZA {runProgress.RoomsCleared + 1}",
-			$"MINACCIA: {encounterLabel}",
+			CurrentRoomHudLabel(),
+			GameText.Format(GameTextKeys.Combat.CpuHudThreat, encounterLabel),
 			progressLabel,
 			0f,
 			EffectiveCpuHudVigorDieSides(),
 			0,
 			0,
 			0);
+		if ((Object)(object)cpuHud.DiceText != (Object)null)
+		{
+			cpuHud.DiceText.fontSize = IsBossFightHudActive() ?35 : 40;
+			cpuHud.DiceText.resizeTextForBestFit = false;
+		}
 		SetCpuCounterStatsVisible(false);
 		SetCpuProgressBarVisible(false);
-		ConfigureCpuHudPresentation(cpuHud);
+		if (seraphelBossPresentationActive
+			|| trentorBossPresentationActive
+			|| bragusBossPresentationActive
+			|| (activePalatirBoss != null && !activePalatirBoss.IsDefeated)
+			|| (activeComposableGolem != null && !activeComposableGolem.IsDefeated))
+		{
+			// Il layout dei boss possiede dado e relativo value: non applicare per un
+			// frame le coordinate del pannello CPU prima di spostarli sotto la runa mana.
+			ApplySeraphelExclusiveLayout();
+		}
+		else
+		{
+			ConfigureCpuHudPresentation(cpuHud);
+		}
 	}
 
 	private string CurrentCpuProgressTooltip()
@@ -415,7 +495,7 @@ public sealed partial class BattleBoardController
 		if (activeComposableGolem != null && !activeComposableGolem.IsDefeated)
 		{
 			ComposableGolemFormStats activeForm = activeComposableGolem.ActiveForm;
-			return $"Golem {GolemFormName(activeForm.Form)}: dado Vigore attuale D{activeForm.VigorDieSides}. Cambia forma e dado durante il combattimento.";
+			return GameText.Format(GameTextKeys.Combat.CpuHudTooltipGolem, GolemFormName(activeForm.Form), activeForm.VigorDieSides);
 		}
 
 		if (!string.IsNullOrWhiteSpace(campaignScenarioId))
@@ -431,32 +511,32 @@ public sealed partial class BattleBoardController
 			string bossName = (Object)(object)boss != (Object)null ?boss.DisplayName : bossId;
 			if (!string.IsNullOrWhiteSpace(bossName))
 			{
-				return $"Grotta {label}: nei combattimenti Boss della campagna il Master evoca {bossName}. Resta attiva fino a fine campagna.";
+				return GameText.Format(GameTextKeys.Combat.CpuHudTooltipCampaignBoss, label, bossName);
 			}
-			return $"Grotta {label}: effetto scenario attivo fino a fine campagna.";
+			return GameText.Format(GameTextKeys.Combat.CpuHudTooltipCampaignScenario, label);
 		}
 
 		string scenarioLabel = CurrentScenarioHudLabel();
 		if (!string.IsNullOrWhiteSpace(scenarioLabel))
 		{
-			return $"Area {scenarioLabel}: questa stanza usa sfondo e regole dello scenario corrente.";
+			return GameText.Format(GameTextKeys.Combat.CpuHudTooltipArea, scenarioLabel);
 		}
-		return "Area Grotta: stanza base senza effetto scenario speciale.";
+		return GameText.Get(GameTextKeys.Combat.CpuHudTooltipBaseArea);
 	}
 
 	private string CurrentEncounterHudLabel()
 	{
 		return currentRoomType switch
 		{
-			RoomType.Boss => "BOSS",
-			RoomType.Merchant => "MERCANTE",
-			RoomType.Loot => "TESORO",
-			RoomType.UnexpectedOpportunity => "IMPREVISTO",
+			RoomType.Boss => GameText.Get(GameTextKeys.Combat.CpuHudEncounterBoss),
+			RoomType.Merchant => GameText.Get(GameTextKeys.Combat.CpuHudEncounterMerchant),
+			RoomType.Loot => GameText.Get(GameTextKeys.Combat.CpuHudEncounterLoot),
+			RoomType.QuickChallenge => GameText.Get(GameTextKeys.Combat.CpuHudEncounterUnexpected),
 			_ => pendingRoomDifficulty switch
 			{
-				RoomDifficulty.Easy => "ACCESSIBILE",
-				RoomDifficulty.Hard => "APOCALITTICA",
-				_ => "NORMALE"
+				RoomDifficulty.Easy => GameText.Get(GameTextKeys.Combat.CpuHudDifficultyEasy),
+				RoomDifficulty.Hard => GameText.Get(GameTextKeys.Combat.CpuHudDifficultyHard),
+				_ => GameText.Get(GameTextKeys.Combat.CpuHudDifficultyNormal)
 			}
 		};
 	}
@@ -518,16 +598,17 @@ public sealed partial class BattleBoardController
 		int cooldownCount,
 		int graveyardCount)
 	{
-		hud.NameText.text = name;
-		hud.LevelText.text = level;
-		hud.ExperienceText.text = progressLabel;
-		SetRect(hud.ExperienceFill.rectTransform, Vector2.zero, new Vector2(Mathf.Clamp01(progress), 1f));
+		if ((Object)(object)hud.NameText != (Object)null) hud.NameText.text = name;
+		if ((Object)(object)hud.LevelText != (Object)null) hud.LevelText.text = level;
+		if ((Object)(object)hud.ExperienceText != (Object)null) hud.ExperienceText.text = progressLabel;
+		if ((Object)(object)hud.ExperienceFill != (Object)null)
+			SetRect(hud.ExperienceFill.rectTransform, Vector2.zero, new Vector2(Mathf.Clamp01(progress), 1f));
 		hud.DiceImage.sprite = LoadHudDiceSprite(diceSides, isPlayer);
 		hud.DiceImage.enabled = (Object)(object)hud.DiceImage.sprite != (Object)null;
 		hud.DiceText.text = $"D{diceSides}";
-		hud.DeckText.text = deckCount.ToString();
-		hud.CooldownText.text = cooldownCount.ToString();
-		hud.GraveyardText.text = graveyardCount.ToString();
+		if ((Object)(object)hud.DeckText != (Object)null) hud.DeckText.text = deckCount.ToString();
+		if ((Object)(object)hud.CooldownText != (Object)null) hud.CooldownText.text = cooldownCount.ToString();
+		if ((Object)(object)hud.GraveyardText != (Object)null) hud.GraveyardText.text = graveyardCount.ToString();
 	}
 
 	private void SetCpuCounterStatsVisible(bool visible)
@@ -587,26 +668,65 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		string encounterLabel = CurrentEncounterHudLabel();
-		string roundLabel = roundNumber > 0 && !draftActive && !deploymentDraftActive ?$"ROUND {roundNumber}" : phaseLabel;
-		string scenario = string.IsNullOrWhiteSpace(scenarioLabel) || SameHudLabel(scenarioLabel, encounterLabel) ?string.Empty : $"  |  {FormatHudLabel(scenarioLabel)}";
-		topInfoText.text = $"STANZA {runProgress.RoomsCleared + 1}  |  {encounterLabel}  |  CPU D{EffectiveCpuHudVigorDieSides()}  |  {roundLabel}{scenario}";
+		bool showRoomInfo = currentRoomType == RoomType.Monster && !IsBossFightHudActive();
+		if ((Object)(object)topInfoBarRect != (Object)null)
+			((Component)topInfoBarRect).gameObject.SetActive(showRoomInfo);
+		((Component)topInfoText).gameObject.SetActive(showRoomInfo);
+		if (((Component)topInfoText).gameObject.activeSelf)
+			topInfoText.text = CurrentRoomHudLabel();
+	}
+
+	private string CurrentRoomHudLabel()
+	{
+		if (IsTutorialWarriorDuelActive)
+			return ActiveTutorialDuelRoomLabel;
+		if (adventureScriptedTutorialActive)
+			return "TUTORIAL FINALE";
+		return GameText.GetOrFallbackSilent(
+			GameTextKeys.Combat.CpuHudRoom,
+			"STANZA {0}",
+			runProgress.RoomsCleared + 1);
+	}
+
+	private bool IsBossFightHudActive()
+	{
+		// Nella scena unificata il titolo stanza non deve comparire neppure prima
+		// del reveal del boss, durante la fase di schieramento.
+		if (debugForceFirstRoomMedusa || debugForceFirstRoomTrentor || debugForceFirstRoomBragus || debugForceFirstRoomJurinashor
+			|| debugForceFirstRoomPalatir || debugForceFirstRoomSeraphel)
+			return true;
+		if (trentorBossPresentationActive || bragusBossPresentationActive || seraphelBossPresentationActive)
+			return true;
+		if ((activeComposableGolem != null && !activeComposableGolem.IsDefeated)
+			|| (activeMedusaBoss != null && !activeMedusaBoss.IsDefeated)
+			|| (activePalatirBoss != null && !activePalatirBoss.IsDefeated))
+			return true;
+		return cpuCards != null && cpuCards.Any(card => card != null && !card.Eliminated
+			&& (IsComposableGolemProxy(card) || IsMedusaBossProxy(card) || IsTrentorBossProxy(card)
+				|| IsBragusBossProxy(card) || IsPalatirBossProxy(card) || IsSeraphelBossProxy(card)));
 	}
 
 	private int EffectiveCpuHudVigorDieSides()
 	{
+		if (tutorialMageDuelActive)
+			return 6;
 		if (activeComposableGolem != null && !activeComposableGolem.IsDefeated)
 		{
 			return activeComposableGolem.ActiveForm.VigorDieSides;
+		}
+		if (activeSeraphelBoss != null && !activeSeraphelBoss.IsDefeated)
+		{
+			BattleCardState seraphel = cpuCards?.FirstOrDefault(IsSeraphelBossProxy);
+			return EffectiveVigorDieSides(seraphel, activeSeraphelBoss.VigorDieSides);
 		}
 		return runProgress != null ?runProgress.MasterVigorDieSides : configuration.Gameplay.VigorDieSides;
 	}
 
 	// Icona del dado Vigore da Resources/UI: variante blu per il player,
-	// rossa per il Master/avversario (D4..D20; il D3 logico usa il D6).
+	// rossa per il Master/avversario (D4..D20; il D2 logico usa l'asset D4).
 	private static Sprite LoadHudDiceSprite(int sides, bool isPlayer)
 	{
-		int visualSides = sides == 3 ? 6 : sides;
+		int visualSides = sides == 2 ? 4 : sides;
 		return Resources.Load<Sprite>($"UI/D{visualSides}_{(isPlayer ? "Player" : "Cpu")}");
 	}
 }

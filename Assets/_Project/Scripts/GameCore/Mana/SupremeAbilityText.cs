@@ -32,23 +32,25 @@ namespace AccardND.GameCore.Mana
             return heroClass switch
             {
                 HeroClass.Warrior =>
-                    "Guadagni +2 alla Potenza fino a fine stanza. Se sei l'unica pedina rimasta il bonus sale a +4.",
+                    "Costo 6 mana: Guadagni +2 alla Potenza fino a fine stanza. Se sei l'unica pedina rimasta il bonus sale a +4.",
                 HeroClass.Rogue =>
-                    "Rubi tutti i potenziamenti del bersaglio. Se non ne ha, gli togli 2 di Potenza fino a fine stanza.",
+                    "Costo 3 mana: Rubi un potenziamento e 2 mana al bersaglio. Se non ha potenziamenti, rubi invece 1 Potenza fino a fine stanza.",
                 HeroClass.Mage =>
-                    "Colpisci tutte le pedine avversarie con un dado Vigore abbassato di uno step.",
+                    "Costo 4 mana: Colpisci tutte le pedine avversarie con un dado Vigore abbassato di uno step.",
                 HeroClass.Hunter =>
-                    "Colpisci tutte le pedine avversarie con un dado Vigore abbassato di uno step.",
+                    "Costo 4 mana: Colpisci tutte le pedine avversarie con un dado Vigore abbassato di uno step.",
                 HeroClass.Barbarian =>
-                    "Suoni la cornamusa: tutta la squadra riceve un potenziamento fino a fine stanza.",
+                    "Costo 4 mana: Suoni la cornamusa: tutta la squadra accumula Furia. La conserva durante le sconfitte e la scarica alla prima vittoria.",
                 HeroClass.Paladin =>
-                    "Attingi alla riserva: se il tuo mana e' sotto 6, risale a 6.",
+                    "Costo 2 mana: Attingi alla riserva: se il tuo mana e' sotto 6, risale a 6.",
                 HeroClass.Priest =>
-                    "Togli tutti i malus agli alleati e tutti i potenziamenti agli avversari. Non tocca le aure.",
+                    "Costo 4 mana: Togli tutti i malus agli alleati e tutti i potenziamenti agli avversari. Non tocca le aure.",
                 HeroClass.Assassin =>
-                    "Diventi non bersagliabile. Quando resti l'unica pedina torni bersagliabile, ma difendi con vantaggio.",
+                    "Costo 5 mana: Diventi non bersagliabile. Quando resti l'unica pedina torni bersagliabile, ma difendi con vantaggio.",
                 HeroClass.Necromancer =>
-                    "In preparazione.",
+                    "Costo 8 mana: Evoca 2 sgherri di Potenza 2 che intercettano gli attacchi diretti e ad area. " +
+                    "Non hanno un turno e non possono attaccare. Quando uno muore, tutte le tue pedine " +
+                    "ottengono +1 Potenza; la Purificazione li dissolve senza attivare il bonus.",
                 _ => string.Empty
             };
         }

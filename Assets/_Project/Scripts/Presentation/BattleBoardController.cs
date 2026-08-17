@@ -5,6 +5,7 @@ using System.Linq;
 using AccardND.Battlefield;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using AccardND.PvpUi;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -23,14 +24,15 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private const string MedusaBossCardId = "boss-medusa";
 	private const string TrentorBossCardId = "trentor";
 	private const string BragusBossCardId = "boss-bragus";
+	private const string JurinashorBossCardId = "boss-jurinashor";
+	private const string JurinashorSwordCardId = "boss-jurinashor-sword";
+	private const string SeraphelBossCardId = "boss-seraphel";
+	private const string SeraphelPhaseTwoCardId = "boss-seraphel-phase-2";
 	private const string PalatirBossCardId = "boss-palatir";
 	private const string MinibossGolemDebugSceneName = "MinibossGolemDebug";
 	private const int MinibossGolemDebugPlayerLevel = 4;
-	private const string MedusaBossDebugSceneName = "MedusaBossDebug";
-	private const string TrentorBossDebugSceneName = "TrentorBossDebug";
-	private const string TrentorBossForcedDebugSceneName = "TrentorBossForcedDebug";
-	private const string BragusBossDebugSceneName = "BragusBossDebug";
-	private const string PalatirBossDebugSceneName = "PalatirBossDebug";
+	private const string MedusaDebugSceneName = "MedusaDebug";
+	private const string BossDebugSceneName = "BossDebug";
 	private const string PromotionalTrailerSceneName = "PromotionalTrailer";
 	private const string MerchantDebugSceneName = "MerchantDebug";
 	private const string LootRoomDebugSceneName = "LootRoomDebug";
@@ -70,17 +72,19 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	/// </summary>
 	private bool pendingCampaignRewardRecoverable;
 	private GameObject campaignDefeatRewardPopup;
+	private RectTransform campaignDefeatPetals;
 	private Text campaignDefeatRewardBodyText;
 	private Button campaignDefeatRewardDoubleButton;
 	private Text campaignDefeatRewardDoubleButtonText;
 
-	// Il mercato espone due banchi mutuamente esclusivi: al primo acquisto quello non scelto
-	// resta chiuso per il resto della stanza. Vendita e recupero carte restano sempre attivi.
+	// Il mercato espone tre banchi mutuamente esclusivi: al primo acquisto quelli non scelti
+	// restano chiusi per il resto della stanza. Vendita e recupero carte restano sempre attivi.
 	private enum MerchantBranch
 	{
 		None,
 		Cards,
-		Items
+		Items,
+		Upgrades
 	}
 
 	private enum AbilityTargetMode
@@ -92,6 +96,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		PaladinAlly,
 		NecromancerAlly,
 		PriestAlly,
+		RogueSupremeEnemy,
 		AttachmentAlly
 	}
 
@@ -117,15 +122,18 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	{
 		Detector,
 		SecondChance,
-		Defrost,
 		Empower,
 		SigilloRubino,
-		DoubleExp
+		DoubleExp,
+		ManaGain5,
+		ManaGain10,
+		Jolly
 	}
 
 	private enum MinibossKind
 	{
-		ComposableGolem
+		ComposableGolem,
+		Medusa
 	}
 
 	private enum CpuEncounterKind
@@ -184,16 +192,13 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	{
 		public RoomType RoomType { get; }
 
-		public int MonsterTier { get; }
-
 		public string ScenarioId { get; }
 
 		public RoomDifficulty Difficulty { get; }
 
-		public CampaignRoomRoll(RoomType roomType, int monsterTier, string scenarioId, RoomDifficulty difficulty)
+		public CampaignRoomRoll(RoomType roomType, string scenarioId, RoomDifficulty difficulty)
 		{
 			RoomType = roomType;
-			MonsterTier = monsterTier;
 			ScenarioId = scenarioId;
 			Difficulty = difficulty;
 		}
@@ -201,9 +206,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private sealed class BattleCardState
 	{
-		public CardDefinition Definition { get; }
+		public CardDefinition Definition { get; private set; }
 
-		public CombatCard Card { get; }
+		public CombatCard Card { get; private set; }
 
 		public PrototypeCardView View { get; }
 
@@ -212,6 +217,16 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		public CampaignCardInstance CampaignCard { get; }
 
 		public int Initiative { get; set; }
+
+		/// <summary>
+		/// Il bonus dei talenti gia' assegnato al dado di questa pedina. Viaggia con la
+		/// pedina invece di essere ricalcolato dalla sua posizione in fila: e' il numero
+		/// che il giocatore ha visto accendersi sul dado durante lo schieramento.
+		/// </summary>
+		public int InitiativeTalentBonus { get; set; }
+
+		/// <summary>"Apertura": questa pedina agisce per prima, qualunque sia il tiro.</summary>
+		public bool OpensTheFight { get; set; }
 
 		public int TieBreaker { get; set; }
 
@@ -222,6 +237,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		public bool AbilityUsed { get; set; }
 
 		public bool AbilityUsedThisTurn { get; set; }
+
+		public bool SupremeUsedThisTurn { get; set; }
 
 		public int PendingAttackBonus { get; set; }
 
@@ -243,6 +260,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 		public bool IsAttachment { get; set; }
 
+		/// <summary>Ha gia ricevuto il bonus di una pedina sacrificata in questa battaglia.</summary>
+		public bool HasEquipment { get; set; }
+
 		/// <summary>
 		/// Invisibilita' dell'Assassino: non selezionabile come bersaglio finche' non
 		/// resta l'unica pedina attiva del suo schieramento. E' un buff, quindi la
@@ -250,7 +270,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		/// </summary>
 		public bool IsUntargetable { get; set; }
 
+		public int NecromancerMinions { get; set; }
+
 		public bool Petrified { get; set; }
+
+		public int SeraphelSeals { get; set; }
 
 		public BattleCardState MarkedTarget { get; set; }
 
@@ -274,7 +298,19 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			if (campaignCard != null)
 			{
 				PermanentCombatBonus = campaignCard.PermanentItemBonus;
+				// I potenziamenti permanenti del fabbro/mercante sono equipaggiamento:
+				// devono quindi comparire sia nell'inspection card sia nel token buff.
+				// Il Sigillo Oscuro mantiene invece la propria voce dedicata.
+				int rubySealBonus = campaignCard.HasRubySeal ? RubySealPowerBonus : 0;
+				HasEquipment = campaignCard.PermanentItemBonus > rubySealBonus;
 			}
+		}
+
+		public void TransformSeraphel(CardDefinition definition, int strength)
+		{
+			Definition = definition;
+			Card = new CombatCard(definition.Id, definition.DisplayName, HeroClass.Priest, strength);
+			View?.SetCardArtwork(definition);
 		}
 	}
 
@@ -293,11 +329,14 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 		public Color Color { get; }
 
-		public InspectionStatusDetail(string label, string description, Color color)
+		public string IconStatus { get; }
+
+		public InspectionStatusDetail(string label, string description, Color color, string iconStatus = null)
 		{
 			Label = label;
 			Description = description;
 			Color = color;
+			IconStatus = iconStatus;
 		}
 	}
 
@@ -308,6 +347,22 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		public int Initiative { get; }
 
 		public int TieBreaker { get; }
+
+		public CardDefinition DeployedCard { get; set; }
+
+		/// <summary>
+		/// Il bonus dei talenti d'iniziativa che spetta a questo dado. Sta qui e non
+		/// si ricava dall'ordine di schieramento perche' e' proprio quell'ordine che
+		/// il bonus cambia: legarlo allo slot della fila voleva dire darlo sempre al
+		/// tiro piu' basso, cioe' ribaltare la timeline a ogni combattimento.
+		/// </summary>
+		public int TalentInitiativeBonus { get; set; }
+
+		/// <summary>"Apertura": questo dado batte qualunque numero in campo.</summary>
+		public bool OpensTheFight { get; set; }
+
+		/// <summary>Il numero che conta per l'ordine: il tiro piu' il bonus dei talenti.</summary>
+		public int EffectiveInitiative => Initiative + TalentInitiativeBonus;
 
 		public DeploymentToken(bool belongsToPlayer, int initiative, int tieBreaker)
 		{
@@ -351,6 +406,16 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private readonly List<CardDefinition> selectedCpuDeploymentCards = new List<CardDefinition>();
 
 	private readonly List<int> selectedPlayerDeploymentInitiatives = new List<int>();
+
+	/// <summary>
+	/// I token schierati dal giocatore, nello stesso ordine delle iniziative qui sopra:
+	/// servono a portare in battaglia il dado com'era nella timeline - bonus dei talenti
+	/// e tie-breaker con cui le parita' sono gia' state sciolte a schermo.
+	/// </summary>
+	private readonly List<DeploymentToken> selectedPlayerDeploymentTokens = new List<DeploymentToken>();
+
+	/// <summary>Gli stessi token, lato CPU: le parita' si sciolgono anche contro di lei.</summary>
+	private readonly List<DeploymentToken> selectedCpuDeploymentTokens = new List<DeploymentToken>();
 
 	private readonly List<int> selectedCpuDeploymentInitiatives = new List<int>();
 
@@ -500,6 +565,26 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private RectTransform startCampaignButtonRect;
 
+	private Button prepareBagButton;
+
+	private RectTransform prepareBagButtonRect;
+
+	private bool deckBuilderPreparingBag;
+
+	private bool deckBuilderBagSaving;
+
+	private readonly List<string> deckBuilderSelectedBagItems = new List<string>();
+
+	private readonly List<GameObject> deckBuilderBagItemViews = new List<GameObject>();
+
+	private RectTransform deckBuilderSelectedBagRoot;
+
+	private Text deckBuilderSelectedBagEmptyText;
+
+	private Text deckBuilderBagEffectText;
+
+	private readonly List<GameObject> deckBuilderSelectedBagViews = new List<GameObject>();
+
 	private GameObject modeSelectionPanel;
 
 	private Image modeSelectionImage;
@@ -509,8 +594,6 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private Button modeSelectionCampaignButton;
 
 	private Button modeSelectionMultiplayerButton;
-
-	private Button modeSelectionTutorialButton;
 
 	private Button modeSelectionSanctuaryButton;
 
@@ -523,6 +606,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private Button modeSelectionProfileButton;
 
 	private Button modeSelectionHallOfFameButton;
+	private Text modeSelectionPvpLeaderText;
+	private Text modeSelectionCampaignLeaderText;
 
 	private readonly List<Button> modeSelectionHotspotButtons = new List<Button>();
 	private readonly Dictionary<Button, RectTransform> modeSelectionHotspotRects = new Dictionary<Button, RectTransform>();
@@ -536,8 +621,6 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private readonly Text[] accountBannerInfoTexts = new Text[3];
 	private Image accountHoneyPanelImage;
 	private Text accountHoneyAmountText;
-
-	private Button tutorialAdvanceButton;
 
 	private Coroutine campaignHubZoomRoutine;
 
@@ -560,6 +643,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private Button campaignModeHardcoreButton;
 
 	private Text campaignModeHardcoreButtonText;
+
+	private GameObject campaignHardcorePurchaseConfirmation;
+
+	private Text campaignHardcorePurchaseConfirmationText;
 
 	private Image campaignModeHardcoreEmblemImage;
 
@@ -587,36 +674,30 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private readonly List<GameObject> adventureChapterRows = new List<GameObject>();
 	private System.Threading.Tasks.Task pendingAdventureChapterClearTask = System.Threading.Tasks.Task.CompletedTask;
+	private bool pendingAdventureChapterTalentPointsReward;
+	private bool pendingAdventureChapterClassReward;
+	private bool pendingAdventureNextChapterReward;
 	private System.Threading.Tasks.Task pendingCampaignRewardTask = System.Threading.Tasks.Task.CompletedTask;
 	private GameObject classChoicePopup;
 	private RectTransform classChoiceButtonsRoot;
 	private Text classChoiceStatusText;
 	private readonly List<GameObject> classChoiceButtonViews = new List<GameObject>();
-	private bool classChoiceSubmitting;
+
+	/// <summary>La scelta è già stata fatta: il popup resta chiuso e non si ridisegna.</summary>
+	private bool classChoiceSubmitted;
 
 	private GameObject adventureTutorialConfirmPopup;
+	private RectTransform adventureTutorialConfirmDialog;
 
 	private Text adventureTutorialConfirmTitleText;
 
 	private Text adventureTutorialConfirmBodyText;
 
+	private Image adventureRewardClassImage;
+
+	private Image adventureRewardChapterImage;
+
 	private Action adventureConfirmAction;
-
-	private GameObject guidedTutorialPanel;
-
-	private Text guidedTutorialTitleText;
-
-	private Text guidedTutorialBodyText;
-
-	private Text guidedTutorialStepText;
-
-	private Button guidedTutorialPreviousButton;
-
-	private Button guidedTutorialNextButton;
-
-	private Text guidedTutorialNextButtonText;
-
-	private int guidedTutorialStepIndex;
 
 	private bool adventureScriptedTutorialActive;
 
@@ -652,14 +733,6 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private readonly List<Image> adventureScriptedTutorialDimmers = new List<Image>();
 
-	private int tutorialPageIndex;
-
-	private bool modeSelectionTutorialActive;
-
-	private bool tutorialReturnToModeSelection;
-
-	private bool tutorialPreviousInputLocked;
-
 	private GameObject multiplayerPopup;
 
 	private GameObject roomChoicePanel;
@@ -667,6 +740,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private Image roomChoiceImage;
 
 	private AspectRatioFitter roomChoiceAspectFitter;
+
+	private Text roomChoiceCounterText;
 
 	private int roomChoiceBackgroundIndex = 1;
 
@@ -683,6 +758,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private HeroClass deckBuilderSelectedClass = HeroClass.Warrior;
 
 	private int deckBuilderSelectedStrength = 2;
+
+	/// <summary>Scarto applicato al seme per dare alla CPU un flusso casuale indipendente dai dadi.</summary>
+	private const int CpuDecisionSeedOffset = 0x5C9A7;
 
 	private IRandomSource random;
 
@@ -704,6 +782,12 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Text messageText;
 
+	// Il messaggio e il banner restano visibili anche mentre si apre Opzioni.
+	// Conserviamo la sorgente, non il risultato già tradotto, così un cambio
+	// lingua può renderizzarli di nuovo senza cambiare lo stato del combattimento.
+	private string currentBattlefieldMessage;
+	private string currentTurnBannerLabel;
+
 	private Image turnBannerImage;
 
 	private Text turnBannerText;
@@ -711,6 +795,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private RectTransform initiativeTimelineRoot;
 
 	private RectTransform timelineBackgroundRect;
+
+	private Text timelineCountdownText;
 
 	private Vector2 timelineBackgroundBaseMin;
 
@@ -788,21 +874,31 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Button merchantRecoverButton;
 
+	private Button merchantUpgradeButton;
+
 	private Button merchantCardsTabButton;
 
 	private Button merchantItemsTabButton;
+
+	private Button merchantUpgradesTabButton;
 
 	private Text merchantCardsTabText;
 
 	private Text merchantItemsTabText;
 
+	private Text merchantUpgradesTabText;
+
 	private Image merchantCardsTabLockImage;
 
 	private Image merchantItemsTabLockImage;
 
+	private Image merchantUpgradesTabLockImage;
+
 	private AccardND.PvpUi.PvpUiVfx merchantCardsTabVfx;
 
 	private AccardND.PvpUi.PvpUiVfx merchantItemsTabVfx;
+
+	private AccardND.PvpUi.PvpUiVfx merchantUpgradesTabVfx;
 
 	private RectTransform merchantShelfRoot;
 
@@ -850,9 +946,6 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private GameObject optionsPanel;
 
-	/// <summary>Apre il modulo delle opzioni privacy di UMP. Visibile solo dove il consenso e' stato raccolto.</summary>
-	private Button optionsPrivacyButton;
-
 	private GameObject optionsBackdropPanel;
 
 	private Button optionsMainMenuButton;
@@ -878,11 +971,15 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private Text sfxVolumeText;
 
+	private Slider sfxVolumeSlider;
+
 	private Button sfxMuteButton;
 
 	private Text sfxMuteButtonText;
 
 	private Text musicVolumeText;
+
+	private Slider musicVolumeSlider;
 
 	private Button musicMuteButton;
 
@@ -903,13 +1000,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private RectTransform implementationDeckRoot;
 
-	private RectTransform implementationCooldownRoot;
-
 	private RectTransform implementationGraveyardRoot;
 
 	private Text implementationDeckEmptyText;
-
-	private Text implementationCooldownEmptyText;
 
 	private Text implementationGraveyardEmptyText;
 
@@ -962,6 +1055,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private float cardInspectionPreviousTimeScale = 1f;
 
 	private int inspectedInitialDraftOfferIndex = -1;
+
+	private UnityAction inspectedPvpLoadoutAddAction;
+
+	private bool inspectedPvpLoadoutActive;
 
 	private bool inspectedCampaignConsumableActive;
 
@@ -1035,6 +1132,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private bool draftActive;
 
 	private bool deploymentDraftActive;
+	// Nelle stanze boss la HUD di combattimento resta nascosta durante la scelta
+	// della formazione e il tiro iniziativa: compare insieme al boss, non prima.
+	private bool waitingForCampaignBossReveal;
 
 	private bool deploymentInitiativesReady;
 
@@ -1046,11 +1146,13 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private bool canRetryCampaignRoom;
 
+	// Valorizzato esclusivamente da "Riprova stanza": impedisce che il nuovo
+	// schieramento di campagna riproponga la stessa terna di iniziative al giocatore.
+	private int[] campaignRetryPreviousPlayerInitiatives;
+
 	private bool returningToStartAfterGameOver;
 
 	private RoomType currentRoomType = RoomType.Monster;
-
-	private int currentMonsterTier = 2;
 
 	private string pendingScenarioId;
 
@@ -1097,7 +1199,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private bool nextCombatTankDuel;
 
-	private int nextMonsterTierBonus;
+	private int nextMonsterDifficultyIncrease;
 
 	private bool nextDoorChoiceRevealed;
 
@@ -1111,10 +1213,15 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private ComposableGolemFormStats[] retryComposableGolemForms;
 	private int? retryComposableGolemHitPoints;
+	private int? retrySeraphelHitPoints;
+	private int? retryJurinashorHitPoints;
+	private bool retryJurinashorPhaseTwo;
 
 	private MedusaBoss activeMedusaBoss;
+	private SeraphelBoss activeSeraphelBoss;
 
 	private TrentorBoss activeTrentorBoss;
+	private JurinashorBoss activeJurinashorBoss;
 
 	private BragusBoss activeBragusBoss;
 	private bool bragusBossPresentationActive;
@@ -1126,6 +1233,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private bool rewardRoomsBlockedUntilMonster;
 
+	// Prezzo della Rinuncia: si consuma soltanto alla vittoria della prossima stanza Mostro.
+	private bool nextMonsterRewardHalved;
+
 	private bool debugForceFirstRoomComposableGolem;
 
 	private bool debugForceFirstRoomMedusa;
@@ -1134,7 +1244,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private bool debugForceFirstRoomBragus;
 
+	private bool debugForceFirstRoomJurinashor;
+
 	private bool debugForceFirstRoomPalatir;
+	private bool debugForceFirstRoomSeraphel;
+	private bool bossDebugSceneSession;
 
 	private bool debugMerchantScene;
 
@@ -1142,6 +1256,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private bool debugClassChoiceScene;
 	private static string bootstrapSceneName;
+	private static BattleBoardController pendingCampaignSessionRecovery;
 
 	[RuntimeInitializeOnLoadMethod(/*Could not decode attribute arguments.*/)]
 	private static void Bootstrap()
@@ -1172,8 +1287,25 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			StringComparison.OrdinalIgnoreCase))
 		{
 			BattleBoardController staleController = Object.FindAnyObjectByType<BattleBoardController>();
+			if ((Object)(object)staleController != (Object)null
+				&& ReferenceEquals(staleController, pendingCampaignSessionRecovery))
+			{
+				staleController.SuspendCampaignForAuthentication();
+				return;
+			}
 			if ((Object)(object)staleController != (Object)null)
 				Object.Destroy((Object)staleController.gameObject);
+			return;
+		}
+
+		// Il ritorno dal login per sessione scaduta non crea una nuova partita: riusa
+		// esattamente il controller parcheggiato, inclusi gli stati non serializzabili
+		// delle meccaniche presenti e future. Il popup lascia al giocatore la scelta.
+		if ((Object)(object)pendingCampaignSessionRecovery != (Object)null)
+		{
+			BattleBoardController recovery = pendingCampaignSessionRecovery;
+			pendingCampaignSessionRecovery = null;
+			recovery.RestoreCampaignAfterAuthentication();
 			return;
 		}
 
@@ -1197,14 +1329,22 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		// e' DontDestroyOnLoad: riutilizzarlo dopo una sessione Bragus conserva scenario,
 		// flag e UI del boss precedente (particolarmente con Domain Reload disattivato).
 		bool bossDebugScene = string.Equals(scene.name, MinibossGolemDebugSceneName, StringComparison.OrdinalIgnoreCase)
-			|| string.Equals(scene.name, MedusaBossDebugSceneName, StringComparison.OrdinalIgnoreCase)
-			|| string.Equals(scene.name, TrentorBossDebugSceneName, StringComparison.OrdinalIgnoreCase)
-			|| string.Equals(scene.name, TrentorBossForcedDebugSceneName, StringComparison.OrdinalIgnoreCase)
-			|| string.Equals(scene.name, BragusBossDebugSceneName, StringComparison.OrdinalIgnoreCase)
-			|| string.Equals(scene.name, PalatirBossDebugSceneName, StringComparison.OrdinalIgnoreCase);
+			|| string.Equals(scene.name, MedusaDebugSceneName, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(scene.name, BossDebugSceneName, StringComparison.OrdinalIgnoreCase);
 		BattleBoardController existingController = Object.FindAnyObjectByType<BattleBoardController>();
 		if (bossDebugScene && (Object)(object)existingController != (Object)null)
 		{
+			// Elimina immediatamente l'immagine residua del precedente boss mentre il
+			// controller pulito ricostruisce la UI della scena debug di Seraphel.
+			if (string.Equals(scene.name, BossDebugSceneName, StringComparison.OrdinalIgnoreCase)
+				&& BossDebugSelection.Current == BossDebugScenario.Seraphel)
+			{
+				existingController.debugForceFirstRoomSeraphel = true;
+				existingController.bragusBossPresentationActive = false;
+				existingController.trentorBossPresentationActive = false;
+				existingController.seraphelBossPresentationActive = false;
+				existingController.RefreshScenarioBackground();
+			}
 			Object.Destroy((Object)existingController.gameObject);
 			GameObject freshBoard = new GameObject("Accard N' Die - Battle Board");
 			Object.DontDestroyOnLoad((Object)freshBoard);
@@ -1220,32 +1360,47 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		}
 	}
 
-	private void Awake()
+	private async void Awake()
 	{
+		AccardND.Network.AccountServerSession.ReturningToLoginForExpiredSession -= PrepareCampaignSessionRecovery;
+		AccardND.Network.AccountServerSession.ReturningToLoginForExpiredSession += PrepareCampaignSessionRecovery;
 		configuration = Resources.Load<GameConfiguration>("GameConfiguration");
 		if ((Object)(object)configuration == (Object)null)
 		{
 			configuration = ScriptableObject.CreateInstance<GameConfiguration>();
 		}
-		debugForceFirstRoomTrentor = IsBootstrapOrLoadedScene(TrentorBossForcedDebugSceneName)
-			|| IsBootstrapOrLoadedScene(TrentorBossDebugSceneName);
+		bool unifiedBossDebug = IsBootstrapOrLoadedScene(BossDebugSceneName);
+		bossDebugSceneSession = unifiedBossDebug;
+		BossDebugScenario debugBoss = BossDebugSelection.Current;
+		debugForceFirstRoomTrentor = unifiedBossDebug && debugBoss == BossDebugScenario.Trentor;
 		debugForceFirstRoomComposableGolem = !debugForceFirstRoomTrentor
 			&& IsSceneLoaded(MinibossGolemDebugSceneName);
-		debugForceFirstRoomMedusa = !debugForceFirstRoomTrentor
-			&& IsSceneLoaded(MedusaBossDebugSceneName);
-		debugForceFirstRoomBragus = !debugForceFirstRoomTrentor
-			&& IsSceneLoaded(BragusBossDebugSceneName);
-		if (debugForceFirstRoomBragus)
-			EnsureBragusDebugAudioListener();
-		debugForceFirstRoomPalatir = !debugForceFirstRoomTrentor
-			&& IsSceneLoaded(PalatirBossDebugSceneName);
+		// Durante sceneLoaded il nuovo controller puo' eseguire Awake prima che Unity
+		// esponga la scena nella lista sceneCount. Conserviamo quindi anche il nome
+		// passato al bootstrap, come gia' facciamo per la scena boss unificata.
+		debugForceFirstRoomMedusa = IsBootstrapOrLoadedScene(MedusaDebugSceneName)
+			|| (unifiedBossDebug && debugBoss == BossDebugScenario.Medusa);
+		debugForceFirstRoomBragus = unifiedBossDebug && debugBoss == BossDebugScenario.Bragus;
+		debugForceFirstRoomJurinashor = unifiedBossDebug && debugBoss == BossDebugScenario.Jurinashor;
+		debugForceFirstRoomPalatir = unifiedBossDebug && debugBoss == BossDebugScenario.Palatir;
+		debugForceFirstRoomSeraphel = unifiedBossDebug && debugBoss == BossDebugScenario.Seraphel;
+		if (debugForceFirstRoomBragus || debugForceFirstRoomSeraphel)
+			EnsureBossDebugAudioListener();
 		debugMerchantScene = IsSceneLoaded(MerchantDebugSceneName);
 		debugLootRoomScene = IsSceneLoaded(LootRoomDebugSceneName);
 		debugClassChoiceScene = IsSceneLoaded(ClassChoiceDebugSceneName);
 		int num = (configuration.UseRandomSeedEachSession ?Guid.NewGuid().GetHashCode() : configuration.Gameplay.RandomSeed);
-		random = new SeededRandomSource(num);
+		// Tenuti anche come sorgenti concrete: e' da li' che lo snapshot di battaglia
+		// legge seme e numero di estrazioni, e senza quelli una battaglia ripresa
+		// ritirerebbe i dadi da capo.
+		battleRandom = new SeededRandomSource(num);
+		random = battleRandom;
 		combatResolver = new CombatResolver(random);
-		cpuDecisionService = new CpuDecisionService(random);
+		// La CPU pesca da un flusso suo: se condividesse quello dei dadi, ogni pareggio
+		// sciolto a sorte sposterebbe tutti i tiri successivi e a parita' di seme la
+		// partita non sarebbe piu' riproducibile.
+		battleCpuRandom = new SeededRandomSource(num ^ CpuDecisionSeedOffset);
+		cpuDecisionService = new CpuDecisionService(battleCpuRandom);
 		runProgress = CreateRunProgress();
 		diceCatalog = Resources.Load<DiceSpriteCatalog>("DiceSpriteCatalog");
 		battleAnimationPlayer = gameObject.AddComponent<BattlePresentationAnimationPlayer>();
@@ -1259,11 +1414,97 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		// chi apriva il gioco e lo chiudeva, e un annuncio caricato all'avvio e' comunque
 		// scaduto quando servirebbe.
 		_ = AccardND.Ads.AdService.PrepareAsync();
+		// Lo store degli acquisti si connette allo stesso modo: presto, in silenzio, e senza
+		// che nessuno aspetti. Serve gia' al primo negozio aperto, per mostrare i prezzi
+		// veri di Google invece dei segnaposto.
+		InitializeIapBridge();
 		InitializeAudio();
+		// Le scene debug avviano direttamente questo controller e non attraversano la
+		// schermata login, che normalmente attende le String Table. Senza questa attesa
+		// la UI nasce con fallback italiani o con la chiave testuale non risolta.
+		await GameText.InitializeAsync();
+		if ((Object)(object)this == (Object)null)
+			return;
 		BuildInterface();
+		GameText.LocaleChanged -= HandleGameLocaleChanged;
+		GameText.LocaleChanged += HandleGameLocaleChanged;
 		AppendLog($"SESSIONE AVVIATA - seed {num}");
 		ShowModeSelection();
 		_ = EnsureServerProgressAsync();
+	}
+
+	private void HandleGameLocaleChanged()
+	{
+		// Le etichette fisse usano EditableRuntimeText e si aggiornano da sole.
+		// Le carte capitolo invece vengono generate al volo: ricrearle evita di
+		// lasciare nella lingua precedente stato, sottotitolo e CTA gia' visibili.
+		if ((Object)(object)adventureChapterPanel != (Object)null && adventureChapterPanel.activeSelf)
+			RefreshAdventureChapterList();
+
+		// La Forgia mantiene le sue etichette e le carte classe gia' create: aggiornarle
+		// qui evita di lasciare il testo nella lingua selezionata prima dell'ingresso.
+		if ((Object)(object)deckBuilderPanel != (Object)null && deckBuilderPanel.activeSelf)
+			RefreshDeckBuilderView();
+
+		if ((Object)(object)merchantPanel != (Object)null && merchantPanel.activeSelf)
+		{
+			RefreshMerchantPanel();
+			SetTurnBanner(
+				playerTurn: true,
+				GameText.GetOrFallbackSilent(
+					GameTextKeys.Campaign.MerchantRoomCompleteBanner,
+					"SPENDI GOLD O CONTINUA"));
+		}
+
+		if ((Object)(object)tavernPanel != (Object)null && tavernPanel.activeSelf)
+			ApplyTavernData(tavernData);
+
+		if ((Object)(object)profilePanel != (Object)null && profilePanel.activeSelf)
+			RefreshProfile();
+
+		RefreshActiveCombatLocalePresentation();
+	}
+
+	/// <summary>
+	/// Il combattimento non viene ricreato al cambio lingua: i badge e le azioni
+	/// esistono già. Li rigeneriamo dallo stato di battaglia corrente per evitare
+	/// un HUD misto tra due locale.
+	/// </summary>
+	private void RefreshActiveCombatLocalePresentation()
+	{
+		RefreshCombatHudRefactor();
+		RefreshPlayerHud();
+		RefreshInitiativeDisplay();
+
+		foreach (BattleCardState card in playerCards)
+		{
+			if (card == null)
+				continue;
+			RefreshPersistentStatus(card);
+			card.View?.ClearActionCalloutForLocaleChange();
+		}
+		foreach (BattleCardState card in cpuCards)
+		{
+			if (card == null)
+				continue;
+			RefreshPersistentStatus(card);
+			card.View?.ClearActionCalloutForLocaleChange();
+		}
+
+		RefreshCardActionOverlays();
+		RefreshOpenCardInspectionLocale();
+		RefreshRetainedCombatTextLocale();
+		UpdateInteractions();
+
+		// Quando il giocatore sta scegliendo l'azione, banner e prompt sono
+		// completamente ricostruibili dallo stato e vengono aggiornati subito.
+		if (!gameFinished && !inputLocked && !attackTargetingActive
+			&& activeAbilityUser == null && abilityTargetMode == AbilityTargetMode.None
+			&& selectedPlayerIndex >= 0 && selectedPlayerIndex < playerCards.Count)
+		{
+			SetTurnBanner(playerTurn: true, GameText.Get(GameTextKeys.Combat.PlayerTurnBanner));
+			SetBattlefieldMessage(GameText.Get(GameTextKeys.Combat.ChooseAction));
+		}
 	}
 
 	private static bool IsSceneLoaded(string sceneName)
@@ -1284,7 +1525,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			|| IsSceneLoaded(sceneName);
 	}
 
-	private void EnsureBragusDebugAudioListener()
+	private void EnsureBossDebugAudioListener()
 	{
 		AudioListener[] sceneListeners = Object.FindObjectsOfType<AudioListener>(includeInactive: true);
 		for (int index = 0; index < sceneListeners.Length; index++)
@@ -1302,8 +1543,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private void Update()
 	{
-		UpdateTavernNotificationBadgeRefresh();
+		UpdateTavernServerRefresh();
 		ResumePendingPvpMatchIfAny();
+		UpdatePvpTimelineCountdown();
+		UpdatePowerBudget();
+		UpdateStuckGestureWatchdog();
 
 		if (IsEscapePressedThisFrame() && CloseTopmostOverlay())
 		{
@@ -1314,6 +1558,69 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		{
 			ApplyResponsiveLayout();
 		}
+	}
+
+	/// <summary>
+	/// Dice al resto del gioco quanto lavoro merita il frame corrente: a che
+	/// ritmo disegnare, e quali VFX procedurali sono ancora visibili.
+	/// </summary>
+	private void UpdatePowerBudget()
+	{
+		AccardND.Battlefield.FrameRateGovernor.SetHighFrameRateScreen(!IsStaticScreenVisible());
+		AccardND.Battlefield.UiVfxBudget.SetForegroundRoot(TopmostFullScreenOverlay());
+	}
+
+	/// <summary>
+	/// Le schermate che restano immobili finche' non le si tocca. Fuori da
+	/// queste siamo in battaglia (o in una transizione verso di essa), dove le
+	/// animazioni partono senza preavviso e i sessanta frame servono davvero.
+	/// </summary>
+	private bool IsStaticScreenVisible()
+	{
+		return IsVisible(modeSelectionPanel)
+			|| IsVisible(campaignModeSelectionPanel)
+			|| IsVisible(adventureChapterPanel)
+			|| IsVisible(shopPanel)
+			|| IsVisible(tavernPanel)
+			|| IsVisible(sanctuaryPanel)
+			|| IsVisible(libraryPanel)
+			|| IsVisible(profilePanel)
+			|| IsVisible(merchantPanel)
+			|| IsVisible(deckBuilderPanel)
+			|| IsVisible(implementationArchivePanel);
+	}
+
+	/// <summary>
+	/// Il pannello che copre per intero quello che c'e' sotto, dal piu' in alto
+	/// al piu' in basso. I VFX fuori da questa gerarchia non li vede nessuno.
+	/// Restano fuori dalla lista i pannelli che non coprono davvero lo schermo:
+	/// congelare uno sfondo ancora visibile sembrerebbe un bug, non un risparmio.
+	/// </summary>
+	private Transform TopmostFullScreenOverlay()
+	{
+		if (IsVisible(campaignDefeatRewardPopup))
+			return campaignDefeatRewardPopup.transform;
+		if (IsVisible(cardInspectionPanel))
+			return cardInspectionPanel.transform;
+		if (IsVisible(auraCodexPanel))
+			return auraCodexPanel.transform;
+		if (IsVisible(implementationArchivePanel))
+			return implementationArchivePanel.transform;
+		if (IsVisible(optionsPanel))
+			return optionsPanel.transform;
+		if (IsVisible(merchantPanel))
+			return merchantPanel.transform;
+
+		return null;
+	}
+
+	/// <summary>
+	/// Come <see cref="IsActive"/>, ma guarda l'intera catena dei genitori:
+	/// un pannello acceso dentro un padre spento non lo vede nessuno.
+	/// </summary>
+	private static bool IsVisible(GameObject panel)
+	{
+		return (Object)(object)panel != (Object)null && panel.activeInHierarchy;
 	}
 
 	private static bool IsEscapePressedThisFrame()
@@ -1396,10 +1703,38 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			|| Screen.orientation != previousScreenOrientation;
 	}
 
+	/// <summary>
+	/// Passo temporale delle animazioni di interfaccia. Un frame lungo — il
+	/// salto a sessanta del governor, decine di view create insieme all'ingresso
+	/// in battaglia, un hitch del browser — non deve mangiarsi mezza animazione
+	/// in un colpo: meglio allungarla di qualche millisecondo che vederla
+	/// saltare da una posa all'altra.
+	/// </summary>
+	private static float AnimationDeltaTime()
+	{
+		return Mathf.Min(Time.unscaledDeltaTime, 1f / 20f);
+	}
+
+	/// <summary>
+	/// Vero solo se la coroutine indicata ha davvero girato nell'ultimo frame.
+	/// Un handle non nullo non basta a dimostrarlo: uno StopAllCoroutines lascia
+	/// dietro di se' riferimenti a coroutine gia' morte, e chi decide in base a
+	/// quelli finisce per non scrivere mai la posa finale.
+	/// </summary>
+	private static bool IsRoutineAlive(Coroutine routine, int lastFrame)
+	{
+		return routine != null && lastFrame >= Time.frameCount - 1;
+	}
+
 	private void LateUpdate()
 	{
 		if (draftActive)
 		{
+			// I layout group si ricostruiscono su Canvas.willRenderCanvases,
+			// cioe' dopo questo LateUpdate: senza forzare prima la ricostruzione,
+			// il ventaglio scriverebbe una posa che il gruppo appiattisce nello
+			// stesso frame.
+			Canvas.ForceUpdateCanvases();
 			ApplyHandFan();
 		}
 		UpdateTurnCoinAnimation();
@@ -1421,7 +1756,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		canvasScaler = ((Component)val).GetComponent<CanvasScaler>();
 		scenarioCatalog = Resources.Load<ScenarioCatalog>("ScenarioCatalog");
 		StartingRoomConfiguration startingRoom = configuration.StartingRoom;
-		currentScenario = (((Object)(object)scenarioCatalog != (Object)null) ?scenarioCatalog.Select(startingRoom.RoomType, startingRoom.Difficulty, startingRoom.BossId, startingRoom.ScenarioId) : null);
+		// La debug boss seleziona lo scenario prima di costruire la UI. Non sostituirlo
+		// con la stanza iniziale generica: il suo fondale deve essere visibile gia'
+		// durante lo schieramento.
+		if ((Object)(object)currentScenario == (Object)null)
+			currentScenario = (((Object)(object)scenarioCatalog != (Object)null) ?scenarioCatalog.Select(startingRoom.RoomType, startingRoom.Difficulty, startingRoom.BossId, startingRoom.ScenarioId) : null);
 		Sprite sprite = CurrentScenarioBackgroundSprite();
 		VisualConfiguration visual = configuration.Visual;
 		float backgroundFillBrightness = visual.BackgroundFillBrightness;
@@ -1445,15 +1784,25 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		image2.rectTransform.anchorMax = new Vector2(0.92f, 0.87f);
 		image2.rectTransform.offsetMin = Vector2.zero;
 		image2.rectTransform.offsetMax = Vector2.zero;
-		Image image3 = CreateImage("Top Info Bar", (Transform)(object)safeAreaRoot, new Color(0.01f, 0.025f, 0.035f, 0.92f));
-		StylePanel(image3);
-		topInfoBarRect = image3.rectTransform;
+		GameObject topInfoBar = new GameObject("Top Info Bar", typeof(RectTransform));
+		topInfoBar.transform.SetParent((Transform)(object)safeAreaRoot, false);
+		topInfoBarRect = (RectTransform)topInfoBar.transform;
 		SetRect(topInfoBarRect, new Vector2(0.04f, 0.942f), new Vector2(0.84f, 0.992f));
-		Text text = CreateText("Top Info Text", ((Component)image3).transform, builtinResource, 19, (FontStyle)1, (TextAnchor)3);
+		Text text = CreateText("Top Info Text", topInfoBar.transform, builtinResource, 50, (FontStyle)1, (TextAnchor)3);
 		titleRect = text.rectTransform;
 		topInfoText = text;
-		topInfoText.text = "STANZA 1  |  ROUND 0  |  LV 1  |  EXP 0/100  |  D4  |  DISP 0";
+		topInfoText.text = GameText.GetOrFallbackSilent(GameTextKeys.Combat.CpuHudRoom, "STANZA {0}", 1);
+		topInfoText.font = Resources.Load<Font>("Fonts/LifeCraft_Font") ?? AccardND.Battlefield.MmoUiTheme.BodyFont;
+		topInfoText.fontStyle = FontStyle.Normal;
+		topInfoText.alignment = TextAnchor.MiddleCenter;
+		topInfoText.resizeTextForBestFit = true;
+		topInfoText.resizeTextMinSize = 24;
+		topInfoText.resizeTextMaxSize = 50;
 		topInfoText.color = new Color(0.95f, 0.79f, 0.34f);
+		Outline roomTitleOutline = ((Component)topInfoText).gameObject.AddComponent<Outline>();
+		roomTitleOutline.effectColor = new Color(0.025f, 0.018f, 0.008f, 1f);
+		roomTitleOutline.effectDistance = new Vector2(2.5f, -2.5f);
+		roomTitleOutline.useGraphicAlpha = true;
 		Stretch(topInfoText.rectTransform, 10f);
 		((Component)topInfoBarRect).gameObject.SetActive(false);
 		logButton = CreateImageButton("Options Button", (Transform)(object)safeAreaRoot, builtinResource, settingsButtonSprite, string.Empty);
@@ -1474,7 +1823,11 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		logPanel.AddComponent<GraphicRaycaster>();
 		logText = CreateText("Log Entries", logPanel.transform, builtinResource, 18, (FontStyle)0, (TextAnchor)6);
 		logText.color = new Color(0.82f, 0.9f, 0.92f);
-		SetRect(logText.rectTransform, new Vector2(0.035f, 0.035f), new Vector2(0.965f, 0.9f));
+		SetRect(logText.rectTransform, new Vector2(0.035f, 0.035f), new Vector2(0.965f, 0.875f));
+		Text logTitle = CreateText("Battle Log Title", logPanel.transform, builtinResource, 22, (FontStyle)1, (TextAnchor)3);
+		SetLocalizedText(logTitle, GameTextKeys.GameLog.BattleLogTitle, "REGISTRO DI BATTAGLIA");
+		logTitle.color = new Color(0.95f, 0.79f, 0.34f);
+		SetRect(logTitle.rectTransform, new Vector2(0.035f, 0.9f), new Vector2(0.78f, 0.985f));
 		Button button = CreateButton("Close Log", logPanel.transform, builtinResource, "CHIUDI");
 		((UnityEvent)button.onClick).AddListener(new UnityAction(ToggleLogPanel));
 		SetRect((RectTransform)((Component)button).transform, new Vector2(0.84f, 0.93f), new Vector2(0.98f, 0.99f));
@@ -1485,7 +1838,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		Text text2 = (cpuTitleText = CreateText("CPU Title", (Transform)(object)safeAreaRoot, builtinResource, 25, (FontStyle)1, (TextAnchor)3));
 		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(text2);
 		cpuTitleRect = text2.rectTransform;
-		text2.text = (((Object)(object)currentScenario != (Object)null) ?("CPU - IL MASTER   *   " + currentScenario.DisplayName.ToUpperInvariant()) : "CPU - IL MASTER");
+		text2.text = ((Object)(object)currentScenario != (Object)null)
+			? GameText.GetOrFallbackSilent(GameTextKeys.Combat.CpuMasterScenario, "CPU - IL MASTER   *   {0}", currentScenario.DisplayName.ToUpperInvariant())
+			: GameText.GetOrFallbackSilent(GameTextKeys.Combat.CpuMaster, "CPU - IL MASTER");
 		SetRect(text2.rectTransform, new Vector2(0.12f, 0.805f), new Vector2(0.88f, 0.85f));
 		((Component)text2).gameObject.SetActive(false);
 		cpuRow = CreateCardRow("CPU Formation", (Transform)(object)safeAreaRoot, new Vector2(0.5f, 0.67f));
@@ -1505,6 +1860,16 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		StylePanel(image6);
 		timelineBackgroundRect = image6.rectTransform;
 		SetRect(image6.rectTransform, new Vector2(0.18f, 0.865f), new Vector2(0.82f, 0.91f));
+		timelineCountdownText = CreateText("Turn Countdown", ((Component)image6).transform, builtinResource, 30, (FontStyle)1, (TextAnchor)4);
+		timelineCountdownText.color = new Color(0.95f, 0.79f, 0.34f);
+		timelineCountdownText.raycastTarget = false;
+		RectTransform countdownRect = timelineCountdownText.rectTransform;
+		countdownRect.anchorMin = new Vector2(0f, 1f);
+		countdownRect.anchorMax = new Vector2(1f, 1f);
+		countdownRect.pivot = new Vector2(0.5f, 0f);
+		countdownRect.anchoredPosition = new Vector2(0f, 8f);
+		countdownRect.sizeDelta = new Vector2(0f, 38f);
+		((Component)timelineCountdownText).gameObject.SetActive(false);
 		initiativeTimelineRoot = new GameObject("Turn Timeline", new Type[1]
 		{
 			typeof(RectTransform)
@@ -1514,6 +1879,10 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		Image image7 = CreateImage("Message Panel", (Transform)(object)safeAreaRoot, new Color(0.015f, 0.025f, 0.04f, 0.56f));
 		StylePanel(image7);
 		messagePanelRect = image7.rectTransform;
+		Canvas messagePanelCanvas = image7.gameObject.AddComponent<Canvas>();
+		messagePanelCanvas.overrideSorting = true;
+		messagePanelCanvas.sortingOrder = 300;
+		image7.gameObject.AddComponent<GraphicRaycaster>();
 		SetRect(image7.rectTransform, new Vector2(0.25f, 0.41f), new Vector2(0.75f, 0.555f));
 		messageText = CreateText("Battle Log", ((Component)image7).transform, builtinResource, 22, (FontStyle)0, (TextAnchor)4);
 		messageText.color = new Color(0.88f, 0.92f, 0.96f);
@@ -1522,7 +1891,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		StylePanel(turnBannerImage);
 		SetRect(turnBannerImage.rectTransform, new Vector2(0.1825f, 0.69f), new Vector2(0.8175f, 0.98f));
 		turnBannerText = CreateText("Current Turn", ((Component)turnBannerImage).transform, builtinResource, 24, (FontStyle)1, (TextAnchor)4);
-		turnBannerText.text = "PREPARAZIONE";
+		turnBannerText.text = GameText.GetOrFallbackSilent(GameTextKeys.Combat.Preparation, "PREPARAZIONE");
 		Stretch(turnBannerText.rectTransform, 4f);
 		restartButton = CreateButton("Primary Action", ((Component)image7).transform, builtinResource, "CONTINUA");
 		((UnityEvent)restartButton.onClick).AddListener(new UnityAction(HandlePrimaryAction));
@@ -1604,7 +1973,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		CreateProfileView(builtinResource);
 		CreateHintOverlay((Transform)(object)safeAreaRoot, builtinResource);
 		CreateAuraCodexView(((Component)val).transform, builtinResource);
-		CreateCampaignDefeatRewardPopup((Transform)(object)safeAreaRoot, builtinResource);
+		// Il velo di fine campagna deve coprire anche le aree esterne alla safe area
+		// (notch/status bar). Il dialogo mantiene comunque il proprio layout centrale.
+		CreateCampaignDefeatRewardPopup(((Component)val).transform, builtinResource);
 		CreateCampaignLevelUpPopup((Transform)(object)safeAreaRoot, builtinResource);
 		CreateClassChoicePopup((Transform)(object)safeAreaRoot, builtinResource);
 		RefreshPlayerHud();
@@ -1612,7 +1983,6 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		RefreshRoomHud("PREPARAZIONE", (((Object)(object)currentScenario != (Object)null) ?currentScenario.DisplayName.ToUpperInvariant() : "SCENARIO"));
 		ApplyResponsiveLayout();
 	}
-
 
 	private List<CardDefinition> GetCampaignRewardPool()
 	{
@@ -1674,8 +2044,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			nextCombatWarriorsLowerVigor = true;
 			return (description: " Nel prossimo combattimento tutti i Guerrieri useranno un dado Vigore inferiore.", bonusExperience: 0);
 		case 12:
-			nextMonsterTierBonus = Math.Max(nextMonsterTierBonus, 1);
-			return (description: " Presagio oscuro: il prossimo mostro sara di un tier piu alto.", bonusExperience: 0);
+			nextMonsterDifficultyIncrease = Math.Max(nextMonsterDifficultyIncrease, 1);
+			return (description: " Presagio oscuro: la prossima stanza mostro sara di una difficolta piu alta.", bonusExperience: 0);
 		default:
 			return (description: " Nessun effetto.", bonusExperience: 0);
 		}
@@ -1769,6 +2139,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 	private void ResetBattle()
 	{
+		ClearManaDeltaCallouts();
+		ClearEnemyManaDeltaCallouts();
 		((MonoBehaviour)this).StopAllCoroutines();
 		ClearDraftEntranceState();
 		abilityTargetMode = AbilityTargetMode.None;
@@ -1809,11 +2181,20 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	{
 		foreach (BattleCardState playerCard in playerCards)
 		{
-			playerCard.View.SetInteractable(CanUsePlayerCardAction(playerCard) || CanInspectBattleCard(playerCard));
+			if (playerCard != null && (Object)(object)playerCard.View != (Object)null)
+				playerCard.View.SetInteractable(CanUsePlayerCardAction(playerCard) || CanInspectBattleCard(playerCard));
 		}
 		for (int i = 0; i < cpuCards.Count; i++)
 		{
-			cpuCards[i].View.SetInteractable(CanUseCpuCardAction(i) || CanInspectBattleCard(cpuCards[i]));
+			BattleCardState cpuCard = cpuCards[i];
+			// Le evocazioni di Jurinashor vengono rimosse subito dalla scena alla morte,
+			// ma il loro stato resta nella lista per lo storico del combattimento.
+			if (cpuCard == null || (Object)(object)cpuCard.View == (Object)null)
+				continue;
+			bool interactable = IsTutorialWarriorDuelActive
+				? TutorialWarriorDuelAllowsEnemyTarget(cpuCard)
+				: CanUseCpuCardAction(i) || CanInspectBattleCard(cpuCard);
+			cpuCard.View.SetInteractable(interactable);
 		}
 		RefreshCardActionOverlays();
 	}

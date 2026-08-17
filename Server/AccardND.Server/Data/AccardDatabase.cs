@@ -19,7 +19,8 @@ public sealed class AccardDatabase
         connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = path,
-            Mode = SqliteOpenMode.ReadWriteCreate
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Pooling = config.DatabasePooling
         }.ToString();
 
         Initialize();
@@ -177,7 +178,7 @@ public sealed class AccardDatabase
                 PRIMARY KEY (player_id, icon_id)
             );
 
-            -- Mostri sconfitti in campagna (sblocco icone). monster_id = famiglia (es. 'goblin').
+            -- Mostri sconfitti in campagna (sblocco icone). monster_id = fazione (es. 'goblin').
             CREATE TABLE IF NOT EXISTS campaign_kills (
                 player_id       TEXT NOT NULL,
                 monster_id      TEXT NOT NULL,
@@ -215,9 +216,23 @@ public sealed class AccardDatabase
                 account_total_experience INTEGER NOT NULL DEFAULT 0,
                 account_experience_to_next_level INTEGER NOT NULL DEFAULT 100,
                 pending_level_rewards INTEGER NOT NULL DEFAULT 0,
+                talent_points      INTEGER NOT NULL DEFAULT 0,
+                talent_points_earned INTEGER NOT NULL DEFAULT 0,
                 tutorial_completed INTEGER NOT NULL DEFAULT 0,
                 hardcore_unlocked  INTEGER NOT NULL DEFAULT 0,
                 updated_at         TEXT NOT NULL,
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+
+            -- Ranghi dei talenti acquistati. Una riga per nodo posseduto: senza respec la
+            -- riga e' gia' tutta la storia dell'acquisto, e uno storico separato non
+            -- servirebbe a nessuno.
+            CREATE TABLE IF NOT EXISTS player_talents (
+                player_id  TEXT NOT NULL,
+                talent_id  TEXT NOT NULL,
+                rank       INTEGER NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (player_id, talent_id),
                 FOREIGN KEY (player_id) REFERENCES accounts(player_id)
             );
 
@@ -246,6 +261,7 @@ public sealed class AccardDatabase
                 source_ref       TEXT,
                 created_at       TEXT NOT NULL,
                 multiplied_at    TEXT,
+                dismissed_at     TEXT,
                 FOREIGN KEY (player_id) REFERENCES accounts(player_id)
             );
             CREATE INDEX IF NOT EXISTS ix_reward_claims_player
@@ -398,6 +414,37 @@ public sealed class AccardDatabase
             );
             CREATE INDEX IF NOT EXISTS ix_request_dedup_expiry ON request_dedup(expires_at);
 
+            -- Acquisti a valuta reale gia' riscattati. Il token di Google e' la chiave
+            -- primaria e questo fa due lavori in uno: la stessa ricevuta rinviata dieci
+            -- volte concede una volta sola, e la stessa ricevuta presentata da un secondo
+            -- account viene rifiutata invece di sbloccare due giocatori con un acquisto.
+            CREATE TABLE IF NOT EXISTS player_purchases (
+                purchase_token TEXT PRIMARY KEY,
+                player_id      TEXT NOT NULL,
+                product_id     TEXT NOT NULL,
+                order_id       TEXT,
+                store          TEXT NOT NULL,
+                redeemed_at    TEXT NOT NULL,
+                FOREIGN KEY (player_id) REFERENCES accounts(player_id)
+            );
+            CREATE INDEX IF NOT EXISTS ix_player_purchases_player ON player_purchases(player_id);
+
+            -- Token di sessione emessi al login e rigiocabili su auth.session dopo una
+            -- caduta di rete. Su disco e non solo in memoria: tenendoli nel processo,
+            -- ogni deploy sbatteva fuori tutti i giocatori collegati, e chi aveva l'app
+            -- in secondo piano si ritrovava il badge della sessione scaduta al rientro.
+            -- Del token si salva solo l'impronta: e' un bearer, e un database rubato non
+            -- deve poter essere rigiocato. superseded_at segna le pietre tombali dei
+            -- token revocati perche' l'account e' entrato altrove (vedi SessionTokenRegistry).
+            CREATE TABLE IF NOT EXISTS session_tokens (
+                token_hash    TEXT PRIMARY KEY,
+                player_id     TEXT NOT NULL,
+                username      TEXT NOT NULL,
+                expires_at    TEXT NOT NULL,
+                superseded_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS ix_session_tokens_expiry ON session_tokens(expires_at);
+
             -- Impostazioni cambiabili a caldo dal pannello admin. Stanno qui e non in
             -- serverconfig.json perche' quel file viene sovrascritto dal deploy: una
             -- versione client alzata dal pannello deve sopravvivere alla pubblicazione
@@ -414,10 +461,33 @@ public sealed class AccardDatabase
         AddColumnIfMissing(connection, "single_player_progress", "account_total_experience", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "single_player_progress", "account_experience_to_next_level", "INTEGER NOT NULL DEFAULT 100");
         AddColumnIfMissing(connection, "single_player_progress", "pending_level_rewards", "INTEGER NOT NULL DEFAULT 0");
+        AddColumnIfMissing(connection, "single_player_progress", "talent_points", "INTEGER NOT NULL DEFAULT 0");
+        AddColumnIfMissing(connection, "single_player_progress", "talent_points_earned", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "single_player_reward_claims", "base_account_experience", "INTEGER NOT NULL DEFAULT 0");
+        AddColumnIfMissing(connection, "single_player_reward_claims", "dismissed_at", "TEXT");
         AddColumnIfMissing(connection, "campaign_runs", "minibosses_defeated", "INTEGER NOT NULL DEFAULT 0");
         AddColumnIfMissing(connection, "campaign_runs", "defeated_boss_ids", "TEXT");
         MigrateCampaignRuns(connection);
+
+        // Gli oggetti non sono piu' sblocchi permanenti: il catalogo del negozio e'
+        // disponibile a tutti. Elimina le vecchie righe senza toccare gli slot bisaccia.
+        using (SqliteCommand removeLegacyItemUnlocks = connection.CreateCommand())
+        {
+            removeLegacyItemUnlocks.CommandText =
+                "DELETE FROM single_player_unlocks WHERE unlock_type = 'item'";
+            removeLegacyItemUnlocks.ExecuteNonQuery();
+        }
+
+        // Defrost e' stato rimosso dal gioco: ripulisce scorte, bisacce e contatori delle
+        // offerte appartenenti agli account creati prima della rimozione.
+        using (SqliteCommand removeDefrost = connection.CreateCommand())
+        {
+            removeDefrost.CommandText = @"
+                DELETE FROM player_bag WHERE item_id = 'defrost';
+                DELETE FROM player_consumables WHERE item_id = 'defrost';
+                DELETE FROM player_shop_offer_purchases WHERE item_id = 'defrost';";
+            removeDefrost.ExecuteNonQuery();
+        }
         // Come si e' autenticato l'account esterno: 'google', 'google-play-games',
         // 'anonymous'... NULL sulle righe create prima di questa colonna, si
         // popola al primo login successivo.

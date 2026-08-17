@@ -10,6 +10,18 @@ namespace AccardND.Battlefield
         private const int SparkCount = 14;
         private const int RuneCount = 12;
 
+        /// <summary>
+        /// Quante volte al secondo rigenerare la mesh. Ogni rebuild ricostruisce
+        /// a mano qualche centinaio di quad in C#, e questa barra e' anche la
+        /// vita di ogni carta sul tavolo: moltiplicata per le carte in campo,
+        /// a ogni frame era il costo CPU piu' alto della battaglia. A quaranta
+        /// si salta circa un frame su tre dei sessanta, con un margine che
+        /// l'occhio non dovrebbe cogliere su nastri e scintille.
+        /// </summary>
+        private const float RebuildsPerSecond = 40f;
+
+        private float nextRebuildAt;
+
         [SerializeField] private Color deepColor = new Color(0.008f, 0.055f, 0.34f, 1f);
         [SerializeField] private Color coreColor = new Color(0.015f, 0.28f, 0.92f, 1f);
         [SerializeField] private Color crestColor = new Color(0.12f, 0.58f, 1f, 1f);
@@ -29,10 +41,24 @@ namespace AccardND.Battlefield
             useLegacyMeshGeneration = false;
         }
 
+        protected override void OnEnable()
+        {
+            base.OnEnable();
+            // Riaccesa, la barra si ridisegna subito invece di aspettare il turno.
+            nextRebuildAt = 0f;
+        }
+
         private void Update()
         {
-            if (isActiveAndEnabled)
-                SetVerticesDirty();
+            if (!isActiveAndEnabled)
+                return;
+
+            float now = Time.unscaledTime;
+            if (now < nextRebuildAt)
+                return;
+
+            nextRebuildAt = now + 1f / RebuildsPerSecond;
+            SetVerticesDirty();
         }
 
         protected override void OnPopulateMesh(VertexHelper vh)

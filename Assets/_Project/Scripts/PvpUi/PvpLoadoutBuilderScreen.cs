@@ -1,9 +1,12 @@
+using System;
 using System.Collections.Generic;
+using AccardND.Battlefield;
 using AccardND.GameCore;
 using AccardND.GameCore.Pvp;
 using AccardND.GameData;
 using AccardND.Localization;
 using AccardND.NetProtocol;
+using AccardND.Presentation;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -17,17 +20,39 @@ namespace AccardND.PvpUi
     /// </summary>
     internal sealed class PvpLoadoutBuilderScreen
     {
-        private const string PrefsKey = "pvp-loadout";
+        private const string LegacyPrefsKey = "pvp-loadout";
+        private const string PrefsKeyPrefix = "pvp-loadout-slot-";
+        private const string ActiveSlotPrefsKey = "pvp-loadout-active-slot";
+        private const string ClassIconAtlasResource = "UI/DeckBuilder/class_icons_atlas";
+        private const string HardcoreLockedEmblemResource = "UI/CampaignRestyle/hardcore_portal_emblem_locked";
+        private const string MultiplayerBackdropResource = "UI/MultiplayerRestyle/multiplayer_gothic_hall";
+        private static readonly HeroClass[] ClassGridOrder =
+        {
+            HeroClass.Barbarian, HeroClass.Paladin, HeroClass.Warrior,
+            HeroClass.Mage, HeroClass.Necromancer, HeroClass.Priest,
+            HeroClass.Assassin, HeroClass.Hunter, HeroClass.Rogue
+        };
 
         private readonly RectTransform root;
+        private readonly RectTransform fullscreenBackdrop;
+        private RectTransform fullscreenFrameLayer;
         private readonly CardDatabase database;
+        private readonly GameConfiguration configuration;
         private readonly PvpLoadoutRules rules = PvpLoadoutRules.CreateDefault();
         private readonly List<CardDefinition> catalog = new();
         private readonly List<CardDefinition> selection = new();
+        private readonly List<Button> loadoutTabs = new();
         private readonly UnityAction<PvpLoadoutDto> onConfirmed;
         private readonly UnityAction onCancelled;
+        private readonly Action<CardDefinition, UnityAction, bool, string> showCampaignInspection;
+        private readonly int unlockedSlotCount;
 
         private Text summaryText;
+        private Text catalogTitle;
+        private RectTransform contentRoot;
+        private RectTransform scrollPanel;
+        private ScrollRect catalogScrollRect;
+        private RectTransform catalogScrollbar;
         private RectTransform gridContent;
         private RectTransform selectionBar;
         private RectTransform inspectionOverlay;
@@ -37,32 +62,64 @@ namespace AccardND.PvpUi
         private Button inspectionBuyButton;
         private Text inspectionBuyText;
         private Button confirmButton;
+        private Button backButton;
         private CardDefinition inspectedCard;
+        private HeroClass? selectedClass;
+        private int activeSlot;
 
         public PvpLoadoutBuilderScreen(
             Transform parent,
             CardDatabase database,
+            GameConfiguration configuration,
+            int unlockedSlotCount,
+            Action<CardDefinition, UnityAction, bool, string> showCampaignInspection,
             UnityAction<PvpLoadoutDto> onConfirmed,
             UnityAction onCancelled)
         {
             this.database = database;
+            this.configuration = configuration;
+            this.unlockedSlotCount = Mathf.Clamp(unlockedSlotCount, 1, 4);
+            this.showCampaignInspection = showCampaignInspection;
             this.onConfirmed = onConfirmed;
             this.onCancelled = onCancelled;
+            activeSlot = Mathf.Clamp(PlayerPrefs.GetInt(ActiveSlotPrefsKey, 1), 1, this.unlockedSlotCount);
             BuildCatalog();
+
+            Transform backdropParent = parent;
+            if (parent != null && parent.GetComponent<SafeAreaRect>() != null && parent.parent != null)
+                backdropParent = parent.parent;
+            fullscreenBackdrop = CreateMultiplayerBackdrop(backdropParent);
 
             root = PvpUiFactory.CreatePanel(parent, "LoadoutBuilder", PvpUiFactory.Ink);
             PvpUiFactory.Stretch(root);
+            DisablePanelBackground(root);
             BuildStaticUi();
             LoadSavedSelection();
             RefreshDynamicUi();
         }
 
-        public void Destroy() => Object.Destroy(root.gameObject);
+        public void Destroy()
+        {
+            if (root != null)
+                UnityEngine.Object.Destroy(root.gameObject);
+            if (fullscreenBackdrop != null)
+                UnityEngine.Object.Destroy(fullscreenBackdrop.gameObject);
+            if (fullscreenFrameLayer != null)
+                UnityEngine.Object.Destroy(fullscreenFrameLayer.gameObject);
+        }
 
         /// <summary>Loadout salvato in precedenza, se ancora valido.</summary>
         public static PvpLoadoutDto LoadSaved()
         {
-            string json = PlayerPrefs.GetString(PrefsKey, string.Empty);
+            int activeSlot = Mathf.Clamp(PlayerPrefs.GetInt(ActiveSlotPrefsKey, 1), 1, 4);
+            return LoadSaved(activeSlot);
+        }
+
+        private static PvpLoadoutDto LoadSaved(int slot)
+        {
+            string json = PlayerPrefs.GetString(
+                PrefsKeyPrefix + Mathf.Clamp(slot, 1, 4),
+                slot == 1 ? PlayerPrefs.GetString(LegacyPrefsKey, string.Empty) : string.Empty);
             if (string.IsNullOrEmpty(json))
                 return null;
             PvpLoadoutDto dto = JsonUtility.FromJson<PvpLoadoutDto>(json);
@@ -91,35 +148,84 @@ namespace AccardND.PvpUi
 
         private void BuildStaticUi()
         {
-            RectTransform titleBand = PvpUiFactory.CreateTitleBand(
-                root,
-                GameText.Get(GameTextKeys.PvpLoadout.Title),
-                GameText.Get(GameTextKeys.PvpLoadout.Subtitle));
-            PvpUiFactory.SetAnchors(titleBand, new Vector2(0.04f, 0.9f), new Vector2(0.76f, 0.985f));
+            // Usa il canvas full-bleed, come la schermata Arena/Lobby, così la
+            // cornice non viene ristretta dalla safe area del contenuto.
+            Transform frameParent = root.parent != null && root.parent.GetComponent<SafeAreaRect>() != null
+                && root.parent.parent != null
+                ? root.parent.parent
+                : root.parent;
+            fullscreenFrameLayer = PvpUiFactory.CreateContainer(frameParent, "Loadout Frame Layer");
+            PvpUiFactory.Stretch(fullscreenFrameLayer);
+            if (root.parent != null && root.parent.parent == frameParent)
+                fullscreenFrameLayer.SetSiblingIndex(root.parent.GetSiblingIndex());
+            PvpUiFactory.CreateScreenOuterFrame(fullscreenFrameLayer, 0.795f);
 
-            Button cancel = PvpUiFactory.CreateButton(
-                root, "Cancel", GameText.Get(GameTextKeys.Common.Back), new Color(0.5f, 0.12f, 0.12f, 0.98f), onCancelled, 24);
-            PvpUiFactory.SetAnchors((RectTransform)cancel.transform, new Vector2(0.79f, 0.92f), new Vector2(0.96f, 0.975f));
+            RectTransform titleBand = PvpUiFactory.CreateScreenTitlePanel(
+                fullscreenFrameLayer,
+                "Loadout Title Frame",
+                GameText.GetOrFallbackSilent(GameTextKeys.PvpLoadout.Title, "LOADOUT"),
+                null,
+                50);
+            PvpUiFactory.SetAnchors(titleBand, new Vector2(0.08f, 0.785f), new Vector2(0.92f, 0.9f));
+            Text titleText = titleBand.Find("Title")?.GetComponent<Text>();
+            if (titleText != null)
+            {
+                titleText.font = MmoUiTheme.LoreFont;
+                titleText.fontStyle = FontStyle.Normal;
+                titleText.fontSize = 50;
+                titleText.resizeTextForBestFit = true;
+                titleText.resizeTextMinSize = 34;
+                titleText.resizeTextMaxSize = 50;
+            }
 
-            RectTransform summaryPanel = PvpUiFactory.CreateSoftPanel(root, "Loadout Summary", new Color(0.035f, 0.06f, 0.09f, 0.96f));
+            contentRoot = PvpUiFactory.CreateContainer(root, "Loadout Content");
+            PvpUiFactory.Stretch(contentRoot);
+            contentRoot.anchoredPosition = new Vector2(0f, -150f);
+
+            RectTransform summaryPanel = PvpUiFactory.CreateSoftPanel(contentRoot, "Loadout Summary", new Color(0.035f, 0.06f, 0.09f, 0.96f));
+            DisablePanelBackground(summaryPanel);
             PvpUiFactory.SetAnchors(summaryPanel, new Vector2(0.04f, 0.79f), new Vector2(0.76f, 0.885f));
             summaryText = PvpUiFactory.CreateText(summaryPanel, "Summary", string.Empty, 25, TextAnchor.MiddleLeft, FontStyle.Bold);
+            summaryText.alignment = TextAnchor.MiddleCenter;
             summaryText.color = PvpUiFactory.TextMuted;
             PvpUiFactory.Stretch((RectTransform)summaryText.transform, 18f, 8f);
+            summaryText.rectTransform.anchorMin = Vector2.zero;
+            summaryText.rectTransform.anchorMax = Vector2.one;
+            summaryText.rectTransform.offsetMin = new Vector2(126f, -12f);
+            summaryText.rectTransform.offsetMax = new Vector2(90f, -28f);
 
-            confirmButton = PvpUiFactory.CreateButton(
-                root, "Confirm", GameText.Get(GameTextKeys.PvpLoadout.Save), new Color(0.1f, 0.55f, 0.25f, 0.98f), Confirm, 28);
-            PvpUiFactory.SetAnchors((RectTransform)confirmButton.transform, new Vector2(0.79f, 0.79f), new Vector2(0.96f, 0.885f));
+            backButton = PvpUiFactory.CreateButton(
+                contentRoot, "Back", GameText.GetOrFallbackSilent(GameTextKeys.Common.Back, "INDIETRO"),
+                new Color(0.5f, 0.12f, 0.12f, 0.98f), BackFromBuilder, 32);
+            MmoUiTheme.ApplyBackButtonStyle(backButton, backButton.GetComponentInChildren<Text>());
+            RectTransform backRect = (RectTransform)backButton.transform;
+            backRect.anchorMin = new Vector2(0.76f, 0.665f);
+            backRect.anchorMax = new Vector2(0.97f, 0.77f);
+            backRect.offsetMin = new Vector2(-47f, -48f);
+            backRect.offsetMax = new Vector2(-47f, -48f);
 
-            Text catalogTitle = PvpUiFactory.CreateTitleText(
-                root, "Catalog Title", GameText.Get(GameTextKeys.PvpLoadout.Catalog), 22, TextAnchor.MiddleLeft);
+            BuildLoadoutTabs();
+
+            catalogTitle = PvpUiFactory.CreateTitleText(
+                contentRoot, "Catalog Title", GameText.GetOrFallbackSilent(GameTextKeys.PvpLoadout.ChooseClass, "SCEGLI UNA CLASSE"), 38, TextAnchor.MiddleCenter);
+            catalogTitle.font = MmoUiTheme.LoreFont;
+            catalogTitle.fontStyle = FontStyle.Normal;
+            catalogTitle.resizeTextForBestFit = true;
+            catalogTitle.resizeTextMinSize = 28;
+            catalogTitle.resizeTextMaxSize = 38;
             catalogTitle.color = PvpUiFactory.Gold;
-            PvpUiFactory.SetAnchors((RectTransform)catalogTitle.transform, new Vector2(0.05f, 0.745f), new Vector2(0.95f, 0.785f));
+            catalogTitle.raycastTarget = false;
+            PvpUiFactory.SetAnchors((RectTransform)catalogTitle.transform, new Vector2(0.1f, 0.69f), new Vector2(0.9f, 0.745f));
+            catalogTitle.rectTransform.offsetMin = new Vector2(0f, -48f);
+            catalogTitle.rectTransform.offsetMax = new Vector2(0f, -48f);
 
             // Griglia scorrevole del catalogo.
-            RectTransform scrollPanel = PvpUiFactory.CreateSoftPanel(root, "Scroll", new Color(0.018f, 0.028f, 0.045f, 0.92f));
-            PvpUiFactory.SetAnchors(scrollPanel, new Vector2(0.04f, 0.31f), new Vector2(0.96f, 0.745f));
-            var scroll = scrollPanel.gameObject.AddComponent<ScrollRect>();
+            scrollPanel = PvpUiFactory.CreateSoftPanel(contentRoot, "Scroll", new Color(0.018f, 0.028f, 0.045f, 0.92f));
+            DisablePanelBackground(scrollPanel);
+            PvpUiFactory.SetAnchors(scrollPanel, new Vector2(0.025f, 0.3f), new Vector2(0.975f, 0.685f));
+            scrollPanel.offsetMin = new Vector2(0f, -52f);
+            scrollPanel.offsetMax = new Vector2(0f, -52f);
+            catalogScrollRect = scrollPanel.gameObject.AddComponent<ScrollRect>();
             scrollPanel.gameObject.AddComponent<RectMask2D>();
 
             var contentHolder = new GameObject("Content", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
@@ -137,23 +243,128 @@ namespace AccardND.PvpUi
             grid.childAlignment = TextAnchor.UpperCenter;
             var fitter = contentHolder.GetComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            scroll.content = gridContent;
-            scroll.viewport = scrollPanel;
-            scroll.horizontal = false;
-            scroll.vertical = true;
-            scroll.scrollSensitivity = 30f;
+            catalogScrollRect.content = gridContent;
+            catalogScrollRect.viewport = scrollPanel;
+            catalogScrollRect.horizontal = false;
+            catalogScrollRect.vertical = true;
+            catalogScrollRect.scrollSensitivity = 30f;
 
-            selectionBar = PvpUiFactory.CreateSoftPanel(root, "Selection", new Color(0.025f, 0.04f, 0.065f, 0.95f));
+            var scrollbarObject = new GameObject("Scrollbar", typeof(RectTransform), typeof(Image), typeof(Scrollbar));
+            scrollbarObject.transform.SetParent(scrollPanel, false);
+            catalogScrollbar = (RectTransform)scrollbarObject.transform;
+            PvpUiFactory.SetAnchors(catalogScrollbar, new Vector2(0.952f, 0.025f), new Vector2(0.972f, 0.975f));
+            catalogScrollbar.offsetMin = new Vector2(-133.5f, 0f);
+            catalogScrollbar.offsetMax = new Vector2(-133.5f, 0f);
+            Image scrollbarTrack = scrollbarObject.GetComponent<Image>();
+            scrollbarTrack.color = new Color(0.16f, 0.12f, 0.06f, 0.95f);
+
+            var handleObject = new GameObject("Handle", typeof(RectTransform), typeof(Image));
+            handleObject.transform.SetParent(scrollbarObject.transform, false);
+            var handleRect = (RectTransform)handleObject.transform;
+            PvpUiFactory.SetAnchors(handleRect, Vector2.zero, Vector2.one);
+            Image handleImage = handleObject.GetComponent<Image>();
+            handleImage.color = PvpUiFactory.Gold;
+
+            Scrollbar verticalScrollbar = scrollbarObject.GetComponent<Scrollbar>();
+            verticalScrollbar.handleRect = handleRect;
+            verticalScrollbar.targetGraphic = handleImage;
+            verticalScrollbar.direction = Scrollbar.Direction.BottomToTop;
+            catalogScrollRect.verticalScrollbar = verticalScrollbar;
+            catalogScrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            catalogScrollRect.verticalScrollbarSpacing = 6f;
+
+            selectionBar = PvpUiFactory.CreateSoftPanel(contentRoot, "Selection", new Color(0.025f, 0.04f, 0.065f, 0.95f));
+            DisablePanelBackground(selectionBar);
             PvpUiFactory.SetAnchors(selectionBar, new Vector2(0.04f, 0.025f), new Vector2(0.96f, 0.29f));
+            selectionBar.offsetMin = new Vector2(0f, 92f);
+            selectionBar.offsetMax = new Vector2(0f, 92f);
 
             BuildInspectionOverlay();
+            backButton.transform.SetAsLastSibling();
+        }
+
+        private static void DisablePanelBackground(RectTransform panel)
+        {
+            Image background = panel != null ? panel.GetComponent<Image>() : null;
+            if (background != null)
+            {
+                background.color = Color.clear;
+                background.enabled = false;
+            }
+        }
+
+        private static RectTransform CreateMultiplayerBackdrop(Transform parent)
+        {
+            Sprite sprite = Resources.Load<Sprite>(MultiplayerBackdropResource);
+            if (sprite == null)
+                return null;
+
+            var holder = new GameObject(
+                "Gothic Hall Backdrop", typeof(RectTransform), typeof(Image), typeof(AspectRatioFitter));
+            holder.transform.SetParent(parent, false);
+            Image image = holder.GetComponent<Image>();
+            image.sprite = sprite;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            image.color = new Color(0.94f, 0.94f, 0.97f, 1f);
+            RectTransform rect = (RectTransform)holder.transform;
+            PvpUiFactory.Stretch(rect);
+            AspectRatioFitter fitter = holder.GetComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+            fitter.aspectRatio = sprite.rect.width / sprite.rect.height;
+            rect.SetAsFirstSibling();
+            return rect;
+        }
+
+        private void BuildLoadoutTabs()
+        {
+            for (int index = 1; index <= 4; index++)
+            {
+                int captured = index;
+                bool unlocked = index <= unlockedSlotCount;
+                Button tab = PvpUiFactory.CreateButton(
+                    contentRoot,
+                    $"Loadout Tab {index}",
+                    GameText.GetOrFallbackSilent(GameTextKeys.PvpLoadout.SlotTitle, "LOADOUT {0}", index),
+                    index == activeSlot ? new Color(0.1f, 0.48f, 0.25f, 0.98f) : new Color(0.08f, 0.14f, 0.18f, 0.98f),
+                    () => SelectLoadoutSlot(captured),
+                    25);
+                float xMin = 0.06f + (index - 1) * 0.22f;
+                RectTransform tabRect = (RectTransform)tab.transform;
+                PvpUiFactory.SetAnchors(
+                    tabRect,
+                    new Vector2(xMin, 0.735f), new Vector2(xMin + 0.21f, 0.78f));
+                float compactOffset = -(index - 1);
+                tabRect.offsetMin = new Vector2(compactOffset, 0f);
+                tabRect.offsetMax = new Vector2(compactOffset, 0f);
+                tab.interactable = unlocked;
+                if (!unlocked)
+                {
+                    var lockObject = new GameObject("Hardcore Lock", typeof(RectTransform), typeof(Image));
+                    lockObject.transform.SetParent(tab.transform, false);
+                    Image lockImage = lockObject.GetComponent<Image>();
+                    lockImage.sprite = Resources.Load<Sprite>(HardcoreLockedEmblemResource);
+                    lockImage.preserveAspect = true;
+                    lockImage.raycastTarget = false;
+                    PvpUiFactory.SetAnchors(
+                        (RectTransform)lockObject.transform,
+                        new Vector2(0.04f, 0.08f), new Vector2(0.3f, 0.92f));
+
+                    Text tabLabel = tab.GetComponentInChildren<Text>();
+                    if (tabLabel != null)
+                        PvpUiFactory.SetAnchors(
+                            (RectTransform)tabLabel.transform,
+                            new Vector2(0.28f, 0.03f), new Vector2(0.96f, 0.97f));
+                }
+                loadoutTabs.Add(tab);
+            }
         }
 
         private void RefreshDynamicUi()
         {
+            RefreshSelectionBar();
             RefreshSummary();
             RefreshGrid();
-            RefreshSelectionBar();
         }
 
         private PvpLoadoutValidationResult Validate()
@@ -183,10 +394,12 @@ namespace AccardND.PvpUi
             confirmButton.interactable = result.IsValid && selection.Count == rules.RequiredCardCount;
         }
 
-        private void RefreshGrid()
+        private void RefreshGrid(bool resetScrollPosition = false)
         {
+            float previousScrollPosition = catalogScrollRect.verticalNormalizedPosition;
+            bool preserveScrollPosition = selectedClass.HasValue && !resetScrollPosition;
+
             PvpUiFactory.Clear(gridContent);
-            bool isLandscape = Screen.width > Screen.height;
             if (catalog.Count == 0)
             {
                 Text warning = PvpUiFactory.CreateText(
@@ -196,20 +409,52 @@ namespace AccardND.PvpUi
                 return;
             }
 
+            if (!selectedClass.HasValue)
+            {
+                catalogScrollRect.vertical = false;
+                catalogScrollRect.verticalNormalizedPosition = 1f;
+                catalogScrollbar.gameObject.SetActive(false);
+                PvpUiFactory.SetAnchors(scrollPanel, new Vector2(0.025f, 0.3f), new Vector2(0.975f, 0.685f));
+                scrollPanel.offsetMin = new Vector2(0f, -52f);
+                scrollPanel.offsetMax = new Vector2(0f, -52f);
+                catalogTitle.text = GameText.GetOrFallbackSilent(
+                    GameTextKeys.PvpLoadout.ChooseClass,
+                    "SCEGLI UNA CLASSE");
+                GridLayoutGroup classGrid = gridContent.GetComponent<GridLayoutGroup>();
+                classGrid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+                classGrid.constraintCount = 3;
+                classGrid.cellSize = new Vector2(200f, 200f);
+                classGrid.spacing = new Vector2(16f, 16f);
+                foreach (HeroClass heroClass in ClassGridOrder)
+                    CreateClassCell(heroClass);
+                return;
+            }
+
+            GridLayoutGroup cardGrid = gridContent.GetComponent<GridLayoutGroup>();
+            catalogScrollRect.vertical = true;
+            catalogScrollbar.gameObject.SetActive(true);
+            PvpUiFactory.SetAnchors(scrollPanel, new Vector2(0.025f, 0.375f), new Vector2(0.975f, 0.685f));
+            scrollPanel.offsetMin = new Vector2(0f, -52f);
+            scrollPanel.offsetMax = new Vector2(0f, -52f);
+            cardGrid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            cardGrid.constraintCount = 1;
+            cardGrid.cellSize = new Vector2(650f, 190f);
+            cardGrid.spacing = new Vector2(0f, 14f);
+            catalogTitle.text = GameText.GetLocalizedFallback(
+                GameTextKeys.PvpLoadout.ClassCardCount,
+                "{0} · {1} CARTE", "{0} · {1} CARDS", "{0} · {1} KARTEN", "{0} · {1} CARTAS", "{0} · {1} CARTES",
+                CardRulesGlossary.HeroClassName(selectedClass.Value).ToUpperInvariant(), 9);
+            int shownCards = 0;
             foreach (CardDefinition card in catalog)
             {
+                if (card.HeroClass != selectedClass.Value || shownCards >= 9)
+                    continue;
+                shownCards++;
                 CardDefinition captured = card;
                 bool selected = IsSelected(card);
                 var cell = PvpUiFactory.CreatePanel(
                     gridContent, $"Card {card.Id}",
                     selected ? new Color(0.65f, 0.45f, 0.12f, 0.98f) : new Color(0.075f, 0.12f, 0.17f, 0.96f));
-
-                if (!isLandscape)
-                {
-                    Text cost = PvpUiFactory.CreateBadge(
-                        cell, "Cost", card.Strength.ToString(), selected ? PvpUiFactory.Gold : PvpUiFactory.Copper, 18);
-                    PvpUiFactory.SetAnchors((RectTransform)cost.transform.parent, new Vector2(0.72f, 0.82f), new Vector2(0.96f, 0.97f));
-                }
 
                 if (card.Artwork != null)
                 {
@@ -219,24 +464,106 @@ namespace AccardND.PvpUi
                     art.sprite = card.Artwork;
                     art.preserveAspect = true;
                     art.raycastTarget = false;
-                    PvpUiFactory.SetAnchors((RectTransform)artHolder.transform, new Vector2(0.05f, 0.33f), new Vector2(0.95f, 0.98f));
+                    PvpUiFactory.SetAnchors((RectTransform)artHolder.transform, new Vector2(0.02f, 0.06f), new Vector2(0.31f, 0.94f));
                 }
 
-                string selectedSuffix = selected ? GameText.Get(GameTextKeys.PvpLoadout.SelectedSuffix) : string.Empty;
-                string labelText = isLandscape
-                    ? $"{card.DisplayName}  {card.Strength}{selectedSuffix}\n{card.HeroClass}"
-                    : $"{card.DisplayName}\n{card.HeroClass}{selectedSuffix}";
+                rules.TryGetCardCost(card.Strength, out int loadoutCost);
                 Text label = PvpUiFactory.CreateText(
                     cell, "Label",
-                    labelText,
-                    20, TextAnchor.MiddleCenter, FontStyle.Bold);
+                    GameText.GetLocalizedFallback(GameTextKeys.PvpLoadout.CardStats,
+                        "POTENZA {0} · COSTO {1}", "POWER {0} · COST {1}", "STÄRKE {0} · KOSTEN {1}", "PODER {0} · COSTE {1}", "PUISSANCE {0} · COÛT {1}",
+                        card.Strength, loadoutCost),
+                    30, TextAnchor.MiddleCenter, FontStyle.Bold);
                 label.raycastTarget = false;
                 label.color = selected ? Color.white : new Color(0.88f, 0.94f, 0.98f);
-                PvpUiFactory.SetAnchors((RectTransform)label.transform, new Vector2(0.04f, 0.04f), new Vector2(0.96f, 0.31f));
+                PvpUiFactory.SetAnchors((RectTransform)label.transform, new Vector2(0.33f, 0.56f), new Vector2(0.97f, 0.94f));
 
-                Button button = cell.gameObject.AddComponent<Button>();
-                button.onClick.AddListener(() => ShowInspection(captured));
+                Button info = PvpUiFactory.CreateButton(
+                    cell, "Info", GameText.GetLocalizedFallback(GameTextKeys.PvpLoadout.Info, "INFO", "INFO", "INFO", "INFO", "INFO"), PvpUiFactory.Copper,
+                    () => ShowInspection(captured), 20);
+                PvpUiFactory.SetAnchors(
+                    (RectTransform)info.transform, new Vector2(0.35f, 0.1f), new Vector2(0.62f, 0.48f));
+
+                Button choose = selected
+                    ? PvpUiFactory.CreateButton(
+                        cell, "Remove", GameText.GetLocalizedFallback(GameTextKeys.PvpLoadout.Remove, "RIMUOVI", "REMOVE", "ENTFERNEN", "QUITAR", "RETIRER"), new Color(0.7f, 0.08f, 0.06f, 1f),
+                        () => RemoveCard(captured), 20)
+                    : PvpUiFactory.CreateButton(
+                        cell, "Choose", GameText.GetLocalizedFallback(GameTextKeys.PvpLoadout.Choose, "SCEGLI", "CHOOSE", "WÄHLEN", "ELEGIR", "CHOISIR"), PvpUiFactory.Good,
+                        () => AddCard(captured), 20);
+                PvpUiFactory.SetAnchors(
+                    (RectTransform)choose.transform, new Vector2(0.67f, 0.1f), new Vector2(0.94f, 0.48f));
+                choose.interactable = selected || selection.Count < rules.RequiredCardCount;
             }
+
+            LayoutRebuilder.ForceRebuildLayoutImmediate(gridContent);
+            catalogScrollRect.StopMovement();
+            catalogScrollRect.verticalNormalizedPosition = preserveScrollPosition
+                ? previousScrollPosition
+                : 1f;
+        }
+
+        private void CreateClassCell(HeroClass heroClass)
+        {
+            HeroClass captured = heroClass;
+            RectTransform cell = PvpUiFactory.CreatePanel(
+                gridContent, $"Class {heroClass}", new Color(1f, 1f, 1f, 0.001f));
+            Sprite classIcon = LoadClassIcon(heroClass);
+            if (classIcon != null)
+            {
+                var artObject = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+                artObject.transform.SetParent(cell, false);
+                Image art = artObject.GetComponent<Image>();
+                art.sprite = classIcon;
+                art.preserveAspect = true;
+                art.raycastTarget = false;
+                PvpUiFactory.SetAnchors((RectTransform)artObject.transform, new Vector2(0.08f, 0.31f), new Vector2(0.92f, 0.96f));
+            }
+
+            Text label = PvpUiFactory.CreateText(
+                cell, "Class Name",
+                GameText.GetOrFallbackSilent(
+                    GameTextKeys.Rules.HeroClassName(heroClass.ToString().ToLowerInvariant()),
+                    heroClass.ToString()).ToUpperInvariant(),
+                22,
+                TextAnchor.MiddleCenter, FontStyle.Bold);
+            label.color = PvpUiFactory.Gold;
+            label.raycastTarget = false;
+            PvpUiFactory.SetAnchors((RectTransform)label.transform, new Vector2(0.04f, 0.02f), new Vector2(0.96f, 0.25f));
+            cell.gameObject.AddComponent<Button>().onClick.AddListener(() => SelectClass(captured));
+        }
+
+        private static Sprite LoadClassIcon(HeroClass heroClass)
+        {
+            string expectedName = "class_" + heroClass.ToString().ToLowerInvariant();
+            foreach (Sprite sprite in Resources.LoadAll<Sprite>(ClassIconAtlasResource))
+            {
+                if (sprite != null && string.Equals(sprite.name, expectedName, StringComparison.OrdinalIgnoreCase))
+                    return sprite;
+            }
+            return null;
+        }
+
+        private void SelectClass(HeroClass heroClass)
+        {
+            selectedClass = heroClass;
+            RefreshGrid(resetScrollPosition: true);
+        }
+
+        private void ShowClasses()
+        {
+            selectedClass = null;
+            RefreshGrid();
+        }
+
+        private void BackFromBuilder()
+        {
+            if (selectedClass.HasValue)
+            {
+                ShowClasses();
+                return;
+            }
+            onCancelled?.Invoke();
         }
 
         private void BuildInspectionOverlay()
@@ -293,16 +620,25 @@ namespace AccardND.PvpUi
         private void ShowInspection(CardDefinition card)
         {
             inspectedCard = card;
+            if (showCampaignInspection != null)
+            {
+                bool selected = IsSelected(card);
+                bool full = selection.Count >= rules.RequiredCardCount;
+                string buttonText = selected
+                    ? GameText.Get(GameTextKeys.PvpLoadout.AlreadyAdded)
+                    : full
+                        ? GameText.Get(GameTextKeys.PvpLoadout.Full)
+                        : GameText.Get(GameTextKeys.PvpLoadout.Add);
+                showCampaignInspection(card, BuyInspectedCard, card != null && !selected && !full, buttonText);
+                return;
+            }
             PvpUiFactory.Clear(inspectionArtSlot);
             if (card?.Artwork != null)
             {
-                var artHolder = new GameObject("Artwork", typeof(RectTransform), typeof(Image));
-                artHolder.transform.SetParent(inspectionArtSlot, false);
-                Image art = artHolder.GetComponent<Image>();
-                art.sprite = card.Artwork;
-                art.preserveAspect = true;
-                art.raycastTarget = false;
-                PvpUiFactory.Stretch((RectTransform)artHolder.transform, 8f, 8f);
+                PrototypeCardView cardView = PrototypeCardView.Create(inspectionArtSlot, card, configuration);
+                RectTransform cardRect = (RectTransform)cardView.transform;
+                PvpUiFactory.Stretch(cardRect, 8f, 8f);
+                cardRect.SetAsFirstSibling();
             }
 
             string className = card != null ? card.HeroClass.ToString() : string.Empty;
@@ -364,20 +700,36 @@ namespace AccardND.PvpUi
         {
             PvpUiFactory.Clear(selectionBar);
             Text caption = PvpUiFactory.CreateText(
-                selectionBar, "Caption", GameText.Get(GameTextKeys.PvpLoadout.YourLoadout), 22, TextAnchor.MiddleLeft);
+                selectionBar, "Caption", GameText.Get(GameTextKeys.PvpLoadout.YourLoadout), 40, TextAnchor.MiddleCenter);
+            caption.font = MmoUiTheme.LoreFont;
+            caption.fontStyle = FontStyle.Normal;
             caption.color = PvpUiFactory.Gold;
-            PvpUiFactory.SetAnchors((RectTransform)caption.transform, new Vector2(0.025f, 0.82f), new Vector2(0.52f, 0.98f));
+            PvpUiFactory.SetAnchors((RectTransform)caption.transform, new Vector2(0.18f, 0.9f), new Vector2(0.7f, 0.99f));
+
+            confirmButton = PvpUiFactory.CreateButton(
+                selectionBar,
+                "Confirm",
+                GameText.Get(GameTextKeys.PvpLoadout.Save),
+                new Color(0.1f, 0.55f, 0.25f, 0.98f),
+                Confirm,
+                24);
+            PvpUiFactory.SetAnchors(
+                (RectTransform)confirmButton.transform,
+                new Vector2(0.73f, 0.82f),
+                new Vector2(0.94f, 0.99f));
+            MmoUiTheme.ApplyConfirmButtonStyle(confirmButton, confirmButton.GetComponentInChildren<Text>());
+
             Text hint = PvpUiFactory.CreateLabel(
-                selectionBar, "Hint", GameText.Get(GameTextKeys.PvpLoadout.RemoveHint), 18, TextAnchor.MiddleRight);
-            PvpUiFactory.SetAnchors((RectTransform)hint.transform, new Vector2(0.48f, 0.82f), new Vector2(0.975f, 0.98f));
+                selectionBar, "Hint", GameText.Get(GameTextKeys.PvpLoadout.RemoveHint), 25, TextAnchor.MiddleCenter);
+            PvpUiFactory.SetAnchors((RectTransform)hint.transform, new Vector2(0.16f, 0.8f), new Vector2(0.84f, 0.9f));
 
             for (int index = 0; index < rules.RequiredCardCount; index++)
             {
                 const int columns = 3;
                 int column = index % columns;
                 int row = index / columns;
-                float xMin = 0.02f + column * 0.326f;
-                float xMax = xMin + 0.306f;
+                float xMin = 0.055f + column * 0.315f;
+                float xMax = xMin + 0.26f;
                 float yMax = 0.79f - row * 0.245f;
                 float yMin = yMax - 0.215f;
                 var slot = PvpUiFactory.CreatePanel(
@@ -394,25 +746,33 @@ namespace AccardND.PvpUi
                 }
 
                 CardDefinition card = selection[index];
-                if (card.Artwork != null)
-                {
-                    var artHolder = new GameObject("Art", typeof(RectTransform), typeof(Image));
-                    artHolder.transform.SetParent(slot, false);
-                    var art = artHolder.GetComponent<Image>();
-                    art.sprite = card.Artwork;
-                    art.preserveAspect = true;
-                    art.raycastTarget = false;
-                    PvpUiFactory.SetAnchors((RectTransform)artHolder.transform, new Vector2(0.04f, 0.1f), new Vector2(0.29f, 0.9f));
-                }
                 Text label = PvpUiFactory.CreateText(
                     slot,
                     "Label",
-                    GameText.Format(GameTextKeys.PvpLoadout.CardPower, card.DisplayName, card.Strength),
-                    17,
-                    TextAnchor.MiddleLeft,
+                    GameText.GetLocalizedFallback(GameTextKeys.PvpLoadout.CardStrength,
+                        "POTENZA {0}", "POWER {0}", "STÄRKE {0}", "PODER {0}", "PUISSANCE {0}", card.Strength),
+                    25,
+                    TextAnchor.MiddleCenter,
                     FontStyle.Bold);
                 label.raycastTarget = false;
-                PvpUiFactory.SetAnchors((RectTransform)label.transform, new Vector2(card.Artwork != null ? 0.32f : 0.08f, 0.08f), new Vector2(0.96f, 0.92f));
+                PvpUiFactory.SetAnchors(
+                    (RectTransform)label.transform,
+                    new Vector2(0.36f, 0.08f),
+                    new Vector2(0.94f, 0.92f));
+
+                Sprite classIcon = LoadClassIcon(card.HeroClass);
+                if (classIcon != null)
+                {
+                    var classIconObject = new GameObject("Class Icon", typeof(RectTransform), typeof(Image));
+                    classIconObject.transform.SetParent(slot, false);
+                    Image classImage = classIconObject.GetComponent<Image>();
+                    classImage.sprite = classIcon;
+                    classImage.preserveAspect = true;
+                    classImage.raycastTarget = false;
+                    PvpUiFactory.SetAnchors(
+                        (RectTransform)classIconObject.transform,
+                        new Vector2(0.05f, 0.08f), new Vector2(0.35f, 0.92f));
+                }
 
                 int captured = index;
                 slot.gameObject.AddComponent<Button>().onClick.AddListener(() => RemoveAt(captured));
@@ -447,6 +807,46 @@ namespace AccardND.PvpUi
             RefreshDynamicUi();
         }
 
+        private void RemoveCard(CardDefinition card)
+        {
+            if (card == null)
+                return;
+            for (int index = 0; index < selection.Count; index++)
+            {
+                if (selection[index] != null && selection[index].Id == card.Id)
+                {
+                    RemoveAt(index);
+                    return;
+                }
+            }
+        }
+
+        private void SelectLoadoutSlot(int slot)
+        {
+            if (slot < 1 || slot > unlockedSlotCount || slot == activeSlot)
+                return;
+            activeSlot = slot;
+            PlayerPrefs.SetInt(ActiveSlotPrefsKey, activeSlot);
+            PlayerPrefs.Save();
+            selection.Clear();
+            selectedClass = null;
+            LoadSavedSelection();
+            RefreshLoadoutTabs();
+            RefreshDynamicUi();
+        }
+
+        private void RefreshLoadoutTabs()
+        {
+            for (int index = 0; index < loadoutTabs.Count; index++)
+            {
+                Image image = loadoutTabs[index] != null ? loadoutTabs[index].GetComponent<Image>() : null;
+                if (image != null)
+                    image.color = index + 1 == activeSlot
+                        ? new Color(0.1f, 0.48f, 0.25f, 0.98f)
+                        : new Color(0.08f, 0.14f, 0.18f, 0.98f);
+            }
+        }
+
         private void Confirm()
         {
             var cards = new LoadoutCardDto[selection.Count];
@@ -463,14 +863,15 @@ namespace AccardND.PvpUi
                 baseDieSides = 3,
                 bagDiceSides = new int[0]
             };
-            PlayerPrefs.SetString(PrefsKey, JsonUtility.ToJson(dto));
+            PlayerPrefs.SetString(PrefsKeyPrefix + activeSlot, JsonUtility.ToJson(dto));
+            PlayerPrefs.SetInt(ActiveSlotPrefsKey, activeSlot);
             PlayerPrefs.Save();
             onConfirmed(dto);
         }
 
         private void LoadSavedSelection()
         {
-            PvpLoadoutDto saved = LoadSaved();
+            PvpLoadoutDto saved = LoadSaved(activeSlot);
             if (saved?.cards == null || database == null)
                 return;
             foreach (LoadoutCardDto card in saved.cards)

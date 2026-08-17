@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using AccardND.GameCore;
 using UnityEngine;
 
 namespace AccardND.GameData
@@ -16,7 +17,22 @@ namespace AccardND.GameData
         public int accountTotalExperience;
         public int accountExperienceToNextLevel = 100;
         public int pendingLevelRewards;
+
+        /// <summary>Punti talento non ancora spesi.</summary>
+        public int talentPoints;
+
+        /// <summary>Punti talento guadagnati in tutto, spesi compresi.</summary>
+        public int talentPointsEarned;
+
         public bool tutorialCompleted;
+
+        /// <summary>
+        /// Moduli del tutorial progressivo gia' portati a termine. E' l'unico stato del
+        /// percorso: tutti i cancelli dell'onboarding si derivano da qui, e non esiste un
+        /// numero di tappa salvato a parte che potrebbe sfasarsi da questa lista.
+        /// </summary>
+        public List<string> completedTutorialModules = new List<string>();
+
         public bool hardcoreUnlocked;
         public List<string> unlockedChapters = new List<string>();
         public List<string> unlockedStages = new List<string>();
@@ -34,9 +50,6 @@ namespace AccardND.GameData
         /// <summary>Slot aggiuntivi della bisaccia gia acquistati.</summary>
         public List<string> unlockedSlots = new List<string>();
 
-        /// <summary>Oggetti sbloccati al Santuario, quindi vendibili dal negozio.</summary>
-        public List<string> unlockedItems = new List<string>();
-
         /// <summary>Consumabili scelti per la prossima run (id del catalogo Santuario).</summary>
         public List<string> bagItems = new List<string>();
 
@@ -45,6 +58,59 @@ namespace AccardND.GameData
         /// Sola lettura per il client: li aggiorna solo il server.
         /// </summary>
         public List<SinglePlayerCounterSave> counters = new List<SinglePlayerCounterSave>();
+
+        /// <summary>
+        /// I modificatori dei talenti per la prossima run, come li ha risolti il server.
+        /// Stanno nella cache come la bisaccia: una run avviata senza rete deve poterli
+        /// applicare lo stesso, altrimenti i talenti si spegnerebbero proprio quando il
+        /// giocatore non puo' farci niente.
+        /// </summary>
+        public TalentLoadoutSave talentLoadout = new TalentLoadoutSave();
+    }
+
+    /// <summary>
+    /// Copia locale del pacchetto modificatori. Rispecchia
+    /// <see cref="AccardND.NetProtocol.TalentLoadoutData"/>: la cache del single player e'
+    /// sempre stata fatta di tipi propri, cosi' il salvataggio su disco non e' legato alla
+    /// forma dei messaggi.
+    /// </summary>
+    [Serializable]
+    public sealed class TalentLoadoutSave
+    {
+        public int startingGold;
+        public int startingEssence;
+        public int merchantDiscountPercent;
+        public int recoveryDiscountPercent;
+
+        /// <summary>Bonus ai dadi d'iniziativa, in ordine di tiro. Indice 0 = primo dado.</summary>
+        public List<int> initiativeBonusBySlot = new List<int>();
+
+        /// <summary>"Apertura": il primo dado d'iniziativa batte qualunque altro tiro.</summary>
+        public bool opensEveryFight;
+
+        public int forgeTemperedCards;
+        public bool firstMerchantUpgradeFree;
+        public int masteryThresholdPercent;
+
+        /// <summary>"Concentrazione": mana recuperato a ogni cambio stanza.</summary>
+        public int roomChangeMana;
+
+        /// <summary>"Riserva": quanto si alza il tetto della riserva di mana.</summary>
+        public int bonusMaximumMana;
+
+        /// <summary>"Trance": la prima abilita' di classe di ogni stanza non costa mana.</summary>
+        public bool firstAbilityFreeEachRoom;
+        public int bossVigorBonus;
+        public int extraLootItems;
+
+        /// <summary>"Secondo fiato": la prima pedina caduta della run torna nel mazzo.</summary>
+        public bool savesFirstFallenCard;
+
+        /// <summary>Bonus di iniziativa della pedina in posizione <paramref name="slot"/>.</summary>
+        public int InitiativeBonusFor(int slot) =>
+            initiativeBonusBySlot != null && slot >= 0 && slot < initiativeBonusBySlot.Count
+                ? initiativeBonusBySlot[slot]
+                : 0;
     }
 
     /// <summary>Un contatore cumulativo nella cache locale.</summary>
@@ -152,21 +218,26 @@ namespace AccardND.GameData
             if (amount == 0)
                 return 0;
 
-            int levelsGained = 0;
-            Progress.accountTotalExperience += amount;
-            Progress.accountExperience += amount;
-            Progress.accountExperienceToNextLevel = Progress.accountExperienceToNextLevel <= 0
-                ? 100
-                : Progress.accountExperienceToNextLevel;
-            while (Progress.accountExperience >= Progress.accountExperienceToNextLevel)
-            {
-                Progress.accountExperience -= Progress.accountExperienceToNextLevel;
-                Progress.accountLevel++;
-                levelsGained++;
-                Progress.honey += 5;
-            }
+            // La curva la possiede AccountLevelCurve, condivisa con il server. Qui c'era una
+            // terza copia della vecchia soglia fissa, che pagava anche cinque vasetti di
+            // miele a livello: il livello adesso paga punti talento, e il miele resta tutto
+            // delle quest giornaliere.
+            AccountLevelProgress updated = AccountLevelCurve.Apply(
+                Progress.accountLevel,
+                Progress.accountExperience,
+                Progress.accountTotalExperience,
+                amount);
+
+            Progress.accountLevel = updated.Level;
+            Progress.accountExperience = updated.Experience;
+            Progress.accountTotalExperience = updated.TotalExperience;
+            Progress.accountExperienceToNextLevel = updated.ExperienceToNextLevel;
+            // I punti li accredita la riscossione sul server, come per i livelli guadagnati
+            // online: qui si accumulano solo i livelli da riscuotere. Pagarli anche in
+            // locale vorrebbe dire darli due volte appena torna la connessione.
+            Progress.pendingLevelRewards += updated.LevelsGained;
             Save();
-            return levelsGained;
+            return updated.LevelsGained;
         }
 
         public bool TrySpendHoney(int amount)
@@ -270,7 +341,7 @@ namespace AccardND.GameData
             SinglePlayerUnlockType.SecondAbility => Progress.unlockedSecondAbilities,
             SinglePlayerUnlockType.ChapterCleared => Progress.clearedChapters,
             SinglePlayerUnlockType.Slot => Progress.unlockedSlots,
-            SinglePlayerUnlockType.Item => Progress.unlockedItems,
+            SinglePlayerUnlockType.TutorialModule => Progress.completedTutorialModules,
             _ => throw new ArgumentOutOfRangeException(nameof(type))
         };
 
@@ -284,6 +355,10 @@ namespace AccardND.GameData
                 ? 100
                 : save.accountExperienceToNextLevel;
             save.pendingLevelRewards = Math.Max(0, save.pendingLevelRewards);
+            save.talentPoints = Math.Max(0, save.talentPoints);
+            save.talentPointsEarned = Math.Max(0, save.talentPointsEarned);
+            save.talentLoadout ??= new TalentLoadoutSave();
+            save.talentLoadout.initiativeBonusBySlot ??= new List<int>();
             save.unlockedChapters ??= new List<string>();
             save.unlockedStages ??= new List<string>();
             save.unlockedClasses ??= new List<string>();
@@ -292,7 +367,7 @@ namespace AccardND.GameData
             save.unlockedSecondAbilities ??= new List<string>();
             save.clearedChapters ??= new List<string>();
             save.unlockedSlots ??= new List<string>();
-            save.unlockedItems ??= new List<string>();
+            save.completedTutorialModules ??= new List<string>();
             save.bagItems ??= new List<string>();
             save.counters ??= new List<SinglePlayerCounterSave>();
             return save;
@@ -309,6 +384,9 @@ namespace AccardND.GameData
             accountTotalExperience = source.accountTotalExperience,
             accountExperienceToNextLevel = source.accountExperienceToNextLevel,
             pendingLevelRewards = source.pendingLevelRewards,
+            talentPoints = source.talentPoints,
+            talentPointsEarned = source.talentPointsEarned,
+            talentLoadout = CloneLoadout(source.talentLoadout),
             tutorialCompleted = source.tutorialCompleted,
             hardcoreUnlocked = source.hardcoreUnlocked,
             unlockedChapters = new List<string>(source.unlockedChapters ?? new List<string>()),
@@ -319,10 +397,36 @@ namespace AccardND.GameData
             unlockedSecondAbilities = new List<string>(source.unlockedSecondAbilities ?? new List<string>()),
             clearedChapters = new List<string>(source.clearedChapters ?? new List<string>()),
             unlockedSlots = new List<string>(source.unlockedSlots ?? new List<string>()),
-            unlockedItems = new List<string>(source.unlockedItems ?? new List<string>()),
+            completedTutorialModules =
+                new List<string>(source.completedTutorialModules ?? new List<string>()),
             bagItems = new List<string>(source.bagItems ?? new List<string>()),
             counters = CloneCounters(source.counters)
         };
+
+        private static TalentLoadoutSave CloneLoadout(TalentLoadoutSave source)
+        {
+            if (source == null)
+                return new TalentLoadoutSave();
+
+            return new TalentLoadoutSave
+            {
+                startingGold = source.startingGold,
+                startingEssence = source.startingEssence,
+                merchantDiscountPercent = source.merchantDiscountPercent,
+                recoveryDiscountPercent = source.recoveryDiscountPercent,
+                initiativeBonusBySlot = new List<int>(source.initiativeBonusBySlot ?? new List<int>()),
+                opensEveryFight = source.opensEveryFight,
+                forgeTemperedCards = source.forgeTemperedCards,
+                firstMerchantUpgradeFree = source.firstMerchantUpgradeFree,
+                masteryThresholdPercent = source.masteryThresholdPercent,
+                roomChangeMana = source.roomChangeMana,
+                bonusMaximumMana = source.bonusMaximumMana,
+                firstAbilityFreeEachRoom = source.firstAbilityFreeEachRoom,
+                bossVigorBonus = source.bossVigorBonus,
+                extraLootItems = source.extraLootItems,
+                savesFirstFallenCard = source.savesFirstFallenCard
+            };
+        }
 
         private static List<SinglePlayerCounterSave> CloneCounters(List<SinglePlayerCounterSave> source)
         {
@@ -395,8 +499,9 @@ namespace AccardND.GameData
         Slot,
 
         /// <summary>
-        /// Oggetto sbloccato: da' il diritto di comprarlo al negozio, non una copia.
+        /// Modulo del tutorial progressivo portato a termine. Non e' acquistabile: lo segna
+        /// il server quando riscuote la ricompensa del modulo.
         /// </summary>
-        Item
+        TutorialModule
     }
 }

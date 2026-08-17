@@ -8,10 +8,25 @@
     "AccardND.NetProtocol",
     "AccardND.Network",
     "AccardND.Battlefield",
+    "AccardND.Presentation",
     "Unity.Localization",
-    "Unity.ResourceManager"
+    "Unity.ResourceManager",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
   ],
-  "optionalUnityReferences": [
-    "TestAssemblies"
-  ]
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
 }

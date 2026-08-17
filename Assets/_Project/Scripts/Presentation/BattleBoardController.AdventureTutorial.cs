@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -19,12 +20,14 @@ public sealed partial class BattleBoardController
 		NextPressed,
 		DraftReady,
 		InitiativeRolled,
+		PlayerDeploymentTurnStarted,
 		DeploymentCardSelected,
 		DeploymentConfirmed,
 		DeploymentCompleted,
 		CardInspected,
 		PlayerTurnStarted,
 		AbilityPressed,
+		SupremeUsed,
 		AttackPressed,
 		EnemyTargeted,
 		BattleFinished
@@ -52,7 +55,7 @@ public sealed partial class BattleBoardController
 		}
 		ShowAdventureScriptedTutorialStep(
 			"Tutorial guidato",
-			"Giocherai una stanza guidata. Ti illuminero cosa guardare o premere, per farti capire a grandi linee come funziona il combattimento.",
+			"Giocherai una stanza guidata. Ti illuminero' su cosa guardare o premere, per farti capire a grandi line come funziona il combattimento.",
 			null);
 	}
 
@@ -68,9 +71,8 @@ public sealed partial class BattleBoardController
 
 		campaignDeck = new CampaignDeckState(new List<CardDefinition>());
 		currentRoomType = RoomType.Monster;
-		currentMonsterTier = 1;
 		pendingScenarioId = null;
-		pendingRoomDifficulty = RoomDifficulty.Normal;
+		pendingRoomDifficulty = RoomDifficulty.Easy;
 		currentScenarioDisplayOverride = "Tutorial - Primo Scontro";
 		ResetScenarioRuleState();
 		RestoreCampaignMana(10);
@@ -105,7 +107,7 @@ public sealed partial class BattleBoardController
 	{
 		return ResolveTutorialCards(new[]
 		{
-			"8-spirit-warrior",
+			"4-animal-warrior",
 			"7-whitealien-mage",
 			"6-chimera-rogue"
 		});
@@ -138,8 +140,15 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
+		// Le lezioni di classe usano lo stesso pannello e gli stessi eventi della stanza
+		// guidata, ma hanno un copione loro: quando una e' in corso e' lei a rispondere.
+		if (AdvanceTutorialWarriorDuel(action))
+		{
+			return;
+		}
 		if (action != AdventureTutorialAction.NextPressed
 			&& action != AdventureTutorialAction.InitiativeRolled
+			&& action != AdventureTutorialAction.PlayerDeploymentTurnStarted
 			&& action != AdventureTutorialAction.DeploymentCardSelected
 			&& action != AdventureTutorialAction.DeploymentConfirmed
 			&& action != AdventureTutorialAction.DeploymentCompleted
@@ -157,15 +166,6 @@ public sealed partial class BattleBoardController
 
 	private void AdvanceAdventureTutorialAfter(AdventureTutorialAction action)
 	{
-		if (action == AdventureTutorialAction.PlayerTurnStarted
-			&& adventureScriptedTutorialStep >= 4
-			&& IsAdventureTutorialWarriorAbilityTurn())
-		{
-			adventureScriptedTutorialStep = 5;
-			RefreshCardActionOverlays();
-			ShowAdventureTutorialWarriorAbilityStep();
-			return;
-		}
 		switch (adventureScriptedTutorialStep)
 		{
 		case 0:
@@ -182,10 +182,15 @@ public sealed partial class BattleBoardController
 			if (action == AdventureTutorialAction.NextPressed)
 			{
 				AcknowledgeAdventureTutorialStep();
+				adventureScriptedTutorialPanel.SetActive(false);
+				MoveAdventureTutorialSpotlight(null);
 				BuildScriptedTutorialRun();
 				break;
 			}
-			if (action == AdventureTutorialAction.InitiativeRolled)
+			// Il dialogo deve riapparire solo quando il deployment e' davvero
+			// arrivato al primo token del giocatore: a quel punto il tiro e le
+			// entrate delle eventuali carte CPU precedenti sono gia' terminati.
+			if (action == AdventureTutorialAction.PlayerDeploymentTurnStarted)
 			{
 				adventureScriptedTutorialStep = 2;
 				ShowAdventureScriptedTutorialStep(
@@ -260,17 +265,19 @@ public sealed partial class BattleBoardController
 			if (action == AdventureTutorialAction.NextPressed)
 			{
 				AcknowledgeAdventureTutorialStep();
+				adventureScriptedTutorialPanel.SetActive(false);
+				SetAdventureTutorialTimelineVisible(visible: false);
+				// Questo passaggio entra direttamente nell'attacco guidato: non deve
+				// riaprire la vecchia spiegazione/inspection del campo.
+				adventureScriptedTutorialInspectionOpened = true;
 				if (currentDeploymentIndex >= deploymentOrder.Count
 					&& selectedPlayerDeploymentIndices.Count >= configuration.Gameplay.FormationSize)
 				{
-					if (adventureScriptedTutorialInspectionOpened)
-					{
-						BeginCurrentTurn();
-					}
-					else
-					{
-						CompleteDeploymentAndStartBattle();
-					}
+					// Le carte mostrate durante lo schieramento sono ancora preview: prima di
+					// iniziare un turno vanno trasformate negli stati di combattimento reali.
+					// Chiamare BeginCurrentTurn qui faceva eseguire CheckEndGame con cpuCards
+					// ancora vuoto, assegnando subito la ricompensa e bloccando il tutorial.
+					CompleteDeploymentAndStartBattle();
 				}
 				break;
 			}
@@ -300,19 +307,10 @@ public sealed partial class BattleBoardController
 			if (action == AdventureTutorialAction.PlayerTurnStarted)
 			{
 				adventureScriptedTutorialStep = 5;
-				RefreshCardActionOverlays();
-				if (IsAdventureTutorialWarriorAbilityTurn())
-				{
-					ShowAdventureTutorialWarriorAbilityStep();
-					break;
-				}
-				RectTransform attackTarget = ActivePlayerAttackActionRect();
-				ShowAdventureScriptedTutorialStep(
-					"Attacca un mostro",
-					"Quando e il tuo turno premi su attacca e scegli un bersaglio nemico, partiranno i dadi Vigore e vedrai come si risolve il confronto.",
-					attackTarget);
-				SetAdventureTutorialNextButtonEnabled(enabled: false);
-				MoveAdventureTutorialSpotlight(attackTarget);
+				adventureScriptedTutorialPanel.SetActive(false);
+				SetAdventureTutorialTimelineVisible(visible: false);
+				MoveAdventureTutorialSpotlight(null);
+				((MonoBehaviour)this).StartCoroutine(ShowAdventureTutorialAttackSpotlightAfterBattlefieldMove());
 			}
 			break;
 		case 5:
@@ -335,19 +333,9 @@ public sealed partial class BattleBoardController
 			}
 			if (action == AdventureTutorialAction.AttackPressed)
 			{
-				if (IsAdventureTutorialMageAdvantageAttackTurn())
-				{
-					adventureScriptedTutorialAwaitingAdvantageContinue = true;
-					ShowAdventureScriptedTutorialStep(
-						"Vantaggio e svantaggio",
-						"Prima del primo attacco guarda le aure sulle pedine nemiche: verde vuol dire vantaggio, gialla vuol dire normale, rossa vuol dire svantaggio. Il vantaggio fa tirare due dadi Vigore e tenere il risultato migliore.",
-						null);
-					SetAdventureTutorialNextButtonEnabled(enabled: true);
-					MoveAdventureTutorialSpotlight(null);
-					break;
-				}
 				SetAdventureTutorialNextButtonEnabled(enabled: false);
-				MoveAdventureTutorialSpotlight(FirstAliveCpuCardRect());
+				adventureScriptedTutorialPanel.SetActive(false);
+				MoveAdventureTutorialSpotlight(TutorialCpuStrengthFourTargetRect());
 				break;
 			}
 			if (action == AdventureTutorialAction.AbilityPressed)
@@ -368,6 +356,7 @@ public sealed partial class BattleBoardController
 				if (!adventureScriptedTutorialObjectiveShown)
 				{
 					adventureScriptedTutorialObjectiveShown = true;
+					HideAdventureTutorialCombatDice();
 					ShowAdventureScriptedTutorialStep(
 						"Completa il tutorial",
 						"Sconfiggi tutti i nemici per completare il tutorial.",
@@ -377,6 +366,9 @@ public sealed partial class BattleBoardController
 					break;
 				}
 				AcknowledgeAdventureTutorialStep();
+				adventureScriptedTutorialPanel.SetActive(false);
+				SetAdventureTutorialTimelineVisible(visible: false);
+				MoveAdventureTutorialSpotlight(null);
 				break;
 			}
 			if (action == AdventureTutorialAction.BattleFinished)
@@ -384,7 +376,7 @@ public sealed partial class BattleBoardController
 				adventureScriptedTutorialStep = 7;
 				ShowAdventureScriptedTutorialStep(
 					"Ricompensa",
-					"Hai completato il tutorial. Ti consegno le classi base e il primo capitolo dell'Avventura. I vasetti di miele, invece, si guadagnano in taverna con le quest del giorno.",
+					"Hai completato il tutorial. Ora hai accesso al primo capitolo dell'Avventura. Avanza nell'avventura, sblocca le classi, completa le missioni giornaliere e scala la classifica!",
 					null);
 			}
 			break;
@@ -395,6 +387,14 @@ public sealed partial class BattleBoardController
 			}
 			break;
 		}
+	}
+
+	private void HideAdventureTutorialCombatDice()
+	{
+		foreach (BattleCardState card in playerCards)
+			card?.View?.HideActiveDiceRoll();
+		foreach (BattleCardState card in cpuCards)
+			card?.View?.HideActiveDiceRoll();
 	}
 
 	private void ShowAdventureTutorialWarriorAbilityStep()
@@ -484,13 +484,26 @@ public sealed partial class BattleBoardController
 			return resolved;
 		}
 
+		if (TryScriptTutorialWarriorDuelResult(attacker, defender, resolved, out CombatResult lessonResult))
+		{
+			return lessonResult;
+		}
+
 		string attackerId = attacker.Card.Id;
 		string defenderId = defender.Card.Id;
 		VigorRollResult attackerRoll;
 		VigorRollResult defenderRoll;
 
+		// Primo attacco guidato: qualunque pedina del giocatore elimina sempre
+		// il bersaglio da 4 mostrato dallo spotlight.
+		if (attacker.BelongsToPlayer && defender.Card.Strength == 4)
+		{
+			attackerRoll = ScriptRoll(resolved.AttackerRoll, resolved.AttackerRoll.DieSides,
+				resolved.AttackerRoll.DieSides);
+			defenderRoll = ScriptRoll(resolved.DefenderRoll, 1, 1);
+		}
 		// 1. Mago 8 del giocatore contro Guerriero 8: 4 e 3 con vantaggio, contro 3.
-		if (IsTutorialCard(attackerId, "8-spirit-mage") && IsTutorialCard(defenderId, "8-spirit-warrior"))
+		else if (IsTutorialCard(attackerId, "8-spirit-mage") && IsTutorialCard(defenderId, "8-spirit-warrior"))
 		{
 			attackerRoll = ScriptRoll(resolved.AttackerRoll, 4, 3);
 			defenderRoll = ScriptRoll(resolved.DefenderRoll, 3);
@@ -597,7 +610,7 @@ public sealed partial class BattleBoardController
 		{
 			if (attackerIsAttacking)
 			{
-				return $"L'attaccante e di famiglia {actorFamily}, e forte contro la famiglia {opponentFamily}: si applica vantaggio tirando due dadi ({roll.FirstRoll} e {roll.SecondRoll}) e si conserva il risultato piu alto ({roll.SelectedRoll}).";
+				return $"L'attaccante e di fazione {actorFamily}, e forte contro la fazione {opponentFamily}: si applica vantaggio tirando due dadi ({roll.FirstRoll} e {roll.SecondRoll}) e si conserva il risultato piu alto ({roll.SelectedRoll}).";
 			}
 			return $"Il difensore ha vantaggio in difesa: tira due dadi ({roll.FirstRoll} e {roll.SecondRoll}) e conserva il risultato piu alto ({roll.SelectedRoll}).";
 		}
@@ -779,6 +792,38 @@ public sealed partial class BattleBoardController
 		return FirstAliveCpuCardRect();
 	}
 
+	private RectTransform TutorialCpuStrengthFourTargetRect()
+	{
+		foreach (BattleCardState card in cpuCards)
+		{
+			if (card != null && !card.Eliminated && card.Card.Strength == 4
+				&& (Object)(object)card.View != (Object)null
+				&& ((Component)card.View).gameObject.activeInHierarchy)
+				return card.View.RectTransform;
+		}
+		return null;
+	}
+
+	private bool IsAdventureTutorialStrengthFourTarget(BattleCardState card)
+	{
+		return card != null && card.Card.Strength == 4;
+	}
+
+	private void ShowAdventureTutorialAfterStrengthFourDefeat(BattleCardState defender)
+	{
+		if (!adventureScriptedTutorialActive || adventureScriptedTutorialStep != 5
+			|| !IsAdventureTutorialStrengthFourTarget(defender))
+			return;
+
+		adventureScriptedTutorialStep = 6;
+		ShowAdventureScriptedTutorialStep(
+			"Primo nemico sconfitto",
+			"Hai vinto il tiro di dado e sconfitto la pedina nemica da 4. Premi CONTINUA per proseguire.",
+			null);
+		SetAdventureTutorialNextButtonEnabled(enabled: true);
+		SetAdventureTutorialTimelineVisible(visible: false);
+	}
+
 	private RectTransform FirstPlayerDeploymentPreviewRect()
 	{
 		foreach (PrototypeCardView view in playerDeploymentPreviewViews)
@@ -812,10 +857,34 @@ public sealed partial class BattleBoardController
 		adventureScriptedTutorialInspectionOpened = false;
 		ShowAdventureScriptedTutorialStep(
 			"Leggi una pedina",
-			"Tocca una pedina schierata per aprire la scheda. Da li puoi leggere potenza, famiglia, classe, abilita e vantaggi.",
+			"Tocca una pedina schierata per aprire la scheda. Da li puoi leggere potenza, fazione, classe, abilita e vantaggi.",
 			FirstPlayerBattleCardRect());
 		SetAdventureTutorialNextButtonEnabled(enabled: false);
 		MoveAdventureTutorialSpotlight(FirstPlayerBattleCardRect());
+	}
+
+	private IEnumerator ShowAdventureTutorialAttackSpotlightAfterBattlefieldMove()
+	{
+		// Il turno comincia mentre la fila del giocatore sta ancora scendendo dalla
+		// posa di schieramento. Lo spotlight memorizza subito le coordinate del target,
+		// quindi va creato soltanto quando pedina e pulsante ATTACCA sono fermi.
+		while (playerBattlefieldRowTransitionCoroutine != null)
+		{
+			yield return null;
+		}
+
+		// Lascia a layout e Canvas un frame per aggiornare il rettangolo dell'azione
+		// dopo l'ultima scrittura della transizione.
+		yield return null;
+		Canvas.ForceUpdateCanvases();
+		if (!adventureScriptedTutorialActive || adventureScriptedTutorialStep != 5)
+		{
+			yield break;
+		}
+
+		RefreshCardActionOverlays();
+		Canvas.ForceUpdateCanvases();
+		MoveAdventureTutorialSpotlight(ActivePlayerAttackActionRect());
 	}
 
 	private RectTransform ActivePlayerAttackActionRect()
@@ -829,7 +898,21 @@ public sealed partial class BattleBoardController
 		{
 			return null;
 		}
-		return card.View.AttackActionRect ?? card.View.RectTransform;
+		return card.View.AttackActionSpotlightRect ?? card.View.RectTransform;
+	}
+
+	private RectTransform ActivePlayerSupremeActionRect()
+	{
+		if (selectedPlayerIndex < 0 || selectedPlayerIndex >= playerCards.Count)
+		{
+			return null;
+		}
+		BattleCardState card = playerCards[selectedPlayerIndex];
+		if (card == null || (Object)(object)card.View == (Object)null)
+		{
+			return null;
+		}
+		return card.View.SupremeActionSpotlightRect ?? card.View.RectTransform;
 	}
 
 	private RectTransform ActivePlayerAbilityActionRect()
@@ -843,7 +926,7 @@ public sealed partial class BattleBoardController
 		{
 			return null;
 		}
-		return card.View.AbilityActionRect ?? card.View.RectTransform;
+		return card.View.AbilityActionSpotlightRect ?? card.View.RectTransform;
 	}
 
 	private bool IsAdventureTutorialWarriorAbilityTurn()
@@ -875,12 +958,24 @@ public sealed partial class BattleBoardController
 		StylePanel(panel);
 		SetAdventureTutorialPanelToMessageDialogRect(panel.rectTransform);
 		adventureScriptedTutorialPanel = ((Component)panel).gameObject;
+		// Negozio e Santuario usano Canvas fullscreen con sorting order 900. Il tutorial
+		// vive nella safe area e, senza un proprio Canvas, viene disegnato dietro di loro
+		// anche se SetAsLastSibling e' corretto nel suo ramo della gerarchia.
+		Canvas tutorialCanvas = adventureScriptedTutorialPanel.AddComponent<Canvas>();
+		tutorialCanvas.overrideSorting = true;
+		tutorialCanvas.sortingOrder = 1100;
+		adventureScriptedTutorialPanel.AddComponent<GraphicRaycaster>();
 		CanvasGroup panelCanvasGroup = adventureScriptedTutorialPanel.AddComponent<CanvasGroup>();
-		panelCanvasGroup.blocksRaycasts = false;
-		panelCanvasGroup.interactable = false;
+		// Il pannello contiene CONTINUA: se il gruppo padre non accetta input, il bottone
+		// resta acceso graficamente ma Unity scarta il click prima di raggiungerlo. Lo
+		// sfondo del pannello non intercetta nulla (panel.raycastTarget e' false), quindi
+		// rendere interattivo il gruppo abilita soltanto i controlli figli.
+		panelCanvasGroup.blocksRaycasts = true;
+		panelCanvasGroup.interactable = true;
 
-		adventureScriptedTutorialTitleText = CreateText("Adventure Scripted Tutorial Title", ((Component)panel).transform, AccardND.Battlefield.MmoUiTheme.LoreFont, 26, FontStyle.Normal, (TextAnchor)3);
+		adventureScriptedTutorialTitleText = CreateText("Adventure Scripted Tutorial Title", ((Component)panel).transform, AccardND.Battlefield.MmoUiTheme.LoreFont, 40, FontStyle.Normal, TextAnchor.MiddleLeft);
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(adventureScriptedTutorialTitleText);
+		adventureScriptedTutorialTitleText.fontSize = 40;
 		adventureScriptedTutorialTitleText.color = new Color(0.95f, 0.79f, 0.34f);
 		adventureScriptedTutorialTitleText.raycastTarget = false;
 		SetRect(adventureScriptedTutorialTitleText.rectTransform, new Vector2(0.04f, 0.68f), new Vector2(0.68f, 0.92f));
@@ -890,13 +985,11 @@ public sealed partial class BattleBoardController
 		adventureScriptedTutorialStepText.raycastTarget = false;
 		SetRect(adventureScriptedTutorialStepText.rectTransform, new Vector2(0.7f, 0.68f), new Vector2(0.96f, 0.92f));
 
-		adventureScriptedTutorialBodyText = CreateText("Adventure Scripted Tutorial Body", ((Component)panel).transform, font, 26, (FontStyle)1, TextAnchor.UpperLeft);
+		adventureScriptedTutorialBodyText = CreateText("Adventure Scripted Tutorial Body", ((Component)panel).transform, font, 30, (FontStyle)1, TextAnchor.UpperLeft);
 		adventureScriptedTutorialBodyText.color = new Color(0.88f, 0.92f, 0.96f);
 		adventureScriptedTutorialBodyText.horizontalOverflow = HorizontalWrapMode.Wrap;
 		adventureScriptedTutorialBodyText.verticalOverflow = VerticalWrapMode.Truncate;
-		adventureScriptedTutorialBodyText.resizeTextForBestFit = true;
-		adventureScriptedTutorialBodyText.resizeTextMinSize = 18;
-		adventureScriptedTutorialBodyText.resizeTextMaxSize = 26;
+		adventureScriptedTutorialBodyText.resizeTextForBestFit = false;
 		adventureScriptedTutorialBodyText.raycastTarget = false;
 		SetRect(adventureScriptedTutorialBodyText.rectTransform, new Vector2(0.04f, 0.22f), new Vector2(0.96f, 0.66f));
 
@@ -913,6 +1006,12 @@ public sealed partial class BattleBoardController
 			{
 				return;
 			}
+			// Il pannello e' condiviso: quando c'e' un tour fuori dalla battaglia e' lui a
+			// rispondere al CONTINUA, altrimenti risponde il tutorial di combattimento.
+			if (TryAdvanceGuidedTourFromContinue())
+			{
+				return;
+			}
 			NotifyAdventureTutorial(AdventureTutorialAction.NextPressed);
 		});
 		SetRect((RectTransform)((Component)adventureScriptedTutorialNextButton).transform, new Vector2(0.66f, 0.05f), new Vector2(0.96f, 0.19f));
@@ -921,6 +1020,9 @@ public sealed partial class BattleBoardController
 		adventureScriptedTutorialSpotlight.sprite = GetHelpAuraSprite();
 		adventureScriptedTutorialSpotlight.preserveAspect = false;
 		adventureScriptedTutorialSpotlight.raycastTarget = false;
+		Canvas spotlightCanvas = ((Component)adventureScriptedTutorialSpotlight).gameObject.AddComponent<Canvas>();
+		spotlightCanvas.overrideSorting = true;
+		spotlightCanvas.sortingOrder = 1090;
 		CanvasGroup spotlightCanvasGroup = ((Component)adventureScriptedTutorialSpotlight).gameObject.AddComponent<CanvasGroup>();
 		spotlightCanvasGroup.blocksRaycasts = false;
 		spotlightCanvasGroup.interactable = false;
@@ -938,6 +1040,9 @@ public sealed partial class BattleBoardController
 		{
 			Image dimmer = CreateImage("Adventure Tutorial Dimmer " + index, (Transform)(object)safeAreaRoot, new Color(0f, 0f, 0f, 0.62f));
 			dimmer.raycastTarget = false;
+			Canvas dimmerCanvas = ((Component)dimmer).gameObject.AddComponent<Canvas>();
+			dimmerCanvas.overrideSorting = true;
+			dimmerCanvas.sortingOrder = 1080;
 			CanvasGroup dimmerCanvasGroup = ((Component)dimmer).gameObject.AddComponent<CanvasGroup>();
 			dimmerCanvasGroup.blocksRaycasts = false;
 			dimmerCanvasGroup.interactable = false;
@@ -954,13 +1059,168 @@ public sealed partial class BattleBoardController
 		SetMessagePanelVisibleDuringAdventureTutorial(visible: false);
 		adventureScriptedTutorialStepAcknowledged = false;
 		adventureScriptedTutorialPendingTarget = target;
-		adventureScriptedTutorialTitleText.text = title;
-		StartAdventureTutorialBodyText(body);
-		adventureScriptedTutorialStepText.text = $"PASSO {Mathf.Min(adventureScriptedTutorialStep + 1, 8)}/8";
-		SetAdventureTutorialTimelineVisible(adventureScriptedTutorialStep >= 2);
+		body = SetLocalizedAdventureTutorialCopy(title, body);
+		adventureScriptedTutorialStepText.text = LocalizedAdventureTutorialStepCounter(
+			Mathf.Min(adventureScriptedTutorialStep + 1, 8), 8);
+		// Dall'arrivo dei D20 fino alla fine dello schieramento la timeline deve
+		// restare visibile: questi passi la descrivono e il giocatore deve poter
+		// seguire concretamente l'ordine delle iniziative.
+		bool showDeploymentTimeline = adventureScriptedTutorialStep >= 2
+			&& adventureScriptedTutorialStep <= 4;
+		SetAdventureTutorialTimelineVisible(showDeploymentTimeline);
 		SetAdventureTutorialNextButtonEnabled(adventureScriptedTutorialStep != 3);
 		PlaceAdventureTutorialPanel(null);
+		ResizeAdventureTutorialPanelForBody(body);
+		StartAdventureTutorialBodyText(body);
 		MoveAdventureTutorialSpotlight(null);
+	}
+
+	/// <summary>
+	/// Unico ingresso per titolo e corpo del pannello tutorial condiviso.
+	/// Tutti i tutorial, inclusi quelli di combattimento, passano dalle String Table qui.
+	/// </summary>
+	private string SetLocalizedAdventureTutorialCopy(string title, string body)
+	{
+		string localizedTitle = LocalizeAdventureTutorialFallback(title);
+		string localizedBody = LocalizeAdventureTutorialFallback(body);
+		if ((Object)(object)adventureScriptedTutorialTitleText != (Object)null)
+			adventureScriptedTutorialTitleText.text = localizedTitle;
+		return localizedBody;
+	}
+
+	private static string LocalizeAdventureTutorialFallback(string italian)
+	{
+		string localized = GameText.GetAutoLocalizedFallback(italian);
+		if (!string.Equals(localized, italian, StringComparison.Ordinal)
+			|| !GameText.CurrentLocaleCode.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+		{
+			return localized;
+		}
+
+		return italian switch
+		{
+			"RICOMPENSA OTTENUTA" => "REWARD RECEIVED",
+			"SANTUARIO SBLOCCATO" => "SANCTUARY UNLOCKED",
+			"COMPRA IL LADRO" => "BUY THE THIEF",
+			"IL SANTUARIO" => "THE SANCTUARY",
+			"GLI ALTARI" => "THE ALTARS",
+			"IL MIELE" => "HONEY",
+			"TORNA IN CAMPAGNA" => "RETURN TO CAMPAIGN",
+			"APRI L'AVVENTURA" => "OPEN ADVENTURE",
+			"APRI I TUTORIAL" => "OPEN TUTORIALS",
+			"IL SECONDO TUTORIAL" => "THE SECOND TUTORIAL",
+			"IL TERZO TUTORIAL" => "THE THIRD TUTORIAL",
+			"LA TUA PROSSIMA CLASSE" => "YOUR NEXT CLASS",
+			"COMPRA LA CLASSE" => "BUY THE CLASS",
+			"USA IL REGALO" => "USE YOUR GIFT",
+			"TUTORIAL OGGETTI" => "ITEM TUTORIAL",
+			"IL NEGOZIO" => "THE SHOP",
+			"L'OFFERTA DEL GIORNO" => "TODAY'S OFFER",
+			"UN REGALO PER IL TUTORIAL" => "A GIFT FOR THE TUTORIAL",
+			"Il Santuario e' ora accessibile. Entra e usa il miele ricevuto per comprare il Mago."
+				=> "The Sanctuary is now available. Enter and use the honey you received to buy the Magician.",
+			"Entra nel SANTUARIO e usa i 40 vasetti ricevuti per comprare il Ladro."
+				=> "Enter the SANCTUARY and use the 40 honey jars you received to buy the Thief.",
+			"Questo e' il Santuario. Qui si trasforma il miele in cose permanenti: classi nuove, tecniche e reliquie. Quello che compri qui resta tuo per sempre, anche quando una run finisce male."
+				=> "This is the Sanctuary. Here, honey becomes permanent upgrades: new classes, techniques, and relics. Everything you buy here remains yours, even when a run ends badly.",
+			"Le CLASSI sono le pedine che potrai schierare. Le TECNICHE sono la seconda abilita' di una classe che possiedi gia'. Le RELIQUIE ampliano la bisaccia e il banco del Mercato."
+				=> "CLASSES are the pawns you can deploy. TECHNIQUES are the second ability of a class you already own. RELICS expand your bag and the Market bench.",
+			"Tutto qui dentro si paga in vasetti di miele. Non si trovano giocando: si guadagnano in taverna, con le quest del giorno. Durante il tutorial te li do io, giusti per quello che serve."
+				=> "Everything here is paid for with honey jars. You do not find them during runs: you earn them in the Tavern by completing daily quests. During the tutorial, you receive exactly what you need.",
+			"Il Mago e' stato sbloccato. Entra in CAMPAGNA per raggiungere il suo tutorial."
+				=> "The Magician has been unlocked. Enter CAMPAIGN to reach its tutorial.",
+			"Il Ladro e' stato sbloccato. Entra in CAMPAGNA per raggiungere il terzo tutorial."
+				=> "The Thief has been unlocked. Enter CAMPAIGN to reach the third tutorial.",
+			"Seleziona AVVENTURA: i tutorial delle classi si trovano qui."
+				=> "Select ADVENTURE: class tutorials are found here.",
+			"Seleziona AVVENTURA per tornare ai tutorial delle classi."
+				=> "Select ADVENTURE to return to the class tutorials.",
+			"Seleziona AVVENTURA." => "Select ADVENTURE.",
+			"Apri la sezione TUTORIAL per vedere il prossimo modulo disponibile."
+				=> "Open the TUTORIAL section to see the next available module.",
+			"Apri la sezione TUTORIAL." => "Open the TUTORIAL section.",
+			"Apri la sezione TUTORIAL per vedere la prossima lezione."
+				=> "Open the TUTORIAL section to see the next lesson.",
+			"Il Mago e' ora disponibile. Apri il suo tutorial per continuare il percorso."
+				=> "The Magician is now available. Open its tutorial to continue your journey.",
+			"Il Ladro e' ora disponibile. Apri il suo tutorial per continuare il percorso."
+				=> "The Thief is now available. Open its tutorial to continue your journey.",
+			"L'Empower e' nella tua scorta. Entra in CAMPAGNA per raggiungere il tutorial sugli oggetti e imparare a usarlo."
+				=> "Empower is in your inventory. Enter CAMPAIGN to reach the item tutorial and learn how to use it.",
+			"Apri OGGETTI: qui userai l'Empower ricevuto dal Negozio."
+				=> "Open ITEMS: here you will use the Empower received from the Shop.",
+			"Nel Negozio puoi comprare gli oggetti consumabili da usare durante l'Avventura. Alcuni potenziano un tiro o una stanza, altri ti salvano nei momenti piu' difficili."
+				=> "In the Shop you can buy consumable items to use during Adventure. Some improve a roll or a room, while others save you in the hardest moments.",
+			"Ogni giorno alcuni oggetti costano meno, e le copie in offerta sono limitate. Vale la pena passare a controllare."
+				=> "Every day, some items cost less and the discounted stock is limited. It is worth checking regularly.",
+			"Hai ricevuto un Empower. Aumenta di uno step il tuo dado Vigore in attacco: nel prossimo tutorial lo metteremo nella bisaccia e lo useremo sul campo."
+				=> "You received an Empower. It increases your attack Vigor die by one step: in the next tutorial, you will put it in your bag and use it in the field.",
+			_ => TranslateDynamicAdventureTutorialFallback(italian)
+		};
+	}
+
+	private static string TranslateDynamicAdventureTutorialFallback(string italian)
+	{
+		if (italian.StartsWith("Hai sbloccato l'accesso al Santuario e hai ricevuto ", StringComparison.Ordinal))
+		{
+			string amount = italian.Substring("Hai sbloccato l'accesso al Santuario e hai ricevuto ".Length)
+				.Split(' ')[0];
+			return $"You unlocked access to the Sanctuary and received {amount} honey jars. To access the next tutorial, buy the Magician in the Sanctuary.";
+		}
+		if (italian.StartsWith("Hai completato il tutorial del Mago e hai ricevuto ", StringComparison.Ordinal))
+		{
+			string amount = italian.Substring("Hai completato il tutorial del Mago e hai ricevuto ".Length)
+				.Split(' ')[0];
+			return $"You completed the Magician tutorial and received {amount} honey jars. Use them to buy the Thief in the Sanctuary and unlock the third tutorial.";
+		}
+		if (italian.StartsWith("Con i vasetti che hai appena ricevuto puoi prendere ", StringComparison.Ordinal))
+		{
+			string className = italian.Contains("Ladro", StringComparison.Ordinal) ? "the Thief" : "the Magician";
+			return $"With the honey jars you just received, you can unlock {className}. Open the CLASSES altar.";
+		}
+		if (italian.StartsWith("Scegli il ", StringComparison.Ordinal))
+		{
+			string className = italian.Contains("Ladro", StringComparison.Ordinal) ? "the Thief" : "the Magician";
+			return $"Choose {className} and confirm. You have exactly enough honey jars: that is the purpose of the gift.";
+		}
+		return italian;
+	}
+
+	private static string LocalizedAdventureTutorialStepCounter(int current, int total) =>
+		GameText.GetLocalizedFallback(
+			"tutorial.guided.step_counter",
+			"PASSO {0}/{1}", "STEP {0}/{1}", "SCHRITT {0}/{1}",
+			"PASO {0}/{1}", "ÉTAPE {0}/{1}", current, total);
+
+	private void ResizeAdventureTutorialPanelForBody(string body)
+	{
+		if ((Object)(object)adventureScriptedTutorialPanel == (Object)null
+			|| (Object)(object)adventureScriptedTutorialBodyText == (Object)null)
+		{
+			return;
+		}
+
+		adventureScriptedTutorialBodyText.text = body ?? string.Empty;
+		Canvas.ForceUpdateCanvases();
+
+		RectTransform panelRect = (RectTransform)adventureScriptedTutorialPanel.transform;
+		float missingBodyHeight = Mathf.Max(0f,
+			adventureScriptedTutorialBodyText.preferredHeight - adventureScriptedTutorialBodyText.rectTransform.rect.height);
+		float maximumPanelHeight = safeAreaRoot.rect.height * 0.9f;
+		float extraHeight = Mathf.Min(missingBodyHeight + (missingBodyHeight > 0f ? 16f : 0f),
+			Mathf.Max(0f, maximumPanelHeight - panelRect.rect.height));
+		if (extraHeight <= 0f)
+		{
+			return;
+		}
+
+		Vector2 offsetMin = panelRect.offsetMin;
+		Vector2 offsetMax = panelRect.offsetMax;
+		offsetMin.y -= extraHeight * 0.5f;
+		offsetMax.y += extraHeight * 0.5f;
+		panelRect.offsetMin = offsetMin;
+		panelRect.offsetMax = offsetMax;
+		Canvas.ForceUpdateCanvases();
 	}
 
 	private void SetAdventureTutorialNextButtonEnabled(bool enabled)
@@ -1087,7 +1347,10 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
-		SetRect(panelRect, new Vector2(0.08f, 0.39f), new Vector2(0.82f, 0.61f));
+		panelRect.anchorMin = new Vector2(0.08f, 0.39f);
+		panelRect.anchorMax = new Vector2(0.82f, 0.61f);
+		panelRect.offsetMin = new Vector2(0f, -81.2749f);
+		panelRect.offsetMax = new Vector2(0f, 81.2752f);
 	}
 
 	private void MoveAdventureTutorialSpotlight(RectTransform target)
@@ -1100,21 +1363,26 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)target == (Object)null || !((Component)target).gameObject.activeInHierarchy)
 		{
 			spotlightObject.SetActive(false);
+			adventureScriptedTutorialSpotlight.rectTransform.SetParent(
+				(Transform)(object)safeAreaRoot, false);
 			adventureScriptedTutorialSpotlight.rectTransform.rotation = Quaternion.identity;
 			SetAdventureTutorialDimmers(null);
 			return;
 		}
 		spotlightObject.SetActive(true);
 		RectTransform spotlightRect = adventureScriptedTutorialSpotlight.rectTransform;
+		// Lo spotlight segue direttamente il bersaglio nella sua gerarchia. In questo modo
+		// non esiste alcuna conversione fra il Canvas del Santuario e quello del tutorial:
+		// posizione locale zero significa sempre il centro esatto del Mago.
+		spotlightRect.SetParent(target, false);
+		spotlightRect.anchorMin = new Vector2(0.5f, 0.5f);
+		spotlightRect.anchorMax = new Vector2(0.5f, 0.5f);
+		spotlightRect.pivot = new Vector2(0.5f, 0.5f);
+		spotlightRect.anchoredPosition = Vector2.zero;
+		spotlightRect.localRotation = Quaternion.identity;
+		spotlightRect.localScale = Vector3.one;
+		spotlightRect.sizeDelta = target.rect.size * 1.18f;
 		spotlightRect.SetAsLastSibling();
-		spotlightRect.rotation = ShouldRotateAdventureTutorialSpotlightWithTarget(target) ? target.rotation : Quaternion.identity;
-		Vector3[] corners = new Vector3[4];
-		target.GetWorldCorners(corners);
-		Vector3 center = (corners[0] + corners[2]) * 0.5f;
-		spotlightRect.position = center;
-		float width = Vector3.Distance(corners[0], corners[3]) * 1.18f;
-		float height = Vector3.Distance(corners[0], corners[1]) * 1.18f;
-		spotlightRect.sizeDelta = new Vector2(width, height);
 		SetAdventureTutorialDimmers(null);
 		adventureScriptedTutorialPanel.transform.SetAsLastSibling();
 	}
@@ -1209,13 +1477,23 @@ public sealed partial class BattleBoardController
 			((Component)adventureScriptedTutorialSpotlight).gameObject.SetActive(false);
 		}
 		SetAdventureTutorialDimmers(null);
-		if (complete)
+		if (!complete)
 		{
-			ConfirmStartTutorialAdventureStage();
-			ReturnToStart(showModeSelection: false);
-			SetAccountHubHudActive(true);
-			ShowAdventureChapterSelection();
+			return;
 		}
+
+		// La lezione fa parte di un modulo del percorso: e' il modulo a decidere quale
+		// ricompensa riscuotere e dove riportare il giocatore.
+		if (activeTutorialModuleId != null)
+		{
+			CompleteActiveTutorialModule();
+			return;
+		}
+
+		ConfirmStartTutorialAdventureStage();
+		ReturnToStart(showModeSelection: false);
+		SetAccountHubHudActive(true);
+		ShowAdventureChapterSelection();
 	}
 
 	private void SetMessagePanelVisibleDuringAdventureTutorial(bool visible)

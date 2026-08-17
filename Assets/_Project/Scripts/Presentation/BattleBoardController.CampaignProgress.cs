@@ -20,6 +20,21 @@ public sealed partial class BattleBoardController
 {
 	private CardDefinition pendingMasterGiftReward;
 
+	/// <summary>
+	/// Se la run appena conclusa e' stata vinta. Serve al popup di recensione, che si
+	/// mostra solo dopo una vittoria e viene deciso alla chiusura del riepilogo, quando
+	/// il parametro <c>completed</c> di ShowCampaignDefeatRewardPopup non c'e' piu'.
+	/// </summary>
+	private bool lastCampaignRunCompleted;
+
+	/// <summary>
+	/// Le azioni guidate servono a insegnare le meccaniche e non sono progressi validi
+	/// per le quest della taverna. Il modulo resta valorizzato anche nelle parti del
+	/// tutorial che non usano il combattimento scriptato.
+	/// </summary>
+	private bool ShouldTrackQuestProgress =>
+		!adventureScriptedTutorialActive && string.IsNullOrEmpty(activeTutorialModuleId);
+
 	private List<CampaignCardInstance> GetCampaignDefeatedCards()
 	{
 		return (from card in playerCards
@@ -27,7 +42,7 @@ public sealed partial class BattleBoardController
 			select card.CampaignCard).ToList();
 	}
 
-	/// <summary>Segna le famiglie dei mostri appena sconfitti per lo sblocco icone PvP.</summary>
+	/// <summary>Segna le fazioni dei mostri appena sconfitti per lo sblocco icone PvP.</summary>
 	private void RecordCampaignMonsterKills()
 	{
 		foreach (BattleCardState card in cpuCards)
@@ -43,7 +58,7 @@ public sealed partial class BattleBoardController
 	/// </summary>
 	private void RecordCampaignEnemiesDefeated()
 	{
-		if (runProgress == null)
+		if (runProgress == null || !ShouldTrackQuestProgress)
 			return;
 
 		int defeated = 0;
@@ -65,7 +80,7 @@ public sealed partial class BattleBoardController
 	/// </summary>
 	private VigorRollResult TrackDiceRoll(VigorRollResult roll)
 	{
-		if (runProgress != null)
+		if (runProgress != null && ShouldTrackQuestProgress)
 			runProgress.RecordDiceRolled(roll.HasSecondRoll ? 2 : 1);
 		return roll;
 	}
@@ -73,7 +88,7 @@ public sealed partial class BattleBoardController
 	/// <summary>Come sopra per i tiri a dado singolo gia' risolti (iniziativa, eventi).</summary>
 	private int TrackDiceRoll(int roll)
 	{
-		if (runProgress != null)
+		if (runProgress != null && ShouldTrackQuestProgress)
 			runProgress.RecordDiceRolled(1);
 		return roll;
 	}
@@ -91,7 +106,7 @@ public sealed partial class BattleBoardController
 
 		card.AbilityUsed = true;
 		card.AbilityUsedThisTurn = true;
-		if (runProgress != null && playerCards.Contains(card))
+		if (runProgress != null && ShouldTrackQuestProgress && playerCards.Contains(card))
 			runProgress.RecordAbilityUsed();
 
 		// L'abilita' e' risolta: si libera il segna-pagamento, che serve solo a non
@@ -123,6 +138,17 @@ public sealed partial class BattleBoardController
 		inputLocked = true;
 		gameFinished = true;
 		SetActiveTurnAura(null);
+		if (IsTutorialWarriorDuelActive)
+		{
+			// La lezione ha una conclusione e una ricompensa proprie: il riepilogo standard
+			// della stanza coprirebbe il pannello didattico e mostrerebbe azioni non valide.
+			SetAdventureTutorialTimelineVisible(visible: false);
+			SetMessagePanelVisibleDuringAdventureTutorial(visible: false);
+			if ((Object)(object)restartButton != (Object)null)
+				((Component)restartButton).gameObject.SetActive(false);
+			NotifyAdventureTutorial(AdventureTutorialAction.BattleFinished);
+			return true;
+		}
 		int previousLevel = 0;
 		int previousExperience = 0;
 		RoomReward roomReward = default;
@@ -135,13 +161,20 @@ public sealed partial class BattleBoardController
 			{
 				List<CampaignCardInstance> campaignDefeatedCards = GetCampaignDefeatedCards();
 				campaignDeck.CompleteCombat(campaignDefeatedCards, skipNextCombatCooldown);
+				ApplySecondWindTalent(campaignDefeatedCards);
 				AppendLog($"ZONE MAZZO - disponibili {campaignDeck.AvailableCount}, " + $"cooldown {campaignDeck.CooldownCount}, cimitero {campaignDeck.GraveyardCount}.");
 			}
 			RecordCampaignMonsterKills();
 			RecordCampaignEnemiesDefeated();
 			if (IsFinalBossRoom())
 				RecordCampaignBossVictory();
-			SetTurnBanner(playerTurn: true, "VITTORIA  -  STANZA SUPERATA");
+			SetTurnBanner(playerTurn: true, GameText.GetLocalizedFallback(
+				GameTextKeys.Campaign.CombatRoomCompleteBanner,
+				"VITTORIA - STANZA SUPERATA",
+				"VICTORY - ROOM CLEARED",
+				"SIEG - RAUM GESCHAFFT",
+				"VICTORIA - SALA SUPERADA",
+				"VICTOIRE - SALLE TERMINÉE"));
 			previousLevel = runProgress.PlayerLevel;
 			previousExperience = runProgress.CurrentExperience;
 			if (activeComposableGolem != null)
@@ -152,11 +185,18 @@ public sealed partial class BattleBoardController
 			else
 			{
 				int num = (nextCombatFallenHeroesGrantExperience ?playerCards.Where(IsCampaignDefeated).Sum((BattleCardState card) => card.Card.Strength) : 0);
+				bool halveMonsterReward = nextMonsterRewardHalved;
 				roomReward = runProgress.CompleteMonsterRoom((from card in cpuCards
 					where card.Eliminated
 					select card.Card.Strength).Concat((num <= 0) ?((IEnumerable<int>)Array.Empty<int>()) : ((IEnumerable<int>)new int[1] { num })),
 					RoomDifficultyRules.For(pendingRoomDifficulty).BaseExperience,
-					ConsumeNextRoomExperienceMultiplier());
+					ConsumeNextRoomExperienceMultiplier(),
+					halveMonsterReward ? 2 : 1);
+				if (halveMonsterReward)
+				{
+					nextMonsterRewardHalved = false;
+					AppendLog("PREZZO DELLA RINUNCIA - ricompensa Mostro ridotta del 50%.");
+				}
 			}
 			SetMessage(GameText.GetOrFallbackSilent(
 				GameTextKeys.Campaign.RoomReward,
@@ -180,7 +220,13 @@ public sealed partial class BattleBoardController
 					GameTextKeys.Campaign.DefeatFormationBanner,
 					"SCONFITTA  -  FORMAZIONE ELIMINATA"),
 				defeat: true);
-			SetMessage("SCONFITTA. La CPU ha eliminato la tua formazione.");
+			SetMessage(GameText.GetLocalizedFallback(
+				GameTextKeys.Campaign.DefeatFormationMessage,
+				"SCONFITTA. La CPU ha eliminato la tua formazione.",
+				"DEFEAT. The CPU has eliminated your formation.",
+				"NIEDERLAGE. Die CPU hat deine Formation besiegt.",
+				"DERROTA. La CPU ha eliminado tu formación.",
+				"DÉFAITE. L'IA a éliminé votre formation."));
 			canAdvanceToNextRoom = false;
 			// Anche i mostri abbattuti nella stanza in cui si muore vanno contati: prima il
 			// conteggio stava solo nel ramo della vittoria, e l'ultima stanza di ogni run
@@ -191,9 +237,12 @@ public sealed partial class BattleBoardController
 			{
 				List<CampaignCardInstance> campaignDefeatedCards2 = GetCampaignDefeatedCards();
 				campaignDeck.CompleteCombat(campaignDefeatedCards2, skipNextCombatCooldown);
+				// Anche sulla sconfitta: la pedina salvata rientra fra le carte pronte, ed e'
+				// quella che puo' rendere ritentabile una stanza altrimenti persa.
+				ApplySecondWindTalent(campaignDefeatedCards2);
 				survivingCpuFormation.Clear();
 				survivingCpuFormation.AddRange(from card in cpuCards
-					where !card.Eliminated
+					where !card.Eliminated && !IsJurinashorSword(card)
 					select card.Definition);
 				AppendLog($"ZONE MAZZO - disponibili {campaignDeck.AvailableCount}, " + $"cooldown {campaignDeck.CooldownCount}, cimitero {campaignDeck.GraveyardCount}.");
 				int formationSize = configuration.Gameplay.FormationSize;
@@ -207,7 +256,16 @@ public sealed partial class BattleBoardController
 							GameTextKeys.Campaign.DefeatRetreatBanner,
 							"SCONFITTA - RITIRATA"),
 						defeat: true);
-					SetMessage($"SCONFITTA. Puoi continuare: hai {combatReadyCount}/" + $"{formationSize} carte disponibili. Restano {survivingCpuFormation.Count} mostri nella stanza.");
+					SetMessage(GameText.GetLocalizedFallback(
+						GameTextKeys.Campaign.DefeatRetreatMessage,
+						"SCONFITTA. Puoi continuare: hai {0}/{1} carte disponibili. Restano {2} mostri nella stanza.",
+						"DEFEAT. You can continue: you have {0}/{1} cards available. {2} monsters remain in the room.",
+						"NIEDERLAGE. Du kannst weitermachen: Du hast {0}/{1} Karten verfügbar. {2} Monster bleiben im Raum.",
+						"DERROTA. Puedes continuar: tienes {0}/{1} cartas disponibles. Quedan {2} monstruos en la sala.",
+						"DÉFAITE. Vous pouvez continuer : vous avez {0}/{1} cartes disponibles. Il reste {2} monstres dans la salle.",
+						combatReadyCount,
+						formationSize,
+						survivingCpuFormation.Count));
 					SetPrimaryActionLabel(restartButtonText, PrimaryActionLabel.RetryRoom);
 					ApplyBattleButtonVariant(restartButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Arcane);
 					((Component)restartButton).gameObject.SetActive(true);
@@ -220,7 +278,13 @@ public sealed partial class BattleBoardController
 			}
 			canRetryCampaignRoom = false;
 			SetTurnBanner(playerTurn: false, "GAME OVER");
-			SetMessage("GAME OVER. La CPU ha eliminato la tua formazione.");
+			SetMessage(GameText.GetLocalizedFallback(
+				GameTextKeys.Campaign.GameOverFormationMessage,
+				"GAME OVER. La CPU ha eliminato la tua formazione.",
+				"GAME OVER. The CPU has eliminated your formation.",
+				"GAME OVER. Die CPU hat deine Formation besiegt.",
+				"GAME OVER. La CPU ha eliminado tu formación.",
+				"GAME OVER. L'IA a éliminé votre formation."));
 			pendingCampaignRewardTask = ClaimCampaignRunAccountReward(completed: false);
 		}
 		RefreshInitiativeDisplay();
@@ -251,12 +315,13 @@ public sealed partial class BattleBoardController
 	{
 		ResetCampaignManaForNewRun();
 		ClearConsumedCombatRules();
-		nextMonsterTierBonus = 0;
+		nextMonsterDifficultyIncrease = 0;
 		nextDoorChoiceRevealed = false;
 		nextRoomEmpowered = false;
 		nextRoomDoubleExperience = false;
 		merchantRoomsBlockedUntilMonster = false;
 		rewardRoomsBlockedUntilMonster = false;
+		nextMonsterRewardHalved = false;
 	}
 
 	private IEnumerator ReturnToStartAfterGameOver()
@@ -290,6 +355,13 @@ public sealed partial class BattleBoardController
 
 	private void HandlePrimaryAction()
 	{
+		if (canAdvanceToNextRoom &&
+			(currentRoomType == RoomType.Loot || currentRoomType == RoomType.QuickChallenge))
+		{
+			// Il reveal puo' sopravvivere durante il fade verso la scelta stanza: il suo
+			// loop audio deve invece terminare esattamente quando il giocatore continua.
+			ClearLootRewardReveal();
+		}
 		if (!((Object)(object)roomTransition == (Object)null) && !roomTransition.IsPlaying)
 		{
 			AnimationConfiguration animation = configuration.Animation;
@@ -301,7 +373,13 @@ public sealed partial class BattleBoardController
 
 	private void RetryCurrentCampaignRoom()
 	{
-		AppendLog("RIPROVA STANZA - " + DescribeRoomRoll(new CampaignRoomRoll(currentRoomType, currentMonsterTier, pendingScenarioId, pendingRoomDifficulty)));
+		AppendLog("RIPROVA STANZA - " + DescribeRoomRoll(new CampaignRoomRoll(currentRoomType, pendingScenarioId, pendingRoomDifficulty)));
+		campaignRetryPreviousPlayerInitiatives = selectedPlayerDeploymentInitiatives
+			.OrderBy(initiative => initiative)
+			.ToArray();
+		retrySeraphelHitPoints = activeSeraphelBoss?.HitPoints;
+		retryJurinashorHitPoints = activeJurinashorBoss?.HitPoints;
+		retryJurinashorPhaseTwo = activeJurinashorBoss?.IsPhaseTwo == true;
 		retryComposableGolemForms = SnapshotComposableGolemForms(activeComposableGolem);
 		retryComposableGolemHitPoints = activeComposableGolem?.HitPoints;
 		if (retryComposableGolemForms != null)
@@ -315,8 +393,20 @@ public sealed partial class BattleBoardController
 		}
 		if (!LoadCampaignRoomScenario())
 		{
-			currentScenarioDisplayOverride = DescribeRoomRoll(new CampaignRoomRoll(currentRoomType, currentMonsterTier, pendingScenarioId, pendingRoomDifficulty));
+			currentScenarioDisplayOverride = DescribeRoomRoll(new CampaignRoomRoll(currentRoomType, pendingScenarioId, pendingRoomDifficulty));
 			AppendLog("SCENARIO - fallback nome stanza: scenario non trovato o non valido.");
+		}
+		if (retrySeraphelHitPoints.HasValue)
+		{
+			activeSeraphelBoss = CreateSeraphelForCurrentRoom();
+			AppendLog($"SERAPHEL - retry ripristinato a {activeSeraphelBoss.HitPoints}/{activeSeraphelBoss.MaxHitPoints} HP.");
+		}
+		if (retryJurinashorHitPoints.HasValue)
+		{
+			activeJurinashorBoss = new JurinashorBoss();
+			activeJurinashorBoss.Restore(retryJurinashorHitPoints.Value, retryJurinashorPhaseTwo);
+			AppendLog($"JURINASHOR - retry ripristinato in fase {(activeJurinashorBoss.IsPhaseTwo ? 2 : 1)} "
+				+ $"a {activeJurinashorBoss.HitPoints}/{activeJurinashorBoss.MaxHitPoints} HP.");
 		}
 		PlayCurrentRoomEnterSfx();
 		PrepareNextCampaignCombatDraft();
@@ -330,6 +420,7 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		survivingCpuFormation.Clear();
+		campaignRetryPreviousPlayerInitiatives = null;
 		canRetryCampaignRoom = false;
 		BeginRoomChoice();
 	}
@@ -354,6 +445,28 @@ public sealed partial class BattleBoardController
 		{
 			return;
 		}
+
+		pendingAdventureChapterTalentPointsReward =
+			!string.IsNullOrWhiteSpace(activeAdventureChapterId)
+			&& singlePlayerProgressService != null
+			&& !singlePlayerProgressService.IsUnlocked(
+				SinglePlayerUnlockType.ChapterCleared,
+				activeAdventureChapterId);
+
+		AdventureChapter completedChapter = AdventureChapterCatalog.Find(activeAdventureChapterId);
+		pendingAdventureChapterClassReward = completedChapter != null
+			&& !string.IsNullOrWhiteSpace(completedChapter.RewardClassId)
+			&& singlePlayerProgressService != null
+			&& !singlePlayerProgressService.IsUnlocked(
+				SinglePlayerUnlockType.Class,
+				completedChapter.RewardClassId);
+
+		AdventureChapter nextChapter = completedChapter == null
+			? null
+			: AdventureChapterCatalog.Find($"chapter-{completedChapter.Number + 1}");
+		pendingAdventureNextChapterReward = nextChapter != null
+			&& singlePlayerProgressService != null
+			&& !singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Chapter, nextChapter.Id);
 
 		AccardND.PvpUi.PvpCampaignKillTracker.RecordBossDefeat(bossId);
 		RecordDefeatedBossInRun(bossId);
@@ -400,7 +513,7 @@ public sealed partial class BattleBoardController
 
 	private void ShowPendingClassChoiceIfAny()
 	{
-		if ((Object)(object)classChoicePopup == (Object)null || classChoiceSubmitting)
+		if ((Object)(object)classChoicePopup == (Object)null || classChoiceSubmitted)
 			return;
 
 		List<string> choices = singlePlayerProgressService.Progress?.pendingClassChoices?
@@ -463,60 +576,42 @@ public sealed partial class BattleBoardController
 			backdrop.color = Color.black;
 	}
 
-	private async void SubmitClassChoice(string classId)
+	/// <summary>
+	/// Chiude il popup della scelta della classe. Vive solo nella scena di prova: in
+	/// partita "pendingClassChoices" resta sempre vuoto, perche' la classe premio di un
+	/// capitolo la concede il server da se' quando il capitolo si chiude (RewardClassId).
+	///
+	/// Prima da qui partiva "singleplayer.class.choose", un messaggio che il server non
+	/// ha mai gestito: si prendeva un "tipo messaggio sconosciuto", mostrava "scelta non
+	/// registrata" e - essendo spedito come mutazione persistente - si portava dietro uno
+	/// slot della coda su disco. Farlo esistere davvero avrebbe voluto dire lasciare che
+	/// il client si concedesse da solo una classe qualsiasi: senza un elenco di scelte
+	/// aperte lato server non c'e' niente contro cui validare.
+	/// </summary>
+	private void SubmitClassChoice(string classId)
 	{
-		if (classChoiceSubmitting) return;
-		if (debugClassChoiceScene)
-		{
-			foreach (GameObject view in classChoiceButtonViews)
-			{
-				Button debugButton = ((Object)(object)view != (Object)null) ? view.GetComponent<Button>() : null;
-				if ((Object)(object)debugButton != (Object)null) debugButton.interactable = false;
-			}
-			classChoiceStatusText.text = GameText.GetOrFallbackSilent(
-				GameTextKeys.Adventure.ClassChoiceTestComplete,
-				"TEST COMPLETATO: {0} SELEZIONATO",
-				ClassChoiceDisplayName(classId));
-			return;
-		}
-		classChoiceSubmitting = true;
+		if (classChoiceSubmitted) return;
+		classChoiceSubmitted = true;
 		foreach (GameObject view in classChoiceButtonViews)
 		{
 			Button button = ((Object)(object)view != (Object)null) ? view.GetComponent<Button>() : null;
 			if ((Object)(object)button != (Object)null) button.interactable = false;
 		}
-		classChoiceStatusText.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Adventure.ClassChoiceUnlocking,
-			"Sblocco in corso...");
 
-		try
+		if (!debugClassChoiceScene)
 		{
-			if (serverProgress == null && !await EnsureServerProgressAsync())
-				throw new InvalidOperationException(GameText.GetOrFallbackSilent(
-					GameTextKeys.Adventure.ClassChoiceConnectionRequired,
-					"Connessione al server non disponibile."));
-			await serverProgress.ChooseClassAsync(classId);
-			MirrorServerProgress();
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Adventure.ClassUnlockedLog,
-				"PROGRESSIONE - classe scelta e sbloccata: {0}.",
-				classId));
-			classChoiceSubmitting = false;
-			RefreshSinglePlayerProgressView();
+			// Irraggiungibile finche' il server non offre davvero delle scelte: se ci
+			// arriviamo, e' cambiato qualcosa e va rifatto il percorso, non nascosto.
+			Debug.LogError(
+				$"[Progressione] Scelta classe '{classId}' fuori dalla scena di prova: il server non offre scelte di classe.");
+			classChoicePopup.SetActive(false);
+			return;
 		}
-		catch (Exception exception)
-		{
-			classChoiceSubmitting = false;
-			classChoiceStatusText.text = GameText.GetOrFallbackSilent(
-				GameTextKeys.Adventure.ClassChoiceFailed,
-				"Scelta non registrata: {0}",
-				exception.Message);
-			foreach (GameObject view in classChoiceButtonViews)
-			{
-				Button button = ((Object)(object)view != (Object)null) ? view.GetComponent<Button>() : null;
-				if ((Object)(object)button != (Object)null) button.interactable = true;
-			}
-		}
+
+		classChoiceStatusText.text = GameText.GetOrFallbackSilent(
+			GameTextKeys.Adventure.ClassChoiceTestComplete,
+			"TEST COMPLETATO: {0} SELEZIONATO",
+			ClassChoiceDisplayName(classId));
 	}
 
 	private static string ClassChoiceDisplayName(string classId)
@@ -621,6 +716,9 @@ public sealed partial class BattleBoardController
 		int roomsCleared = runProgress.RoomsCleared;
 		int bossesDefeated = completed ?1 : 0;
 		string outcomeLabel = completed ?"vittoria" : "sconfitta";
+		string[] keptItemIds = CollectUnusedRunItemIds();
+		if (keptItemIds.Length > 0)
+			AppendLog($"SCORTA - {keptItemIds.Length} oggetti trovati e mai usati tornano nella scorta del Santuario.");
 		var summary = new AccardND.Network.DeathRewardSummary(
 			campaignRunRewardId,
 			"campaign",
@@ -635,7 +733,14 @@ public sealed partial class BattleBoardController
 			consumedBagItemIds.ToArray(),
 			runProgress.DiceRolled,
 			runProgress.AbilitiesUsed,
-			runProgress.TotalExperience);
+			runProgress.TotalExperience,
+			runProgress.SupremesUsed,
+			runProgress.QuickChallengesCompleted,
+			runProgress.MerchantPurchases,
+			runProgress.GoldEarned,
+			runProgress.LevelsGained,
+			runProgress.ItemsUsed,
+			keptItemIds);
 
 		// Non richiedere che il link sia pronto in questo esatto frame. ClaimDeathRewardAsync
 		// salva prima il riepilogo nell'outbox persistente: anche se il tentativo immediato
@@ -733,7 +838,7 @@ public sealed partial class BattleBoardController
 			title.font = campaignTitleFont;
 		title.fontSize = 50;
 		title.resizeTextForBestFit = false;
-		title.text = "FINE CAMPAGNA";
+		title.text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.RewardTitle, "FINE CAMPAGNA");
 		title.color = new Color(0.95f, 0.79f, 0.34f);
 		SetRect(title.rectTransform, new Vector2(0.06f, 0.74f), new Vector2(0.94f, 0.92f));
 
@@ -777,6 +882,7 @@ public sealed partial class BattleBoardController
 	private void WarmCampaignRunAds()
 	{
 		AccardND.Ads.AdService.Warm(AccardND.Ads.AdPlacement.CampaignExperienceTriple);
+		AccardND.Ads.AdService.Warm(AccardND.Ads.AdPlacement.FlashTrialForfeit);
 		if (runBagItemIds.Count > 0)
 			AccardND.Ads.AdService.Warm(AccardND.Ads.AdPlacement.BagItemUsed);
 	}
@@ -789,10 +895,34 @@ public sealed partial class BattleBoardController
 	{
 		AccardND.Ads.AdService.Cool(AccardND.Ads.AdPlacement.CampaignExperienceTriple);
 		AccardND.Ads.AdService.Cool(AccardND.Ads.AdPlacement.BagItemUsed);
+		AccardND.Ads.AdService.Cool(AccardND.Ads.AdPlacement.FlashTrialForfeit);
+	}
+
+	/// <summary>
+	/// Registra una rinuncia volontaria alla Prova Lampo. Lo stato viene scritto prima di
+	/// chiedere l'interstitial: chiudere l'app mentre l'annuncio e' aperto non annulla il
+	/// Prezzo della Rinuncia. L'annuncio non e' un cancello e il gioco prosegue anche se la
+	/// rete non ha niente da mostrare.
+	/// </summary>
+	private void ApplyFlashTrialForfeit()
+	{
+		nextMonsterRewardHalved = true;
+		AppendLog("PROVA LAMPO - rinuncia: prossima ricompensa Mostro ridotta del 50%.");
+		SaveCurrentRun();
 	}
 
 	private void ShowCampaignDefeatRewardPopup(int earnedExperience, bool completed = false)
 	{
+		lastCampaignRunCompleted = completed;
+		if (completed)
+		{
+			PlaySfx(victorySfx);
+		}
+		else
+		{
+			PlayMusic(gameOverSoundtrack);
+		}
+
 		if ((Object)(object)campaignDefeatRewardPopup == (Object)null)
 		{
 			((MonoBehaviour)this).StartCoroutine(ReturnToStartAfterGameOver());
@@ -801,9 +931,22 @@ public sealed partial class BattleBoardController
 
 		pendingCampaignRewardBaseAccountExperience = Mathf.Max(0, earnedExperience);
 		pendingCampaignRewardAdClaimed = false;
+		// Il VFX avvia subito una coroutine. Il popup nasce disattivato, quindi va
+		// attivato prima di creare i petali: Unity non avvia coroutine su GameObject
+		// inattivi nella gerarchia.
+		campaignDefeatRewardPopup.SetActive(true);
+		if ((Object)(object)campaignDefeatPetals != (Object)null)
+			Destroy(((Component)campaignDefeatPetals).gameObject);
+		campaignDefeatPetals = completed
+			? null
+			// Figli del Canvas del popup e ultimi sibling: restano in sovraimpressione
+			// rispetto sia al velo nero sia al dialogo, senza intercettare i tocchi.
+			: AccardND.PvpUi.PvpUiVfx.CreateDefeatPetals(campaignDefeatRewardPopup.transform);
 		Text title = campaignDefeatRewardPopup.transform.Find("Campaign Defeat Reward Dialog/Campaign Defeat Reward Title")?.GetComponent<Text>();
 		if ((Object)(object)title != (Object)null)
-			title.text = completed ? "CAPITOLO COMPLETATO" : "FINE CAMPAGNA";
+			title.text = completed
+				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterCompletedTitle, "CAPITOLO COMPLETATO")
+				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.RewardTitle, "FINE CAMPAGNA");
 		// Senza claim id non c'e' niente da far verificare al server: il moltiplicatore
 		// verrebbe rifiutato prima ancora di mostrare il video. Succede quando la reward di
 		// fine campagna e' stata rifiutata o messa in coda offline, e in quei casi qui arriva
@@ -862,7 +1005,6 @@ public sealed partial class BattleBoardController
 		campaignDefeatRewardDoubleButtonText.text = GameText.GetOrFallbackSilent(
 			GameTextKeys.Campaign.Triple,
 			"TRIPLICA");
-		campaignDefeatRewardPopup.SetActive(true);
 		campaignDefeatRewardPopup.transform.SetAsLastSibling();
 	}
 
@@ -874,17 +1016,32 @@ public sealed partial class BattleBoardController
 			return "NUOVE RICOMPENSE SBLOCCATE";
 
 		var lines = new List<string>();
-		if (!string.IsNullOrWhiteSpace(chapter.RewardClassId))
-			lines.Add($"CLASSE  <b>{ClassChoiceDisplayName(chapter.RewardClassId)}</b>");
+		if (pendingAdventureChapterClassReward
+			&& !string.IsNullOrWhiteSpace(chapter.RewardClassId))
+			lines.Add(GameText.GetLocalizedFallback(
+				GameTextKeys.Adventure.ChapterRewardClass,
+				"CLASSE  <b>{0}</b>", "CLASS  <b>{0}</b>", "KLASSE  <b>{0}</b>", "CLASE  <b>{0}</b>", "CLASSE  <b>{0}</b>",
+				ClassChoiceDisplayName(chapter.RewardClassId)));
 
 		AccardND.GameData.AdventureChapter nextChapter =
 			AccardND.GameData.AdventureChapterCatalog.Find($"chapter-{chapter.Number + 1}");
-		if (nextChapter != null && !string.IsNullOrWhiteSpace(nextChapter.ScenarioLabel))
-			lines.Add($"SCENARIO  <b>{nextChapter.ScenarioLabel}</b>");
+		if (pendingAdventureNextChapterReward
+			&& nextChapter != null
+			&& !string.IsNullOrWhiteSpace(nextChapter.ScenarioLabel))
+			lines.Add(GameText.GetLocalizedFallback(
+				GameTextKeys.Adventure.ChapterScenarioLabel,
+				"SCENARIO: <b>{0}</b>", "SCENARIO: <b>{0}</b>", "SZENARIO: <b>{0}</b>", "ESCENARIO: <b>{0}</b>", "SCÉNARIO : <b>{0}</b>",
+				LocalizedAdventureScenarioName(nextChapter)));
+
+		if (pendingAdventureChapterTalentPointsReward)
+			lines.Add(GameText.GetLocalizedFallback(
+				GameTextKeys.Adventure.ChapterRewardPropolis,
+				"PUNTI PROPOLI  <b>+{0}</b>", "PROPOLIS POINTS  <b>+{0}</b>", "PROPOLIS-PUNKTE  <b>+{0}</b>", "PUNTOS DE PROPÓLEO  <b>+{0}</b>", "POINTS DE PROPOLIS  <b>+{0}</b>",
+				AccountLevelCurve.TalentPointsPerFirstChapterClear));
 
 		return lines.Count > 0
-			? "HAI SBLOCCATO\n" + string.Join("\n", lines)
-			: "CAPITOLO COMPLETATO";
+			? GameText.GetLocalizedFallback(GameTextKeys.Adventure.ChapterRewardsHeading, "HAI SBLOCCATO", "YOU UNLOCKED", "DU HAST FREIGESCHALTET", "HAS DESBLOQUEADO", "VOUS AVEZ DÉBLOQUÉ") + "\n" + string.Join("\n", lines)
+			: GameText.GetLocalizedFallback(GameTextKeys.Campaign.ChapterCompletedTitle, "CAPITOLO COMPLETATO", "CHAPTER COMPLETE", "KAPITEL ABGESCHLOSSEN", "CAPÍTULO COMPLETADO", "CHAPITRE TERMINÉ");
 	}
 
 	private static void ApplyCampaignRewardContinueStyle(Button button)
@@ -915,10 +1072,35 @@ public sealed partial class BattleBoardController
 
 	private void ContinueAfterCampaignDefeatReward()
 	{
+		if ((Object)(object)campaignDefeatPetals != (Object)null)
+		{
+			Destroy(((Component)campaignDefeatPetals).gameObject);
+			campaignDefeatPetals = null;
+		}
 		if ((Object)(object)campaignDefeatRewardPopup != (Object)null)
 			campaignDefeatRewardPopup.SetActive(false);
-		((MonoBehaviour)this).StartCoroutine(ReturnToStartAfterGameOver());
+
+		// La recensione si chiede qui e non nel popup della ricompensa: il giocatore ha
+		// gia' visto cosa ha guadagnato e non c'e' piu' niente in ballo. Se il popup
+		// compare, il ritorno al menu aspetta la sua chiusura, altrimenti partirebbe
+		// sotto e la domanda si vedrebbe per mezzo secondo.
+		bool prompted = AccardND.Presentation.ReviewPrompt.ReviewPromptController.TryShow(
+			CanvasRootTransform(),
+			activeAdventureChapterId,
+			lastCampaignRunCompleted,
+			() => ((MonoBehaviour)this).StartCoroutine(ReturnToStartAfterGameOver()));
+
+		if (!prompted)
+			((MonoBehaviour)this).StartCoroutine(ReturnToStartAfterGameOver());
 	}
+
+	/// <summary>
+	/// La radice del Canvas, che NON e' <c>safeAreaRoot</c>: i due rect non coincidono e
+	/// un modale centrato dentro la safe area finisce fuori asse (stesso motivo per cui
+	/// il velo di fine campagna e' appeso qui).
+	/// </summary>
+	private Transform CanvasRootTransform() =>
+		(Object)(object)canvasScaler != (Object)null ? ((Component)canvasScaler).transform : null;
 
 	/// <summary>
 	/// Offre il x3 sulla plancia a fine campagna vinta. Restituisce se l'offerta e' davvero
@@ -1065,9 +1247,9 @@ public sealed partial class BattleBoardController
 		{
 			int tripledExperience = pendingCampaignRewardBaseAccountExperience * 3;
 			campaignDefeatRewardBodyText.text =
-				$"<size=30><b>+{tripledExperience} EXP totali</b></size>\n\nLa ricompensa e stata triplicata.";
+				$"<size=30><b>+{tripledExperience} EXP totali</b></size>\n\nLa ricompensa è stata triplicata.";
 			campaignDefeatRewardDoubleButton.interactable = false;
-			campaignDefeatRewardDoubleButtonText.text = "EXP TRIPLICATA";
+			campaignDefeatRewardDoubleButtonText.text = GameText.GetOrFallbackSilent(GameTextKeys.Profile.Triple, "TRIPLICATA");
 		}
 		else if ((Object)(object)merchantBuyButton != (Object)null)
 		{
@@ -1083,7 +1265,7 @@ public sealed partial class BattleBoardController
 
 		((UnityEvent)merchantBuyButton.onClick).RemoveAllListeners();
 		((UnityEvent)merchantBuyButton.onClick).AddListener(new UnityAction(OpenMerchantPanel));
-		merchantBuyButtonText.text = "MERCATO";
+		merchantBuyButtonText.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.CampaignTitle, "MERCATO");
 		merchantBuyButton.interactable = true;
 	}
 
@@ -1094,11 +1276,22 @@ public sealed partial class BattleBoardController
 
 	private void ReturnToStart(bool showModeSelection)
 	{
+		ReturnToStart(showModeSelection, preserveMusic: false);
+	}
+
+	private void ReturnToStart(bool showModeSelection, bool preserveMusic)
+	{
 		AbandonActivePvpSession();
+		ResetGlobalRunPresentationState();
 		ClearRuntimeSessionVisuals();
+		ClearManaDeltaCallouts();
+		ClearEnemyManaDeltaCallouts();
 		((MonoBehaviour)this).StopAllCoroutines();
 		ClearDraftEntranceState();
-		StopMusic();
+		if (!preserveMusic)
+		{
+			StopMusic();
+		}
 		returningToStartAfterGameOver = false;
 		abilityTargetMode = AbilityTargetMode.None;
 		activeAbilityUser = null;
@@ -1109,13 +1302,16 @@ public sealed partial class BattleBoardController
 		currentDeploymentIndex = 0;
 		currentTurnIndex = 0;
 		roundNumber = 0;
-		currentMonsterTier = 2;
 		pendingScenarioId = null;
 		pendingRoomDifficulty = RoomDifficulty.Normal;
 		currentScenarioDisplayOverride = null;
 		activeComposableGolem = null;
 		retryComposableGolemForms = null;
 		retryComposableGolemHitPoints = null;
+		retrySeraphelHitPoints = null;
+		retryJurinashorHitPoints = null;
+		retryJurinashorPhaseTwo = false;
+		campaignRetryPreviousPlayerInitiatives = null;
 		activeMedusaBoss = null;
 		activeTrentorBoss = null;
 		activeBragusBoss = null;
@@ -1148,7 +1344,9 @@ public sealed partial class BattleBoardController
 		selectedPlayerDeploymentIndices.Clear();
 		selectedCpuDeploymentCards.Clear();
 		selectedPlayerDeploymentInitiatives.Clear();
+		selectedPlayerDeploymentTokens.Clear();
 		selectedCpuDeploymentInitiatives.Clear();
+		selectedCpuDeploymentTokens.Clear();
 		deploymentOrder.Clear();
 		draftCandidates.Clear();
 		draftCampaignCards.Clear();
@@ -1212,11 +1410,11 @@ public sealed partial class BattleBoardController
 		ConfigureActionButtonLayout(merchantVisible: false);
 		ResetRunProgress();
 		RefreshInitiativeDisplay();
-		SetTurnBanner(playerTurn: true, "PREPARAZIONE");
-		SetMessage("Scegli una modalita' per iniziare.");
+		SetTurnBanner(playerTurn: true, GameText.GetOrFallbackSilent(GameTextKeys.Combat.Preparation, "PREPARAZIONE"));
+		SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChooseModeToStart, "Scegli una modalità per iniziare."));
 		if ((Object)(object)playerTitleText != (Object)null)
 		{
-			playerTitleText.text = "LA TUA FORMAZIONE";
+			playerTitleText.text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.YourFormation, "LA TUA FORMAZIONE");
 		}
 		SetBattlefieldSurfaceVisible(showModeSelection);
 		if (showModeSelection)
@@ -1255,6 +1453,84 @@ public sealed partial class BattleBoardController
 		{
 			Transform child = ((Transform)safeAreaRoot).GetChild(index);
 			if (Array.IndexOf(names, child.name) < 0)
+				continue;
+
+			((Component)child).gameObject.SetActive(false);
+			Object.Destroy((Object)(object)((Component)child).gameObject);
+		}
+	}
+
+	private void DestroySafeAreaChildrenEndingWith(string suffix)
+	{
+		if ((Object)(object)safeAreaRoot == (Object)null || string.IsNullOrEmpty(suffix))
+			return;
+
+		for (int index = ((Transform)safeAreaRoot).childCount - 1; index >= 0; index--)
+		{
+			Transform child = ((Transform)safeAreaRoot).GetChild(index);
+			if (!child.name.EndsWith(suffix, StringComparison.Ordinal))
+				continue;
+
+			((Component)child).gameObject.SetActive(false);
+			Object.Destroy((Object)(object)((Component)child).gameObject);
+		}
+	}
+
+	/// <summary>
+	/// Reset autoritativo di tutto cio' che una coroutine di run puo' aver agganciato alla
+	/// UI globale. Va eseguito prima di StopAllCoroutines: dopo l'interruzione, i finally e
+	/// le ultime Destroy delle animazioni non hanno piu' occasione di partire.
+	/// </summary>
+	private void ResetGlobalRunPresentationState()
+	{
+		ResetAuraPresentationState();
+
+		if (scenarioBackgroundTransitionRoutine != null)
+			((MonoBehaviour)this).StopCoroutine(scenarioBackgroundTransitionRoutine);
+		scenarioBackgroundTransitionRoutine = null;
+		DestroyBossTransitionBlackout();
+
+		if ((Object)(object)seraphelRevealHealthRoot != (Object)null)
+		{
+			seraphelRevealHealthRoot.SetActive(false);
+			Object.Destroy(seraphelRevealHealthRoot);
+			seraphelRevealHealthRoot = null;
+		}
+
+		DestroySafeAreaChildrenStartingWith("Seraphel ");
+		DestroySafeAreaChildrenStartingWith("Timeline Slide VFX");
+		DestroyControllerChildrenStartingWith("Campaign Quick Challenge");
+		ClearLootRewardReveal();
+
+		SetTurnCoinState(playerTurn: true, visible: false);
+		SetTurnCoinSuppressed(suppressed: false);
+	}
+
+	private void DestroySafeAreaChildrenStartingWith(string prefix)
+	{
+		if ((Object)(object)safeAreaRoot == (Object)null || string.IsNullOrEmpty(prefix))
+			return;
+
+		for (int index = ((Transform)safeAreaRoot).childCount - 1; index >= 0; index--)
+		{
+			Transform child = ((Transform)safeAreaRoot).GetChild(index);
+			if (!child.name.StartsWith(prefix, StringComparison.Ordinal))
+				continue;
+
+			((Component)child).gameObject.SetActive(false);
+			Object.Destroy((Object)(object)((Component)child).gameObject);
+		}
+	}
+
+	private void DestroyControllerChildrenStartingWith(string prefix)
+	{
+		if (string.IsNullOrEmpty(prefix))
+			return;
+
+		for (int index = transform.childCount - 1; index >= 0; index--)
+		{
+			Transform child = transform.GetChild(index);
+			if (!child.name.StartsWith(prefix, StringComparison.Ordinal))
 				continue;
 
 			((Component)child).gameObject.SetActive(false);
@@ -1309,6 +1585,9 @@ public sealed partial class BattleBoardController
 
 	private void PrepareNextCampaignCombatDraft()
 	{
+		ResetAuraPresentationState();
+		ClearManaDeltaCallouts();
+		ClearEnemyManaDeltaCallouts();
 		((MonoBehaviour)this).StopAllCoroutines();
 		ClearDraftEntranceState();
 		abilityTargetMode = AbilityTargetMode.None;
@@ -1316,6 +1595,9 @@ public sealed partial class BattleBoardController
 		activeAbilityUser = null;
 		activeAttachmentSource = null;
 		selectedPlayerIndex = -1;
+		// Il retry deve sempre ripartire dal lancio iniziative, anche se la pulizia
+		// della battaglia precedente conteneva evocazioni con View già distrutta.
+		deploymentInitiativesReady = false;
 		inputLocked = true;
 		gameFinished = false;
 		canRetryCampaignRoom = false;
@@ -1329,16 +1611,11 @@ public sealed partial class BattleBoardController
 		{
 			roomChoicePanel.SetActive(false);
 		}
-		foreach (BattleCardState playerCard in playerCards)
-		{
-			Object.Destroy((Object)(object)((Component)playerCard.View).gameObject);
-		}
-		foreach (BattleCardState cpuCard in cpuCards)
-		{
-			Object.Destroy((Object)(object)((Component)cpuCard.View).gameObject);
-		}
-		playerCards.Clear();
-		cpuCards.Clear();
+		// Include le floating sword e tollera quelle già concluse/distrutte dal VFX.
+		DestroyCardViews(playerCards);
+		DestroyCardViews(cpuCards);
+		ClearCardRowChildren(playerRow);
+		ClearCardRowChildren(cpuRow);
 		turnOrder.Clear();
 		initialPlayerFormation.Clear();
 		initialPlayerCampaignFormation.Clear();
@@ -1359,62 +1636,114 @@ public sealed partial class BattleBoardController
 		string text = string.Empty;
 		switch (roomType)
 		{
-		case RoomType.UnexpectedOpportunity:
+		case RoomType.QuickChallenge:
 		{
-			(string scenarioText, int scenarioExperience) = RevealCampaignScenario();
-			if (!string.IsNullOrWhiteSpace(scenarioText))
+			bool challengeFinished = false;
+			FlashTrialResult challengeResult = FlashTrialResult.Failed;
+			int completedLevels = 0;
+			FlashTrialCampaignReward challengeReward = default;
+			bool challengeRewardResolved = false;
+			bool challengeForfeitedWithoutMalus = false;
+			GameObject challengeObject = new GameObject("Campaign Quick Challenge");
+			challengeObject.transform.SetParent(transform, false);
+			QuickChallengeRoomDebugScene challenge = challengeObject.AddComponent<QuickChallengeRoomDebugScene>();
+			challenge.ConfigureForCampaign(
+				// Il premio va deciso prima dei rulli: la slot del minigioco deve mostrare la
+				// carta e la valuta che la run assegna davvero.
+				(result, levels) =>
+				{
+					if (result == FlashTrialResult.Forfeited || challengeRewardResolved)
+						return null;
+					try
+					{
+						challengeReward = RollFlashTrialCampaignReward(result, Mathf.Max(0, levels));
+					}
+					catch (Exception exception)
+					{
+						// Un premio che esplode non deve piu' lasciare la stanza senza interfaccia:
+						// si chiude comunque la sfida e la campagna prosegue senza ricompensa.
+						Debug.LogException(exception);
+						AppendLog("PROVA LAMPO - errore nel calcolo del premio: stanza chiusa senza ricompensa.");
+						challengeReward = new FlashTrialCampaignReward(default, null, 0, 0,
+							" Nessuna ricompensa disponibile.");
+						challengeRewardResolved = true;
+						return null;
+					}
+					challengeRewardResolved = true;
+					return challengeReward.Outcome;
+				},
+				(result, levels) =>
+				{
+					challengeResult = result;
+					completedLevels = Mathf.Max(0, levels);
+					challengeFinished = true;
+				},
+				() =>
+				{
+					challengeForfeitedWithoutMalus = true;
+					challengeResult = FlashTrialResult.Forfeited;
+					completedLevels = 0;
+					challengeFinished = true;
+				});
+
+			while (!challengeFinished)
+				yield return null;
+
+			challengeObject.SetActive(false);
+			Object.Destroy(challengeObject);
+			if (challengeResult == FlashTrialResult.Forfeited)
 			{
-				text += scenarioText;
-				num += scenarioExperience;
+				if (challengeForfeitedWithoutMalus)
+				{
+					text = " Rinuncia senza malus.";
+				}
+				else
+				{
+					ApplyFlashTrialForfeit();
+					text = " Rinuncia: oro ed EXP del prossimo combattimento saranno ridotti del 50%.";
+				}
+				break;
 			}
-			int eventRoll = random.NextInclusive(1, 12);
-			AppendLog($"EVENTO - D12 = {eventRoll}");
-			if (playerCards.Count > 0)
+
+			// Sfida portata a termine, comunque sia andata: la quest della taverna chiede di
+			// giocarla fino in fondo, non di vincerla. Solo la rinuncia (ramo sopra) non conta.
+			if (runProgress != null && ShouldTrackQuestProgress)
+				runProgress.RecordQuickChallengeCompleted();
+
+			if (!challengeRewardResolved)
 			{
-				bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
-				PlayRollingDiceSfx();
-				playerCards[0].View.PlayDiceRoll(diceCatalog, 12, TrackDiceRoll(eventRoll), "IMPREVISTO / OPPORTUNITA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
-				yield return WaitForCardInspectionPause(configuration.Animation.DiceRollDuration + configuration.Animation.DiceResultHold);
-				RestoreMessagePanelAfterDiceRoll(messagePanelWasHidden);
+				// Sfida chiusa senza passare dalla slot (per esempio una scena interrotta):
+				// il premio si risolve qui, cosi' la stanza non resta senza ricompensa.
+				try
+				{
+					challengeReward = RollFlashTrialCampaignReward(challengeResult, completedLevels);
+				}
+				catch (Exception exception)
+				{
+					Debug.LogException(exception);
+					AppendLog("PROVA LAMPO - errore nel calcolo del premio: stanza chiusa senza ricompensa.");
+					challengeReward = new FlashTrialCampaignReward(default, null, 0, 0,
+						" Nessuna ricompensa disponibile.");
+				}
 			}
-			pendingMasterGiftReward = null;
-			(string eventText, int eventExperience) = ResolveOpportunity(eventRoll);
-			if (!string.IsNullOrWhiteSpace(eventText))
-			{
-				text += eventText;
-				num += eventExperience;
-			}
-			if ((Object)(object)pendingMasterGiftReward != (Object)null)
-			{
-				CardDefinition masterGiftReward = pendingMasterGiftReward;
-				pendingMasterGiftReward = null;
-				PlayLootRoomEnterSfx();
-				yield return PlayLootRewardReveal(new[] { masterGiftReward });
-			}
+			num += challengeReward.BonusExperience;
+			text = challengeReward.Description;
 			break;
 		}
 		case RoomType.Loot:
 		{
 			PlayLootRoomEnterSfx();
-			int lootReserveCards = configuration.Progression.LootReserveCards;
-			List<CardDefinition> campaignRewardPool = GetCampaignRewardPool();
-			lootReserveCards = Mathf.Min(lootReserveCards, campaignRewardPool.Count);
-			if (lootReserveCards > 0)
+			// "Cercatore" aggiunge consegne, non probabilita': ogni pezzo e' un'estrazione a
+			// se', cosi' il talento si vede subito invece di sciogliersi in una statistica.
+			int lootItems = AccardND.GameData.TalentRunModifiers.LootItemCount(ActiveTalents);
+			CampaignConsumableType grantedItem = default;
+			text = null;
+			for (int lootIndex = 0; lootIndex < lootItems; lootIndex++)
 			{
-				List<CardDefinition> list = formationDraftService.DrawCandidates(campaignRewardPool, lootReserveCards);
-				List<CardDefinition> addedCards = new List<CardDefinition>();
-				foreach (CardDefinition item in list)
-				{
-					if (TryAddCardToPlayerCollection(item))
-						addedCards.Add(item);
-				}
-				AppendLog("LOOT - " + string.Join(", ", addedCards.Select(CardDisplayNames.MarketName)));
-				yield return PlayLootRewardReveal(addedCards);
-				text = " Carte ottenute: " + string.Join(", ", addedCards.Select(CardDisplayNames.MarketName)) + ".";
-			}
-			else
-			{
-				text = " Hai gia trovato tutte le carte disponibili: ottieni solo le altre ricompense.";
+				GrantRandomConsumable("TESORO", out grantedItem);
+				string itemName = CampaignConsumableName(grantedItem);
+				text = lootIndex == 0 ? itemName : text + ", " + itemName;
+				yield return PlayLootRewardReveal(grantedItem);
 			}
 			break;
 		}
@@ -1441,7 +1770,7 @@ public sealed partial class BattleBoardController
 		{
 			RoomType.Loot => progression.LootRoomExperience, 
 			RoomType.Merchant => progression.MerchantRoomExperience, 
-			RoomType.UnexpectedOpportunity => progression.OpportunityRoomExperience, 
+			RoomType.QuickChallenge => progression.OpportunityRoomExperience,
 			_ => 0, 
 		};
 		int previousLevel = runProgress.PlayerLevel;
@@ -1460,24 +1789,35 @@ public sealed partial class BattleBoardController
 		{
 			RoomType.Loot => "STANZA RICOMPENSA: hai trovato un tesoro.", 
 			RoomType.Merchant => "STANZA MERCATO: scegli il banco delle carte o quello degli oggetti, non entrambi. Puoi sempre vendere e recuperare carte.",
-			RoomType.UnexpectedOpportunity => "IMPREVISTO / OPPORTUNITA:", 
+			RoomType.QuickChallenge => "SFIDA VELOCE:",
 			_ => "Stanza superata.", 
 		};
 		SetTurnBanner(playerTurn: true, roomType switch
 		{
-			RoomType.Loot => "TESORO  -  RICOMPENSA OTTENUTA", 
-			RoomType.Merchant => "MERCATO  -  SPENDI EXP O CONTINUA",
-			RoomType.UnexpectedOpportunity => "OPPORTUNITA  -  EVENTO RISOLTO", 
-			_ => "STANZA COMPLETATA", 
+			RoomType.Loot => GameText.GetLocalizedFallback(
+				GameTextKeys.Campaign.LootRoomCompleteBanner,
+				"STANZA TESORO", "TREASURE ROOM", "SCHATZRAUM", "SALA DEL TESORO", "SALLE AU TRÉSOR"),
+			RoomType.Merchant => GameText.GetLocalizedFallback(
+				GameTextKeys.Campaign.MerchantRoomCompleteBanner,
+				"SPENDI GOLD O CONTINUA", "SPEND GOLD OR CONTINUE", "GOLD AUSGEBEN ODER WEITER", "GASTA ORO O CONTINÚA", "DÉPENSER DE L'OR OU CONTINUER"),
+			RoomType.QuickChallenge => GameText.GetLocalizedFallback(
+				GameTextKeys.Campaign.QuickChallengeCompleteBanner,
+				"SFIDA VELOCE - COMPLETATA", "QUICK CHALLENGE - COMPLETE", "SCHNELLE HERAUSFORDERUNG - GESCHAFFT", "DESAFÍO RÁPIDO - COMPLETADO", "DÉFI RAPIDE - TERMINÉ"),
+			_ => GameText.GetLocalizedFallback(
+				GameTextKeys.Campaign.CombatRoomCompleteBanner,
+				"STANZA COMPLETATA", "ROOM CLEARED", "RAUM GESCHAFFT", "SALA SUPERADA", "SALLE TERMINÉE"),
 		});
 		string text3 = ((roomReward.TotalExperience > 0) ?$" +{roomReward.TotalExperience} EXP." : string.Empty);
-		SetMessage(text2 + text + text3);
+		string completionMessage = roomType == RoomType.Loot
+			? $"Hai trovato {text} e guadagni {roomReward.TotalExperience} EXP."
+			: text2 + text + text3;
+		SetMessage(completionMessage);
 		if (roomReward.LevelsGained > 0)
 		{
 			ShowLevelUpVigorHint();
 		}
 		SetPrimaryActionLabel(restartButtonText, PrimaryActionLabel.Continue);
-		if (roomType == RoomType.UnexpectedOpportunity)
+		if (roomType == RoomType.QuickChallenge)
 		{
 			AccardND.Battlefield.MmoUiTheme.ApplyConfirmButtonStyle(restartButton, restartButtonText);
 		}
@@ -1510,6 +1850,8 @@ public sealed partial class BattleBoardController
 		SetCombatChromeVisible(showCombatChrome);
 		ApplyResponsiveLayout();
 		SetCombatChromeVisible(showCombatChrome);
+		if (roomType == RoomType.QuickChallenge && roomReward.LevelsGained == 0)
+			StartNextRoom();
 	}
 
 	private static void ApplyMerchantRoomCta(Button button, Text label, string spriteResource, bool preserveAspect = true)
@@ -1556,10 +1898,23 @@ public sealed partial class BattleBoardController
 			((Component)playerHud.Rect).gameObject.SetActive(false);
 		}
 		SetCombatHudRefactorVisible(visible);
+		if ((Object)(object)topInfoBarRect != (Object)null)
+		{
+			bool showRoomInfo = visible
+				&& currentRoomType == RoomType.Monster
+				&& !IsBossFightHudActive();
+			((Component)topInfoBarRect).gameObject.SetActive(showRoomInfo);
+			if (showRoomInfo)
+				RefreshRoomHud(string.Empty, string.Empty);
+		}
 		if (cpuHud != null && (Object)(object)cpuHud.Rect != (Object)null)
 		{
 			((Component)cpuHud.Rect).gameObject.SetActive(
-				visible && !bragusBossPresentationActive && !trentorBossPresentationActive);
+				visible
+				&& currentRoomType != RoomType.Boss
+				&& !bragusBossPresentationActive
+				&& !trentorBossPresentationActive
+				&& !seraphelBossPresentationActive);
 		}
 		if ((Object)(object)playerTitleText != (Object)null)
 		{
@@ -1567,13 +1922,16 @@ public sealed partial class BattleBoardController
 		}
 		if ((Object)(object)timelineBackgroundRect != (Object)null)
 		{
-			((Component)timelineBackgroundRect).gameObject.SetActive(visible);
+			// Il modulo Guerriero e' un playground a sequenza guidata: non presenta
+			// iniziative e la timeline non deve riapparire quando si attiva la HUD.
+			((Component)timelineBackgroundRect).gameObject.SetActive(
+				visible && !IsTutorialWarriorDuelActive && !waitingForCampaignBossReveal);
 		}
 	}
 
 	private static bool ShouldShowNonCombatChrome(RoomType roomType)
 	{
-		if (roomType != RoomType.Loot && roomType != RoomType.UnexpectedOpportunity)
+		if (roomType != RoomType.Loot && roomType != RoomType.QuickChallenge)
 		{
 			return roomType != RoomType.Merchant;
 		}

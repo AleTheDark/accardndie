@@ -1,7 +1,10 @@
+using System.Text.Json;
 using AccardND.NetProtocol;
 using AccardND.Server.Accounts;
+using AccardND.Server.Admin;
 using AccardND.Server.Data;
 using AccardND.Server.Progression;
+using AccardND.Server.Sessions;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
@@ -92,6 +95,162 @@ public sealed class CampaignRunHistoryTests
     }
 
     [Fact]
+    public void Admin_panel_lists_open_and_ended_runs()
+    {
+        using var server = new TestServer();
+        AccountIdentity player = server.RegisterAccount("run-history-6");
+        var progress = new SinglePlayerProgressService(server.Database);
+        AdminService admin = CreateAdmin(server);
+
+        progress.RecordRunStart(player, StartRun("run-6a"));
+        progress.RecordRunStart(player, StartRun("run-6b"));
+        progress.ClaimDeathReward(player, DeathRun("run-6b"));
+
+        JsonElement all = Serialize(admin.GetRuns("all", 50, 0));
+        Assert.Equal(2, all.GetProperty("total").GetInt32());
+        Assert.Equal(1, all.GetProperty("open").GetInt32());
+        Assert.Equal(1, all.GetProperty("ended").GetInt32());
+        Assert.Equal("run-history-6", all.GetProperty("runs")[0].GetProperty("username").GetString());
+
+        JsonElement open = Serialize(admin.GetRuns("open", 50, 0));
+        Assert.Equal(1, open.GetProperty("runs").GetArrayLength());
+        Assert.Equal(
+            JsonValueKind.Null, open.GetProperty("runs")[0].GetProperty("endedAt").ValueKind);
+
+        JsonElement overview = Serialize(admin.GetOverview());
+        Assert.Equal(2, overview.GetProperty("startedRuns24h").GetInt32());
+        Assert.Equal(1, overview.GetProperty("openRuns24h").GetInt32());
+        Assert.Equal(1, overview.GetProperty("totalCampaignRuns").GetInt32());
+
+        JsonElement detail = Serialize(admin.GetPlayerDetail(player.PlayerId));
+        Assert.Equal(2, detail.GetProperty("recentRuns").GetArrayLength());
+        Assert.Equal(2, detail.GetProperty("campaignTotals").GetProperty("startedRuns").GetInt32());
+        Assert.Equal(1, detail.GetProperty("campaignTotals").GetProperty("openRuns").GetInt32());
+        Assert.Equal(1, detail.GetProperty("campaignTotals").GetProperty("runs").GetInt32());
+
+        JsonElement series = Serialize(admin.GetTimeseries(7)).GetProperty("points");
+        JsonElement today = series[series.GetArrayLength() - 1];
+        Assert.Equal(2, today.GetProperty("campaignStarted").GetInt32());
+        Assert.Equal(1, today.GetProperty("campaign").GetInt32());
+    }
+
+    [Fact]
+    public void Admin_campaign_leaderboard_keeps_each_players_personal_record()
+    {
+        using var server = new TestServer();
+        AccountIdentity first = server.RegisterAccount("campaign-record-a");
+        AccountIdentity second = server.RegisterAccount("campaign-record-b");
+        var progress = new SinglePlayerProgressService(server.Database);
+
+        progress.ClaimDeathReward(first, DeathRun("record-a-1", 3));
+        progress.ClaimDeathReward(first, DeathRun("record-a-2", 8));
+        progress.ClaimDeathReward(second, DeathRun("record-b-1", 5));
+
+        JsonElement players = Serialize(CreateAdmin(server).GetCampaignLeaderboard(100))
+            .GetProperty("players");
+
+        Assert.Equal(2, players.GetArrayLength());
+        Assert.Equal("campaign-record-a", players[0].GetProperty("username").GetString());
+        Assert.Equal(8, players[0].GetProperty("personalRecord").GetInt32());
+        Assert.Equal(2, players[0].GetProperty("runs").GetInt32());
+        Assert.Equal(1, players[0].GetProperty("position").GetInt32());
+        Assert.Equal(5, players[1].GetProperty("personalRecord").GetInt32());
+        Assert.Equal(2, players[1].GetProperty("position").GetInt32());
+    }
+
+    [Fact]
+    public void Admin_can_delete_one_campaign_run_without_touching_the_others()
+    {
+        using var server = new TestServer();
+        AccountIdentity player = server.RegisterAccount("run-delete-one");
+        var progress = new SinglePlayerProgressService(server.Database);
+        AdminService admin = CreateAdmin(server);
+
+        progress.ClaimDeathReward(player, DeathRun("keep-this", 3));
+        progress.ClaimDeathReward(player, DeathRun("delete-this", 8));
+        JsonElement runs = Serialize(admin.GetRuns("all", 50, 0)).GetProperty("runs");
+        long runId = runs[0].GetProperty("runId").GetInt64();
+
+        Assert.True(admin.DeleteCampaignRun(runId).ok);
+        Assert.Equal(1, server.QueryScalar<int>("SELECT COUNT(*) FROM campaign_runs"));
+        Assert.Equal("keep-this", server.QueryScalar<string>(
+            "SELECT client_run_ref FROM campaign_runs"));
+        Assert.False(admin.DeleteCampaignRun(runId).ok);
+    }
+
+    [Fact]
+    public void Game_adventure_leaderboard_returns_records_and_profile_icons()
+    {
+        using var server = new TestServer();
+        AccountIdentity first = server.RegisterAccount("adventure-ladder-a");
+        AccountIdentity second = server.RegisterAccount("adventure-ladder-b");
+        var progress = new SinglePlayerProgressService(server.Database);
+        progress.ClaimDeathReward(first, DeathRun("ladder-a", 9));
+        progress.ClaimDeathReward(second, DeathRun("ladder-b", 4));
+
+        using (SqliteConnection connection = server.Database.Open())
+        using (SqliteCommand icon = connection.CreateCommand())
+        {
+            icon.CommandText = @"
+                INSERT INTO profiles (player_id, selected_icon_id, updated_at)
+                VALUES ($id, 'tier-gold', '2026-01-01T00:00:00Z')
+                ON CONFLICT(player_id) DO UPDATE SET selected_icon_id=excluded.selected_icon_id";
+            icon.Parameters.AddWithValue("$id", first.PlayerId);
+            icon.ExecuteNonQuery();
+        }
+
+        AdventureLeaderboardData data =
+            new RankedService(server.Database, server.Config).GetAdventureLeaderboard(50);
+
+        Assert.Equal(2, data.entries.Length);
+        Assert.Equal(1, data.entries[0].rank);
+        Assert.Equal(9, data.entries[0].roomsCleared);
+        Assert.Equal("tier-gold", data.entries[0].selectedIconId);
+        Assert.Equal(2, data.entries[1].rank);
+    }
+
+    [Fact]
+    public void Adventure_personal_record_prioritizes_chapter_before_room()
+    {
+        using var server = new TestServer();
+        AccountIdentity player = server.RegisterAccount("chapter-before-room");
+        var progress = new SinglePlayerProgressService(server.Database);
+
+        progress.ClaimDeathReward(player, DeathRun("chapter-one-far", 15, "chapter-1"));
+        progress.ClaimDeathReward(player, DeathRun("chapter-two-near", 5, "chapter-2"));
+
+        AdventureLeaderboardEntry entry =
+            new RankedService(server.Database, server.Config).GetAdventureLeaderboard(50).entries[0];
+
+        Assert.Equal(2, entry.chapterNumber);
+        Assert.Equal(5, entry.roomsCleared);
+    }
+
+    [Fact]
+    public void Admin_campaign_leaderboard_prioritizes_chapter_before_room()
+    {
+        using var server = new TestServer();
+        AccountIdentity chapterOne = server.RegisterAccount("chapter-one-far");
+        AccountIdentity chapterTwo = server.RegisterAccount("chapter-two-near");
+        var progress = new SinglePlayerProgressService(server.Database);
+
+        progress.ClaimDeathReward(
+            chapterOne, DeathRun("chapter-one-far", 15, "chapter-1"));
+        progress.ClaimDeathReward(
+            chapterTwo, DeathRun("chapter-two-near", 4, "chapter-2"));
+
+        JsonElement players = Serialize(CreateAdmin(server).GetCampaignLeaderboard(100))
+            .GetProperty("players");
+
+        Assert.Equal(chapterTwo.PlayerId, players[0].GetProperty("playerId").GetString());
+        Assert.Equal(2, players[0].GetProperty("chapterNumber").GetInt32());
+        Assert.Equal(4, players[0].GetProperty("personalRecord").GetInt32());
+        Assert.Equal(1, players[0].GetProperty("position").GetInt32());
+        Assert.Equal(chapterOne.PlayerId, players[1].GetProperty("playerId").GetString());
+        Assert.Equal(2, players[1].GetProperty("position").GetInt32());
+    }
+
+    [Fact]
     public void Old_database_keeps_its_runs_and_accepts_open_ones()
     {
         // Il database vero arriva dalla versione in cui ended_at era NOT NULL: la
@@ -100,7 +259,9 @@ public sealed class CampaignRunHistoryTests
         string path = Path.Combine(Path.GetTempPath(), $"accardnd-migration-{Guid.NewGuid():N}.db");
         try
         {
-            using (var legacy = new SqliteConnection($"Data Source={path}"))
+            // Niente pool nemmeno sulla connessione "legacy": ClearAllPools e' globale al
+            // processo e strapperebbe le connessioni ai test in parallelo.
+            using (var legacy = new SqliteConnection($"Data Source={path};Pooling=False"))
             {
                 legacy.Open();
                 using SqliteCommand create = legacy.CreateCommand();
@@ -122,9 +283,7 @@ public sealed class CampaignRunHistoryTests
                     VALUES ('vecchio', 'run-storica', 6, '2026-01-01T00:00:00.0000000Z');";
                 create.ExecuteNonQuery();
             }
-            SqliteConnection.ClearAllPools();
-
-            var config = new ServerConfig { DatabaseFilePath = path };
+            var config = new ServerConfig { DatabaseFilePath = path, DatabasePooling = false };
             var database = new AccardDatabase(config);
 
             using SqliteConnection connection = database.Open();
@@ -142,10 +301,22 @@ public sealed class CampaignRunHistoryTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             try { File.Delete(path); } catch (IOException) { }
         }
     }
+
+    private static AdminService CreateAdmin(TestServer server)
+    {
+        var ranked = new RankedService(server.Database, server.Config);
+        var seasons = new SeasonService(
+            server.Database, server.Config, ranked, new UnlockService(server.Database, server.Config));
+        return new AdminService(
+            server.Database, new PresenceRegistry(), seasons, ranked,
+            new AccountEraser(server.Database));
+    }
+
+    /// <summary>Il pannello legge JSON: si ispeziona quello che vedra' davvero la pagina.</summary>
+    private static JsonElement Serialize(object payload) => JsonSerializer.SerializeToElement(payload);
 
     private static SinglePlayerRunStartRequest StartRun(string runId) => new()
     {
@@ -155,13 +326,14 @@ public sealed class CampaignRunHistoryTests
         stageId = "climbing"
     };
 
-    private static SinglePlayerDeathRewardRequest DeathRun(string runId) => new()
+    private static SinglePlayerDeathRewardRequest DeathRun(
+        string runId, int roomsCleared = 4, string chapterId = "chapter-2") => new()
     {
         runId = runId,
         mode = "campaign",
-        chapterId = "chapter-2",
+        chapterId = chapterId,
         stageId = "climbing",
-        roomsCleared = 4,
+        roomsCleared = roomsCleared,
         enemiesDefeated = 7,
         matchExperience = 250
     };

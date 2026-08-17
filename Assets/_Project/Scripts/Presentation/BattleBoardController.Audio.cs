@@ -14,9 +14,17 @@ public sealed partial class BattleBoardController
 
 	private const string MusicMutedPlayerPrefsKey = "AccardND.MusicMuted";
 
+	private const float DefaultMusicFadeOutDuration = 1.2f;
+
+	private const float MusicSwitchFadeOutDuration = 0.45f;
+
 	private AudioSource musicAudioSource;
 
-	private Coroutine musicFadeRoutine;
+	private AudioSource pvpTimerAudioSource;
+
+	private MusicFadeRunner musicFadeRunner;
+
+	private bool musicFadeActive;
 
 	private BattleSfxPlayer battleSfx;
 
@@ -27,17 +35,27 @@ public sealed partial class BattleBoardController
 	/// <summary>Rifiuto per mana insufficiente, accompagna il callout NO MANA.</summary>
 	private AudioClip noManaSfx;
 
+	private AudioClip pvpTimerSfx;
+
+	private AudioClip actionTargetingSfx;
+
 	private AudioClip openCardInspectionSfx;
 
 	private AudioClip closeCardInspectionSfx;
 
 	private AudioClip buyCardSfx;
 
+	private AudioClip forgeHitSfx;
+
 	private AudioClip arrowChangeSfx;
 
 	private AudioClip coinFlipSfx;
 
 	private AudioClip transitionSfx;
+
+	private AudioClip levelUpSfx;
+
+	private AudioClip talentAcquiredSfx;
 
 	private AudioClip openBagSfx;
 
@@ -55,7 +73,21 @@ public sealed partial class BattleBoardController
 
 	private AudioClip hubDaySoundtrack;
 
+	private AudioClip tutorialSoundtrack;
+
+	private AudioClip[] pvpArenaSoundtracks;
+
+	private AudioClip gameOverSoundtrack;
+
+	private AudioClip victorySfx;
+
 	private AudioClip bossBragusSoundtrack;
+
+	private AudioClip bossJurinashorSoundtrack;
+
+	private AudioClip jurinashorWeaponEvocationSfx;
+
+	private AudioClip bossJurinashorJoinBattlefieldSfx;
 
 	private AudioClip bossMedusaSoundtrack;
 
@@ -79,6 +111,10 @@ public sealed partial class BattleBoardController
 
 	private AudioClip bossBragusDeathSfx;
 
+	private AudioClip transformationSeraphelSfx;
+
+	private AudioClip seraphelHealSfx;
+
 	private void InitializeAudio()
 	{
 		battleSfx = new BattleSfxPlayer();
@@ -92,15 +128,28 @@ public sealed partial class BattleBoardController
 		musicAudioSource.playOnAwake = false;
 		musicAudioSource.loop = true;
 		musicAudioSource.spatialBlend = 0f;
+		musicFadeRunner = musicObject.AddComponent<MusicFadeRunner>();
 		UpdateMusicSourceVolume();
+
+		GameObject pvpTimerObject = new GameObject("PvP Timer SFX Audio Source");
+		pvpTimerObject.transform.SetParent(transform, false);
+		pvpTimerAudioSource = pvpTimerObject.AddComponent<AudioSource>();
+		pvpTimerAudioSource.playOnAwake = false;
+		pvpTimerAudioSource.loop = true;
+		pvpTimerAudioSource.spatialBlend = 0f;
 
 		openCardInspectionSfx = LoadSfx("open_card_inspection");
 		closeCardInspectionSfx = LoadSfx("close_card_inspection");
 		noManaSfx = LoadSfx("no_mana");
+		pvpTimerSfx = LoadSfx("timer_out");
+		actionTargetingSfx = LoadSfx("click_on_action");
 		buyCardSfx = LoadSfx("buy_card");
+		forgeHitSfx = LoadSfx("forge_hit");
 		arrowChangeSfx = LoadSfx("arrow_change");
 		coinFlipSfx = LoadSfx("coin_flip");
 		transitionSfx = LoadSfx("transition");
+		levelUpSfx = LoadSfx("level_up");
+		talentAcquiredSfx = LoadSfx("talent_acquired");
 		openBagSfx = LoadSfx("open_bag");
 		closedBagSfx = LoadSfx("closed_bag");
 		lootRoomEnterSfx = LoadSfx("loot_room_enter");
@@ -109,7 +158,20 @@ public sealed partial class BattleBoardController
 		apocalypticMonsterRoomEnterSfx = LoadSfx("monster_apocalyptic_room");
 		hubNightSoundtrack = LoadSfx("hub_night");
 		hubDaySoundtrack = LoadSfx("hub_day") ?? hubNightSoundtrack;
+		tutorialSoundtrack = LoadSfx("tutorial_song");
+		pvpArenaSoundtracks = new[]
+		{
+			LoadSfx("arena_1"),
+			LoadSfx("arena_2"),
+			LoadSfx("arena_3")
+		};
+		gameOverSoundtrack = LoadSfx("game_over");
+		victorySfx = LoadSfx("victory_pvp");
 		bossBragusSoundtrack = LoadSfx("boss_bragus_soundtrack");
+		// Jurinashor uses the standard boss music until a dedicated track is provided.
+		bossJurinashorSoundtrack = LoadSfx("boss_jurinashor_soundtrack") ?? bossBragusSoundtrack;
+		jurinashorWeaponEvocationSfx = LoadSfx("jurinashor_weapon_evocation");
+		bossJurinashorJoinBattlefieldSfx = LoadSfx("boss_jurinashor_join_battlefield");
 		bossMedusaSoundtrack = LoadSfx("boss_medusa_soundtrack");
 		bossPalantirSoundtrack = LoadSfx("boss_palantir_soundtrack");
 		bossMedusaAttackSfx = LoadSfx("boss_medusa_attack");
@@ -121,6 +183,8 @@ public sealed partial class BattleBoardController
 		bossBragusAttackHitSfx = LoadSfx("boss_bragus_attack_hit");
 		bossBragusTakeDamageSfx = LoadSfxSet("boss_bragus_takedamage", 3);
 		bossBragusDeathSfx = LoadSfx("boss_bragus_death");
+		transformationSeraphelSfx = LoadSfx("transformation_seraphel");
+		seraphelHealSfx = LoadSfx("seraphel_heal");
 	}
 
 	private static AudioClip LoadSfx(string clipName)
@@ -141,6 +205,58 @@ public sealed partial class BattleBoardController
 	private void PlaySfx(AudioClip clip, float volume = 1f)
 	{
 		battleSfx?.PlayClip(clip, volume);
+	}
+
+	/// <summary>
+	/// Feedback condiviso quando un'azione entra nella modalita di scelta bersaglio.
+	/// Va chiamato sul bottone dell'azione, mai sul click della pedina di destinazione.
+	/// </summary>
+	private void PlayActionTargetingSfx()
+	{
+		PlaySfx(actionTargetingSfx);
+	}
+
+	private void StartPvpTimerSfx()
+	{
+		if ((Object)(object)pvpTimerAudioSource == (Object)null
+			|| (Object)(object)pvpTimerSfx == (Object)null
+			|| pvpTimerAudioSource.isPlaying)
+		{
+			return;
+		}
+
+		pvpTimerAudioSource.clip = pvpTimerSfx;
+		pvpTimerAudioSource.volume = battleSfx?.Volume ?? 1f;
+		pvpTimerAudioSource.Play();
+	}
+
+	private void StopPvpTimerSfx()
+	{
+		if ((Object)(object)pvpTimerAudioSource == (Object)null)
+			return;
+
+		pvpTimerAudioSource.Stop();
+		pvpTimerAudioSource.clip = null;
+	}
+
+	private void PlayLevelUpSfx()
+	{
+		PlaySfx(levelUpSfx);
+	}
+
+	private void PlayTalentAcquiredSfx()
+	{
+		PlaySfx(talentAcquiredSfx);
+	}
+
+	private void PlaySeraphelTransformationSfx()
+	{
+		PlaySfx(transformationSeraphelSfx);
+	}
+
+	private void PlaySeraphelHealSfx()
+	{
+		PlaySfx(seraphelHealSfx);
 	}
 
 	private void IncreaseSfxVolume()
@@ -175,10 +291,11 @@ public sealed partial class BattleBoardController
 				? GameText.Get(GameTextKeys.Common.Muted)
 				: GameText.Format(GameTextKeys.Audio.VolumePercent, Mathf.RoundToInt(volume * 100f));
 		}
+		if ((Object)(object)sfxVolumeSlider != (Object)null)
+			sfxVolumeSlider.SetValueWithoutNotify(battleSfx?.Volume ?? 1f);
 		if ((Object)(object)sfxMuteButtonText != (Object)null)
 		{
-			sfxMuteButtonText.text = GameText.Get(
-				battleSfx?.Muted == true ? GameTextKeys.Common.Activate : GameTextKeys.Common.Mute);
+			sfxMuteButtonText.text = LocalizedOptionsAudioAction(battleSfx?.Muted == true);
 		}
 	}
 
@@ -223,11 +340,19 @@ public sealed partial class BattleBoardController
 				? GameText.Get(GameTextKeys.Common.Muted)
 				: GameText.Format(GameTextKeys.Audio.VolumePercent, Mathf.RoundToInt(musicVolume * 100f));
 		}
+		if ((Object)(object)musicVolumeSlider != (Object)null)
+			musicVolumeSlider.SetValueWithoutNotify(musicVolume);
 		if ((Object)(object)musicMuteButtonText != (Object)null)
 		{
-			musicMuteButtonText.text = GameText.Get(
-				musicMuted ? GameTextKeys.Common.Activate : GameTextKeys.Common.Mute);
+			musicMuteButtonText.text = LocalizedOptionsAudioAction(musicMuted);
 		}
+	}
+
+	private static string LocalizedOptionsAudioAction(bool muted)
+	{
+		return muted
+			? GameText.GetLocalizedFallback(GameTextKeys.Options.Unmute, "ATTIVA AUDIO", "UNMUTE", "TON EINSCHALTEN", "ACTIVAR SONIDO", "ACTIVER LE SON")
+			: GameText.GetLocalizedFallback(GameTextKeys.Options.Mute, "MUTE", "MUTE", "STUMMSCHALTEN", "SILENCIAR", "COUPER LE SON");
 	}
 
 	private void UpdateMusicSourceVolume()
@@ -251,6 +376,12 @@ public sealed partial class BattleBoardController
 			UpdateMusicSourceVolume();
 			return;
 		}
+		if (musicAudioSource.isPlaying)
+		{
+			StopMusicFade();
+			StartMusicFade(SwitchMusicRoutine(clip, MusicSwitchFadeOutDuration));
+			return;
+		}
 		musicAudioSource.clip = clip;
 		musicAudioSource.loop = true;
 		UpdateMusicSourceVolume();
@@ -260,13 +391,7 @@ public sealed partial class BattleBoardController
 
 	private void StopMusic()
 	{
-		if ((Object)(object)musicAudioSource == (Object)null)
-		{
-			return;
-		}
-		StopMusicFade();
-		musicAudioSource.Stop();
-		musicAudioSource.clip = null;
+		FadeOutMusic(DefaultMusicFadeOutDuration);
 	}
 
 	private void FadeOutMusic(float duration)
@@ -276,7 +401,41 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		StopMusicFade();
-		musicFadeRoutine = StartCoroutine(FadeOutMusicRoutine(Mathf.Max(0.01f, duration)));
+		StartMusicFade(FadeOutMusicRoutine(Mathf.Max(0.01f, duration)));
+	}
+
+	private void StartMusicFade(IEnumerator routine)
+	{
+		if ((Object)(object)musicFadeRunner == (Object)null)
+		{
+			StartCoroutine(routine);
+			return;
+		}
+		musicFadeActive = true;
+		musicFadeRunner.Play(routine);
+	}
+
+	private IEnumerator SwitchMusicRoutine(AudioClip clip, float duration)
+	{
+		float startVolume = musicAudioSource.volume;
+		float elapsed = 0f;
+		while (elapsed < duration && (Object)(object)musicAudioSource != (Object)null)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			float progress = Mathf.Clamp01(elapsed / duration);
+			musicAudioSource.volume = Mathf.Lerp(startVolume, 0f, progress);
+			yield return null;
+		}
+		if ((Object)(object)musicAudioSource != (Object)null)
+		{
+			musicAudioSource.Stop();
+			musicAudioSource.clip = clip;
+			musicAudioSource.loop = true;
+			UpdateMusicSourceVolume();
+			Debug.Log($"[Music] Riproduco '{clip.name}' (volume {musicAudioSource.volume:0.00})");
+			musicAudioSource.Play();
+		}
+		CompleteMusicFade();
 	}
 
 	private IEnumerator FadeOutMusicRoutine(float duration)
@@ -296,17 +455,29 @@ public sealed partial class BattleBoardController
 			musicAudioSource.clip = null;
 			UpdateMusicSourceVolume();
 		}
-		musicFadeRoutine = null;
+		CompleteMusicFade();
+	}
+
+	private void CompleteMusicFade()
+	{
+		musicFadeActive = false;
+		if ((Object)(object)musicFadeRunner != (Object)null)
+		{
+			musicFadeRunner.ClearActive();
+		}
 	}
 
 	private void StopMusicFade()
 	{
-		if (musicFadeRoutine == null)
+		if (!musicFadeActive)
 		{
 			return;
 		}
-		StopCoroutine(musicFadeRoutine);
-		musicFadeRoutine = null;
+		if ((Object)(object)musicFadeRunner != (Object)null)
+		{
+			musicFadeRunner.StopActive();
+		}
+		musicFadeActive = false;
 		UpdateMusicSourceVolume();
 	}
 
@@ -328,6 +499,11 @@ public sealed partial class BattleBoardController
 	private void PlayBuyCardSfx()
 	{
 		PlaySfx(buyCardSfx);
+	}
+
+	private void PlayForgeHitSfx()
+	{
+		PlaySfx(forgeHitSfx);
 	}
 
 	private void PlayArrowChangeSfx()
@@ -362,6 +538,11 @@ public sealed partial class BattleBoardController
 
 	private void PlayPawnEnteringBattlefieldSfx(CardDefinition definition)
 	{
+		if ((Object)(object)definition != (Object)null && IsJurinashorBossDefinition(definition))
+		{
+			PlaySfx(bossJurinashorJoinBattlefieldSfx);
+			return;
+		}
 		battleSfx?.PlayJoinBattlefield(definition);
 	}
 
@@ -415,9 +596,29 @@ public sealed partial class BattleBoardController
 		battleSfx?.PlayWarriorSupreme();
 	}
 
+	private void PlayBarbarianSupremeSfx()
+	{
+		battleSfx?.PlayBarbarianSupreme();
+	}
+
 	private void PlayMageSupremeSfx()
 	{
 		battleSfx?.PlayMageSupreme();
+	}
+
+	private void PlayAssassinSupremeSfx()
+	{
+		battleSfx?.PlayAssassinSupreme();
+	}
+
+	private void PlayPriestSupremeSfx()
+	{
+		battleSfx?.PlayPriestSupreme();
+	}
+
+	private void PlayNecromancerSupremeSfx()
+	{
+		battleSfx?.PlayNecromancerSupreme();
 	}
 
 	private void PlayComposableGolemAttackSfx(ComposableGolemForm form)
@@ -501,6 +702,11 @@ public sealed partial class BattleBoardController
 
 	private void PlayCurrentRoomEnterSfx()
 	{
+		if (currentRoomType == RoomType.Boss && IsJurinashorMusicRoom())
+		{
+			PlayMusic(bossJurinashorSoundtrack);
+			return;
+		}
 		if (currentRoomType == RoomType.Boss && IsMedusaMusicRoom())
 		{
 			PlayMusic(bossMedusaSoundtrack);
@@ -533,6 +739,49 @@ public sealed partial class BattleBoardController
 	{
 		AudioClip clip = IsCurrentHubNight() ? hubNightSoundtrack : hubDaySoundtrack;
 		PlayMusic(clip ?? hubNightSoundtrack);
+	}
+
+	private void PlayTutorialMusic()
+	{
+		if ((Object)(object)tutorialSoundtrack == (Object)null)
+		{
+			Debug.LogWarning("[Music] Traccia tutorial_song non trovata.");
+			return;
+		}
+		PlayMusic(tutorialSoundtrack);
+	}
+
+	private void PlayPvpArenaMusic(int matchRound)
+	{
+		int index = Mathf.Clamp(matchRound <= 0 ? 1 : matchRound, 1, 3) - 1;
+		AudioClip clip = pvpArenaSoundtracks != null && index < pvpArenaSoundtracks.Length
+			? pvpArenaSoundtracks[index]
+			: null;
+		if ((Object)(object)clip == (Object)null)
+		{
+			Debug.LogWarning($"[Music] Traccia arena_{index + 1} non trovata.");
+			return;
+		}
+		PlayMusic(clip);
+	}
+
+	private void StopPvpArenaMusic()
+	{
+		if ((Object)(object)musicAudioSource == (Object)null
+			|| pvpArenaSoundtracks == null
+			|| !System.Array.Exists(
+				pvpArenaSoundtracks,
+				clip => (Object)(object)clip == (Object)(object)musicAudioSource.clip))
+		{
+			return;
+		}
+
+		// L'uscita dal PvP e' un confine netto: nessun fade/coroutine Arena deve
+		// poter sopravvivere e riscrivere il volume o ripartire sopra la musica Hub.
+		StopMusicFade();
+		musicAudioSource.Stop();
+		musicAudioSource.clip = null;
+		UpdateMusicSourceVolume();
 	}
 
 	private bool IsMedusaMusicRoom()
@@ -569,6 +818,16 @@ public sealed partial class BattleBoardController
 			&& string.Equals(currentScenario.BossId, BragusBossCardId, System.StringComparison.OrdinalIgnoreCase);
 	}
 
+	private bool IsJurinashorMusicRoom()
+	{
+		if (activeJurinashorBoss != null)
+		{
+			return true;
+		}
+		return (Object)(object)currentScenario != (Object)null
+			&& string.Equals(currentScenario.BossId, JurinashorBossCardId, System.StringComparison.OrdinalIgnoreCase);
+	}
+
 	private void PlayAttackResultSfx(BattleCardState attacker, bool hit)
 	{
 		if (attacker == null)
@@ -590,6 +849,32 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		PlayAttackResultSfx(attacker, hit);
+	}
+}
+
+internal sealed class MusicFadeRunner : MonoBehaviour
+{
+	private Coroutine activeRoutine;
+
+	public void Play(IEnumerator routine)
+	{
+		StopActive();
+		activeRoutine = StartCoroutine(routine);
+	}
+
+	public void StopActive()
+	{
+		if (activeRoutine == null)
+		{
+			return;
+		}
+		StopCoroutine(activeRoutine);
+		activeRoutine = null;
+	}
+
+	public void ClearActive()
+	{
+		activeRoutine = null;
 	}
 }
 }

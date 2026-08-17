@@ -17,7 +17,6 @@ namespace AccardND.Editor
         private const string ResourcesRoot = "Assets/_Project/Resources";
         private const string DatabasePath = ResourcesRoot + "/CardDatabase.asset";
 
-        [MenuItem("Accard N' Die/Rebuild Card Database", priority = 20)]
         public static void Rebuild()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -99,7 +98,6 @@ namespace AccardND.Editor
             Debug.Log($"[Accard N' Die] Database aggiornato: {definitions.Count} carte.");
         }
 
-        [MenuItem("Accard N' Die/Open Card Database", priority = 21)]
         private static void OpenDatabase()
         {
             CardDatabase database = AssetDatabase.LoadAssetAtPath<CardDatabase>(DatabasePath);
@@ -113,7 +111,6 @@ namespace AccardND.Editor
             EditorGUIUtility.PingObject(database);
         }
 
-        [MenuItem("Accard N' Die/Validate Card Database", priority = 22)]
         private static void ValidateFromMenu()
         {
             CardDatabase database = AssetDatabase.LoadAssetAtPath<CardDatabase>(DatabasePath);

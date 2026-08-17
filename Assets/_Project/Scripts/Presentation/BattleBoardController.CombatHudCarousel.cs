@@ -4,12 +4,14 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using AccardND.Battlefield;
+using AccardND.Localization;
 using Object = UnityEngine.Object;
 
 namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	private const int CombatExperienceFontSize = 30;
 	private RectTransform combatExperienceRoot;
 	private ArcaneExperienceFillGraphic combatExperienceFill;
 	private Coroutine combatExperienceFillRoutine;
@@ -18,6 +20,10 @@ public sealed partial class BattleBoardController
 	private Text combatVigorText;
 	private BattleCardState carouselCenterCard;
 	private Coroutine carouselRotationRoutine;
+	private int carouselRotationFrame = -1;
+	private readonly Dictionary<RectTransform, Vector2> carouselTargets = new Dictionary<RectTransform, Vector2>();
+	private readonly Dictionary<RectTransform, Vector2> carouselAnimatedTargets = new Dictionary<RectTransform, Vector2>();
+	private readonly List<(RectTransform Rect, Vector2 Pose)> combatPawnPoseSnapshot = new List<(RectTransform, Vector2)>();
 
 	private void CreateCombatHudRefactor(Font font)
 	{
@@ -38,8 +44,13 @@ public sealed partial class BattleBoardController
 		SetRect(combatExperienceFill.rectTransform, Vector2.zero, new Vector2(0f, 1f));
 		combatExperienceFill.raycastTarget = false;
 
-		combatExperienceText = CreateText("Combat Experience Value", expRoot.transform, font, 18,
+		combatExperienceText = CreateText("Combat Experience Value", expRoot.transform, font, CombatExperienceFontSize,
 			FontStyle.Bold, TextAnchor.MiddleCenter);
+		// This HUD value must remain fixed instead of inheriting portrait scaling or best-fit resizing.
+		combatExperienceText.fontSize = CombatExperienceFontSize;
+		combatExperienceText.resizeTextForBestFit = false;
+		combatExperienceText.resizeTextMinSize = CombatExperienceFontSize;
+		combatExperienceText.resizeTextMaxSize = CombatExperienceFontSize;
 		combatExperienceText.color = Color.white;
 		combatExperienceText.raycastTarget = false;
 		Stretch(combatExperienceText.rectTransform, 2f);
@@ -50,7 +61,7 @@ public sealed partial class BattleBoardController
 		combatVigorImage = CreateImage("Combat Vigor Die", (Transform)(object)safeAreaRoot, Color.white);
 		combatVigorImage.preserveAspect = true;
 		combatVigorImage.raycastTarget = false;
-		combatVigorText = CreateText("Combat Vigor Value", combatVigorImage.transform, font, 20,
+		combatVigorText = CreateText("Combat Vigor Value", combatVigorImage.transform, font, 35,
 			FontStyle.Bold, TextAnchor.MiddleCenter);
 		combatVigorText.color = Color.white;
 		combatVigorText.raycastTarget = false;
@@ -69,6 +80,10 @@ public sealed partial class BattleBoardController
 			return;
 
 		bool portrait = Screen.height > Screen.width;
+		Vector2 leftResourceAnchor = portrait ? new Vector2(0.395f, 0.09f) : new Vector2(0.42f, 0.105f);
+		Vector2 rightResourceAnchor = portrait ? new Vector2(0.605f, 0.09f) : new Vector2(0.58f, 0.105f);
+		Vector2 leftEnemyAnchor = new Vector2(leftResourceAnchor.x, 1f - leftResourceAnchor.y);
+		Vector2 rightEnemyAnchor = new Vector2(rightResourceAnchor.x, 1f - rightResourceAnchor.y);
 		SetRect(combatExperienceRoot,
 			portrait ? new Vector2(0.055f, 0f) : new Vector2(0.06f, 0f),
 			portrait ? new Vector2(0.945f, 0.043f) : new Vector2(0.94f, 0.05f));
@@ -76,7 +91,7 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)manaRuneImage != (Object)null)
 		{
 			RectTransform manaRect = manaRuneImage.rectTransform;
-			manaRect.anchorMin = manaRect.anchorMax = portrait ? new Vector2(0.395f, 0.09f) : new Vector2(0.42f, 0.105f);
+			manaRect.anchorMin = manaRect.anchorMax = leftResourceAnchor;
 			manaRect.pivot = new Vector2(0.5f, 0.5f);
 			manaRect.anchoredPosition = Vector2.zero;
 			manaRect.sizeDelta = portrait ? new Vector2(118f, 118f) : new Vector2(138f, 138f);
@@ -86,11 +101,46 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)combatVigorImage != (Object)null)
 		{
 			RectTransform vigorRect = combatVigorImage.rectTransform;
-			vigorRect.anchorMin = vigorRect.anchorMax = portrait ? new Vector2(0.605f, 0.09f) : new Vector2(0.58f, 0.105f);
+			vigorRect.anchorMin = vigorRect.anchorMax = rightResourceAnchor;
 			vigorRect.pivot = new Vector2(0.5f, 0.5f);
 			vigorRect.anchoredPosition = Vector2.zero;
 			vigorRect.sizeDelta = portrait ? new Vector2(110f, 110f) : new Vector2(128f, 128f);
 			vigorRect.localScale = new Vector3(1.2f, 1.2f, 1f);
+		}
+
+		if ((Object)(object)enemyManaRuneImage != (Object)null)
+		{
+			RectTransform enemyManaRect = enemyManaRuneImage.rectTransform;
+			enemyManaRect.anchorMin = enemyManaRect.anchorMax = leftEnemyAnchor;
+			enemyManaRect.pivot = new Vector2(0.5f, 0.5f);
+			enemyManaRect.anchoredPosition = new Vector2(0f, -24f);
+			enemyManaRect.sizeDelta = portrait ? new Vector2(118f, 118f) : new Vector2(138f, 138f);
+			enemyManaRect.localScale = new Vector3(1.3f, 1.3f, 1f);
+		}
+
+		if (cpuHud != null && (Object)(object)cpuHud.Rect != (Object)null)
+		{
+			Stretch(cpuHud.Rect, 0f);
+			if ((Object)(object)cpuHud.DiceImage != (Object)null)
+			{
+				RectTransform cpuDiceRect = cpuHud.DiceImage.rectTransform;
+				// Boss e cambi di forma possono aggiornare il dado, non spostarlo.
+				if (cpuDiceRect.parent != cpuHud.Rect)
+					cpuDiceRect.SetParent(cpuHud.Rect, false);
+				cpuDiceRect.anchorMin = cpuDiceRect.anchorMax = rightEnemyAnchor;
+				cpuDiceRect.pivot = new Vector2(0.5f, 0.5f);
+				cpuDiceRect.anchoredPosition = new Vector2(0f, -23.5f);
+				cpuDiceRect.sizeDelta = portrait ? new Vector2(110f, 110f) : new Vector2(128f, 128f);
+				cpuDiceRect.localScale = new Vector3(1.2f, 1.2f, 1f);
+			}
+			if ((Object)(object)cpuHud.DiceText != (Object)null)
+			{
+				RectTransform cpuDiceValueRect = cpuHud.DiceText.rectTransform;
+				if (cpuDiceValueRect.parent != cpuHud.DiceImage.transform)
+					cpuDiceValueRect.SetParent(cpuHud.DiceImage.transform, false);
+				Stretch(cpuDiceValueRect, 3f);
+				cpuDiceValueRect.localScale = Vector3.one;
+			}
 		}
 	}
 
@@ -100,7 +150,9 @@ public sealed partial class BattleBoardController
 		{
 			int maximum = Mathf.Max(0, runProgress.ExperiencePerLevel);
 			int current = Mathf.Max(0, runProgress.CurrentExperience);
-			combatExperienceText.text = maximum > 0 ? $"{current} / {maximum} EXP" : "LIVELLO MASSIMO";
+			combatExperienceText.text = maximum > 0
+				? GameText.GetOrFallbackSilent(GameTextKeys.Combat.ExperienceProgress, "{0} / {1} EXP", current, maximum)
+				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.MaxLevel, "LIVELLO MASSIMO");
 			float fill = maximum > 0 ? Mathf.Clamp01((float)current / maximum) : 1f;
 			AnimateCombatExperienceFill(fill);
 		}
@@ -154,9 +206,44 @@ public sealed partial class BattleBoardController
 	private void SetCombatHudRefactorVisible(bool visible)
 	{
 		if ((Object)(object)combatExperienceRoot != (Object)null)
-			combatExperienceRoot.gameObject.SetActive(visible);
+			combatExperienceRoot.gameObject.SetActive(
+				visible && !pvpPresentationActive && !IsTutorialWarriorDuelActive);
 		if ((Object)(object)combatVigorImage != (Object)null)
-			combatVigorImage.gameObject.SetActive(visible);
+			combatVigorImage.gameObject.SetActive(
+				visible && !waitingForCampaignBossReveal
+					&& (!IsTutorialWarriorDuelActive
+						|| tutorialMageDuelActive
+						|| tutorialWarriorDuelStep >= TutorialWarriorDuelStep.Vigor));
+	}
+
+	/// <summary>
+	/// Fotografa la posa attuale delle pedine locali prima che la griglia di
+	/// formazione la riscriva. La rotazione deve partire da dove le pedine sono
+	/// davvero: farla partire dalla fila appena scritta significa mostrarle in
+	/// fila per un istante, ed e' esattamente il flick che si vedeva in PvP a
+	/// ogni azione, dove ogni aggiornamento del server ripassa dal layout.
+	/// </summary>
+	private void CaptureCombatPawnPoses()
+	{
+		combatPawnPoseSnapshot.Clear();
+		foreach (BattleCardState card in playerCards)
+		{
+			if (card == null || (Object)(object)card.View == (Object)null)
+				continue;
+
+			RectTransform rect = card.View.RectTransform;
+			combatPawnPoseSnapshot.Add((rect, rect.anchoredPosition));
+		}
+	}
+
+	private void RestoreCombatPawnPoses()
+	{
+		foreach ((RectTransform rect, Vector2 pose) in combatPawnPoseSnapshot)
+		{
+			if ((Object)(object)rect != (Object)null)
+				rect.anchoredPosition = pose;
+		}
+		combatPawnPoseSnapshot.Clear();
 	}
 
 	private void RefreshCombatPawnCarousel(bool animate)
@@ -167,12 +254,143 @@ public sealed partial class BattleBoardController
 			return;
 
 		BattleCardState next = ResolveCarouselCenter(alive);
-		bool changed = carouselCenterCard != null && carouselCenterCard != next;
 		carouselCenterCard = next;
 		List<BattleCardState> carouselOrder = BuildCombatPawnCarouselOrder(allPawns, next);
-		if (carouselRotationRoutine != null)
-			StopCoroutine(carouselRotationRoutine);
-		carouselRotationRoutine = StartCoroutine(AnimateCombatPawnCarousel(carouselOrder, next, animate && changed));
+		BuildCombatPawnCarouselTargets(carouselOrder, next);
+		if (carouselTargets.Count == 0)
+			return;
+
+		// Non basta guardare la pedina centrale: una morte accoda l'eliminata in
+		// fondo all'ordine lasciando il centro dov'era, e chi decideva in base al
+		// solo centro faceva scivolare quella riga di colpo. Conta chi si muove
+		// davvero, chiunque sia.
+		if (animate && HasPendingCarouselMovement())
+		{
+			// Una rotazione gia' in volo verso questi stessi bersagli non si
+			// riavvia: la coroutine li insegue da se', e ripartire da capo a ogni
+			// aggiornamento del server - in PvP ne arrivano anche a meta' corsa -
+			// la farebbe strisciare invece di arrivare.
+			if (IsRoutineAlive(carouselRotationRoutine, carouselRotationFrame)
+				&& IsAnimatingTowardCurrentCarouselTargets())
+			{
+				return;
+			}
+
+			if (carouselRotationRoutine != null)
+				StopCoroutine(carouselRotationRoutine);
+			carouselAnimatedTargets.Clear();
+			foreach (KeyValuePair<RectTransform, Vector2> target in carouselTargets)
+				carouselAnimatedTargets[target.Key] = target.Value;
+			carouselRotationFrame = Time.frameCount;
+			carouselRotationRoutine = StartCoroutine(AnimateCombatPawnCarousel());
+			return;
+		}
+
+		// Un ricalcolo di layout non deve troncare una rotazione in volo: i
+		// bersagli sono appena stati aggiornati e la coroutine ci scivola sopra
+		// da sola. Solo a riposo la posa finale si scrive, e si scrive subito:
+		// una versione "animata a durata zero" resterebbe comunque un frame
+		// esposta a chi scrive dopo di lei.
+		if (!IsRoutineAlive(carouselRotationRoutine, carouselRotationFrame))
+			ApplyCombatPawnCarouselTargets();
+	}
+
+	/// <summary>
+	/// Slot visivi del carosello: la pedina attiva al centro e rialzata, le
+	/// altre alternate ai suoi lati partendo da sinistra. Oltre le tre pedine
+	/// della formazione gli slot continuano ad allargarsi invece di accatastare
+	/// tutte le pedine in eccesso sulla stessa posizione.
+	/// </summary>
+	private void BuildCombatPawnCarouselTargets(List<BattleCardState> order, BattleCardState center)
+	{
+		carouselTargets.Clear();
+		if (center == null || (Object)(object)center.View == (Object)null)
+			return;
+
+		float cardWidth = Mathf.Max(100f, center.View.RectTransform.rect.width);
+		float spacing = cardWidth * 1.18f;
+		for (int i = 0; i < order.Count; i++)
+		{
+			BattleCardState pawn = order[i];
+			if (pawn == null || (Object)(object)pawn.View == (Object)null)
+				continue;
+
+			int slot = CarouselSlot(i);
+			RectTransform rect = pawn.View.RectTransform;
+			carouselTargets[rect] = new Vector2(
+				slot * spacing,
+				slot == 0 ?cardWidth * 0.2f : (0f - cardWidth) * 0.16f);
+		}
+
+		ApplyCombatPawnCarouselSorting(order);
+	}
+
+	/// <summary>
+	/// Riscrive l'ordine di disegno dal fondo verso il centro: ogni pedina
+	/// portata in cima copre quelle gia' passate, e l'ultima a salire e' la
+	/// centrale. Chiedere invece un indice numerico per pedina non funzionava:
+	/// l'indice era la posizione nel carosello, non nella gerarchia, e gli
+	/// spostamenti si applicavano uno sull'altro. Con tre pedine l'ultima del
+	/// giro chiedeva proprio l'indice della cima e la rubava alla centrale, e
+	/// il risultato cambiava con il numero di figli della fila - sei nel frame
+	/// dello schieramento, dove le preview appena distrutte sono ancora li',
+	/// tre dal frame dopo. Da qui il sorting che saltava durante la discesa.
+	/// </summary>
+	private static void ApplyCombatPawnCarouselSorting(List<BattleCardState> order)
+	{
+		for (int i = order.Count - 1; i >= 0; i--)
+		{
+			BattleCardState pawn = order[i];
+			if (pawn == null || (Object)(object)pawn.View == (Object)null)
+				continue;
+
+			((Transform)pawn.View.RectTransform).SetAsLastSibling();
+		}
+	}
+
+	private static int CarouselSlot(int orderIndex)
+	{
+		if (orderIndex == 0)
+			return 0;
+
+		int distance = (orderIndex + 1) / 2;
+		return (orderIndex % 2 == 1) ?-distance : distance;
+	}
+
+	private bool IsAnimatingTowardCurrentCarouselTargets()
+	{
+		if (carouselAnimatedTargets.Count != carouselTargets.Count)
+			return false;
+
+		foreach (KeyValuePair<RectTransform, Vector2> target in carouselTargets)
+		{
+			if (!carouselAnimatedTargets.TryGetValue(target.Key, out Vector2 animated))
+				return false;
+			if (Vector2.Distance(animated, target.Value) > 0.5f)
+				return false;
+		}
+		return true;
+	}
+
+	private bool HasPendingCarouselMovement()
+	{
+		foreach (KeyValuePair<RectTransform, Vector2> target in carouselTargets)
+		{
+			if ((Object)(object)target.Key == (Object)null)
+				continue;
+			if (Vector2.Distance(target.Key.anchoredPosition, target.Value) > 0.5f)
+				return true;
+		}
+		return false;
+	}
+
+	private void ApplyCombatPawnCarouselTargets()
+	{
+		foreach (KeyValuePair<RectTransform, Vector2> target in carouselTargets)
+		{
+			if ((Object)(object)target.Key != (Object)null)
+				target.Key.anchoredPosition = target.Value;
+		}
 	}
 
 	private List<BattleCardState> BuildCombatPawnCarouselOrder(
@@ -225,46 +443,6 @@ public sealed partial class BattleBoardController
 		return ordered;
 	}
 
-	/// <summary>
-	/// Durante lo schieramento conserva l'ordine logico delle carte ma assegna
-	/// esplicitamente gli slot visivi: prima a destra, seconda a sinistra e
-	/// terza al centro. La transizione successiva puo' quindi essere verticale.
-	/// </summary>
-	private void ApplyReverseDeploymentPawnOrder()
-	{
-		if (playerCards.Count < 2)
-			return;
-
-		List<RectTransform> rects = playerCards
-			.Where(card => card != null && card.View != null && !card.Eliminated)
-			.Select(card => card.View.RectTransform)
-			.ToList();
-		if (rects.Count < 2)
-			return;
-
-		List<float> horizontalPositions = rects
-			.Select(rect => rect.anchoredPosition.x)
-			.OrderBy(value => value)
-			.ToList();
-		if (rects.Count == 3)
-		{
-			SetDeploymentPawnHorizontalPosition(rects[0], horizontalPositions[2]);
-			SetDeploymentPawnHorizontalPosition(rects[1], horizontalPositions[0]);
-			SetDeploymentPawnHorizontalPosition(rects[2], horizontalPositions[1]);
-			return;
-		}
-
-		for (int i = 0; i < rects.Count; i++)
-			SetDeploymentPawnHorizontalPosition(rects[i], horizontalPositions[horizontalPositions.Count - 1 - i]);
-	}
-
-	private static void SetDeploymentPawnHorizontalPosition(RectTransform rect, float horizontalPosition)
-	{
-		Vector2 position = rect.anchoredPosition;
-		position.x = horizontalPosition;
-		rect.anchoredPosition = position;
-	}
-
 	private BattleCardState ResolveCarouselCenter(IReadOnlyList<BattleCardState> alive)
 	{
 		if (pvpPresentationActive && pvpState != null)
@@ -297,37 +475,49 @@ public sealed partial class BattleBoardController
 		return alive[0];
 	}
 
-	private IEnumerator AnimateCombatPawnCarousel(List<BattleCardState> alive,
-		BattleCardState center, bool animate)
+	/// <summary>
+	/// Scivola verso i bersagli correnti, non verso una copia congelata: se un
+	/// ricalcolo di layout li sposta a meta' corsa, la rotazione li insegue
+	/// invece di essere interrotta e ripresa con uno scatto.
+	/// </summary>
+	private IEnumerator AnimateCombatPawnCarousel()
 	{
-		float cardWidth = Mathf.Max(100f, center.View.RectTransform.rect.width);
-		float spacing = cardWidth * 1.18f;
 		Dictionary<RectTransform, Vector2> starts = new Dictionary<RectTransform, Vector2>();
-		Dictionary<RectTransform, Vector2> targets = new Dictionary<RectTransform, Vector2>();
-		for (int i = 0; i < alive.Count; i++)
+		foreach (RectTransform rect in carouselTargets.Keys)
 		{
-			int slot = i == 0 ? 0 : (i == 1 ? -1 : 1);
-			RectTransform rect = alive[i].View.RectTransform;
-			starts[rect] = rect.anchoredPosition;
-			targets[rect] = new Vector2(slot * spacing, slot == 0 ? cardWidth * 0.2f : -cardWidth * 0.16f);
-			rect.SetSiblingIndex(slot == 0 ? rect.parent.childCount - 1 : i);
+			if ((Object)(object)rect != (Object)null)
+				starts[rect] = rect.anchoredPosition;
 		}
 
-		float duration = animate ? 0.48f : 0f;
+		const float duration = 0.48f;
 		float elapsed = 0f;
-		do
+		bool firstFrame = true;
+		while (elapsed < duration)
 		{
-			float t = duration <= 0f ? 1f : Mathf.Clamp01(elapsed / duration);
+			carouselRotationFrame = Time.frameCount;
+			// Il primo giro non consuma tempo: la rotazione parte spesso subito
+			// dopo un frame pesante (ricalcolo di layout, pedine appena create) e
+			// il delta di quel frame la farebbe nascere gia' a un terzo di corsa.
+			elapsed += firstFrame ?0f : AnimationDeltaTime();
+			firstFrame = false;
+			float t = Mathf.Clamp01(elapsed / duration);
 			float eased = 1f - Mathf.Pow(1f - t, 3f);
-			foreach (KeyValuePair<RectTransform, Vector2> item in targets)
-				item.Key.anchoredPosition = Vector2.LerpUnclamped(starts[item.Key], item.Value, eased);
-			elapsed += Time.unscaledDeltaTime;
+			foreach (KeyValuePair<RectTransform, Vector2> target in carouselTargets)
+			{
+				if ((Object)(object)target.Key == (Object)null)
+					continue;
+				if (!starts.TryGetValue(target.Key, out Vector2 start))
+				{
+					// Pedina entrata in scena a rotazione gia' iniziata.
+					start = target.Key.anchoredPosition;
+					starts[target.Key] = start;
+				}
+				target.Key.anchoredPosition = Vector2.LerpUnclamped(start, target.Value, eased);
+			}
 			yield return null;
 		}
-		while (elapsed < duration);
 
-		foreach (KeyValuePair<RectTransform, Vector2> item in targets)
-			item.Key.anchoredPosition = item.Value;
+		ApplyCombatPawnCarouselTargets();
 		carouselRotationRoutine = null;
 	}
 }

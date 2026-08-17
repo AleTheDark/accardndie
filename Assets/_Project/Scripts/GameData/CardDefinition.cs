@@ -32,7 +32,9 @@ namespace AccardND.GameData
         private bool IsMedusaBoss => string.Equals(id, "boss-medusa", StringComparison.OrdinalIgnoreCase);
 
         public bool CanEnterCombat =>
-            (category == CardCategory.Monster || category == CardCategory.Boss)
+            (category == CardCategory.Monster
+                || category == CardCategory.Boss
+                || category == CardCategory.Token)
             && Strength > 0
             && HasHeroClass;
 

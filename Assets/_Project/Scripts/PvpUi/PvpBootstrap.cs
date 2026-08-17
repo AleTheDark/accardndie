@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using AccardND.Battlefield;
+using AccardND.GameCore;
 using AccardND.GameCore.Pvp;
 using AccardND.GameData;
 using AccardND.Localization;
@@ -23,6 +24,10 @@ namespace AccardND.PvpUi
         private const string NicknamePrefsKey = "AccardND.PvpNickname";
         private const string PlayerHudNamePrefsKey = "AccardND.PlayerHudName";
         private const int NicknameMaxLength = 18;
+        private const int RankedRequirementsSortingOrder = 920;
+        public const string HubPvpLeaderPrefsKey = "AccardND.HubLeaderboard.PvpLeader";
+        public const string HubCampaignLeaderPrefsKey = "AccardND.HubLeaderboard.CampaignLeader";
+        private const string HiddenAdminLeaderboardName = "apina";
 
         [SerializeField] private string serverUrl = "wss://accardndie.com/ws";
         [SerializeField, Tooltip("Nome mostrato al server; vuoto = derivato dal dispositivo.")]
@@ -39,12 +44,15 @@ namespace AccardND.PvpUi
         private PvpMatchResultOverlay resultOverlay;
         private RectTransform challengePrompt;
         private RectTransform nicknameDialog;
+        private RectTransform rankedRequirementsDialog;
+        private Text rankedRequirementsText;
         private InputField nicknameInput;
         private Text nicknameStatusText;
         private bool nicknameRequired;
         private string myPlayerId = string.Empty;
         private PvpLoadoutBuilderScreen builder;
         private PvpLoadoutDto confirmedLoadout;
+        private SinglePlayerProgressData accountProgress;
         private Transform canvasRoot;
         private GameObject canvasObject;
         private List<LoadoutCardDto> myLoadout;
@@ -67,6 +75,50 @@ namespace AccardND.PvpUi
 
         public PvpServerMessageDispatcher ServerDispatcher => dispatcher;
         public bool IsAuthenticated => authenticated;
+
+        private static void CacheHubLeader(string prefsKey, LeaderboardEntry[] entries)
+        {
+            string leader = string.Empty;
+            int bestRank = int.MaxValue;
+            foreach (LeaderboardEntry entry in entries ?? Array.Empty<LeaderboardEntry>())
+            {
+                if (entry == null || string.IsNullOrWhiteSpace(entry.username) ||
+                    string.Equals(entry.username.Trim(), HiddenAdminLeaderboardName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                int rank = entry.rank > 0 ? entry.rank : int.MaxValue - 1;
+                if (rank >= bestRank)
+                    continue;
+
+                bestRank = rank;
+                leader = entry.username.Trim();
+            }
+
+            PlayerPrefs.SetString(prefsKey, leader);
+            PlayerPrefs.Save();
+        }
+
+        private static void CacheHubLeader(string prefsKey, AdventureLeaderboardEntry[] entries)
+        {
+            string leader = string.Empty;
+            int bestRank = int.MaxValue;
+            foreach (AdventureLeaderboardEntry entry in entries ?? Array.Empty<AdventureLeaderboardEntry>())
+            {
+                if (entry == null || string.IsNullOrWhiteSpace(entry.username) ||
+                    string.Equals(entry.username.Trim(), HiddenAdminLeaderboardName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                int rank = entry.rank > 0 ? entry.rank : int.MaxValue - 1;
+                if (rank >= bestRank)
+                    continue;
+
+                bestRank = rank;
+                leader = entry.username.Trim();
+            }
+
+            PlayerPrefs.SetString(prefsKey, leader);
+            PlayerPrefs.Save();
+        }
 
         /// <summary>Da chiamare subito dopo AddComponent quando il PvP è lanciato dal menu di gioco.</summary>
         public void Configure(
@@ -221,6 +273,11 @@ namespace AccardND.PvpUi
             SetConnectionStatus("Connessione ripristinata.");
             state?.AddNotice("Connessione ripristinata.");
             HideReconnectOverlay();
+            // Le richieste di sola lettura inviate sul vecchio socket non fanno parte
+            // della coda persistente del dispatcher. Se la Classifica era aperta,
+            // richiedile nuovamente: altrimenti Avventura resta per sempre su
+            // "in caricamento" anche se autenticazione e connessione sono ripristinate.
+            leaderboardScreen?.RequestInitialData();
             stateDirty = true;
         }
 
@@ -252,7 +309,14 @@ namespace AccardND.PvpUi
             UpdateReconnectOverlay();
             if (dispatcher == null)
                 return;
-            dispatcher.Pump();
+            // La sessione account condivisa viene gia' pompata ogni frame dal suo
+            // driver DontDestroyOnLoad. Pomparla anche qui crea due proprietari dello
+            // stesso ciclo di riconnessione, cosa che all'apertura diretta della
+            // Classifica puo' innescare una sequenza continua di resume della sessione.
+            // Una connessione creata localmente dal bootstrap, invece, resta a carico
+            // di questa schermata finche' non viene adottata dalla sessione globale.
+            if (ownsConnection)
+                dispatcher.Pump();
             // Una partita da riprendere può essere arrivata prima che questa schermata
             // esistesse (login, Hub): la sessione la tiene da parte e noi la raccogliamo
             // appena siamo in piedi.
@@ -286,7 +350,9 @@ namespace AccardND.PvpUi
                     if (!response.ok)
                     {
                         if (nicknameStatusText != null)
-                            nicknameStatusText.text = response.error ?? "Nickname non disponibile.";
+                            nicknameStatusText.text = string.IsNullOrWhiteSpace(response.error)
+                                ? GameText.Get(GameTextKeys.Login.NicknameUnavailable)
+                                : response.error;
                         break;
                     }
 
@@ -297,7 +363,10 @@ namespace AccardND.PvpUi
                     PlayerPrefs.Save();
                     nicknameDialog?.gameObject.SetActive(false);
                     lobby.SetPlayerName(username);
-                    lobby.SetStatus($"Nickname salvato: {username}.");
+                    lobby.SetStatus(GameText.GetOrFallbackSilent(
+                        GameTextKeys.PvpNickname.Saved,
+                        "Nickname salvato: {0}.",
+                        username));
                     AccountServerSession.UpdateIdentity(myPlayerId, username);
                     break;
                 }
@@ -387,6 +456,7 @@ namespace AccardND.PvpUi
                 case MessageTypes.SinglePlayerProgressData:
                 {
                     var data = PvpServerClient.ParsePayload<SinglePlayerProgressData>(envelope);
+                    accountProgress = data;
                     lobby?.SetAccountProgress(data);
                     leaderboardScreen?.SetAccountProgress(data);
                     break;
@@ -403,6 +473,7 @@ namespace AccardND.PvpUi
                 case MessageTypes.LeaderboardData:
                 {
                     var data = PvpServerClient.ParsePayload<LeaderboardData>(envelope);
+                    CacheHubLeader(HubPvpLeaderPrefsKey, data?.entries);
                     profileScreen?.SetLeaderboard(data);
                     leaderboardScreen?.SetLeaderboard(data);
                     break;
@@ -463,27 +534,136 @@ namespace AccardND.PvpUi
                 }
 
                 case MessageTypes.MatchOpponentLeft:
+                {
+                    var opponentLeft = PvpServerClient.ParsePayload<ErrorMessage>(envelope);
                     if (state != null)
-                        lobby.SetStatus("L'avversario ha lasciato la partita.");
+                        lobby.SetStatus(GameText.GetRemote(
+                            opponentLeft?.localizationKey,
+                            opponentLeft?.message ?? "L'avversario ha lasciato la partita.",
+                            opponentLeft?.localizationArguments));
                     LeaveToLobby();
                     break;
+                }
+
+                case MessageTypes.AdventureLeaderboardData:
+                {
+                    var data = PvpServerClient.ParsePayload<AdventureLeaderboardData>(envelope);
+                    CacheHubLeader(HubCampaignLeaderPrefsKey, data?.entries);
+                    leaderboardScreen?.SetAdventureLeaderboard(data);
+                    break;
+                }
 
                 case MessageTypes.Error:
                 {
                     var error = PvpServerClient.ParsePayload<ErrorMessage>(envelope);
                     Debug.LogWarning($"[PvP] {error.code}: {error.message}");
+                    string errorText = GameText.GetRemote(
+                        error?.localizationKey,
+                        error?.message ?? GameText.GetOrFallbackSilent(GameTextKeys.Server.GenericError, "Errore del server."),
+                        error?.localizationArguments);
+                    if (error?.code == ErrorCodes.RankedLoadoutRequirements)
+                    {
+                        rankedQueueRequested = false;
+                        lobby.SetWaitingForOpponent(false);
+                        ShowRankedRequirementsDialog(errorText);
+                        break;
+                    }
                     if (profileScreen != null)
-                        profileScreen.SetStatus($"Errore: {error.message}");
+                        profileScreen.SetStatus(GameText.Format(GameTextKeys.Server.ErrorPrefix, errorText));
                     else if (leaderboardScreen != null)
-                        leaderboardScreen.SetStatus($"Errore: {error.message}");
+                        leaderboardScreen.SetStatus(GameText.Format(GameTextKeys.Server.ErrorPrefix, errorText));
                     else if (state == null)
                     {
                         lobby.SetWaitingForOpponent(false);
-                        lobby.SetStatus($"Errore: {error.message}");
+                        lobby.SetStatus(GameText.Format(GameTextKeys.Server.ErrorPrefix, errorText));
                     }
                     break;
                 }
             }
+        }
+
+        private void ShowRankedRequirementsDialog(string message)
+        {
+            // L'errore puo' arrivare mentre il giocatore ha gia' aperto il builder.
+            // Torniamo esplicitamente alla scheda ranked: il backdrop fullscreen del
+            // loadout vive fuori dalla safe area e altrimenti coprirebbe il dialogo.
+            CloseLoadoutBuilder(null);
+            lobby.ShowRankedTab();
+
+            if (rankedRequirementsDialog == null)
+            {
+                // Questo e' un modal globale: deve coprire anche l'header account e
+                // l'Honey Pot, che usano canvas separati con sorting 910/911.
+                // L'ordine tra sibling non puo' superarli, quindi il dialogo necessita
+                // di un canvas autonomo e vive fuori dalla Safe Area.
+                rankedRequirementsDialog = PvpUiFactory.CreatePanel(
+                    canvasObject.transform, "Ranked Requirements Overlay", new Color(0f, 0f, 0f, 0.78f));
+                PvpUiFactory.Stretch(rankedRequirementsDialog);
+                Canvas dialogCanvas = rankedRequirementsDialog.gameObject.AddComponent<Canvas>();
+                dialogCanvas.overrideSorting = true;
+                dialogCanvas.sortingOrder = RankedRequirementsSortingOrder;
+                rankedRequirementsDialog.gameObject.AddComponent<GraphicRaycaster>();
+
+                // Stesso pannello MMO gotico usato dagli altri popup globali:
+                // cornice dorata, gemma superiore e CTA tematizzata.
+                RectTransform dialog = PvpUiFactory.CreatePanel(
+                    rankedRequirementsDialog, "Ranked Requirements Dialog", Color.white);
+                dialog.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.99f);
+                PvpUiFactory.SetAnchors(dialog, new Vector2(0.14f, 0.22f), new Vector2(0.86f, 0.78f));
+                MmoUiTheme.AddPanelGem(
+                    dialog, "Ranked Requirements Crest", new Vector2(0.5f, 1f),
+                    new Vector2(42f, 42f), Color.white);
+
+                Text title = PvpUiFactory.CreateTitleText(dialog, "Title", "REQUISITI LOADOUT", 70);
+                Font rankedRequirementsTitleFont = Resources.Load<Font>("Fonts/IMFellEnglishSC");
+                if (rankedRequirementsTitleFont != null)
+                    title.font = rankedRequirementsTitleFont;
+                title.fontSize = 70;
+                title.fontStyle = FontStyle.Normal;
+                title.resizeTextForBestFit = false;
+                title.color = PvpUiFactory.Gold;
+                PvpUiFactory.SetAnchors((RectTransform)title.transform, new Vector2(0.07f, 0.78f), new Vector2(0.93f, 0.94f));
+
+                rankedRequirementsText = PvpUiFactory.CreateLabel(
+                    dialog, "Requirements", string.Empty, 35, TextAnchor.MiddleCenter);
+                rankedRequirementsText.fontSize = 40;
+                rankedRequirementsText.color = new Color(0.88f, 0.92f, 0.96f, 1f);
+                rankedRequirementsText.horizontalOverflow = HorizontalWrapMode.Wrap;
+                rankedRequirementsText.verticalOverflow = VerticalWrapMode.Truncate;
+                rankedRequirementsText.resizeTextForBestFit = true;
+                rankedRequirementsText.resizeTextMinSize = 16;
+                rankedRequirementsText.resizeTextMaxSize = 40;
+                PvpUiFactory.SetAnchors((RectTransform)rankedRequirementsText.transform,
+                    new Vector2(0.09f, 0.25f), new Vector2(0.91f, 0.77f));
+
+                Button continueButton = PvpUiFactory.CreateButton(
+                    dialog, "Continue Campaign", "CONTINUA", Color.green,
+                    () => rankedRequirementsDialog.gameObject.SetActive(false), 21);
+                RectTransform continueRect = (RectTransform)continueButton.transform;
+                PvpUiFactory.SetAnchors(continueRect,
+                    new Vector2(0.2f, 0.06f), new Vector2(0.8f, 0.22f));
+                Image continueImage = continueButton.GetComponent<Image>();
+                Sprite greenCta = Resources.Load<Sprite>(
+                    "UI/CampaignRestyle/campaign_cta_confirm_green");
+                if (greenCta != null)
+                {
+                    continueImage.sprite = greenCta;
+                    continueImage.type = Image.Type.Sliced;
+                    continueImage.color = Color.white;
+                }
+                Text continueLabel = continueButton.GetComponentInChildren<Text>();
+                if (continueLabel != null)
+                {
+                    continueLabel.font = MmoUiTheme.LoreFont;
+                    continueLabel.fontSize = 30;
+                    continueLabel.resizeTextForBestFit = false;
+                }
+                PvpUiVfx.CreateRankedButton(continueRect, new Color(0.25f, 1f, 0.48f, 1f));
+            }
+
+            rankedRequirementsText.text = message;
+            rankedRequirementsDialog.gameObject.SetActive(true);
+            rankedRequirementsDialog.SetAsLastSibling();
         }
 
         /// <summary>
@@ -673,19 +853,53 @@ namespace AccardND.PvpUi
             return false;
         }
 
-        private void OpenLoadoutBuilder()
+        private async void OpenLoadoutBuilder()
         {
+            if (builder != null)
+                return;
+
+            int unlockedLoadoutSlots = 1;
+            if (authenticated && dispatcher != null)
+            {
+                try
+                {
+                    SanctuaryData sanctuary = await new ServerSinglePlayerProgressClient(dispatcher).GetSanctuaryAsync();
+                    foreach (SanctuaryEntryData entry in sanctuary?.entries ?? System.Array.Empty<SanctuaryEntryData>())
+                    {
+                        if (entry != null && entry.owned && entry.id != null &&
+                            entry.id.StartsWith("loadout-slot-", System.StringComparison.OrdinalIgnoreCase))
+                            unlockedLoadoutSlots++;
+                    }
+                }
+                catch (System.Exception exception)
+                {
+                    Debug.LogWarning($"[PvP] Impossibile leggere gli slot Loadout dal Santuario: {exception.Message}");
+                }
+            }
+
             if (builder != null)
                 return;
             lobby.SetVisible(false);
             builder = new PvpLoadoutBuilderScreen(
                 canvasRoot,
                 cardDatabase,
+                configuration,
+                unlockedLoadoutSlots,
+                matchView != null
+                    ? new System.Action<CardDefinition, UnityEngine.Events.UnityAction, bool, string>(
+                        matchView.ShowPvpLoadoutCardInspection)
+                    : null,
                 confirmed =>
                 {
                     confirmedLoadout = confirmed;
                     myLoadout = new List<LoadoutCardDto>(confirmed.cards);
-                    CloseLoadoutBuilder("Loadout pronto: crea una stanza o cerca un avversario.");
+                    bool rankedEligible = IsRankedEligible(confirmed);
+                    CloseLoadoutBuilder(null);
+                    lobby.SetLoadoutAvailability(
+                        rankedEligible
+                            ? "PUOI GIOCARE IN RANKED"
+                            : "PUOI GIOCARE SOLO IN AMICHEVOLE",
+                        rankedEligible);
                 },
                 () => CloseLoadoutBuilder(null));
         }
@@ -697,6 +911,26 @@ namespace AccardND.PvpUi
             lobby.SetVisible(true);
             if (!string.IsNullOrEmpty(statusMessage))
                 lobby.SetStatus(statusMessage);
+        }
+
+        private bool IsRankedEligible(PvpLoadoutDto loadout)
+        {
+            if (loadout?.cards == null || accountProgress == null)
+                return false;
+
+            var unlockedClasses = new HashSet<string>(
+                accountProgress.unlockedClasses ?? System.Array.Empty<string>(),
+                System.StringComparer.OrdinalIgnoreCase);
+            foreach (LoadoutCardDto card in loadout.cards)
+            {
+                if (card == null)
+                    continue;
+                string classId = ((HeroClass)card.heroClass).ToString().ToLowerInvariant();
+                if (!unlockedClasses.Contains(classId))
+                    return false;
+            }
+
+            return true;
         }
 
         // --- Profilo / social ---
@@ -762,7 +996,7 @@ namespace AccardND.PvpUi
             }
         }
 
-        /// <summary>Mappa un id icona all'artwork di una carta: classe eroe o famiglia di mostri.</summary>
+        /// <summary>Mappa un id icona all'artwork di una carta: classe eroe o fazione di mostri.</summary>
         private Sprite ResolveIconArtwork(string iconId)
         {
             if (cardDatabase == null || string.IsNullOrEmpty(iconId))
@@ -813,6 +1047,7 @@ namespace AccardND.PvpUi
                     OnRequestProfile = () => Send(MessageTypes.ProfileGet),
                     OnRequestAccountProgress = () => Send(MessageTypes.SinglePlayerProgressGet),
                     OnRequestLeaderboard = () => Send(MessageTypes.LeaderboardGet),
+                    OnRequestAdventureLeaderboard = () => Send(MessageTypes.AdventureLeaderboardGet),
                     OnRequestHallOfFameSeasons = () => Send(MessageTypes.HallOfFameSeasonsGet),
                     OnRequestHallOfFame = seasonId =>
                         Send(MessageTypes.HallOfFameGet, new HallOfFameGetRequest { seasonId = seasonId })
@@ -846,6 +1081,8 @@ namespace AccardND.PvpUi
             }
 
             resultOverlay?.Destroy();
+            if (result != null && result.youWon)
+                matchView?.PlayPvpVictorySfx();
             resultOverlay = new PvpMatchResultOverlay(canvasRoot, result, () =>
             {
                 resultOverlay?.Destroy();
@@ -1014,27 +1251,41 @@ namespace AccardND.PvpUi
             });
 
         /// <summary>
-        /// Resa. Non passa dalle azioni di gioco: vale anche a partita in pausa, e la
-        /// conferma è il risultato che il server manda subito dopo. Chi si arrende non
-        /// si ferma a guardare il tabellone, torna alla lobby.
+        /// Resa fail-safe. L'uscita verso l'Hub è sempre locale e immediata: il server
+        /// riceve la resa best-effort, ma rete assente, timeout o backend fermo non possono
+        /// lasciare il giocatore bloccato sul tavolo.
         /// </summary>
-        public async void Surrender()
+        public void Surrender()
         {
-            if (dispatcher == null || state == null || surrenderSent)
+            if (surrenderSent)
+            {
+                CloseToHub();
                 return;
+            }
+
             surrenderSent = true;
+            PvpServerMessageDispatcher surrenderDispatcher = dispatcher;
+
+            // Avvia l'invio prima di smontare la schermata, ma non aspettarlo: CloseToHub
+            // deve funzionare anche quando SendAsync non potrà mai ricevere una risposta.
+            if (surrenderDispatcher != null)
+                _ = SendSurrenderBestEffortAsync(surrenderDispatcher);
+
+            CloseToHub();
+        }
+
+        private static async System.Threading.Tasks.Task SendSurrenderBestEffortAsync(
+            PvpServerMessageDispatcher surrenderDispatcher)
+        {
             try
             {
-                await dispatcher.SendAsync(MessageTypes.MatchForfeit);
+                await surrenderDispatcher.SendAsync(MessageTypes.MatchForfeit);
             }
             catch (System.Exception exception)
             {
-                surrenderSent = false;
-                state?.AddNotice(GameText.GetOrFallbackSilent(
-                    GameTextKeys.PvpStatus.SurrenderNotSent,
-                    "Resa non inviata: connessione persa."));
-                stateDirty = true;
-                Debug.LogWarning($"[PvP] Invio resa fallito: {exception.Message}");
+                // L'utente è già al sicuro nell'Hub. Il server applicherà le proprie
+                // regole di disconnessione/timeout se la resa non è arrivata.
+                Debug.LogWarning($"[PvP] Invio resa fallito dopo l'uscita all'Hub: {exception.Message}");
             }
         }
 
@@ -1160,10 +1411,10 @@ namespace AccardND.PvpUi
             canvasObject = new GameObject("PvpCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             var canvas = canvasObject.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            // La classifica lanciata dall'Hub resta sotto il suo banner account
-            // standard (sorting 901). Le altre schermate PvP continuano a coprire
-            // integralmente l'Hub.
-            canvas.sortingOrder = startInLeaderboard ? 900 : 950;
+            // Tutte le schermate Hub del PvP restano sotto l'account header condiviso
+            // (sorting 910) e l'Honey Pot (911). Durante il combattimento il controller
+            // nasconde esplicitamente quell'header, quindi non serve coprirlo col canvas.
+            canvas.sortingOrder = 900;
             var scaler = canvasObject.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
@@ -1231,7 +1482,8 @@ namespace AccardND.PvpUi
                 OnLoadout = OpenLoadoutBuilder,
                 OnProfile = OpenProfile,
                 OnSettings = OpenSettings,
-                OnRefreshRooms = () => Send(MessageTypes.RoomsList)
+                OnRefreshRooms = () => Send(MessageTypes.RoomsList),
+                OnRefreshProfile = () => Send(MessageTypes.ProfileGet)
             }, ResolveIconArtwork);
         }
 
@@ -1255,11 +1507,15 @@ namespace AccardND.PvpUi
             RectTransform dialog = PvpUiFactory.CreateSoftPanel(nicknameDialog, "Nickname Dialog", new Color(0.02f, 0.035f, 0.055f, 0.98f));
             PvpUiFactory.SetAnchors(dialog, new Vector2(0.3f, 0.34f), new Vector2(0.7f, 0.68f));
 
-            Text title = PvpUiFactory.CreateTitleText(dialog, "Title", "CAMBIA NICKNAME", 26);
+            Text title = PvpUiFactory.CreateTitleText(dialog, "Title", GameText.GetOrFallbackSilent(
+                GameTextKeys.PvpNickname.DialogTitle,
+                "CAMBIA NICKNAME"), 26);
             title.color = PvpUiFactory.Gold;
             PvpUiFactory.SetAnchors((RectTransform)title.transform, new Vector2(0.06f, 0.75f), new Vector2(0.94f, 0.94f));
 
-            Text hint = PvpUiFactory.CreateLabel(dialog, "Hint", "Il nome viene associato al tuo account di gioco.", 16, TextAnchor.MiddleCenter);
+            Text hint = PvpUiFactory.CreateLabel(dialog, "Hint", GameText.GetOrFallbackSilent(
+                GameTextKeys.PvpNickname.DialogHint,
+                "Il nome viene associato al tuo account di gioco."), 16, TextAnchor.MiddleCenter);
             PvpUiFactory.SetAnchors((RectTransform)hint.transform, new Vector2(0.08f, 0.62f), new Vector2(0.92f, 0.75f));
 
             RectTransform inputPanel = PvpUiFactory.CreateSoftPanel(dialog, "Nickname Input Panel", new Color(0.06f, 0.09f, 0.12f, 0.98f));
@@ -1270,7 +1526,9 @@ namespace AccardND.PvpUi
             nicknameInput.textComponent = PvpUiFactory.CreateText(inputPanel, "Input Text", nicknameInput.text, 22, TextAnchor.MiddleLeft, FontStyle.Normal);
             nicknameInput.textComponent.color = Color.white;
             PvpUiFactory.SetAnchors((RectTransform)nicknameInput.textComponent.transform, new Vector2(0.04f, 0f), new Vector2(0.96f, 1f));
-            nicknameInput.placeholder = PvpUiFactory.CreateLabel(inputPanel, "Placeholder", "Nuovo nickname", 20, TextAnchor.MiddleLeft);
+            nicknameInput.placeholder = PvpUiFactory.CreateLabel(inputPanel, "Placeholder", GameText.GetOrFallbackSilent(
+                GameTextKeys.PvpNickname.Placeholder,
+                "Nuovo nickname"), 20, TextAnchor.MiddleLeft);
             PvpUiFactory.SetAnchors((RectTransform)nicknameInput.placeholder.transform, new Vector2(0.04f, 0f), new Vector2(0.96f, 1f));
 
             nicknameStatusText = PvpUiFactory.CreateLabel(dialog, "Status", string.Empty, 16, TextAnchor.MiddleCenter);
@@ -1291,7 +1549,7 @@ namespace AccardND.PvpUi
             if (nicknameRequired)
             {
                 if (nicknameStatusText != null)
-                    nicknameStatusText.text = "Devi scegliere un nickname per continuare.";
+                    nicknameStatusText.text = GameText.Get(GameTextKeys.Login.ChooseNickname);
                 return;
             }
             if (nicknameDialog != null)
@@ -1304,14 +1562,14 @@ namespace AccardND.PvpUi
             if (newNickname.Length < 3)
             {
                 if (nicknameStatusText != null)
-                    nicknameStatusText.text = "Usa almeno 3 caratteri.";
+                    nicknameStatusText.text = GameText.Get(GameTextKeys.Login.NicknameTooShort);
                 return;
             }
 
             if (!await EnsureReadyAsync())
                 return;
             if (nicknameStatusText != null)
-                nicknameStatusText.text = "Salvataggio...";
+                nicknameStatusText.text = GameText.Get(GameTextKeys.Login.CheckingNickname);
             await dispatcher.SendAsync(MessageTypes.NicknameSet, new SetNicknameRequest
             {
                 nickname = newNickname

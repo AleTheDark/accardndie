@@ -32,7 +32,10 @@ namespace AccardND.Ads
         PvpExperienceTriple,
 
         /// <summary>Uso di un consumabile della bisaccia durante la run.</summary>
-        BagItemUsed
+        BagItemUsed,
+
+        /// <summary>Rinuncia volontaria a una Prova Lampo di campagna.</summary>
+        FlashTrialForfeit
     }
 
     public static class AdPlacements
@@ -64,6 +67,7 @@ namespace AccardND.Ads
             {
                 case AdPlacement.TavernQuestClaim:
                 case AdPlacement.BagItemUsed:
+                case AdPlacement.FlashTrialForfeit:
                     return true;
                 default:
                     return false;
@@ -84,6 +88,7 @@ namespace AccardND.Ads
                 case AdPlacement.CampaignExperienceTriple: return "campaign_experience_triple";
                 case AdPlacement.PvpExperienceTriple: return "pvp_experience_triple";
                 case AdPlacement.BagItemUsed: return "bag_item_used";
+                case AdPlacement.FlashTrialForfeit: return "flash_trial_forfeit";
                 default: return "unknown";
             }
         }
@@ -98,6 +103,7 @@ namespace AccardND.Ads
                 case AdPlacement.CampaignExperienceTriple: return "EXP tripla di campagna";
                 case AdPlacement.PvpExperienceTriple: return "EXP tripla d'arena";
                 case AdPlacement.BagItemUsed: return "uso di un oggetto";
+                case AdPlacement.FlashTrialForfeit: return "rinuncia alla Prova Lampo";
                 default: return placement.ToString();
             }
         }

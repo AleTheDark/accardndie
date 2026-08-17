@@ -13,7 +13,6 @@ namespace AccardND.Localization.Editor
 {
     public static class LocalizationCatalogValidator
     {
-        [MenuItem("Accard N' Die/Localization/Validate Catalog", priority = 81)]
         public static void ValidateCatalog()
         {
             Locale italian = LocalizationEditorSettings.GetLocale(new LocaleIdentifier("it"));
@@ -78,6 +77,95 @@ namespace AccardND.Localization.Editor
             Debug.Log(
                 $"[Localization] Catalogo valido: {expectedKeys.Count} chiavi controllate e " +
                 "risoluzione runtime verificata.");
+        }
+
+        public static void ValidateEnglishCatalog()
+        {
+            ValidateTranslatedCatalog("en", "inglese");
+        }
+
+        public static void ValidateGermanCatalog()
+        {
+            ValidateTranslatedCatalog("de", "tedesco");
+        }
+
+        public static void ValidateSpanishCatalog()
+        {
+            ValidateTranslatedCatalog("es", "spagnolo");
+        }
+
+        public static void ValidateFrenchCatalog()
+        {
+            ValidateTranslatedCatalog("fr", "francese");
+        }
+
+        public static void ValidateAllCatalogs()
+        {
+            ValidateCatalog();
+            ValidateEnglishCatalog();
+            ValidateGermanCatalog();
+            ValidateSpanishCatalog();
+            ValidateFrenchCatalog();
+        }
+
+        private static void ValidateTranslatedCatalog(string localeCode, string localeName)
+        {
+            Locale locale = LocalizationEditorSettings.GetLocale(new LocaleIdentifier(localeCode));
+            StringTableCollection collection =
+                LocalizationEditorSettings.GetStringTableCollection(GameText.TableName);
+            StringTable table = locale == null ? null : collection?.GetTable(locale.Identifier) as StringTable;
+            if (table == null)
+                throw new InvalidOperationException($"La String Table {localeName} 'Game' non esiste.");
+
+            HashSet<string> expectedKeys = CollectExpectedKeys();
+            ValidateLocaleEntries(table, expectedKeys, localeName);
+
+            Locale previous = LocalizationSettings.SelectedLocale;
+            LocalizationSettings.SelectedLocale = locale;
+            string title = GameText.Get(GameTextKeys.Login.Title);
+            string welcome = GameText.Format(GameTextKeys.Login.Welcome, "Ada");
+            LocalizationSettings.SelectedLocale = previous;
+            if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(welcome))
+                throw new InvalidOperationException($"Risoluzione runtime {localeName} non valida.");
+
+            Debug.Log(
+                $"[Localization] Catalogo {localeName} valido: {expectedKeys.Count} chiavi controllate e " +
+                "risoluzione runtime verificata.");
+        }
+
+        private static HashSet<string> CollectExpectedKeys()
+        {
+            var expectedKeys = new HashSet<string>(StringComparer.Ordinal);
+            CollectConstantKeys(typeof(GameTextKeys), expectedKeys);
+            foreach (ItalianTextEntry entry in ItalianGameTextCatalog.Entries)
+                expectedKeys.Add(entry.Key);
+            CollectDataKeys("t:CardDefinition", "id", expectedKeys, includeRules: true);
+            CollectDataKeys("t:ScenarioDefinition", "id", expectedKeys, includeRules: false);
+            CollectCapturedRuntimeUiKeys(expectedKeys);
+            CollectPrefabUiKeys(expectedKeys);
+            return expectedKeys;
+        }
+
+        private static void ValidateLocaleEntries(
+            StringTable table,
+            ISet<string> expectedKeys,
+            string localeName)
+        {
+            List<string> missing = expectedKeys
+                .Where(key => table.GetEntry(key) == null)
+                .OrderBy(key => key, StringComparer.Ordinal)
+                .ToList();
+            if (missing.Count > 0)
+                throw new InvalidOperationException(
+                    $"Chiavi mancanti nel catalogo {localeName}:\n" + string.Join("\n", missing));
+
+            List<string> empty = expectedKeys
+                .Where(key => string.IsNullOrWhiteSpace(table.GetEntry(key)?.Value))
+                .OrderBy(key => key, StringComparer.Ordinal)
+                .ToList();
+            if (empty.Count > 0)
+                throw new InvalidOperationException(
+                    $"Valori {localeName} vuoti:\n" + string.Join("\n", empty));
         }
 
         private static void CollectConstantKeys(Type type, ISet<string> keys)

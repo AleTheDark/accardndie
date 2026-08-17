@@ -16,7 +16,6 @@ namespace AccardND.Editor
             "Assets/_Project/Art/Cards"
         };
 
-        [MenuItem("Accard N' Die/Rebuild Card Art Catalog")]
         public static void Rebuild()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)

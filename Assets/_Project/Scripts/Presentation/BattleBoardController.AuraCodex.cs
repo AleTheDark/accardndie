@@ -1,6 +1,7 @@
 using System.Text;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -25,7 +26,11 @@ public sealed partial class BattleBoardController
 
 		Text title = CreateText("Aura Codex Title", ((Component)overlay).transform, font, 40, (FontStyle)1, (TextAnchor)4);
 		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(title);
-		title.text = "CODICE DELLE AURE";
+		title.text = GameText.GetOrFallbackSilent(GameTextKeys.Rules.AuraCodexTitle, "CODICE DELLE AURE");
+		AccardND.Battlefield.EditableRuntimeText.BindLocalized(
+			title,
+			GameTextKeys.Rules.AuraCodexTitle,
+			"CODICE DELLE AURE");
 		title.color = new Color(0.95f, 0.79f, 0.34f);
 		SetRect(title.rectTransform, new Vector2(0.08f, 0.9f), new Vector2(0.82f, 0.97f));
 
@@ -122,16 +127,16 @@ public sealed partial class BattleBoardController
 		builder.AppendLine("<b>COME SI ATTIVANO</b>");
 		builder.AppendLine("Schieri sempre 3 carte. In base alla loro composizione si attiva UNA sola aura, con questa priorita':");
 		builder.AppendLine("• 3 carte della stessa CLASSE  ->  Aura di Classe");
-		builder.AppendLine("• 3 carte della stessa FAMIGLIA (classi diverse)  ->  Aura di Famiglia");
+		builder.AppendLine("• 3 carte della stessa FAZIONE (classi diverse)  ->  Aura di Fazione");
 		builder.AppendLine("• 1 Fortuza + 1 Astuta + 1 Magica  ->  Aura di Formazione");
-		builder.AppendLine("L'Aura di Classe sostituisce quella di Famiglia: non si sommano.");
+		builder.AppendLine("L'Aura di Classe sostituisce quella di Fazione: non si sommano.");
 		builder.AppendLine();
-		builder.AppendLine("Famiglie:  Fortuza (Warrior, Barbarian, Paladin)  ·  Astuta (Rogue, Assassin, Hunter)  ·  Magica (Mage, Necromancer, Priest)");
+		builder.AppendLine("Fazioni:  Fortuza (Warrior, Barbarian, Paladin)  ·  Astuta (Rogue, Assassin, Hunter)  ·  Magica (Mage, Necromancer, Priest)");
 		builder.AppendLine();
 		builder.AppendLine("<b>AURA DI FORMAZIONE</b>");
 		AppendAuraEntry(builder, "Formazione bilanciata", BattleAuraType.Formation);
 		builder.AppendLine();
-		builder.AppendLine("<b>AURE DI FAMIGLIA</b>");
+		builder.AppendLine("<b>AURE DI FAZIONE</b>");
 		AppendAuraEntry(builder, "Fortuza", BattleAuraType.Might);
 		AppendAuraEntry(builder, "Astuta", BattleAuraType.Cunning);
 		AppendAuraEntry(builder, "Magica", BattleAuraType.Magic);

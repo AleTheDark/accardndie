@@ -82,5 +82,27 @@ namespace AccardND.GameCore.Mana
         public int AttackCost { get; }
 
         public static ManaRules CreateDefault() => new();
+
+        /// <summary>
+        /// Le stesse regole con un tetto diverso. Serve al talento "Riserva", che alza il
+        /// massimo della riserva del giocatore in campagna.
+        ///
+        /// Il tetto si cambia qui e non dentro <see cref="ManaPool"/> perche' e' la regola a
+        /// dire quanto mana ci sta: <c>Gain</c>, <c>RaiseTo</c> e <c>Restore</c> tagliano
+        /// tutti su <see cref="Maximum"/>, e la barra a schermo legge lo stesso numero. Una
+        /// riserva con un tetto "vero" e uno "mostrato" sarebbe due tetti.
+        /// </summary>
+        public ManaRules WithMaximum(int maximum) => new(
+            maximum,
+            RunStart,
+            RoundFloor,
+            GainOnActivation,
+            GainOnSkip,
+            GainOnParry,
+            GainOnKill,
+            GainOnLoss,
+            SupremeRepeatSurcharge,
+            PaladinReserveThreshold,
+            AttackCost);
     }
 }

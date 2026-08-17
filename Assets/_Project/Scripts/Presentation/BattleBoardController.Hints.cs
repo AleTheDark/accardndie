@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -101,7 +102,11 @@ public sealed partial class BattleBoardController
 
 	private void OnDisable()
 	{
+		ClearManaDeltaCallouts();
+		ClearEnemyManaDeltaCallouts();
 		ResumeGameAfterHint();
+		RestoreBossShakeTransform();
+		DestroyBossTransitionBlackout();
 	}
 
 	private void CreateHintOverlay(Transform parent, Font font)
@@ -341,7 +346,7 @@ public sealed partial class BattleBoardController
 		hintCurrentPageIndex = Mathf.Clamp(pageIndex, 0, hintCurrentPages.Length - 1);
 		if ((Object)(object)hintButtonText != (Object)null)
 		{
-			hintButtonText.text = "AVANTI";
+			hintButtonText.text = GameText.GetOrFallbackSilent(GameTextKeys.Hints.Next, "AVANTI");
 		}
 		string page = hintCurrentPages[hintCurrentPageIndex];
 		ResizeHintBubble(page);
@@ -947,11 +952,8 @@ public sealed partial class BattleBoardController
 	private HintContent CreateMerchantHintContent()
 	{
 		return new HintContent(
-			"MERCATO",
-			"Due banchi: carte oppure oggetti.",
-			"Il primo acquisto chiude l'altro banco.",
-			"Vendere e recuperare carte resta sempre possibile.",
-			"Quando hai finito, premi CONTINUA.");
+			"Spendi Gold o continua",
+			"Spendi Gold o continua.");
 	}
 
 	public void ShowAllHintsForDebug()

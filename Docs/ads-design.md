@@ -240,8 +240,15 @@ Restano:
 8. **Test device**: l'id si legge in logcat al primo avvio e va messo in `AdUnits.TestDeviceIds`.
    Finche' e' vuoto, collaudare una build di release sul proprio telefono genera traffico non
    valido. Cliccare i propri annunci significa chiusura dell'account.
-9. `app-ads.txt` sul dominio dichiarato nella scheda Play, questionario annunci, classificazione
-   contenuti.
+9. `app-ads.txt` **scritto**: `Docs/web/app-ads.txt`, con la stessa riga di `ads.txt`
+   (`google.com, pub-3580486749764055, DIRECT, f08c47fec0942fa0`), ed e' nella lista di
+   deploy in `Docs/webgl-hosting-cache.md`. Resta da fare il deploy del sito e poi, su Play
+   Console, controllare che "Sito web dello sviluppatore" dica esattamente lo stesso dominio
+   su cui il file e' servito: AdMob confronta le stringhe, quindi `www.` di troppo o mancante
+   fa fallire la scansione. Dopo il deploy servono almeno 24 ore prima che AdMob lo veda, e
+   lo stato si legge in AdMob sotto *App -> app-ads.txt*.
+
+   Restano il questionario annunci e la classificazione dei contenuti.
 
 ## Fase 3 — Web e PWA (H5 Games Ads)
 
@@ -353,7 +360,7 @@ sito vero:
 
 | pagina | cosa contiene |
 |---|---|
-| `guida.html` | il regolamento completo: mazzo e mano, triangolo delle famiglie, scala del Vigore, tutte le aure, e come si sceglie uno schieramento |
+| `guida.html` | il regolamento completo: mazzo e mano, triangolo delle fazioni, scala del Vigore, tutte le aure, e come si sceglie uno schieramento |
 | `classi.html` | le nove classi, con abilita, aura da tre copie e una nota su come si giocano |
 | `carte.html` | le 81 carte schierabili, **generate** dagli asset da `gen-carte.sh` |
 | `privacy.html` | l'informativa, aggiornata con AdSense e i cookie pubblicitari sul web |

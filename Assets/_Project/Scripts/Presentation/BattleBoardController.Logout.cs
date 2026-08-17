@@ -1,4 +1,5 @@
 using AccardND.Network;
+using AccardND.Localization;
 using AccardND.PvpUi;
 using UnityEngine;
 using UnityEngine.Events;
@@ -47,12 +48,14 @@ public sealed partial class BattleBoardController
 			title.font = logoutTitleFont;
 		title.fontSize = 50;
 		title.resizeTextForBestFit = false;
-		title.text = "USCIRE DALL'ACCOUNT?";
+		title.text = GameText.GetOrFallbackSilent(GameTextKeys.Options.LogoutTitle, "USCIRE DALL'ACCOUNT?");
 		title.color = new Color(0.95f, 0.79f, 0.34f);
 		SetRect(title.rectTransform, new Vector2(0.06f, 0.68f), new Vector2(0.94f, 0.9f));
 
 		Text body = CreateText("Logout Body", ((Component)dialog).transform, font, 30, (FontStyle)0, (TextAnchor)4);
-		body.text = "Tornerai alla schermata di accesso. La campagna in corso verra' abbandonata.";
+		body.text = GameText.GetOrFallbackSilent(
+			GameTextKeys.Options.LogoutBody,
+			"Tornerai alla schermata di accesso. La campagna in corso verrà abbandonata.");
 		body.color = new Color(0.86f, 0.92f, 0.94f);
 		body.horizontalOverflow = HorizontalWrapMode.Wrap;
 		body.verticalOverflow = VerticalWrapMode.Truncate;
@@ -60,11 +63,11 @@ public sealed partial class BattleBoardController
 		body.fontSize = 30;
 		SetRect(body.rectTransform, new Vector2(0.08f, 0.36f), new Vector2(0.92f, 0.66f));
 
-		Button cancelButton = CreateButton("Cancel Logout", ((Component)dialog).transform, font, "ANNULLA");
+		Button cancelButton = CreateButton("Cancel Logout", ((Component)dialog).transform, font, GameText.GetOrFallbackSilent(GameTextKeys.Common.Cancel, "ANNULLA"));
 		((UnityEvent)cancelButton.onClick).AddListener(new UnityAction(HideLogoutConfirmation));
 		SetRect((RectTransform)((Component)cancelButton).transform, new Vector2(0.08f, 0.09f), new Vector2(0.46f, 0.28f));
 
-		Button confirmButton = CreateButton("Confirm Logout", ((Component)dialog).transform, font, "ESCI");
+		Button confirmButton = CreateButton("Confirm Logout", ((Component)dialog).transform, font, GameText.GetOrFallbackSilent(GameTextKeys.Common.Exit, "ESCI"));
 		((UnityEvent)confirmButton.onClick).AddListener(new UnityAction(ConfirmLogout));
 		AccardND.Battlefield.MmoUiTheme.ApplyConfirmButtonStyle(confirmButton);
 		SetRect((RectTransform)((Component)confirmButton).transform, new Vector2(0.54f, 0.09f), new Vector2(0.92f, 0.28f));
@@ -109,6 +112,9 @@ public sealed partial class BattleBoardController
 		// appena chiusa, e il logout durerebbe il tempo di un cambio scena.
 		PlayerPrefs.DeleteKey(LoginProviderPrefsKey);
 		PlayerPrefs.Save();
+
+		// La memoria dei tour e' separata per PlayerId: non va cancellata al logout,
+		// altrimenti lo stesso account ripartirebbe dall'inizio alla riconnessione.
 
 		SceneManager.LoadScene(LoginSceneName);
 	}

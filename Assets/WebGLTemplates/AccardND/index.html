@@ -7,8 +7,12 @@
          la radice e' la homepage del sito. Tutti i percorsi delle risorse qui sotto
          (Build, TemplateData, StreamingAssets, sw.js, manifest) sono RELATIVI apposta,
          cosi' si risolvono dentro /game/ senza dover ripetere il prefisso. -->
-    <title>Gioca — {{{ PRODUCT_NAME }}}</title>
-    <meta name="description" content="Gioca ad Accard N' Die direttamente nel browser: carte, nove classi e dadi, senza installare niente.">
+    <!-- Il titolo NON usa {{{ PRODUCT_NAME }}}: quello e' l'identificativo tecnico del
+         player Unity (AcCardNDie, senza spazi, usato anche come etichetta del launcher
+         Android) e va tenuto corto. Qui serve invece il nome per esteso, lo stesso della
+         scheda Play, perche' e' quello che finisce nei risultati di ricerca. -->
+    <title>Gioca — AcCard N' Die: Carte e Dadi</title>
+    <meta name="description" content="Gioca ad AcCard N' Die direttamente nel browser: carte, nove classi e dadi, senza installare niente.">
     <link rel="canonical" href="https://accardndie.com/game/">
     <script>
       window.ACCARDND_GOOGLE_CLIENT_ID = "866249556431-mgdm97uvov7mjvect4bp453dpp2oe48u.apps.googleusercontent.com";
@@ -36,13 +40,19 @@
             crossorigin="anonymous"
             data-adbreak-test="on"></script>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css">
+    <!-- Versionato come i file della build: senza il ?v= questo foglio di stile resta nella
+         cache di Cloudflare per ore (max-age=14400) e un deploy nuovo continua a essere
+         servito con il CSS vecchio - nemmeno un ricaricamento forzato lo aggira, perche'
+         salta la cache del browser ma non quella del bordo. -->
+    <link rel="stylesheet" href="TemplateData/style.css?v={{{ PRODUCT_VERSION }}}">
     <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#1a1410">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="AcCardNDie">
+    <!-- Etichetta sotto l'icona su iPhone: qui va il nome CORTO, non quello per esteso
+         della scheda Play, perche' la home di iOS taglia dopo una dozzina di caratteri. -->
+    <meta name="apple-mobile-web-app-title" content="AcCard N' Die">
     <link rel="apple-touch-icon" href="TemplateData/apple-touch-icon.png">
 #if SHOW_DIAGNOSTICS
     <link rel="stylesheet" href="<<<TemplateData/diagnostics.css>>>">
@@ -68,23 +78,47 @@
 #if SHOW_DIAGNOSTICS
         <img id="diagnostics-icon" src="TemplateData/webmemd-icon.png">
 #endif
-        <div id="unity-build-title">{{{ PRODUCT_NAME }}}</div>
+        <div id="unity-build-title">AcCard N' Die</div>
 
-        <!-- Collegamenti alle pagine di contenuto del sito. Non sono decorazione: sono
-             l'unico percorso da cui un crawler puo' raggiungere il regolamento, il database
-             delle carte e l'informativa, perche' la pagina di gioco per lui e' un canvas
-             vuoto. Stanno dentro #unity-footer per ereditarne il posizionamento (sotto al
-             canvas su desktop, nascosto sul telefono, dove il gioco occupa tutto lo
-             schermo): nel documento restano comunque, ed e' quello che conta.
-             Sono tutti assoluti perche' questa pagina vive in /game/, mentre il resto del
-             sito sta in radice: un href relativo cercherebbe /game/guida.html. -->
+        <!-- Testo e collegamenti sotto al canvas. Non sono decorazione: per un crawler
+             questa pagina e' un canvas vuoto, cioe' una pagina senza contenuto su cui
+             pero' girano gli annunci - ed e' esattamente la forma che AdSense boccia come
+             "contenuto di scarso valore". Queste righe sono l'unica cosa leggibile qui
+             dentro, e l'unico percorso verso il regolamento, il database delle carte e
+             l'informativa.
+             Stanno dentro #unity-footer per ereditarne il posizionamento (sotto al canvas
+             su desktop, nascosto sul telefono, dove il gioco occupa tutto lo schermo): nel
+             documento restano comunque, ed e' quello che conta.
+             Gli href sono tutti assoluti perche' questa pagina vive in /game/, mentre il
+             resto del sito sta in radice: un href relativo cercherebbe /game/guida.html. -->
+        <div id="site-intro">
+          <h1>AcCard N' Die: gioca nel browser</h1>
+          <p>Un gioco di carte e dadi: schieri tre eroi su nove classi, e lo scontro non si
+          risolve confrontando due numeri — la fazione di chi attacca contro quella di chi
+          difende decide quanti dadi tiri e quale tieni. Sopra ci stanno le abilità delle
+          classi, le supreme e le aure dello schieramento.</p>
+          <p>Parte qui sopra, gratis e senza installare niente. C'è una campagna in sette
+          capitoli e ci sono i duelli online con gradi e stagioni. Il regolamento completo è
+          pubblico: <a href="/guida">come si gioca</a>, le
+          <a href="/classi">nove classi</a> e tutte le
+          <a href="/carte">81 carte</a>.</p>
+        </div>
+
         <nav id="site-links">
           <a href="/">Home</a>
-          <a href="/guida.html">Come si gioca</a>
-          <a href="/classi.html">Le nove classi</a>
-          <a href="/carte.html">Database carte</a>
+          <a href="/guida">Come si gioca</a>
+          <a href="/strategia">Strategia</a>
+          <a href="/classi">Le nove classi</a>
+          <a href="/carte">Database carte</a>
+          <a href="/campagna">Campagna</a>
+          <a href="/duelli">Duelli</a>
+          <a href="/rifugio">Il rifugio</a>
+          <a href="/faq">Domande frequenti</a>
+          <a href="/hall-of-fame">Hall of Fame</a>
           <a href="/statistiche">Statistiche</a>
-          <a href="/privacy.html">Privacy</a>
+          <a href="/chi-siamo">Chi siamo</a>
+          <a href="/contatti">Contatti</a>
+          <a href="/privacy">Privacy</a>
         </nav>
       </div>
     </div>
@@ -92,6 +126,15 @@
       /* Riga propria sotto al logo Unity: il canvas su desktop e' un ritratto stretto, e
          quattro link in fila accanto al logo e al pulsante schermo intero non ci starebbero.
          Il clear serve proprio a scendere sotto quei float. */
+      #site-intro {
+        clear: both; max-width: 46rem; margin: 1.6rem auto 0; padding: 0 1rem;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        color: #cbbfa8; font-size: .9rem; line-height: 1.6; text-align: left;
+      }
+      #site-intro h1 { color: #f0b93d; font-size: 1.15rem; margin: 0 0 .5rem; }
+      #site-intro p { margin: 0 0 .7rem; }
+      #site-intro a { color: #f0b93d; }
+
       #site-links {
         clear: both; text-align: center; padding-top: 2px;
         font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: .8rem;
@@ -183,8 +226,14 @@
       // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
       // expected to change.
 
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
+      // Una finestra stretta e verticale su desktop e' normalmente un'anteprima mobile
+      // (DevTools, tablet o embed). Basarsi solo sullo user-agent la trattava invece come
+      // desktop, lasciando footer e layout diversi da quelli del telefono reale.
+      var isMobilePresentation = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+        || window.innerHeight > window.innerWidth;
+
+      if (isMobilePresentation) {
+        // Mobile/portrait-preview style: fill the whole browser client area with the game canvas.
 
         var meta = document.createElement('meta');
         meta.name = 'viewport';
@@ -208,22 +257,27 @@
 
       } else {
         // Desktop style: render the game in a centered portrait frame, like the mobile app.
-        // L'aspect ratio arriva dalle dimensioni WebGL di default (Player Settings).
-        var portraitAspect = {{{ WIDTH }}} / {{{ HEIGHT }}};
-        function fitPortrait() {
-          // 68 e non 44: il footer ha due righe, la barra Unity piu' i collegamenti alle
-          // pagine del sito. Sottostimarlo taglierebbe i link fuori dallo schermo.
-          var h = window.innerHeight - 68; // spazio per il footer
-          var w = h * portraitAspect;
-          if (w > window.innerWidth) {
-            w = window.innerWidth;
-            h = w / portraitAspect;
-          }
-          canvas.style.width = w + "px";
-          canvas.style.height = h + "px";
-        }
-        fitPortrait();
-        window.addEventListener("resize", fitPortrait);
+        // Si simula uno schermo di telefono 19.5:9 in verticale (1206 x 2622, la
+        // risoluzione nativa del riferimento) e NON le dimensioni WebGL dei Player
+        // Settings, che sono 540x960 cioe' 9:16: piu' largo di un telefono vero, ed e'
+        // quello che faceva sembrare il gioco allargato e ricampionato sul browser PC.
+        var SIM_WIDTH = 1206, SIM_HEIGHT = 2622;
+
+        // Il render target resta fisso a 1206x2622 invece di inseguire la dimensione DOM
+        // del canvas moltiplicata per il devicePixelRatio: cosi' Screen.width/height dentro
+        // Unity valgono esattamente quelli del telefono simulato (stessi CanvasScaler,
+        // stessi breakpoint della UI) e il risultato viene solo rimpicciolito dal browser
+        // per stare nella finestra, senza ricampionamenti a risoluzioni arbitrarie.
+        config.matchWebGLToCanvasSize = false;
+        canvas.width = SIM_WIDTH;
+        canvas.height = SIM_HEIGHT;
+
+        // La dimensione a schermo del canvas (che con il render target fisso non c'entra
+        // niente con i 1206x2622 qui sopra) e' decisa dal foglio di stile, regola
+        // ".unity-desktop #unity-canvas": impostarla da qui non funziona, perche' Unity
+        // riscrive l'attributo style del canvas quando l'istanza parte e cancella la
+        // misura, lasciando il canvas grande 1206x2622 px veri dentro una finestra molto
+        // piu' piccola - da cui il gioco che si vedeva tagliato sul browser da PC.
       }
 
 #if BACKGROUND_FILENAME

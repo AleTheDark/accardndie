@@ -105,6 +105,15 @@ namespace AccardND.NetProtocol
                     };
                 case CardRevivedEvent e:
                     return new MatchEventDto { type = "CardRevived", player = e.Player, slot = e.Slot, lives = e.Lives };
+                case NecromancerMinionsChangedEvent e:
+                    return new MatchEventDto
+                    {
+                        type = "NecromancerMinionsChanged",
+                        player = e.Player,
+                        slot = e.Slot,
+                        amount = e.Remaining,
+                        bonus = e.DeathBuff ? 1 : 0
+                    };
                 case ProtectionTriggeredEvent e:
                     return new MatchEventDto
                     {
@@ -119,6 +128,7 @@ namespace AccardND.NetProtocol
                         type = "AttackResolved",
                         player = e.AttackerPlayer,
                         slot = e.AttackerSlot,
+                        heroClass = (int)e.AttackerHeroClass,
                         targetPlayer = e.DefenderPlayer,
                         targetSlot = e.DefenderSlot,
                         certainty = e.Certainty.ToString(),
@@ -145,7 +155,8 @@ namespace AccardND.NetProtocol
                         defenderEliminated = e.DefenderEliminated,
                         becameSpirit = e.BecameSpirit,
                         overkill = e.Overkill,
-                        isCounter = e.IsCounter
+                        isCounter = e.IsCounter,
+                        interceptedByNecromancerMinion = e.InterceptedByNecromancerMinion
                     };
                 case AttachmentAppliedEvent e:
                     return new MatchEventDto
@@ -153,6 +164,7 @@ namespace AccardND.NetProtocol
                         type = "AttachmentApplied",
                         player = e.Player,
                         slot = e.SourceSlot,
+                        targetPlayer = e.Player,
                         targetSlot = e.TargetSlot,
                         bonus = e.Bonus
                     };

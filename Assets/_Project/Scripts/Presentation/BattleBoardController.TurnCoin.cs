@@ -1,4 +1,6 @@
 using System;
+using AccardND.GameData;
+using AccardND.NetProtocol;
 using UnityEngine;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
@@ -9,45 +11,73 @@ public sealed partial class BattleBoardController
 {
 	private const int TurnCoinLayer = 30;
 	private const float TurnCoinFlipDuration = 0.45f;
+	private const bool TurnCoinEnabled = true;
 	private RawImage turnCoinImage;
 	private Transform turnCoinTransform;
 	private RenderTexture turnCoinTexture;
-	private Quaternion turnCoinTargetRotation = Quaternion.Euler(90f, 0f, 0f);
-	private Quaternion turnCoinStartRotation = Quaternion.Euler(90f, 0f, 0f);
+	private Quaternion turnCoinTargetRotation = Quaternion.identity;
+	private Quaternion turnCoinStartRotation = Quaternion.identity;
 	private float turnCoinFlipElapsed = TurnCoinFlipDuration;
 	private bool turnCoinPointsToPlayer;
 	private bool turnCoinStateAvailable;
 	private bool turnCoinShouldBeVisible;
 	private bool turnCoinSuppressed;
+	private bool turnCoinFlipPending;
 
 	private void SetTurnCoinState(bool playerTurn, bool visible)
 	{
-		bool directionChanged = turnCoinStateAvailable && turnCoinPointsToPlayer != playerTurn;
+		if (!TurnCoinEnabled)
+		{
+			turnCoinShouldBeVisible = false;
+			RefreshTurnCoinVisibility();
+			return;
+		}
+
+		bool hadState = turnCoinStateAvailable;
+		bool directionChanged = hadState && turnCoinPointsToPlayer != playerTurn;
+		bool becomingVisible = visible && !turnCoinShouldBeVisible;
+		if (directionChanged || becomingVisible)
+		{
+			turnCoinStartRotation = Quaternion.Euler(
+				0f,
+				0f,
+				playerTurn ? 180f : 0f);
+			turnCoinFlipPending = true;
+		}
 		turnCoinStateAvailable = true;
 		turnCoinShouldBeVisible = visible;
 		turnCoinPointsToPlayer = playerTurn;
-		turnCoinTargetRotation = Quaternion.Euler(playerTurn ? 90f : 270f, 0f, 0f);
+		turnCoinTargetRotation = Quaternion.Euler(0f, 0f, playerTurn ? 0f : 180f);
 		if (turnCoinSuppressed)
 		{
 			RefreshTurnCoinVisibility();
 			return;
 		}
 		EnsureTurnCoinView();
-		if (directionChanged && (Object)(object)turnCoinTransform != (Object)null)
-		{
-			turnCoinStartRotation = turnCoinTransform.localRotation;
-			turnCoinFlipElapsed = 0f;
-			if (!adventureScriptedTutorialActive)
-			{
-				PlaySfx(coinFlipSfx);
-			}
-		}
+		StartPendingTurnCoinFlip();
 		RefreshTurnCoinVisibility();
+	}
+
+	private void StartPendingTurnCoinFlip()
+	{
+		if (!turnCoinFlipPending || (Object)(object)turnCoinTransform == (Object)null)
+		{
+			return;
+		}
+
+		turnCoinFlipPending = false;
+		turnCoinTransform.localRotation = turnCoinStartRotation;
+		turnCoinTransform.localScale = Vector3.one;
+		turnCoinFlipElapsed = 0f;
+		if (!adventureScriptedTutorialActive)
+		{
+			PlaySfx(coinFlipSfx);
+		}
 	}
 
 	private void UpdateTurnCoinAnimation()
 	{
-		if (!turnCoinStateAvailable || turnCoinSuppressed)
+		if (!TurnCoinEnabled || !turnCoinStateAvailable || turnCoinSuppressed)
 		{
 			return;
 		}
@@ -59,10 +89,17 @@ public sealed partial class BattleBoardController
 		{
 			turnCoinFlipElapsed = Mathf.Min(TurnCoinFlipDuration, turnCoinFlipElapsed + Time.unscaledDeltaTime);
 			float progress = turnCoinFlipElapsed / TurnCoinFlipDuration;
-			float eased = progress * progress * (3f - 2f * progress);
-			turnCoinTransform.localRotation = progress >= 1f
-				? turnCoinTargetRotation
-				: Quaternion.Slerp(turnCoinStartRotation, turnCoinTargetRotation, eased);
+			// Simula il flip 3D sulla texture UI: la moneta si assottiglia fino
+			// al bordo, cambia verso a meta corsa e torna alla larghezza piena.
+			float height = Mathf.Abs(Mathf.Cos(progress * Mathf.PI));
+			turnCoinTransform.localScale = new Vector3(1f, height, 1f);
+			turnCoinTransform.localRotation = progress < 0.5f
+				? turnCoinStartRotation
+				: turnCoinTargetRotation;
+			if (progress >= 1f)
+			{
+				turnCoinTransform.localScale = Vector3.one;
+			}
 		}
 	}
 
@@ -73,23 +110,56 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		bool messagePanelVisible = (Object)(object)messagePanelRect != (Object)null
-			&& ((Component)messagePanelRect).gameObject.activeSelf;
-		bool visible = turnCoinShouldBeVisible
+		bool visible = TurnCoinEnabled
+			&& turnCoinShouldBeVisible
 			&& !turnCoinSuppressed
-			&& !IsBackdropBossTurnCoinSuppressed()
 			&& !adventureScriptedTutorialActive
-			&& !messagePanelVisible;
+			&& (pvpPresentationActive || currentRoomType == RoomType.Monster);
 		if (((Component)turnCoinImage).gameObject.activeSelf != visible)
 		{
 			((Component)turnCoinImage).gameObject.SetActive(visible);
 		}
 	}
 
+	private bool IsTurnCoinVisiblePhase()
+	{
+		// La moneta indica di chi e' il turno: serve mentre si schiera e per
+		// tutto il combattimento, dove il pannello messaggi sparisce nei turni
+		// della CPU e resterebbe altrimenti nessun segnale a schermo.
+		if (pvpPresentationActive)
+		{
+			return pvpState != null
+				&& (pvpState.Phase == PvpClientPhase.Deployment
+					|| pvpState.Phase == PvpClientPhase.Battle);
+		}
+
+		if (IsBackdropBossTurnCoinSuppressed())
+		{
+			return false;
+		}
+
+		if (deploymentDraftActive)
+		{
+			return !UsesBossStyleDeployment();
+		}
+
+		return IsTurnCoinCombatPhase();
+	}
+
+	private bool IsTurnCoinCombatPhase()
+	{
+		return roundNumber > 0
+			&& !draftActive
+			&& !gameFinished
+			&& currentRoomType == RoomType.Monster
+			&& (playerCards.Count > 0 || cpuCards.Count > 0);
+	}
+
 	private bool IsBackdropBossTurnCoinSuppressed()
 	{
 		return debugForceFirstRoomBragus
 			|| debugForceFirstRoomTrentor
+			|| debugForceFirstRoomSeraphel
 			|| bragusBossPresentationActive
 			|| trentorBossPresentationActive
 			|| activeBragusBoss != null
@@ -112,6 +182,7 @@ public sealed partial class BattleBoardController
 		{
 			EnsureTurnCoinView();
 			PlaceTurnCoinBelowPawns();
+			StartPendingTurnCoinFlip();
 		}
 		RefreshTurnCoinVisibility();
 	}
@@ -127,12 +198,15 @@ public sealed partial class BattleBoardController
 		imageObject.transform.SetParent((Transform)(object)safeAreaRoot, false);
 		turnCoinImage = imageObject.GetComponent<RawImage>();
 		turnCoinImage.raycastTarget = false;
+		turnCoinImage.color = Color.white;
 		RectTransform imageRect = (RectTransform)imageObject.transform;
 		imageRect.anchorMin = new Vector2(0.5f, 0.5f);
 		imageRect.anchorMax = new Vector2(0.5f, 0.5f);
 		imageRect.pivot = new Vector2(0.5f, 0.5f);
 		imageRect.anchoredPosition = new Vector2(0f, -55f);
-		imageRect.sizeDelta = new Vector2(300f, 300f);
+		imageRect.sizeDelta = new Vector2(135.375f, 135.375f);
+		imageRect.localRotation = Quaternion.Euler(0f, 0f, turnCoinPointsToPlayer ? 0f : 180f);
+		turnCoinTransform = imageRect;
 		PlaceTurnCoinBelowPawns();
 
 		turnCoinTexture = new RenderTexture(256, 256, 24, RenderTextureFormat.ARGB32)
@@ -180,10 +254,13 @@ public sealed partial class BattleBoardController
 			90f,
 			0f,
 			turnCoinPointsToPlayer ? 180f : 0f);
-		turnCoinTransform = coin.transform;
 		SetLayerRecursively(coin, TurnCoinLayer);
 		Texture2D coinFace = Resources.Load<Texture2D>("UI/TurnCoin/turn_coin_arrow_aaa");
 		ApplyTurnCoinMaterial(coin.GetComponent<Renderer>(), Color.white, 0.35f, coinFace);
+		// Usa la texture direttamente nella Canvas: su alcuni device mobili la
+		// camera fuori scena può lasciare la RenderTexture vuota.
+		turnCoinImage.texture = coinFace;
+		stage.SetActive(false);
 	}
 
 	private void PlaceTurnCoinBelowPawns()

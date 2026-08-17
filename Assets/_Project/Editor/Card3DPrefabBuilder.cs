@@ -16,7 +16,6 @@ namespace AccardND.Editor
             EditorApplication.delayCall += BuildIfMissing;
         }
 
-        [MenuItem("Accard N' Die/Rebuild Card 3D Prefab", priority = 35)]
         public static void Rebuild()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)

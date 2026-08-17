@@ -9,7 +9,7 @@ namespace AccardND.PvpUi
     /// <summary>
     /// Classifica competitiva aperta direttamente dall'Hub. Mostra soltanto dati
     /// autoritativi ricevuti dal server: profilo, progresso account, ladder attiva
-    /// e stagioni archiviate nella Hall of Fame.
+    /// e record della campagna Avventura.
     /// </summary>
     internal sealed class PvpLeaderboardScreen
     {
@@ -19,11 +19,14 @@ namespace AccardND.PvpUi
             public Action OnRequestProfile;
             public Action OnRequestAccountProgress;
             public Action OnRequestLeaderboard;
+            public Action OnRequestAdventureLeaderboard;
             public Action OnRequestHallOfFameSeasons;
             public Action<int> OnRequestHallOfFame;
         }
 
         private const string TabRanked = "ranked";
+        private const string TabAdventure = "adventure";
+        // Mantenuto per i setter legacy del profilo; non e' piu' una scheda visibile.
         private const string TabHallOfFame = "halloffame";
         private const string BackgroundResource = "UI/HallOfFame/hall_of_fame_background";
         private const string PortraitBackgroundResource = "UI/HallOfFame/hall_of_fame_background_portrait";
@@ -51,13 +54,14 @@ namespace AccardND.PvpUi
         private readonly Image backgroundImage;
         private readonly RectTransform viewRoot;
         private readonly Button rankedTab;
-        private readonly Button hallOfFameTab;
+        private readonly Button adventureTab;
         private readonly Text statusText;
 
         private string myPlayerId;
         private string currentTab = TabRanked;
         private ProfileData profile;
         private LeaderboardData leaderboard;
+        private AdventureLeaderboardData adventureLeaderboard;
         private HallOfFameSeasonsData hallOfFameSeasons;
         private HallOfFameData hallOfFame;
         private Text countdownText;
@@ -111,15 +115,15 @@ namespace AccardND.PvpUi
                 titlePanel, new Vector2(0.08f, 0.79f), new Vector2(0.92f, 0.9f));
 
             rankedTab = PvpUiFactory.CreateTabButton(
-                root, "Tab Ranked", "STAGIONE IN CORSO", () => SwitchTab(TabRanked), 23);
+                root, "Tab Ranked", "RANKED", () => SwitchTab(TabRanked), 23);
             PvpUiFactory.SetAnchors(
                 (RectTransform)rankedTab.transform,
                 new Vector2(0.18f, 0.715f), new Vector2(0.5f, 0.775f));
 
-            hallOfFameTab = PvpUiFactory.CreateTabButton(
-                root, "Tab Hall Of Fame", "HALL OF FAME", () => SwitchTab(TabHallOfFame), 23);
+            adventureTab = PvpUiFactory.CreateTabButton(
+                root, "Tab Adventure", "AVVENTURA", () => SwitchTab(TabAdventure), 23);
             PvpUiFactory.SetAnchors(
-                (RectTransform)hallOfFameTab.transform,
+                (RectTransform)adventureTab.transform,
                 new Vector2(0.5f, 0.715f), new Vector2(0.82f, 0.775f));
 
             var viewObject = new GameObject("Classifica Content", typeof(RectTransform));
@@ -135,7 +139,7 @@ namespace AccardND.PvpUi
                 new Vector2(0.055f, 0.018f), new Vector2(0.945f, 0.052f));
 
             PvpUiFactory.SetTabActive(rankedTab, true);
-            PvpUiFactory.SetTabActive(hallOfFameTab, false);
+            PvpUiFactory.SetTabActive(adventureTab, false);
             Render();
         }
 
@@ -150,6 +154,7 @@ namespace AccardND.PvpUi
             callbacks.OnRequestProfile?.Invoke();
             callbacks.OnRequestAccountProgress?.Invoke();
             callbacks.OnRequestLeaderboard?.Invoke();
+            callbacks.OnRequestAdventureLeaderboard?.Invoke();
         }
 
         public void SetStatus(string message)
@@ -180,6 +185,13 @@ namespace AccardND.PvpUi
             leaderboard = data;
             SetStatus(string.Empty);
             RenderIf(TabRanked);
+        }
+
+        public void SetAdventureLeaderboard(AdventureLeaderboardData data)
+        {
+            adventureLeaderboard = data;
+            SetStatus(string.Empty);
+            RenderIf(TabAdventure);
         }
 
         public void SetHallOfFameSeasons(HallOfFameSeasonsData data)
@@ -237,7 +249,7 @@ namespace AccardND.PvpUi
 
             currentTab = tab;
             PvpUiFactory.SetTabActive(rankedTab, tab == TabRanked);
-            PvpUiFactory.SetTabActive(hallOfFameTab, tab == TabHallOfFame);
+            PvpUiFactory.SetTabActive(adventureTab, tab == TabAdventure);
             SetStatus("Caricamento dati dal server...");
             Render();
 
@@ -249,7 +261,7 @@ namespace AccardND.PvpUi
             }
             else
             {
-                callbacks.OnRequestHallOfFameSeasons?.Invoke();
+                callbacks.OnRequestAdventureLeaderboard?.Invoke();
             }
         }
 
@@ -263,67 +275,146 @@ namespace AccardND.PvpUi
         {
             countdownText = null;
             PvpUiFactory.Clear(viewRoot);
-            if (currentTab == TabHallOfFame)
-                RenderHallOfFame();
+            if (currentTab == TabAdventure)
+                RenderAdventure();
             else
                 RenderRanked();
         }
 
         private void RenderRanked()
         {
-            RectTransform ladderPanel = CreateFramedPanel(
-                viewRoot, "Ladder", new Vector2(0f, 0f), new Vector2(0.72f, 1f));
-            RectTransform personalPanel = CreateFramedPanel(
-                viewRoot, "Your Season", new Vector2(0.735f, 0f), new Vector2(1f, 1f));
-
-            string seasonName = leaderboard?.seasonName ?? profile?.seasonName ?? "Stagione in corso";
-            Text title = PvpUiFactory.CreateTitleText(
-                ladderPanel, "Season Title", seasonName.ToUpperInvariant(), 25, TextAnchor.MiddleLeft);
-            title.color = Gold;
-            PvpUiFactory.SetAnchors(
-                (RectTransform)title.transform,
-                new Vector2(0.025f, 0.925f), new Vector2(0.56f, 0.99f));
-
-            countdownText = PvpUiFactory.CreateLabel(
-                ladderPanel, "Season Countdown", "Fine stagione in aggiornamento", 16, TextAnchor.MiddleRight);
-            countdownText.color = PaleGold;
-            PvpUiFactory.SetAnchors(
-                (RectTransform)countdownText.transform,
-                new Vector2(0.56f, 0.925f), new Vector2(0.975f, 0.99f));
-            Tick();
-
-            RectTransform podium = PvpUiFactory.CreateSoftPanel(
-                ladderPanel, "Podium", new Color(0.012f, 0.012f, 0.018f, 0.76f));
-            PvpUiFactory.SetAnchors(podium, new Vector2(0.025f, 0.515f), new Vector2(0.975f, 0.915f));
-
-            LeaderboardEntry first = EntryAt(leaderboard?.entries, 0);
-            LeaderboardEntry second = EntryAt(leaderboard?.entries, 1);
-            LeaderboardEntry third = EntryAt(leaderboard?.entries, 2);
-            CreateRankedPodiumCard(podium, second, 2, new Vector2(0.02f, 0.05f), new Vector2(0.323f, 0.84f), Silver);
-            CreateRankedPodiumCard(podium, first, 1, new Vector2(0.343f, 0.05f), new Vector2(0.657f, 0.98f), Gold);
-            CreateRankedPodiumCard(podium, third, 3, new Vector2(0.677f, 0.05f), new Vector2(0.98f, 0.84f), Bronze);
-
             RectTransform listContent = CreateScrollContent(
-                ladderPanel, "Ladder List",
-                new Vector2(0.025f, 0.105f), new Vector2(0.975f, 0.5f));
+                viewRoot, "Ranked Top Server", Vector2.zero, Vector2.one);
 
             if (leaderboard?.entries == null)
             {
                 AddMessageRow(listContent, "Classifica in caricamento...");
             }
-            else if (leaderboard.entries.Length <= 3)
+            else if (leaderboard.entries.Length == 0)
             {
-                AddMessageRow(listContent, "Nessun altro giocatore classificato.");
+                AddMessageRow(listContent, "Nessun giocatore classificato.");
             }
             else
             {
-                for (int index = 3; index < leaderboard.entries.Length; index++)
-                    AddRankedRow(listContent, leaderboard.entries[index]);
+                foreach (LeaderboardEntry entry in leaderboard.entries)
+                    AddRankedTavernRow(listContent, entry);
             }
+        }
 
-            CreatePersonalRankedRow(
-                ladderPanel, new Vector2(0.025f, 0.015f), new Vector2(0.975f, 0.092f));
-            RenderRankedPersonalPanel(personalPanel);
+        private void RenderAdventure()
+        {
+            RectTransform listContent = CreateScrollContent(
+                viewRoot, "Adventure Top Server", Vector2.zero, Vector2.one);
+            if (adventureLeaderboard?.entries == null)
+                AddMessageRow(listContent, "Classifica Avventura in caricamento...");
+            else if (adventureLeaderboard.entries.Length == 0)
+                AddMessageRow(listContent, "Nessuna run Avventura registrata.");
+            else
+                foreach (AdventureLeaderboardEntry entry in adventureLeaderboard.entries)
+                    AddAdventureTavernRow(listContent, entry);
+        }
+
+        private void AddRankedTavernRow(RectTransform content, LeaderboardEntry entry)
+        {
+            bool highlighted = IsMe(entry.playerId);
+            RectTransform row = PvpUiFactory.CreateSoftPanel(
+                content, $"Ranked Position {entry.rank}",
+                highlighted
+                    ? new Color(0.15f, 0.095f, 0.025f, 0.98f)
+                    : new Color(0.035f, 0.028f, 0.021f, 0.94f));
+            row.gameObject.AddComponent<LayoutElement>().preferredHeight = 170f;
+
+            Image emblem = CreateImage(row, "Rank Emblem");
+            emblem.sprite = iconArtwork?.Invoke(entry.selectedIconId);
+            if (emblem.sprite == null && !entry.placement)
+                emblem.sprite = PvpUiFactory.RankEmblem(entry.tier);
+            if (emblem.sprite == null)
+                emblem.sprite = Resources.Load<Sprite>(FallbackAvatarResource);
+            emblem.enabled = emblem.sprite != null;
+            emblem.preserveAspect = true;
+            PvpUiFactory.SetAnchors(
+                (RectTransform)emblem.transform,
+                new Vector2(0.025f, 0.12f), new Vector2(0.17f, 0.88f));
+
+            Text name = TavernText(
+                row, "Username", $"{entry.rank:N0}#  {(entry.username ?? "—").ToUpperInvariant()}",
+                31, FontStyle.Normal, TextAnchor.LowerLeft);
+            name.color = highlighted || entry.rank <= 3 ? Gold : Color.white;
+            PvpUiFactory.SetAnchors(
+                (RectTransform)name.transform,
+                new Vector2(0.20f, 0.51f), new Vector2(0.965f, 0.91f));
+
+            string league = entry.placement ? "IN PIAZZAMENTO" : $"{entry.tier} {entry.division}";
+            Text leagueText = TavernText(
+                row, "League", league, 26, FontStyle.Normal, TextAnchor.UpperLeft);
+            leagueText.color = entry.placement
+                ? new Color(0.72f, 0.62f, 0.42f, 1f)
+                : PvpUiFactory.TierAccent(entry.tier);
+            PvpUiFactory.SetAnchors(
+                (RectTransform)leagueText.transform,
+                new Vector2(0.20f, 0.13f), new Vector2(0.65f, 0.52f));
+
+            Text points = TavernText(
+                row, "League Points", entry.placement ? string.Empty : $"{entry.leaguePoints:N0} LP", 31,
+                FontStyle.Bold, TextAnchor.LowerRight);
+            points.color = new Color(0.96f, 0.72f, 0.24f, 1f);
+            PvpUiFactory.SetAnchors(
+                (RectTransform)points.transform,
+                new Vector2(0.66f, 0.12f), new Vector2(0.965f, 0.56f));
+        }
+
+        private void AddAdventureTavernRow(
+            RectTransform content, AdventureLeaderboardEntry entry)
+        {
+            bool highlighted = IsMe(entry.playerId);
+            RectTransform row = PvpUiFactory.CreateSoftPanel(
+                content, $"Adventure Position {entry.rank}",
+                highlighted
+                    ? new Color(0.15f, 0.095f, 0.025f, 0.98f)
+                    : new Color(0.035f, 0.028f, 0.021f, 0.94f));
+            row.gameObject.AddComponent<LayoutElement>().preferredHeight = 170f;
+
+            Image portrait = CreateImage(row, "Player Icon");
+            portrait.sprite = iconArtwork?.Invoke(entry.selectedIconId) ??
+                              Resources.Load<Sprite>(FallbackAvatarResource);
+            portrait.enabled = portrait.sprite != null;
+            portrait.preserveAspect = true;
+            PvpUiFactory.SetAnchors(
+                (RectTransform)portrait.transform,
+                new Vector2(0.025f, 0.12f), new Vector2(0.17f, 0.88f));
+
+            Text name = TavernText(
+                row, "Username", $"{entry.rank:N0}#  {(entry.username ?? "—").ToUpperInvariant()}",
+                31, FontStyle.Normal, TextAnchor.LowerLeft);
+            name.color = highlighted || entry.rank <= 3 ? Gold : Color.white;
+            PvpUiFactory.SetAnchors(
+                (RectTransform)name.transform,
+                new Vector2(0.20f, 0.51f), new Vector2(0.78f, 0.91f));
+
+            Text record = TavernText(
+                row, "Record", entry.chapterNumber > 0
+                    ? $"CAPITOLO {entry.chapterNumber:N0} · STANZA {entry.roomsCleared:N0}"
+                    : $"{entry.roomsCleared:N0} STANZE SUPERATE", 26,
+                FontStyle.Normal, TextAnchor.UpperLeft);
+            record.color = new Color(0.92f, 0.68f, 0.22f, 1f);
+            PvpUiFactory.SetAnchors(
+                (RectTransform)record.transform,
+                new Vector2(0.20f, 0.13f), new Vector2(0.78f, 0.52f));
+
+        }
+
+        private static Text TavernText(
+            Transform parent, string name, string value, int size,
+            FontStyle style, TextAnchor alignment)
+        {
+            Text text = PvpUiFactory.CreateLabel(parent, name, value, size, alignment);
+            Font tavernFont = Resources.Load<Font>("Fonts/IMFellEnglishSC");
+            if (tavernFont != null)
+                text.font = tavernFont;
+            text.fontStyle = style;
+            text.resizeTextForBestFit = false;
+            text.supportRichText = true;
+            return text;
         }
 
         private void RenderHallOfFame()

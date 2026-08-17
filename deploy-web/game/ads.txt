@@ -1,0 +1,16 @@
+# ads.txt di accardndie.com
+#
+# Dichiara chi e' autorizzato a vendere lo spazio pubblicitario di questo dominio.
+# Non e' un formalismo: senza, AdSense considera l'inventario non verificato e gli
+# H5 Games Ads non servono annunci (o li pagano molto meno).
+#
+# Va servito su https://accardndie.com/ads.txt, cioe' nella radice del sito. E' cosa
+# diversa da app-ads.txt, che riguarda l'app Android su Play.
+#
+# Il publisher id e' lo stesso di ACCARDND_ADSENSE_CLIENT_ID in index.html, ma senza il
+# prefisso "ca-", ed e' anche il numero prima della tilde nell'app id AdMob
+# (AdUnits.AndroidAppId): AdMob e AdSense condividono lo stesso account.
+#
+# Questa riga vale anche come metodo di verifica della proprieta' del sito, se in AdSense
+# si sceglie "Snippet ads.txt" invece dello snippet nel <head>.
+google.com, pub-3580486749764055, DIRECT, f08c47fec0942fa0

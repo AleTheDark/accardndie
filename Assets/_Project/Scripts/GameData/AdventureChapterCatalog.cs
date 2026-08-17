@@ -43,7 +43,13 @@ namespace AccardND.GameData
         /// <summary>Classe consegnata completando il capitolo. Null sull'ultimo, che da' un cosmetico.</summary>
         public string RewardClassId { get; }
 
-        /// <summary>Prezzo al Santuario. Zero sul primo, che arriva dal tutorial.</summary>
+        /// <summary>
+        /// Quanto valeva al Santuario quando i capitoli erano in vendita. Non lo legge piu'
+        /// nessuno - un capitolo si apre solo battendo il boss di quello prima - ma resta
+        /// perche' questa tabella e' il riflesso di quella del server, che lo tiene per la
+        /// valutazione degli account nel pannello admin: toglierlo qui farebbe divergere le
+        /// due righe senza guadagnarci niente. Zero sul primo, che arriva dal tutorial.
+        /// </summary>
         public int HoneyCost { get; }
 
         /// <summary>Se il boss del capitolo e' implementato, quindi se il capitolo si puo' giocare.</summary>
@@ -75,20 +81,18 @@ namespace AccardND.GameData
                 "fog", "Nebbia", "boss-bragus", "Bragus", "barbarian", 25, true),
 
             new AdventureChapter(3, "chapter-3", "Capitolo 3 - L'Infestazione di Jurinashor",
-                "infested", "Infestata", "boss-jurinashor", "Jurinashor", "necromancer", 50, false),
+                "infested", "Infestata", "boss-jurinashor", "Jurinashor", "necromancer", 50, true),
 
-            // Nome del boss ancora da decidere: "Seraphel" segue Docs/ScenariBoss.md, non
-            // lux.asset (che dice "zakhar", boss che lo stesso documento assegna pero' allo
-            // scenario Spettrale). Vedi ChapterCatalog sul server, che tiene la stessa nota.
-            new AdventureChapter(4, "chapter-4", "Capitolo 4 - La Luce di Seraphel",
-                "lux", "Illuminata", "boss-seraphel", "Seraphel", "paladin", 80, false),
+            // Seraphel segue Docs/ScenariBoss.md; Zakhar resta nello scenario Spettrale.
+			new AdventureChapter(4, "chapter-4", "Capitolo 4 - La Luce di Seraphel",
+				"lux", "Illuminata", "boss-seraphel", "Seraphel", "priest", 80, true),
 
             new AdventureChapter(5, "chapter-5", "Capitolo 5",
                 null, null, null, null, "assassin", 120, false),
 
-            // Medusa gira per ora sullo scenario di default, non sugli Specchi.
-            new AdventureChapter(6, "chapter-6", "Capitolo 6 - Medusa",
-                "default", "Dungeon", "boss-medusa", "Medusa", "priest", 170, true),
+			// In attesa del nuovo boss: Medusa e' ora un miniboss casuale della stanza 10.
+			new AdventureChapter(6, "chapter-6", "Capitolo 6",
+				null, null, null, null, "paladin", 170, false),
 
             new AdventureChapter(7, "chapter-7", "Capitolo 7 - La Cosmica di Palatir",
                 "cosmic", "Cosmica", "boss-palatir", "Palatir", null, 230, true)

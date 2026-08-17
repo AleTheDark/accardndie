@@ -2,20 +2,29 @@ namespace AccardND.Server.Progression;
 
 /// <summary>
 /// L'ordine dei capitoli della campagna, i loro boss e cosa consegnano. Sorgente unica sul
-/// server: la mappa boss-capitolo, la catena degli sblocchi e il listino del Santuario
-/// nascono tutti da qui, cosi' riordinare la campagna e' cambiare questa tabella e nient'altro.
+/// server: la mappa boss-capitolo e la catena degli sblocchi nascono tutte da qui, cosi'
+/// riordinare la campagna e' cambiare questa tabella e nient'altro.
 ///
-/// Un capitolo si ottiene in due modi (sono alternative, non passaggi): battendo il boss del
-/// capitolo precedente, oppure comprandolo al Santuario col miele.
+/// Un capitolo si ottiene in un modo solo: battendo il boss del capitolo precedente. Il
+/// Santuario li ha venduti per un periodo, poi la campagna e' tornata a essere un percorso
+/// e non un listino; <see cref="Chapter.HoneyCost"/> sopravvive perche' e' il prezzo con cui
+/// l'admin valuta un account, non un cartellino esposto al giocatore.
 /// </summary>
 public static class ChapterCatalog
 {
+	private const string PendingBossProgressionGate = "chapter-6";
     /// <summary>
     /// Un capitolo. <paramref name="Playable"/> distingue i capitoli con il boss davvero
     /// implementato da quelli gia' in tabella ma ancora senza avversario: la campagna e'
     /// scritta per intero fin da subito, cosi' gli id finiscono nel DB nella forma
     /// definitiva e non andranno piu' rinumerati quando i contenuti arriveranno.
     /// </summary>
+    /// <param name="AccountExperiencePercent">
+    /// Quanto vale, in percentuale, l'esperienza account di una run giocata qui. E' la sola
+    /// leva che rende la campagna una progressione e non una collezione di boss: piu' avanti
+    /// si arriva, piu' in fretta sale l'account, quindi battere un boss non apre solo il
+    /// capitolo dopo ma alza il ritmo di tutto quello che si giochera' da li' in poi.
+    /// </param>
     public sealed record Chapter(
         int Number,
         string Id,
@@ -24,7 +33,8 @@ public static class ChapterCatalog
         string BossId,
         string RewardClassId,
         int HoneyCost,
-        bool Playable);
+        bool Playable,
+        int AccountExperiencePercent);
 
     /// <summary>Capitolo consegnato dal tutorial: e' la dotazione con cui si comincia.</summary>
     public const string TutorialChapterId = "chapter-1";
@@ -32,13 +42,13 @@ public static class ChapterCatalog
     private static readonly Chapter[] Chapters =
     {
         new(1, "chapter-1", "Capitolo 1 · I Rampicanti di Trentor",
-            "climbing", "trentor", "hunter", 0, true),
+            "climbing", "trentor", "hunter", 0, true, 100),
 
         new(2, "chapter-2", "Capitolo 2 · La Nebbia di Bragus",
-            "fog", "boss-bragus", "barbarian", 25, true),
+            "fog", "boss-bragus", "barbarian", 25, true, 120),
 
         new(3, "chapter-3", "Capitolo 3 · L'Infestazione di Jurinashor",
-            "infested", "boss-jurinashor", "necromancer", 50, false),
+            "infested", "boss-jurinashor", "necromancer", 50, false, 140),
 
         // Il boss non ha ancora un nome deciso. "Seraphel" viene da Docs/ScenariBoss.md, che
         // assegna quel boss allo scenario Illuminata; l'asset lux.asset dice invece "zakhar",
@@ -46,22 +56,30 @@ public static class ChapterCatalog
         // dato che non torna. Cambiare questo id piu' avanti non costa nulla: i boss non
         // finiscono nel database, ci finiscono solo i capitoli.
         new(4, "chapter-4", "Capitolo 4 · La Luce di Seraphel",
-            "lux", "boss-seraphel", "paladin", 80, false),
+            "lux", "boss-seraphel", "priest", 80, false, 160),
 
-        new(5, "chapter-5", "Capitolo 5", null, null, "assassin", 120, false),
+        new(5, "chapter-5", "Capitolo 5", null, null, "assassin", 120, false, 180),
 
         // Medusa gira per ora sullo scenario di default, non sugli Specchi: e' una scelta
         // temporanea, e cambiarla e' cambiare questa riga (piu' la gemella sul client).
         new(6, "chapter-6", "Capitolo 6 · Medusa",
-            "default", "boss-medusa", "priest", 170, true),
+            null, null, "paladin", 170, false, 200),
 
         // Chiude la campagna: non consegna una classe ma il cosmetico dei dadi, che vive
         // fuori da questo catalogo perche' non e' un unlock di progressione.
         new(7, "chapter-7", "Capitolo 7 · La Cosmica di Palatir",
-            "cosmic", "boss-palatir", null, 230, true)
+            "cosmic", "boss-palatir", null, 230, true, 250)
     };
 
     public static IReadOnlyList<Chapter> All => Chapters;
+
+    /// <summary>
+    /// Il moltiplicatore di esperienza account, in percentuale, della run giocata in
+    /// <paramref name="chapterId"/>. Le run fuori campagna (free run, id sconosciuto)
+    /// valgono il capitolo base: non hanno un capitolo da premiare.
+    /// </summary>
+    public static int AccountExperiencePercentOf(string chapterId) =>
+        TryGetById(chapterId, out Chapter chapter) ? chapter.AccountExperiencePercent : 100;
 
     public static bool TryGetById(string chapterId, out Chapter chapter)
     {
@@ -116,36 +134,10 @@ public static class ChapterCatalog
                 continue;
 
             granted.Add(candidate.Id);
-            if (candidate.Playable)
-                break;
+			if (candidate.Playable
+				|| string.Equals(candidate.Id, PendingBossProgressionGate, StringComparison.OrdinalIgnoreCase))
+				break;
         }
         return granted;
-    }
-
-    /// <summary>
-    /// Un capitolo si compra al Santuario se ha un prezzo e se e' giocabile: far pagare
-    /// l'accesso a un capitolo che non si puo' ancora giocare sarebbe vendere il vuoto.
-    /// Il primo non ha prezzo perche' lo consegna il tutorial.
-    /// </summary>
-    public static bool IsPurchasable(Chapter chapter) => chapter.Playable && chapter.HoneyCost > 0;
-
-    /// <summary>
-    /// Il capitolo che va posseduto per poter comprarne un altro: gli acquisti restano in
-    /// ordine, altrimenti si salta al settimo capitolo dal primo giorno. E' il precedente
-    /// <em>giocabile</em>, non il precedente in assoluto: un capitolo ancora senza boss non
-    /// si puo' comprare, quindi pretenderlo bloccherebbe per sempre tutti quelli dopo.
-    /// Null sul primo, che arriva dal tutorial.
-    /// </summary>
-    public static string PurchasePrerequisiteOf(Chapter chapter)
-    {
-        Chapter previous = null;
-        foreach (Chapter candidate in Chapters)
-        {
-            if (candidate.Number >= chapter.Number)
-                break;
-            if (candidate.Playable)
-                previous = candidate;
-        }
-        return previous?.Id;
     }
 }

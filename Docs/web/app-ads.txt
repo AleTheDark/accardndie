@@ -1,0 +1,19 @@
+# app-ads.txt di accardndie.com
+#
+# Dichiara chi e' autorizzato a vendere lo spazio pubblicitario dell'app Android su
+# Google Play. E' il gemello di ads.txt, ma per le app: AdMob prende il sito dello
+# sviluppatore dalla scheda Play, cerca /app-ads.txt su quel dominio e solo se ci
+# trova questa riga considera l'inventario dell'app verificato. Senza, molti
+# acquirenti non fanno offerte e il guadagno scende.
+#
+# Va servito su https://accardndie.com/app-ads.txt, cioe' nella radice del sito. Il
+# dominio deve coincidere *esattamente* con quello scritto nella scheda Play, sotto
+# "Sito web dello sviluppatore": se li' c'e' www.accardndie.com e il file sta su
+# accardndie.com (o viceversa), la scansione fallisce.
+#
+# Il publisher id e' lo stesso di ads.txt e dell'app id AdMob (il numero prima della
+# tilde in AdUnits.AndroidAppId): AdMob e AdSense condividono l'account.
+#
+# Dopo il deploy AdMob impiega almeno 24 ore a fare la scansione; lo stato si
+# controlla in AdMob sotto App -> app-ads.txt.
+google.com, pub-3580486749764055, DIRECT, f08c47fec0942fa0

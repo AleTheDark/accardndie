@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <!-- Questa pagina e' servita da https://accardndie.com/game/ , non dalla radice:
+         la radice e' la homepage del sito. Tutti i percorsi delle risorse qui sotto
+         (Build, TemplateData, StreamingAssets, sw.js, manifest) sono RELATIVI apposta,
+         cosi' si risolvono dentro /game/ senza dover ripetere il prefisso. -->
+    <!-- Il titolo NON usa AcCardNDie: quello e' l'identificativo tecnico del
+         player Unity (AcCardNDie, senza spazi, usato anche come etichetta del launcher
+         Android) e va tenuto corto. Qui serve invece il nome per esteso, lo stesso della
+         scheda Play, perche' e' quello che finisce nei risultati di ricerca. -->
+    <title>Gioca — AcCard N' Die: Carte e Dadi</title>
+    <meta name="description" content="Gioca ad AcCard N' Die direttamente nel browser: carte, nove classi e dadi, senza installare niente.">
+    <link rel="canonical" href="https://accardndie.com/game/">
+    <script>
+      window.ACCARDND_GOOGLE_CLIENT_ID = "866249556431-mgdm97uvov7mjvect4bp453dpp2oe48u.apps.googleusercontent.com";
+
+      // Pubblicita' sul web (H5 Games Ads di AdSense). Il publisher id sta qui e non nel
+      // codice C# perche' e' una configurazione del sito, non del gioco: cambiarlo non
+      // richiede una build. Vuoto = niente pubblicita', il gioco parte lo stesso.
+      window.ACCARDND_ADSENSE_CLIENT_ID = "ca-pub-3580486749764055";
+    </script>
+    <!-- Precaricato: il click Unity puo' aprire Google subito, conservando il gesto utente. -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <!-- Lo snippet AdSense sta qui, statico, e non viene iniettato da AccardNdAds.jslib.
+         Due motivi, tutti e due appresi sul campo:
+         - il crawler che verifica la proprieta' del sito legge l'HTML e non aspetta che
+           Unity si avvii, quindi un tag creato da JavaScript per lui non esiste;
+         - due copie dello script sulla stessa pagina fanno fallire adsbygoogle con
+           "only one AdSense head tag supported per page".
+
+         data-adbreak-test="on" fa uscire annunci di PROVA: si vedono anche prima
+         dell'approvazione ed e' l'unico modo di collaudare senza generare traffico non
+         valido. TOGLIERE quell'attributo quando il sito e' approvato - da quel momento gli
+         annunci sono veri e cliccare i propri significa chiusura dell'account. -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3580486749764055"
+            crossorigin="anonymous"
+            data-adbreak-test="on"></script>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <!-- Versionato come i file della build: senza il ?v= questo foglio di stile resta nella
+         cache di Cloudflare per ore (max-age=14400) e un deploy nuovo continua a essere
+         servito con il CSS vecchio - nemmeno un ricaricamento forzato lo aggira, perche'
+         salta la cache del browser ma non quella del bordo. -->
+    <link rel="stylesheet" href="TemplateData/style.css?v=0.19.0">
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#1a1410">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- Etichetta sotto l'icona su iPhone: qui va il nome CORTO, non quello per esteso
+         della scheda Play, perche' la home di iOS taglia dopo una dozzina di caratteri. -->
+    <meta name="apple-mobile-web-app-title" content="AcCard N' Die">
+    <link rel="apple-touch-icon" href="TemplateData/apple-touch-icon.png">
+  </head>
+  <body>
+    <div id="unity-container" class="unity-desktop">
+      <canvas id="unity-canvas" width=540 height=960 tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-warning"> </div>
+      <div id="unity-footer">
+        <div id="unity-logo-title-footer"></div>
+        <div id="unity-fullscreen-button"></div>
+        <div id="unity-build-title">AcCard N' Die</div>
+
+        <!-- Testo e collegamenti sotto al canvas. Non sono decorazione: per un crawler
+             questa pagina e' un canvas vuoto, cioe' una pagina senza contenuto su cui
+             pero' girano gli annunci - ed e' esattamente la forma che AdSense boccia come
+             "contenuto di scarso valore". Queste righe sono l'unica cosa leggibile qui
+             dentro, e l'unico percorso verso il regolamento, il database delle carte e
+             l'informativa.
+             Stanno dentro #unity-footer per ereditarne il posizionamento (sotto al canvas
+             su desktop, nascosto sul telefono, dove il gioco occupa tutto lo schermo): nel
+             documento restano comunque, ed e' quello che conta.
+             Gli href sono tutti assoluti perche' questa pagina vive in /game/, mentre il
+             resto del sito sta in radice: un href relativo cercherebbe /game/guida.html. -->
+        <div id="site-intro">
+          <h1>AcCard N' Die: gioca nel browser</h1>
+          <p>Un gioco di carte e dadi: schieri tre eroi su nove classi, e lo scontro non si
+          risolve confrontando due numeri — la fazione di chi attacca contro quella di chi
+          difende decide quanti dadi tiri e quale tieni. Sopra ci stanno le abilità delle
+          classi, le supreme e le aure dello schieramento.</p>
+          <p>Parte qui sopra, gratis e senza installare niente. C'è una campagna in sette
+          capitoli e ci sono i duelli online con gradi e stagioni. Il regolamento completo è
+          pubblico: <a href="/guida">come si gioca</a>, le
+          <a href="/classi">nove classi</a> e tutte le
+          <a href="/carte">81 carte</a>.</p>
+        </div>
+
+        <nav id="site-links">
+          <a href="/">Home</a>
+          <a href="/guida">Come si gioca</a>
+          <a href="/strategia">Strategia</a>
+          <a href="/classi">Le nove classi</a>
+          <a href="/carte">Database carte</a>
+          <a href="/campagna">Campagna</a>
+          <a href="/duelli">Duelli</a>
+          <a href="/rifugio">Il rifugio</a>
+          <a href="/faq">Domande frequenti</a>
+          <a href="/hall-of-fame">Hall of Fame</a>
+          <a href="/statistiche">Statistiche</a>
+          <a href="/chi-siamo">Chi siamo</a>
+          <a href="/contatti">Contatti</a>
+          <a href="/privacy">Privacy</a>
+        </nav>
+      </div>
+    </div>
+    <style>
+      /* Riga propria sotto al logo Unity: il canvas su desktop e' un ritratto stretto, e
+         quattro link in fila accanto al logo e al pulsante schermo intero non ci starebbero.
+         Il clear serve proprio a scendere sotto quei float. */
+      #site-intro {
+        clear: both; max-width: 46rem; margin: 1.6rem auto 0; padding: 0 1rem;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        color: #cbbfa8; font-size: .9rem; line-height: 1.6; text-align: left;
+      }
+      #site-intro h1 { color: #f0b93d; font-size: 1.15rem; margin: 0 0 .5rem; }
+      #site-intro p { margin: 0 0 .7rem; }
+      #site-intro a { color: #f0b93d; }
+
+      #site-links {
+        clear: both; text-align: center; padding-top: 2px;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: .8rem;
+      }
+      #site-links a { color: #a89c88; text-decoration: none; margin: 0 .55rem; }
+      #site-links a:hover { color: #f0b93d; }
+    </style>
+    <script>
+      var canvas = document.querySelector("#unity-canvas");
+
+      // Shows a temporary message banner/ribbon for a few seconds, or
+      // a permanent error message on top of the canvas if type=='error'.
+      // If type=='warning', a yellow highlight color is used.
+      // Modify or remove this function to customize the visually presented
+      // way that non-critical warnings and error messages are presented to the
+      // user.
+      function unityShowBanner(msg, type) {
+        var warningBanner = document.querySelector("#unity-warning");
+        function updateBannerVisibility() {
+          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+        }
+        var div = document.createElement('div');
+        div.innerHTML = msg;
+        warningBanner.appendChild(div);
+        if (type == 'error') div.style = 'background: red; padding: 10px;';
+        else {
+          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+          setTimeout(function() {
+            warningBanner.removeChild(div);
+            updateBannerVisibility();
+          }, 5000);
+        }
+        updateBannerVisibility();
+      }
+
+      var buildUrl = "Build";
+      var buildVersion = "0.19.0";
+      var cacheBust = "?v=" + encodeURIComponent(buildVersion);
+      var loaderUrl = buildUrl + "/output-web.loader.js" + cacheBust;
+      var config = {
+        arguments: [],
+        dataUrl: buildUrl + "/output-web.data" + cacheBust,
+        frameworkUrl: buildUrl + "/output-web.framework.js" + cacheBust,
+        codeUrl: buildUrl + "/output-web.wasm" + cacheBust,
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "AcCardNDie",
+        productName: "AcCardNDie",
+        productVersion: buildVersion,
+        showBanner: unityShowBanner,
+        // I file principali della build sono versionati con ?v=PRODUCT_VERSION,
+        // quindi si possono cachare in IndexedDB come "immutable": vengono serviti
+        // dalla cache locale senza ri-scaricarli. Alzando la Product Version in
+        // Unity l'URL cambia e i client prendono automaticamente la build nuova.
+        cacheControl: function (url) {
+          if (url.match(/\.(data|wasm|framework\.js|worker\.js|symbols\.json)(\?.*)?$/)) {
+            return "immutable";
+          }
+          return "must-revalidate";
+        },
+        // errorHandler: function(err, url, line) {
+        //    alert("error " + err + " occurred at line " + line);
+        //    // Return 'true' if you handled this error and don't want Unity
+        //    // to process it further, 'false' otherwise.
+        //    return true;
+        // },
+      };
+
+      // By default, Unity keeps WebGL canvas render target size matched with
+      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
+      // Set this to false if you want to decouple this synchronization from
+      // happening inside the engine, and you would instead like to size up
+      // the canvas DOM size and WebGL render target sizes yourself.
+      // config.matchWebGLToCanvasSize = false;
+
+      // If you would like all file writes inside Unity Application.persistentDataPath
+      // directory to automatically persist so that the contents are remembered when
+      // the user revisits the site the next time, uncomment the following line:
+      // config.autoSyncPersistentDataPath = true;
+      // This autosyncing is currently not the default behavior to avoid regressing
+      // existing user projects that might rely on the earlier manual
+      // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
+      // expected to change.
+
+      // Una finestra stretta e verticale su desktop e' normalmente un'anteprima mobile
+      // (DevTools, tablet o embed). Basarsi solo sullo user-agent la trattava invece come
+      // desktop, lasciando footer e layout diversi da quelli del telefono reale.
+      var isMobilePresentation = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+        || window.innerHeight > window.innerWidth;
+
+      if (isMobilePresentation) {
+        // Mobile/portrait-preview style: fill the whole browser client area with the game canvas.
+
+        var meta = document.createElement('meta');
+        meta.name = 'viewport';
+        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+        document.getElementsByTagName('head')[0].appendChild(meta);
+        document.querySelector("#unity-container").className = "unity-mobile";
+        canvas.className = "unity-mobile";
+
+        // To lower canvas resolution on mobile devices to gain some
+        // performance, uncomment the following line:
+        // config.devicePixelRatio = 1;
+
+
+      } else {
+        // Desktop style: render the game in a centered portrait frame, like the mobile app.
+        // Si simula uno schermo di telefono 19.5:9 in verticale (1206 x 2622, la
+        // risoluzione nativa del riferimento) e NON le dimensioni WebGL dei Player
+        // Settings, che sono 540x960 cioe' 9:16: piu' largo di un telefono vero, ed e'
+        // quello che faceva sembrare il gioco allargato e ricampionato sul browser PC.
+        var SIM_WIDTH = 1206, SIM_HEIGHT = 2622;
+
+        // Il render target resta fisso a 1206x2622 invece di inseguire la dimensione DOM
+        // del canvas moltiplicata per il devicePixelRatio: cosi' Screen.width/height dentro
+        // Unity valgono esattamente quelli del telefono simulato (stessi CanvasScaler,
+        // stessi breakpoint della UI) e il risultato viene solo rimpicciolito dal browser
+        // per stare nella finestra, senza ricampionamenti a risoluzioni arbitrarie.
+        config.matchWebGLToCanvasSize = false;
+        canvas.width = SIM_WIDTH;
+        canvas.height = SIM_HEIGHT;
+
+        // La dimensione a schermo del canvas (che con il render target fisso non c'entra
+        // niente con i 1206x2622 qui sopra) e' decisa dal foglio di stile, regola
+        // ".unity-desktop #unity-canvas": impostarla da qui non funziona, perche' Unity
+        // riscrive l'attributo style del canvas quando l'istanza parte e cancella la
+        // misura, lasciando il canvas grande 1206x2622 px veri dentro una finestra molto
+        // piu' piccola - da cui il gioco che si vedeva tagliato sul browser da PC.
+      }
+
+      document.querySelector("#unity-loading-bar").style.display = "block";
+
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config, (progress) => {
+          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+              }).then((unityInstance) => {
+                document.querySelector("#unity-loading-bar").style.display = "none";
+                document.querySelector("#unity-fullscreen-button").onclick = () => {
+                  unityInstance.SetFullscreen(1);
+                };
+
+              }).catch((message) => {
+                alert(message);
+              });
+            };
+
+      document.body.appendChild(script);
+
+      // Service Worker: installabile (Aggiungi a Home) + cache durevole dello shell.
+      // Versionato con la Product Version cosi' la vecchia cache si ripulisce da sola.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js?v=' + encodeURIComponent(buildVersion))
+            .catch(function (e) { console.warn('SW register failed', e); });
+        });
+      }
+
+    </script>
+  </body>
+</html>

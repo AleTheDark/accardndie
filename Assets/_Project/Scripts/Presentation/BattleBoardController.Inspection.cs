@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,6 +19,28 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	private CardDefinition inspectedDefinition;
+	private BattleCardState inspectedState;
+
+	public void ShowPvpLoadoutCardInspection(
+		CardDefinition definition,
+		UnityAction onAdd,
+		bool canAdd,
+		string buttonText)
+	{
+		inspectedPvpLoadoutAddAction = onAdd;
+		inspectedPvpLoadoutActive = true;
+		ShowCardInspection(definition);
+		Canvas inspectionCanvas = cardInspectionPanel != null
+			? cardInspectionPanel.GetComponent<Canvas>()
+			: null;
+		if ((Object)(object)inspectionCanvas != (Object)null)
+			inspectionCanvas.sortingOrder = 970;
+		// Nella Loadout la scelta/rimozione avviene direttamente nella lista delle carte.
+		// L'ispezione resta quindi puramente informativa e non mostra il pulsante del draft.
+		HideCardInspectionDraftConfirm();
+	}
+
 	private void ShowCardInspection(CardDefinition definition)
 	{
 		ShowCardInspection(definition, null);
@@ -34,6 +56,11 @@ public sealed partial class BattleBoardController
 
 	private void ShowCardInspection(CardDefinition definition, BattleCardState state)
 	{
+		// Aprire l'ispezione e' il gesto che il giocatore fa naturalmente quando
+		// qualcosa non risponde: ne approfittiamo per liberare in silenzio lo stato
+		// dello swipe rimasto appeso, cosi' il turno torna giocabile da solo.
+		ReleaseStuckSwipeGestures("apertura inspection");
+
 		// Inspection and target selection must never compete for the same card click.
 		// Keep this guard here too: some UI callbacks call this method directly and
 		// may survive an interaction refresh.
@@ -42,11 +69,31 @@ public sealed partial class BattleBoardController
 			|| pendingAbilityUser != null
 			|| activeAttachmentSource != null)
 		{
+			LogInspectionState("SHOW_INSPECTION_GUARD_BLOCKED", state);
 			return;
 		}
+		LogInspectionState("SHOW_INSPECTION_ACCEPTED", state);
 
 		if (!((Object)(object)definition == (Object)null) && !((Object)(object)cardInspectionPanel == (Object)null) && !((Object)(object)cardInspectionSlot == (Object)null))
 		{
+			inspectedDefinition = definition;
+			inspectedState = state;
+			RefreshCardInspectionLayout();
+			bool seraphelInspection = IsSeraphelBossDefinition(definition)
+				|| string.Equals(definition.Id, SeraphelPhaseTwoCardId, StringComparison.OrdinalIgnoreCase);
+			bool jurinashorInspection = IsJurinashorBossDefinition(definition);
+			if (seraphelInspection)
+			{
+				bool landscape = Screen.width > Screen.height;
+				SetRect(cardInspectionSlot,
+					landscape ? new Vector2(0.075f, 0.07f) : new Vector2(0.17f, 0.55f),
+					landscape ? new Vector2(0.54f, 0.96f) : new Vector2(0.83f, 0.96f));
+				if ((Object)(object)cardInspectionContentViewport != (Object)null && !landscape)
+				{
+					SetRect(cardInspectionContentViewport, new Vector2(0.12f, 0.07f), new Vector2(0.84f, 0.535f));
+					cardInspectionContentViewport.offsetMax = new Vector2(CardInspectionViewportRightExpansion, cardInspectionContentViewport.offsetMax.y);
+				}
+			}
 			if ((Object)(object)inspectedCardView != (Object)null)
 			{
 				Object.Destroy((Object)(object)((Component)inspectedCardView).gameObject);
@@ -59,11 +106,34 @@ public sealed partial class BattleBoardController
 			AspectRatioFitter aspectRatioFitter = ((Component)inspectedCardView).gameObject.AddComponent<AspectRatioFitter>();
 			aspectRatioFitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
 			aspectRatioFitter.aspectRatio = 0.6708861f;
+			if (seraphelInspection)
+				inspectedCardView.ConfigureSeraphelInspectionArtwork(definition);
+			if (jurinashorInspection)
+				inspectedCardView.ConfigureJurinashorInspectionArtwork(
+					definition,
+					state != null && IsJurinashorImmuneToDebuffs(state));
 			if (state != null)
 			{
 				inspectedCardView.SetStrengthValue(DisplayStrength(state));
 			}
 			UpdateCardInspectionSummary(definition, state);
+			// UpdateCardInspectionSummary applica il layout generico del contenuto.
+			// Seraphel va riallineata dopo quel passaggio, così il testo comincia
+			// realmente sotto il bordo inferiore della carta ingrandita.
+			if (seraphelInspection)
+			{
+				bool landscape = Screen.width > Screen.height;
+				SetRect(cardInspectionSlot,
+					landscape ? new Vector2(0.075f, 0.07f) : new Vector2(0.17f, 0.55f),
+					landscape ? new Vector2(0.54f, 0.96f) : new Vector2(0.83f, 0.96f));
+				if ((Object)(object)cardInspectionContentViewport != (Object)null)
+				{
+					SetRect(cardInspectionContentViewport,
+						landscape ? new Vector2(0.56f, 0.07f) : new Vector2(0.12f, 0.07f),
+						landscape ? new Vector2(0.915f, 0.89f) : new Vector2(0.84f, 0.525f));
+					cardInspectionContentViewport.offsetMax = new Vector2(CardInspectionViewportRightExpansion, cardInspectionContentViewport.offsetMax.y);
+				}
+			}
 			HideCardInspectionDraftConfirm();
 			PauseGameForCardInspection();
 			cardInspectionPanel.SetActive(true);
@@ -77,6 +147,15 @@ public sealed partial class BattleBoardController
 		}
 	}
 
+	private void RefreshOpenCardInspectionLocale()
+	{
+		if ((Object)(object)cardInspectionPanel == (Object)null || !cardInspectionPanel.activeSelf || (Object)(object)inspectedDefinition == (Object)null)
+			return;
+
+		UpdateCardInspectionSummary(inspectedDefinition, inspectedState);
+		RefreshCardInspectionPreferredHeights();
+	}
+
 	private void UpdateCardInspectionSummary(CardDefinition definition, BattleCardState state)
 	{
 		if ((Object)(object)cardInspectionSummaryText == (Object)null)
@@ -84,13 +163,15 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		int num = ((state != null) ?DisplayStrength(state) : definition.Strength);
-		string strengthText = ((state != null && num != definition.Strength) ?$"Potenza: {definition.Strength} -> {num}" : $"Potenza: {definition.Strength}");
-		string familyText = "Famiglia: Nessuna";
-		string classText = "Classe: Nessuna";
-		string advantageText = "Vantaggio contro Nessuno";
-		string disadvantageText = "Svantaggio contro Nessuno";
-		string familyAuraLabel = "AURA FAMIGLIA NESSUNA";
-		string familyAuraDescription = "Nessuna aura di famiglia.";
+		string strengthText = state != null && num != definition.Strength
+			? InspectionText(GameTextKeys.Inspection.StrengthChanged, "Potenza: {0} -> {1}", "Power: {0} -> {1}", "Stärke: {0} -> {1}", "Poder: {0} -> {1}", "Puissance : {0} -> {1}", definition.Strength, num)
+			: InspectionText(GameTextKeys.Inspection.Strength, "Potenza: {0}", "Power: {0}", "Stärke: {0}", "Poder: {0}", "Puissance : {0}", definition.Strength);
+		string familyText = InspectionText(GameTextKeys.Inspection.NoFamily, "Fazione: Nessuna", "Faction: None", "Familie: Keine", "Familia: Ninguna", "Famille : Aucune");
+		string classText = InspectionText(GameTextKeys.Inspection.NoClass, "Classe: Nessuna", "Class: None", "Klasse: Keine", "Clase: Ninguna", "Classe : Aucune");
+		string advantageText = InspectionText(GameTextKeys.Inspection.Advantage, "Vantaggio contro Nessuno", "Advantage against None", "Vorteil gegen Keine", "Ventaja contra Ninguna", "Avantage contre Aucune");
+		string disadvantageText = GameText.GetLocalizedFallback(GameTextKeys.Combat.DisadvantageAgainst, "Svantaggio contro {0}", "Disadvantage against {0}", "Nachteil gegen {0}", "Desventaja contra {0}", "Désavantage contre {0}", "Nessuno");
+		string familyAuraLabel = InspectionText(GameTextKeys.Inspection.FamilyAura, "AURA FAZIONE NESSUNA", "NO FACTION AURA", "KEINE FAMILIENAURA", "SIN AURA DE FAMILIA", "AUCUNE AURA DE FAMILLE");
+		string familyAuraDescription = "Nessuna aura di fazione.";
 		string classAuraLabel = "AURA CLASSE NESSUNA";
 		string classAuraDescription = "Nessuna aura di classe.";
 		BattleAuraType familyAura = BattleAuraType.None;
@@ -101,13 +182,10 @@ public sealed partial class BattleBoardController
 			ClassFamily classFamily = HeroClassFamily.Of(definition.HeroClass);
 			familyAura = FamilyAuraFor(classFamily);
 			classAura = ClassAuraFor(definition.HeroClass);
-			familyText = "Famiglia: " + CardRulesGlossary.ClassFamilyName(classFamily);
-			classText = "Classe: " + CardRulesGlossary.HeroClassName(definition.HeroClass);
-			advantageText = "Vantaggio contro " + CardRulesGlossary.ClassFamilyName(StrongAgainst(classFamily));
-			disadvantageText = GameText.GetOrFallbackSilent(
-				GameTextKeys.Combat.DisadvantageAgainst,
-				"Svantaggio contro {0}",
-				CardRulesGlossary.ClassFamilyName(WeakAgainst(classFamily)));
+			familyText = InspectionText(GameTextKeys.Inspection.Family, "Fazione: {0}", "Faction: {0}", "Familie: {0}", "Familia: {0}", "Famille : {0}", CardRulesGlossary.ClassFamilyName(classFamily));
+			classText = InspectionText(GameTextKeys.Inspection.Class, "Classe: {0}", "Class: {0}", "Klasse: {0}", "Clase: {0}", "Classe : {0}", CardRulesGlossary.HeroClassName(definition.HeroClass));
+			advantageText = InspectionText(GameTextKeys.Inspection.Advantage, "Vantaggio contro {0}", "Advantage against {0}", "Vorteil gegen {0}", "Ventaja contra {0}", "Avantage contre {0}", CardRulesGlossary.ClassFamilyName(StrongAgainst(classFamily)));
+			disadvantageText = GameText.GetLocalizedFallback(GameTextKeys.Combat.DisadvantageAgainst, "Svantaggio contro {0}", "Disadvantage against {0}", "Nachteil gegen {0}", "Desventaja contra {0}", "Désavantage contre {0}", CardRulesGlossary.ClassFamilyName(WeakAgainst(classFamily)));
 			familyAuraLabel = AuraInspectionLabel(familyAura);
 			familyAuraDescription = FamilyAuraSummary(classFamily);
 			classAuraLabel = AuraInspectionLabel(classAura);
@@ -120,16 +198,16 @@ public sealed partial class BattleBoardController
 		ConfigureCardInspectionText(cardInspectionSummaryText);
 		if (!isBossOrMiniboss && !fieldInspection && definition.HasHeroClass)
 		{
-			ruleDetails.Add(new InspectionStatusDetail(familyAuraLabel, familyAuraDescription, AuraColor(familyAura)));
-			ruleDetails.Add(new InspectionStatusDetail(classAuraLabel, classAuraDescription, AuraColor(classAura)));
+			ruleDetails.Add(new InspectionStatusDetail(familyAuraLabel, familyAuraDescription, AuraColor(familyAura), AuraIconStatus(familyAura)));
+			ruleDetails.Add(new InspectionStatusDetail(classAuraLabel, classAuraDescription, AuraColor(classAura), AuraIconStatus(classAura)));
 		}
 		if (ShouldShowAbilitySummary(definition))
 		{
 			ruleDetails.Add(new InspectionStatusDetail(CardAbilityInspectionLabel(definition), CardAbilityInspectionDescription(definition), new Color(1f, 0.78f, 0.24f)));
-			if (ShouldShowSupremeSummary(definition))
+			if (ShouldShowSupremeSummary(definition, state))
 			{
 				ruleDetails.Add(new InspectionStatusDetail(
-					CardSupremeInspectionLabel(definition),
+					CardSupremeInspectionLabel(definition, state),
 					CardSupremeInspectionDescription(definition),
 					SupremeInspectionColor));
 			}
@@ -149,10 +227,11 @@ public sealed partial class BattleBoardController
 			advantageText,
 			disadvantageText
 		};
-		if (isBossOrMiniboss && !string.IsNullOrWhiteSpace(definition.RulesText))
+		string inspectionRules = JurinashorInspectionRules(definition, state);
+		if (isBossOrMiniboss && !string.IsNullOrWhiteSpace(inspectionRules))
 		{
 			summaryLines.Add("Regole:");
-			summaryLines.Add(CompactInspectionText(definition.RulesText));
+			summaryLines.Add(CompactInspectionText(inspectionRules));
 		}
 		cardInspectionSummaryText.text = string.Join("\n", summaryLines);
 		foreach (InspectionStatusDetail item in ruleDetails)
@@ -168,6 +247,17 @@ public sealed partial class BattleBoardController
 			CreateInspectionStatusRow(item);
 		}
 		RefreshCardInspectionPreferredHeights();
+	}
+
+	private string JurinashorInspectionRules(CardDefinition definition, BattleCardState state)
+	{
+		if (!IsJurinashorBossDefinition(definition))
+			return definition?.RulesText;
+
+		bool phaseTwo = state != null && activeJurinashorBoss != null && activeJurinashorBoss.IsPhaseTwo;
+		return phaseTwo
+			? "FASE II — RINASCITA NECROMANTICA\n30 HP. All'ingresso rimuove tutti i malus ed è immune ai nuovi malus. Può controllare fino a 5 Spade Maledette. Quando para o termina il turno recupera il doppio del mana. Ogni 3 mana spende 3 mana ed evoca una spada. Ogni spada fornisce +2 Potenza in attacco e difesa, può essere bersagliata singolarmente o da effetti ad area e non attacca autonomamente. Quando Jurinashor elimina una pedina evoca una spada, senza spendere mana, fino al limite."
+			: "FASE I — ARSENALE MALEDETTO\n30 HP. Ogni 3 mana spende 3 mana ed evoca una Spada Maledetta, fino a 3 spade. Ogni spada fornisce +2 Potenza in attacco e difesa, può essere bersagliata singolarmente o da effetti ad area e non attacca autonomamente. Quando Jurinashor elimina una pedina evoca una spada, senza spendere mana, fino al limite. Gli attacchi di Jurinashor non consumano mana.";
 	}
 
 	private static bool IsBossOrMinibossInspectionCard(CardDefinition definition)
@@ -196,8 +286,9 @@ public sealed partial class BattleBoardController
 		{
 			return "ABILITA'";
 		}
-		string prefix = IsPassiveClassAbility(definition.HeroClass) ? "ABILITA' PASSIVA " : "ABILITA' ";
-		string label = prefix + CardRulesGlossary.HeroClassName(definition.HeroClass).ToUpperInvariant();
+		string label = IsPassiveClassAbility(definition.HeroClass)
+			? InspectionText(GameTextKeys.Inspection.PassiveAbility, "ABILITÀ PASSIVA {0}", "PASSIVE {0} ABILITY", "PASSIVE FÄHIGKEIT: {0}", "HABILIDAD PASIVA: {0}", "COMPÉTENCE PASSIVE : {0}", CardRulesGlossary.HeroClassName(definition.HeroClass).ToUpperInvariant())
+			: InspectionText(GameTextKeys.Inspection.Ability, "ABILITÀ {0}", "{0} ABILITY", "FÄHIGKEIT: {0}", "HABILIDAD: {0}", "COMPÉTENCE : {0}", CardRulesGlossary.HeroClassName(definition.HeroClass).ToUpperInvariant());
 		return label + ManaCostSuffix(PrimaryCostForInspection(definition.HeroClass));
 	}
 
@@ -213,17 +304,38 @@ public sealed partial class BattleBoardController
 			: AbilityManaCosts.Primary(heroClass);
 	}
 
-	private int SupremeCostForInspection(HeroClass heroClass)
+	private int SupremeCostForInspection(HeroClass heroClass, BattleCardState state = null)
 	{
+		if (pvpPresentationActive && pvpState != null && state != null
+			&& pvpCardSlots.TryGetValue(state, out int slot))
+		{
+			bool isLocalCard = playerCards.Contains(state);
+			int owner = isLocalCard ? pvpState.MyIndex : OpponentIndex();
+			return pvpState.SupremeCostFor(owner, heroClass);
+		}
 		return CampaignManaEnabled
 			? campaignPlayerMana.CostOfSupreme(heroClass)
 			: AbilityManaCosts.Supreme(heroClass);
 	}
 
+	private int SupremeUsesForInspection(HeroClass heroClass, BattleCardState state = null)
+	{
+		if (pvpPresentationActive && pvpState != null && state != null
+			&& pvpCardSlots.ContainsKey(state))
+		{
+			bool isLocalCard = playerCards.Contains(state);
+			int owner = isLocalCard ? pvpState.MyIndex : OpponentIndex();
+			return pvpState.SupremeUsesFor(owner, heroClass);
+		}
+		return CampaignManaEnabled && state != null && state.BelongsToPlayer
+			? campaignPlayerMana.SupremeUses(heroClass)
+			: 0;
+	}
+
 	/// <summary>Suffisso da attaccare all'intestazione. Le passive costano 0 e non lo mostrano.</summary>
 	private static string ManaCostSuffix(int cost)
 	{
-		return cost <= 0 ? string.Empty : $" ({cost} MANA)";
+		return cost <= 0 ? string.Empty : GameText.GetLocalizedFallback(GameTextKeys.Inspection.ManaSuffix, " ({0} MANA)", " ({0} MANA)", " ({0} MANA)", " ({0} MANÁ)", " ({0} MANA)", cost);
 	}
 
 	private string CardAbilityInspectionDescription(CardDefinition definition)
@@ -267,7 +379,7 @@ public sealed partial class BattleBoardController
 	/// La suprema compare solo se la tecnica e' stata appresa: mostrarla bloccata
 	/// occuperebbe spazio nell'ispezione senza dare niente al giocatore.
 	/// </summary>
-	private bool ShouldShowSupremeSummary(CardDefinition definition)
+	private bool ShouldShowSupremeSummary(CardDefinition definition, BattleCardState state)
 	{
 		if ((Object)(object)definition == (Object)null || !definition.HasHeroClass)
 		{
@@ -277,22 +389,39 @@ public sealed partial class BattleBoardController
 		{
 			return false;
 		}
+		// In una stanza in cui la CPU puo usare le supreme (attualmente la
+		// Diabolica), l'ispezione deve spiegare anche la tecnica del nemico.
+		// Lo sblocco al Santuario riguarda soltanto le carte del giocatore e non
+		// deve nascondere un'azione che l'avversario puo effettivamente eseguire.
+		if (state != null
+			&& !state.BelongsToPlayer
+			&& !pvpPresentationActive
+			&& RoomDifficultyRules.For(pendingRoomDifficulty).CpuUsesSupremes)
+		{
+			return true;
+		}
 		return IsSupremeUnlocked(definition.HeroClass);
 	}
 
 	private bool IsSupremeUnlocked(HeroClass heroClass)
 	{
+		// Dentro una lezione di classe la tecnica si prova senza possederla: e' una sandbox,
+		// e il permesso vale solo li'. Fuori dalla lezione la regola resta quella del
+		// Santuario, che e' dove la tecnica si compra davvero.
+		if (IsTutorialSandboxSupremeAllowed(heroClass))
+		{
+			return true;
+		}
 		return singlePlayerProgressService != null
 			&& singlePlayerProgressService.IsUnlocked(
 				AccardND.GameData.SinglePlayerUnlockType.SecondAbility,
 				SupremeUnlockId(heroClass));
 	}
 
-	private string CardSupremeInspectionLabel(CardDefinition definition)
+	private string CardSupremeInspectionLabel(CardDefinition definition, BattleCardState state)
 	{
-		return "SUPREMA: "
-			+ CardRulesGlossary.SupremeName(definition.HeroClass).ToUpperInvariant()
-			+ ManaCostSuffix(SupremeCostForInspection(definition.HeroClass));
+		return InspectionText(GameTextKeys.Inspection.Supreme, "SUPREMA: {0}", "SUPREME: {0}", "ULTIMATIVE: {0}", "SUPREMA: {0}", "SUPRÊME : {0}", CardRulesGlossary.SupremeName(definition.HeroClass).ToUpperInvariant())
+			+ ManaCostSuffix(SupremeCostForInspection(definition.HeroClass, state));
 	}
 
 	private static string CardSupremeInspectionDescription(CardDefinition definition)
@@ -422,6 +551,23 @@ public sealed partial class BattleBoardController
 			list.Add(new InspectionStatusDetail("ELIMINATA", "La carta e eliminata: non puo agire e andra al cimitero se appartiene alla tua formazione.", new Color(0.95f, 0.12f, 0.12f)));
 			return list;
 		}
+		int supremeUses = SupremeUsesForInspection(state.Card.HeroClass, state);
+		if (supremeUses > 0)
+		{
+			int supremeCost = SupremeCostForInspection(state.Card.HeroClass, state);
+			list.Add(new InspectionStatusDetail(
+				GameText.GetLocalizedFallback(GameTextKeys.Inspection.SupremeCostMalusStatus, "MALUS SUPREMA {0} MANA", "SUPREME PENALTY {0} MANA", "HÖCHSTE-FÄHIGKEIT-MALUS {0} MANA", "PENALIZACIÓN SUPREMA {0} MANÁ", "MALUS SUPRÊME {0} MANA", supremeCost),
+				GameText.GetLocalizedFallback(GameTextKeys.Inspection.SupremeCostMalusDescription, "Suprema usata {0} volte in questa partita: il prossimo uso costa {1} mana.", "Supreme used {0} times in this match: the next use costs {1} Mana.", "Höchste Fähigkeit wurde in diesem Spiel {0}-mal benutzt: Die nächste Nutzung kostet {1} Mana.", "Suprema usada {0} veces en esta partida: el próximo uso cuesta {1} de Maná.", "Capacité suprême utilisée {0} fois dans cette partie : la prochaine utilisation coûte {1} Mana.", supremeUses, supremeCost),
+				new Color(1f, 0.38f, 0.32f), "debuff_supreme_cost"));
+		}
+		if (state.SeraphelSeals > 0)
+		{
+			int sealDamage = state.SeraphelSeals * SeraphelBoss.DamagePerSeal;
+			list.Add(new InspectionStatusDetail(
+				GameText.GetLocalizedFallback(GameTextKeys.Inspection.SeraphelSealsStatus, "SIGILLI {0} - MALUS", "SEALS {0} - PENALTY", "SIEGEL {0} - MALUS", "SELLOS {0} - PENALIZACIÓN", "SCEAUX {0} - MALUS", state.SeraphelSeals),
+				GameText.GetLocalizedFallback(GameTextKeys.Inspection.SeraphelSealsDescription, "Malus persistente di Seraphel: il boss ottiene +{0} contro questa carta. Al terzo Sigillo la carta viene eliminata automaticamente.", "Seraphel's persistent penalty: the boss gains +{0} against this card. At the third Seal, the card is eliminated automatically.", "Seraphels dauerhafter Malus: Der Boss erhält +{0} gegen diese Karte. Beim dritten Siegel wird die Karte automatisch eliminiert.", "Penalización persistente de Seraphel: el jefe obtiene +{0} contra esta carta. Al tercer Sello, la carta se elimina automáticamente.", "Malus persistant de Seraphel : le boss gagne +{0} contre cette carte. Au troisième Sceau, la carte est éliminée automatiquement.", sealDamage),
+				new Color(1f, 0.22f, 0.18f)));
+		}
 		BattleAuraType battleAuraType = AuraForCard(state);
 		if (battleAuraType != BattleAuraType.None)
 		{
@@ -449,11 +595,19 @@ public sealed partial class BattleBoardController
 		}
 		if (state.PendingVigorStepPenalty > 0)
 		{
-			list.Add(new InspectionStatusDetail($"DADO -{state.PendingVigorStepPenalty}", "Il dado Vigore scende di tante taglie quanti sono i marchi, fino a D3, nel prossimo confronto.", new Color(0.55f, 0.8f, 1f)));
+			list.Add(new InspectionStatusDetail($"DADO -{state.PendingVigorStepPenalty}", "Il dado Vigore scende di tante taglie quanti sono i marchi, fino a D2, nel prossimo confronto.", new Color(0.55f, 0.8f, 1f)));
 		}
-		if (state.PermanentCombatBonus > 0)
+		if (state.CampaignCard?.HasRubySeal == true)
 		{
-			list.Add(new InspectionStatusDetail($"POTENZA AGGIUNTIVA DA EQUIPAGGIAMENTO +{state.PermanentCombatBonus}", "Bonus permanente ottenuto equipaggiando una carta sacrificata.", new Color(0.7f, 1f, 0.45f)));
+			list.Add(new InspectionStatusDetail(
+				"SIGILLO OSCURO +2",
+				"Bonus permanente del Sigillo Oscuro. Questa pedina non puo ricevere altri sigilli ne equipaggiamenti da altre pedine.",
+				new Color(0.72f, 0.35f, 0.9f)));
+		}
+		int equipmentBonus = EquipmentBonusOf(state);
+		if (equipmentBonus > 0)
+		{
+			list.Add(new InspectionStatusDetail($"POTENZA AGGIUNTIVA DA EQUIPAGGIAMENTO +{equipmentBonus}", "Bonus permanente ottenuto equipaggiando una carta sacrificata.", new Color(0.7f, 1f, 0.45f)));
 		}
 		if (state.MightAuraCombatBonus > 0)
 		{
@@ -470,7 +624,11 @@ public sealed partial class BattleBoardController
 		int num = HunterMarkBonusForTarget(state);
 		if (num > 0)
 		{
-			list.Add(new InspectionStatusDetail($"BERSAGLIO MARCATO +{num}", "Chi attacca questa carta riceve il bonus indicato. Piu marchi sullo stesso bersaglio non si sommano.", new Color(1f, 0.65f, 0.2f)));
+			list.Add(new InspectionStatusDetail(
+				GameText.GetLocalizedFallback(GameTextKeys.Inspection.HunterMarkStatus, "BERSAGLIO MARCATO +{0}", "MARKED TARGET +{0}", "MARKIERTES ZIEL +{0}", "OBJETIVO MARCADO +{0}", "CIBLE MARQUÉE +{0}", num),
+				GameText.GetLocalizedFallback(GameTextKeys.Inspection.HunterMarkDescription, "Chi attacca questa carta riceve il bonus indicato. Più marchi sullo stesso bersaglio non si sommano.", "Anyone attacking this card receives the indicated bonus. Multiple marks on the same target do not stack.", "Wer diese Karte angreift, erhält den angegebenen Bonus. Mehrere Markierungen auf demselben Ziel sind nicht kumulativ.", "Quien ataque esta carta recibe el bono indicado. Varias marcas sobre el mismo objetivo no se acumulan.", "Toute personne attaquant cette carte reçoit le bonus indiqué. Plusieurs marques sur la même cible ne se cumulent pas."),
+				new Color(1f, 0.65f, 0.2f),
+				"BERSAGLIO MARCATO"));
 		}
 		return list;
 	}
@@ -489,7 +647,7 @@ public sealed partial class BattleBoardController
 	{
 		return card.PendingAttackBonusKind switch
 		{
-			PendingAttackBonusKind.Fury => "Furia del Barbaro: bonus temporaneo in attacco e difesa.", 
+			PendingAttackBonusKind.Fury => "Accumula Furia durante le sconfitte, la scarica alla prima vittoria.", 
 			PendingAttackBonusKind.Blessing => "Benedizione del Sacerdote: bonus temporaneo al prossimo attacco della carta.", 
 			_ => "Bonus temporaneo al prossimo attacco della carta.", 
 		};
@@ -516,24 +674,43 @@ public sealed partial class BattleBoardController
 		};
 	}
 
-	private static string AuraInspectionLabel(BattleAuraType aura)
+	private string AuraInspectionLabel(BattleAuraType aura)
 	{
 		return aura switch
 		{
-			BattleAuraType.Might => "AURA FAMIGLIA FORTUZA",
-			BattleAuraType.Cunning => "AURA FAMIGLIA ASTUTA",
-			BattleAuraType.Magic => "AURA FAMIGLIA MAGICA",
-			BattleAuraType.Formation => "AURA FORMAZIONE",
-			BattleAuraType.Warrior => "AURA CLASSE GUERRIERO",
-			BattleAuraType.Barbarian => "AURA CLASSE BARBARO",
-			BattleAuraType.Paladin => "AURA CLASSE PALADINO",
-			BattleAuraType.Rogue => "AURA CLASSE LADRO",
-			BattleAuraType.Assassin => "AURA CLASSE ASSASSINO",
-			BattleAuraType.Hunter => "AURA CLASSE CACCIATORE",
-			BattleAuraType.Mage => "AURA CLASSE MAGO",
-			BattleAuraType.Necromancer => "AURA CLASSE NECROMANTE",
-			BattleAuraType.Priest => "AURA CLASSE SACERDOTE",
+			BattleAuraType.Might => InspectionText(GameTextKeys.Inspection.FamilyAura, "AURA FAZIONE {0}", "{0} FACTION AURA", "FAMILIENAURA: {0}", "AURA DE FAMILIA: {0}", "AURA DE FAMILLE : {0}", CardRulesGlossary.ClassFamilyName(ClassFamily.Might).ToUpperInvariant()),
+			BattleAuraType.Cunning => InspectionText(GameTextKeys.Inspection.FamilyAura, "AURA FAZIONE {0}", "{0} FACTION AURA", "FAMILIENAURA: {0}", "AURA DE FAMILIA: {0}", "AURA DE FAMILLE : {0}", CardRulesGlossary.ClassFamilyName(ClassFamily.Cunning).ToUpperInvariant()),
+			BattleAuraType.Magic => InspectionText(GameTextKeys.Inspection.FamilyAura, "AURA FAZIONE {0}", "{0} FACTION AURA", "FAMILIENAURA: {0}", "AURA DE FAMILIA: {0}", "AURA DE FAMILLE : {0}", CardRulesGlossary.ClassFamilyName(ClassFamily.Magic).ToUpperInvariant()),
+			BattleAuraType.Formation => InspectionText(GameTextKeys.Inspection.FamilyAura, "AURA FORMAZIONE", "FORMATION AURA", "FORMATIONSAURA", "AURA DE FORMACIÓN", "AURA DE FORMATION"),
+			BattleAuraType.Warrior or BattleAuraType.Barbarian or BattleAuraType.Paladin or BattleAuraType.Rogue or BattleAuraType.Assassin or BattleAuraType.Hunter or BattleAuraType.Mage or BattleAuraType.Necromancer or BattleAuraType.Priest => InspectionText(GameTextKeys.Inspection.ClassAura, "AURA CLASSE {0}", "{0} CLASS AURA", "KLASSENAURA: {0}", "AURA DE CLASE: {0}", "AURA DE CLASSE : {0}", AuraClassName(aura).ToUpperInvariant()),
 			_ => "AURA",
+		};
+	}
+
+	private static string AuraIconStatus(BattleAuraType aura)
+	{
+		return aura == BattleAuraType.None ? null : "AURA " + aura.ToString().ToUpperInvariant();
+	}
+
+	private static string InspectionText(string key, string italian, string english, string german, string spanish, string french, params object[] arguments)
+	{
+		return GameText.GetLocalizedFallback(key, italian, english, german, spanish, french, arguments);
+	}
+
+	private static string AuraClassName(BattleAuraType aura)
+	{
+		return aura switch
+		{
+			BattleAuraType.Warrior => CardRulesGlossary.HeroClassName(HeroClass.Warrior),
+			BattleAuraType.Barbarian => CardRulesGlossary.HeroClassName(HeroClass.Barbarian),
+			BattleAuraType.Paladin => CardRulesGlossary.HeroClassName(HeroClass.Paladin),
+			BattleAuraType.Rogue => CardRulesGlossary.HeroClassName(HeroClass.Rogue),
+			BattleAuraType.Assassin => CardRulesGlossary.HeroClassName(HeroClass.Assassin),
+			BattleAuraType.Hunter => CardRulesGlossary.HeroClassName(HeroClass.Hunter),
+			BattleAuraType.Mage => CardRulesGlossary.HeroClassName(HeroClass.Mage),
+			BattleAuraType.Necromancer => CardRulesGlossary.HeroClassName(HeroClass.Necromancer),
+			BattleAuraType.Priest => CardRulesGlossary.HeroClassName(HeroClass.Priest),
+			_ => string.Empty
 		};
 	}
 
@@ -559,7 +736,10 @@ public sealed partial class BattleBoardController
 			component2.childForceExpandWidth = true;
 			component2.childForceExpandHeight = false;
 			Image image = CreateImage("Icon", val.transform, Color.white);
-			image.sprite = PrototypeCardView.GetStatusIconSprite(label);
+			bool supremeMalusRow = label.StartsWith("MALUS SUPREMA", StringComparison.OrdinalIgnoreCase);
+			image.sprite = supremeMalusRow
+				? GetSupremeButtonSprite()
+				: PrototypeCardView.GetStatusIconSprite(status.IconStatus ?? label);
 			image.color = (((Object)(object)image.sprite != (Object)null) ?Color.white : status.Color);
 			image.preserveAspect = true;
 			image.raycastTarget = false;
@@ -567,7 +747,7 @@ public sealed partial class BattleBoardController
 			bool abilityRow = label.StartsWith("ABILITA", StringComparison.OrdinalIgnoreCase);
 			bool supremeRow = label.StartsWith("SUPREMA", StringComparison.OrdinalIgnoreCase);
 			bool attachmentRow = label.StartsWith("EQUIPAGGIA", StringComparison.OrdinalIgnoreCase);
-			float iconSize = (abilityRow || supremeRow || attachmentRow) ?54f :44f;
+			float iconSize = (abilityRow || supremeRow || supremeMalusRow || attachmentRow) ?54f :44f;
 			layoutElement.minWidth = iconSize;
 			layoutElement.preferredWidth = iconSize;
 			layoutElement.minHeight = iconSize;
@@ -607,7 +787,7 @@ public sealed partial class BattleBoardController
 		text.horizontalOverflow = (HorizontalWrapMode)0;
 		text.verticalOverflow = (VerticalWrapMode)1;
 		ConfigureCardInspectionText(text);
-		text.text = "Status attivi:";
+		text.text = GameText.GetOrFallbackSilent(GameTextKeys.Inspection.ActiveStatuses, "Status attivi:");
 		cardInspectionStatusRows.Add(((Component)text).gameObject);
 	}
 
@@ -737,9 +917,16 @@ public sealed partial class BattleBoardController
 
 	private void CloseCardInspection(bool playSfx)
 	{
+		// Stessa pulizia silenziosa dell'apertura: chiudere l'ispezione riporta il
+		// giocatore sulla plancia e deve trovarla sempre reattiva.
+		ReleaseStuckSwipeGestures("chiusura inspection");
+
 		bool wasOpen = (Object)(object)cardInspectionPanel != (Object)null && cardInspectionPanel.activeSelf;
+		bool wasPvpLoadoutInspection = inspectedPvpLoadoutActive;
 		inspectedInitialDraftOfferIndex = -1;
 		inspectedCampaignConsumableActive = false;
+		inspectedPvpLoadoutAddAction = null;
+		inspectedPvpLoadoutActive = false;
 		HideCardInspectionDraftConfirm();
 		if ((Object)(object)inspectedCardView != (Object)null)
 		{
@@ -750,6 +937,12 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)cardInspectionPanel != (Object)null)
 		{
 			cardInspectionPanel.SetActive(false);
+			if (wasPvpLoadoutInspection)
+			{
+				Canvas inspectionCanvas = cardInspectionPanel.GetComponent<Canvas>();
+				if ((Object)(object)inspectionCanvas != (Object)null)
+					inspectionCanvas.sortingOrder = 700;
+			}
 		}
 		if (wasOpen && playSfx)
 		{
@@ -802,7 +995,7 @@ public sealed partial class BattleBoardController
 		float elapsed = 0f;
 		while (elapsed < seconds)
 		{
-			if (!cardInspectionPausedGame)
+			if (!cardInspectionPausedGame && !implementationArchivePausedGame)
 			{
 				elapsed += Time.unscaledDeltaTime;
 			}

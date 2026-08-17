@@ -24,7 +24,7 @@ public sealed class AchievementService
         new("ach-matches-100", "Instancabile", "Gioca 100 partite.", "matches", 100, null),
         new("ach-streak-5", "Inarrestabile", "Vinci 5 partite di fila.", "best_streak", 5, "ach-streak"),
         new("ach-tier-esperto", "Esperto riconosciuto", "Raggiungi il tier Esperto.", "tier", 2, null),
-        new("ach-boss-medusa", "Boss sconfitto", "Sconfiggi Medusa alla fine della campagna.", "campaign_boss", 1, "boss-medusa"),
+		new("ach-boss-medusa", "Miniboss sconfitto", "Sconfiggi Medusa nella stanza 10.", "campaign_boss", 1, "boss-medusa"),
         new("ach-tier-onnipotente", "Divinità", "Raggiungi il tier Onnipotente.", "tier", 4, "ach-onnipotente")
     };
 

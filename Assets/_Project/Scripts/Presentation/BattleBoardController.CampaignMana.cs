@@ -1,22 +1,36 @@
 using System.Collections.Generic;
+using System.Linq;
+using AccardND.GameCore;
 using AccardND.GameCore.Mana;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 
 namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
-	private readonly ManaPool campaignPlayerMana = new ManaPool();
+	// Non e' readonly perche' il talento "Riserva" alza il tetto, e il tetto vive nelle
+	// regole: la riserva del giocatore va quindi ricostruita quando la run comincia, cioe'
+	// quando i talenti sono noti. Nessuno tiene un riferimento a questo oggetto oltre la
+	// singola chiamata, quindi sostituirlo non lascia in giro riserve vecchie.
+	private ManaPool campaignPlayerMana = new ManaPool();
 	private readonly ManaPool campaignCpuMana = new ManaPool();
 	private readonly HashSet<BattleCardState> campaignManaEliminations = new HashSet<BattleCardState>();
 	private readonly HashSet<BattleCardState> campaignPaidPrimaryAbilities = new HashSet<BattleCardState>();
+
+	/// <summary>
+	/// Se la "Trance" ha ancora la sua abilita' gratuita in questa stanza. E' stato di
+	/// stanza e non di run, quindi si riarma da solo a ogni ingresso e non ha bisogno di
+	/// finire nel salvataggio: una run ripresa rientra comunque da BeginCampaignRoomMana.
+	/// </summary>
+	private bool freePrimaryAbilityAvailable;
 
 	private bool CampaignManaEnabled => campaignDeck != null && !pvpPresentationActive;
 	private bool BattleManaHudEnabled =>
 		(CampaignManaEnabled
 			&& currentRoomType != RoomType.Loot
-			&& currentRoomType != RoomType.UnexpectedOpportunity
+			&& currentRoomType != RoomType.QuickChallenge
 			&& currentRoomType != RoomType.Merchant)
 		|| (pvpPresentationActive && pvpState != null);
 	private int BattlePlayerManaCurrent => pvpPresentationActive && pvpState != null && pvpState.MyIndex >= 0
@@ -48,9 +62,28 @@ public sealed partial class BattleBoardController
 
 	private int CampaignManaMaximum => campaignPlayerMana.Rules.Maximum;
 
+	/// <summary>
+	/// Rifa' la riserva del giocatore con il tetto che i talenti gli danno. Va chiamata dove
+	/// la run comincia o riprende: prima di quel momento il pacchetto dei talenti puo' non
+	/// essere ancora arrivato, e la riserva nascerebbe con il tetto di base.
+	///
+	/// La riserva della CPU non si tocca: i talenti sono del giocatore.
+	/// </summary>
+	private void RebuildPlayerManaPool()
+	{
+		int maximum = AccardND.GameData.TalentRunModifiers.MaximumMana(
+			ManaRules.CreateDefault().Maximum, ActiveTalents);
+		campaignPlayerMana = new ManaPool(ManaRules.CreateDefault().WithMaximum(maximum));
+	}
+
 	private void ResetCampaignManaForNewRun()
 	{
+		RebuildPlayerManaPool();
 		campaignPlayerMana.StartRun();
+		if (bossDebugSceneSession)
+		{
+			campaignPlayerMana.Restore(10);
+		}
 		campaignCpuMana.StartRun();
 		campaignManaEliminations.Clear();
 		campaignPaidPrimaryAbilities.Clear();
@@ -59,6 +92,9 @@ public sealed partial class BattleBoardController
 
 	private void RestoreCampaignMana(int value)
 	{
+		// Prima il tetto, poi il valore: ripristinare su una riserva col tetto vecchio
+		// taglierebbe a 10 il mana di chi ha la Riserva e aveva salvato a 12.
+		RebuildPlayerManaPool();
 		campaignPlayerMana.Restore(value);
 		campaignCpuMana.StartRun();
 		campaignManaEliminations.Clear();
@@ -73,16 +109,37 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		if (adventureScriptedTutorialActive)
+		if (bossDebugSceneSession)
+		{
+			// BossDebug e' un banco prova: ogni avvio del combattimento deve avere
+			// la riserva piena, senza modificare le regole della campagna reale.
+			campaignPlayerMana.Restore(10);
+		}
+		else if (adventureScriptedTutorialActive)
 		{
 			campaignPlayerMana.Restore(10);
 		}
 
 		int before = campaignPlayerMana.Current;
 		campaignPlayerMana.StartRound();
+
+		// "Concentrazione": il recupero del cambio stanza. Passa da Gain, quindi la riserva
+		// lo taglia comunque al proprio tetto - il talento accelera il recupero, non alza il
+		// massimo, e i due numeri restano quelli che la barra sa mostrare.
+		int roomChangeMana = AccardND.GameData.TalentRunModifiers.RoomChangeMana(ActiveTalents);
+		if (roomChangeMana > 0)
+		{
+			int gained = campaignPlayerMana.Gain(roomChangeMana);
+			if (gained > 0)
+				AppendLog($"CONCENTRAZIONE - nuova stanza, +{gained} mana.");
+		}
+
 		campaignCpuMana.StartRun();
+		campaignCpuMana.Restore(RoomDifficultyRules.For(pendingRoomDifficulty).CpuStartingMana);
 		campaignManaEliminations.Clear();
 		campaignPaidPrimaryAbilities.Clear();
+		freePrimaryAbilityAvailable =
+			AccardND.GameData.TalentRunModifiers.FirstAbilityFreeEachRoom(ActiveTalents);
 
 		if (campaignPlayerMana.Current > before)
 		{
@@ -115,7 +172,9 @@ public sealed partial class BattleBoardController
 		}
 		if (campaignPlayerMana.Current != playerBefore || campaignCpuMana.Current != cpuBefore)
 		{
-			AppendLog($"MANA - nuovo round: tu {campaignPlayerMana.Current}/{CampaignManaMaximum}, CPU {campaignCpuMana.Current}/{CampaignManaMaximum}.");
+			// Ogni riserva col proprio tetto: con la "Riserva" il giocatore arriva a 12 e la
+			// CPU resta a 10, e stampare il tetto del giocatore per entrambi direbbe il falso.
+			AppendLog($"MANA - nuovo round: tu {campaignPlayerMana.Current}/{CampaignManaMaximum}, CPU {campaignCpuMana.Current}/{campaignCpuMana.Rules.Maximum}.");
 		}
 		RefreshCampaignManaPresentation();
 	}
@@ -135,12 +194,87 @@ public sealed partial class BattleBoardController
 			CampaignManaFor(card).Rules,
 			skipped,
 			card.AbilityUsedThisTurn);
+		if (IsJurinashorBossProxy(card) && activeJurinashorBoss?.IsPhaseTwo == true)
+		{
+			amount *= 2;
+		}
 		if (amount <= 0)
 		{
 			AppendLog($"MANA - {card.Card.Name} salta dopo aver agito: nessun recupero.");
 			return;
 		}
 		GainCampaignMana(card, amount, skipped ? "salto" : "fine attivazione");
+	}
+
+	/// <summary>
+	/// Sopra questa probabilita' di eliminazione la CPU colpisce e basta: mettere via mana
+	/// vale meno di un bersaglio tolto dal campo adesso.
+	/// </summary>
+	private const double CpuSkipKillProbabilityCeiling = 0.6;
+
+	/// <summary>
+	/// La CPU rinuncia all'attacco quando lo skip da +3 le fa raggiungere una mossa
+	/// attualmente inaccessibile - in Diabolica una Suprema, altrove l'abilita' primaria
+	/// della pedina - e solo se in questo turno non ha gia' un colpo che vale la pena.
+	/// </summary>
+	private bool ShouldCpuSkipToSaveMana(BattleCardState card, out string objective)
+	{
+		objective = string.Empty;
+		// Il mana di Jurinashor alimenta le spade, non i suoi attacchi. Se entrasse
+		// nella politica di risparmio standard, lo skip lo porterebbe alla soglia 3,
+		// l'evocazione consumerebbe subito il mana e il boss salterebbe per sempre.
+		if (card != null && IsJurinashorBossProxy(card))
+		{
+			return false;
+		}
+		if (!CampaignManaEnabled || card == null || card.BelongsToPlayer
+			|| card.AbilityUsedThisTurn || card.AbilityArmed || IsCampaignManaExempt(card))
+		{
+			return false;
+		}
+
+		RoomDifficultyRules difficulty = RoomDifficultyRules.For(pendingRoomDifficulty);
+		if (!difficulty.CpuCanSkip || !difficulty.CpuUsesMana)
+			return false;
+
+		ManaPool pool = CampaignManaFor(card);
+		int manaAfterSkip = Mathf.Min(pool.Rules.Maximum, pool.Current + pool.Rules.GainOnSkip);
+		if (difficulty.CpuUsesSupremes
+			&& CardRulesGlossary.HasSupreme(card.Card.HeroClass)
+			&& AbilityManaCosts.IsSupremeImplemented(card.Card.HeroClass))
+		{
+			int supremeCost = pool.CostOfSupreme(card.Card.HeroClass);
+			if (pool.Current < supremeCost && manaAfterSkip >= supremeCost)
+			{
+				objective = $"la Suprema di {card.Card.Name}";
+			}
+		}
+
+		if (objective.Length == 0)
+		{
+			if (!difficulty.CpuUsesAbilities
+				|| !ManaActionPolicy.HasActivatablePrimary(card.Card.HeroClass)
+				|| !ClassAbilitiesEnabled(card))
+			{
+				return false;
+			}
+
+			int primaryCost = pool.CostOfPrimary(card.Card.HeroClass);
+			if (pool.Current >= primaryCost || manaAfterSkip < primaryCost)
+				return false;
+
+			objective = $"l'abilita di {card.Card.Name}";
+		}
+
+		double bestKill = BestCpuKillProbability(card);
+		if (bestKill >= CpuSkipKillProbabilityCeiling)
+		{
+			AppendLog($"MANA - {card.Card.Name} rinuncia a conservare mana: ha un colpo al {bestKill:P0}.");
+			objective = string.Empty;
+			return false;
+		}
+
+		return true;
 	}
 
 	private bool IsCampaignPrimaryAffordable(BattleCardState card)
@@ -183,6 +317,18 @@ public sealed partial class BattleBoardController
 
 		ManaPool pool = CampaignManaFor(card);
 		int cost = pool.CostOfPrimary(card.Card.HeroClass);
+
+		// "Trance": la prima abilita' di classe della stanza non si paga. Si consuma qui e
+		// non al calcolo del costo mostrato, cosi' aprire e chiudere il pannello non la
+		// brucia; e vale solo per il giocatore, perche' la CPU non ha talenti.
+		if (card.BelongsToPlayer && freePrimaryAbilityAvailable && cost > 0)
+		{
+			freePrimaryAbilityAvailable = false;
+			campaignPaidPrimaryAbilities.Add(card);
+			AppendLog($"TRANCE - l'abilita di {card.Card.Name} non costa mana in questa stanza.");
+			return true;
+		}
+
 		if (!pool.CanAfford(cost))
 		{
 			if (card.BelongsToPlayer)
@@ -190,7 +336,11 @@ public sealed partial class BattleBoardController
 				// Anche il rifiuto differito (abilita' innescata e pagata piu' tardi)
 				// deve parlare dalla pedina, non solo dalla barra dei messaggi.
 				ShowNoManaCallout(card);
-				SetMessage($"Mana insufficiente: servono {cost}, disponibili {pool.Current}.");
+				SetMessage(GameText.GetOrFallbackSilent(
+					GameTextKeys.Campaign.ManaInsufficient,
+					"Mana insufficiente: servono {0}, disponibili {1}.",
+					cost,
+					pool.Current));
 			}
 			return false;
 		}
@@ -271,6 +421,10 @@ public sealed partial class BattleBoardController
 
 	private bool IsCampaignAttackAffordable(BattleCardState card)
 	{
+		if (card != null && IsJurinashorBossProxy(card))
+		{
+			return true;
+		}
 		if (!CampaignManaEnabled || card == null || IsCampaignManaExempt(card))
 		{
 			return true;
@@ -289,6 +443,10 @@ public sealed partial class BattleBoardController
 	/// </summary>
 	private bool TrySpendCampaignAttackMana(BattleCardState card)
 	{
+		if (card != null && IsJurinashorBossProxy(card))
+		{
+			return true;
+		}
 		if (!CampaignManaEnabled || card == null || IsCampaignManaExempt(card))
 		{
 			return true;
@@ -323,6 +481,23 @@ public sealed partial class BattleBoardController
 		return true;
 	}
 
+	private bool TryPayForSelectedCampaignAttack(BattleCardState card, bool primaryAbilityAttack)
+	{
+		bool paid = primaryAbilityAttack
+			? TrySpendCampaignPrimaryMana(card)
+			: TrySpendCampaignAttackMana(card);
+		if (paid)
+			return true;
+
+		ShowNoManaCallout(card);
+		if (primaryAbilityAttack)
+			card.AbilityArmed = false;
+		attackTargetingActive = false;
+		inputLocked = false;
+		UpdateInteractions();
+		return false;
+	}
+
 	/// <summary>
 	/// Rifiuto visibile: i bottoni restano cliccabili, ma la pedina dice perche'
 	/// non succede niente invece di lasciare il giocatore davanti a un tasto muto.
@@ -343,7 +518,7 @@ public sealed partial class BattleBoardController
 	}
 
 	// Stesso blu del callout "ABILITA'" in PrototypeCardView: il rifiuto deve sembrare
-	// parte della stessa famiglia di etichette, non un elemento estraneo.
+	// parte della stessa fazione di etichette, non un elemento estraneo.
 	private static readonly Color NoManaCalloutColor = new Color(0.05f, 0.28f, 0.76f);
 
 	private void ResetCampaignPrimaryManaPayment(BattleCardState card)
@@ -361,7 +536,12 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		GainCampaignMana(defender, CampaignManaFor(defender).Rules.GainOnParry, "parata");
+		int amount = CampaignManaFor(defender).Rules.GainOnParry;
+		if (IsJurinashorBossProxy(defender) && activeJurinashorBoss?.IsPhaseTwo == true)
+		{
+			amount *= 2;
+		}
+		GainCampaignMana(defender, amount, "parata");
 	}
 
 	private void RegisterCampaignEliminationMana(BattleCardState killer, BattleCardState victim)
@@ -374,10 +554,18 @@ public sealed partial class BattleBoardController
 		if (killer != null && !killer.IsSpirit && !killer.IsAttachment)
 		{
 			GainCampaignMana(killer, CampaignManaFor(killer).Rules.GainOnKill, "eliminazione");
+			if (IsJurinashorBossDefinition(killer.Definition))
+			{
+				TrySummonJurinashorSwordOnKill(killer);
+			}
 		}
 		if (!victim.IsSpirit)
 		{
 			GainCampaignMana(victim, CampaignManaFor(victim).Rules.GainOnLoss, "perdita pedina");
+		}
+		if (IsJurinashorSword(victim))
+		{
+			RefreshJurinashorSwordBonusPresentation();
 		}
 	}
 
@@ -399,6 +587,28 @@ public sealed partial class BattleBoardController
 		{
 			PlayEnemyManaDeltaCallout(gained);
 		}
+		BattleCardState activeJurinashor = !ownerCard.BelongsToPlayer
+			? cpuCards.FirstOrDefault(card => card != null && !card.Eliminated && IsJurinashorBossDefinition(card.Definition))
+			: null;
+		if (activeJurinashor != null)
+		{
+			TrySummonJurinashorSwords(activeJurinashor, pool);
+		}
+		if (!ownerCard.BelongsToPlayer
+			&& IsSeraphelBossProxy(ownerCard)
+			&& activeSeraphelBoss != null
+			&& pool.Current >= SeraphelBoss.ManaHealingThreshold)
+		{
+			pool.Spend(SeraphelBoss.ManaHealingThreshold);
+			int healed = activeSeraphelBoss.Heal(activeSeraphelBoss.ManaHealingAmount);
+			PlayEnemyManaDeltaCallout(-SeraphelBoss.ManaHealingThreshold);
+			RefreshSeraphelBossPawn(ownerCard);
+			PlaySeraphelHealSfx();
+			ownerCard.View?.PlayActionCallout($"RIGENERAZIONE +{healed}", Color.white);
+			((MonoBehaviour)this).StartCoroutine(PlaySeraphelRegenerationVfx());
+			SetMessage(GameText.GetLocalizedFallback(GameTextKeys.Campaign.SeraphelManaRegeneration, "LUCE RIGENERANTE: Seraphel consuma 10 Mana e recupera {0} HP. HP {1}/{2}.", "REGENERATING LIGHT: Seraphel spends 10 Mana and restores {0} HP. HP {1}/{2}.", "REGENERIERENDES LICHT: Seraphel verbraucht 10 Mana und stellt {0} LP wieder her. LP {1}/{2}.", "LUZ REGENERADORA: Seraphel consume 10 de Maná y recupera {0} PV. PV {1}/{2}.", "LUMIÈRE RÉGÉNÉRATRICE : Seraphel consomme 10 Mana et récupère {0} PV. PV {1}/{2}.", healed, activeSeraphelBoss.HitPoints, activeSeraphelBoss.MaxHitPoints));
+			AppendLog(GameText.Format(GameTextKeys.Campaign.SeraphelManaRegenerationLog, healed, activeSeraphelBoss.HitPoints, activeSeraphelBoss.MaxHitPoints));
+		}
 		RefreshCampaignManaPresentation();
 	}
 
@@ -411,6 +621,21 @@ public sealed partial class BattleBoardController
 	{
 		RefreshPlayerHud();
 		RefreshCpuHud();
+
+		// Il costo crescente della Suprema appartiene alla riserva della fazione ed e'
+		// condiviso per classe. Quando cambia, aggiorna quindi tutte le pedine: una
+		// inspection ricalcola gia' il dato al volo e non deve risultare piu' aggiornata
+		// dei badge visibili sul campo.
+		foreach (BattleCardState card in playerCards)
+		{
+			if (card?.View != null)
+				RefreshPersistentStatus(card);
+		}
+		foreach (BattleCardState card in cpuCards)
+		{
+			if (card?.View != null)
+				RefreshPersistentStatus(card);
+		}
 	}
 }
 }

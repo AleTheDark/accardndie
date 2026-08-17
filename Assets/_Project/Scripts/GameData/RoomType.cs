@@ -7,7 +7,7 @@ namespace AccardND.GameData
         Boss,
         Merchant,
         Loot,
-        UnexpectedOpportunity
+        QuickChallenge
     }
 
     public enum RoomDifficulty
@@ -24,23 +24,29 @@ namespace AccardND.GameData
         public string DisplayName { get; }
         public int MinimumFormationPower { get; }
         public int MaximumFormationPower { get; }
+        public int MaximumMonsterCardStrength { get; }
         public int BaseExperience { get; }
         public bool CpuUsesAbilities { get; }
         public bool CpuUsesMana { get; }
         public bool CpuUsesAttachments { get; }
+        public bool CpuUsesSupremes { get; }
+        public int CpuStartingMana { get; }
         public bool CpuCanSkip { get; }
         public bool GrantsLootStyleCard { get; }
 
-        private RoomDifficultyRules(string name, int minPower, int maxPower, int baseExperience,
-            bool abilities, bool mana, bool attachments, bool canSkip, bool lootCard)
+        private RoomDifficultyRules(string name, int minPower, int maxPower, int maxCardStrength, int baseExperience,
+            bool abilities, bool mana, bool attachments, bool supremes, int cpuStartingMana, bool canSkip, bool lootCard)
         {
             DisplayName = name;
             MinimumFormationPower = minPower;
             MaximumFormationPower = maxPower;
+            MaximumMonsterCardStrength = maxCardStrength;
             BaseExperience = baseExperience;
             CpuUsesAbilities = abilities;
             CpuUsesMana = mana;
             CpuUsesAttachments = attachments;
+            CpuUsesSupremes = supremes;
+            CpuStartingMana = cpuStartingMana;
             CpuCanSkip = canSkip;
             GrantsLootStyleCard = lootCard;
         }
@@ -50,11 +56,11 @@ namespace AccardND.GameData
             switch (difficulty)
             {
                 case RoomDifficulty.Easy:
-                    return new RoomDifficultyRules("Accessibile", 6, 20, 5, false, false, false, false, false);
+                    return new RoomDifficultyRules("Accessibile", 6, 20, 8, 5, true, true, true, false, 1, true, false);
                 case RoomDifficulty.Hard:
-                    return new RoomDifficultyRules("Diabolica", 24, 30, 15, true, true, true, true, true);
+                    return new RoomDifficultyRules("Diabolica", 24, 30, 10, 15, true, true, true, true, 4, true, true);
                 default:
-                    return new RoomDifficultyRules("Normale", 6, 25, 10, true, true, true, true, false);
+                    return new RoomDifficultyRules("Normale", 6, 25, 9, 10, true, true, true, false, 2, true, false);
             }
         }
     }

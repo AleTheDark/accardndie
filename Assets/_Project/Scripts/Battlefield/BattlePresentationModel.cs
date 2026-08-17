@@ -45,6 +45,7 @@ namespace AccardND.Battlefield
         public bool HasAbilityClass { get; set; }
         public HeroClass AbilityClass { get; set; }
         public int AbilityMagnitude { get; set; }
+		public int Amount { get; set; }
 		public int ManaCurrent { get; set; }
 		public int ManaDelta { get; set; }
 		public string ManaReason { get; set; }
@@ -69,9 +70,15 @@ namespace AccardND.Battlefield
         public int DefenderRollSecondBeforeReroll { get; set; }
         public int DefenderTotal { get; set; }
         public bool DefenderLostLife { get; set; }
+        public int DefenderRemainingLives { get; set; }
         public bool DefenderEliminated { get; set; }
         public bool BecameSpirit { get; set; }
         public bool Overkill { get; set; }
         public bool Redirected { get; set; }
+        public bool IsCounter { get; set; }
+        public bool InterceptedByNecromancerMinion { get; set; }
+        public int Winner { get; set; }
+        public int WinsPlayer0 { get; set; }
+        public int WinsPlayer1 { get; set; }
     }
 }

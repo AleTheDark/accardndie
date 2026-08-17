@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>AccardND.LoadTest</AssemblyName>
+    <RootNamespace>AccardND.LoadTest</RootNamespace>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <!-- Stessi sorgenti condivisi del server: i bot parlano il protocollo vero, non una
+       copia che puo' divergere. Se un DTO cambia, questo progetto smette di compilare. -->
+  <ItemGroup>
+    <Compile Include="..\..\Assets\_Project\Scripts\GameCore\**\*.cs" LinkBase="Shared\GameCore" />
+    <Compile
+      Include="..\..\Assets\_Project\Scripts\NetProtocol\**\*.cs"
+      Exclude="..\..\Assets\_Project\Scripts\NetProtocol\PvpClientMatchState.cs"
+      LinkBase="Shared\NetProtocol" />
+  </ItemGroup>
+
+</Project>

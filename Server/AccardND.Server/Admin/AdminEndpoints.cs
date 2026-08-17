@@ -1,3 +1,4 @@
+using AccardND.Server.Rooms;
 using AccardND.Server.Sessions;
 using Microsoft.AspNetCore.Http;
 
@@ -15,13 +16,19 @@ public static class AdminEndpoints
     private sealed record HoneyRequest(int honey);
     private sealed record UnlockRequest(string type, string id, bool granted);
     private sealed record UnlockAllRequest(bool granted);
+    private sealed record StashRequest(string itemId, int count);
+    private sealed record StashAllRequest(int count);
     private sealed record ClientVersionRequest(string target, bool enforce, string updateUrl);
+    private sealed record MaintenanceRequest(bool enabled, string message);
 
     public static void MapAdminEndpoints(this WebApplication app)
     {
         var auth = app.Services.GetRequiredService<AdminAuth>();
         var service = app.Services.GetRequiredService<AdminService>();
         var clientVersions = app.Services.GetRequiredService<ClientVersionGate>();
+        var maintenance = app.Services.GetRequiredService<MaintenanceGate>();
+        var rooms = app.Services.GetRequiredService<RoomManager>();
+        var presence = app.Services.GetRequiredService<PresenceRegistry>();
 
         // Pagina del pannello.
         app.MapGet("/admin", (HttpContext context) =>
@@ -61,6 +68,10 @@ public static class AdminEndpoints
         app.MapGet("/admin/api/timeseries", (HttpContext context, int? days) =>
             Guard(context, auth, () => Results.Ok(service.GetTimeseries(days ?? 30))));
 
+        // 60 giorni di default: con 30 il D30 avrebbe una sola coorte matura.
+        app.MapGet("/admin/api/retention", (HttpContext context, int? days) =>
+            Guard(context, auth, () => Results.Ok(service.GetRetention(days ?? 60))));
+
         // sort/desc si leggono dalla query invece di farli legare: i minimal API
         // risponderebbero 400 se un client vecchio non li mandasse.
         app.MapGet("/admin/api/players", (HttpContext context, string search, int? limit, int? offset) =>
@@ -86,6 +97,9 @@ public static class AdminEndpoints
         app.MapGet("/admin/api/runs", (HttpContext context, int? limit, int? offset) =>
             Guard(context, auth, () => Results.Ok(service.GetRuns(
                 context.Request.Query["status"], limit ?? 100, offset ?? 0))));
+
+        app.MapGet("/admin/api/campaign-leaderboard", (HttpContext context, int? limit) =>
+            Guard(context, auth, () => Results.Ok(service.GetCampaignLeaderboard(limit ?? 100))));
 
         app.MapGet("/admin/api/seasons", (HttpContext context) =>
             Guard(context, auth, () => Results.Ok(service.GetSeasons())));
@@ -143,11 +157,43 @@ public static class AdminEndpoints
                 return ok ? Results.Ok(service.GetPlayerUnlocks(id)) : Results.BadRequest(new { error });
             }));
 
+        // Scorta consumabili: come gli sblocchi, la POST risponde con lo stato aggiornato
+        // cosi' il pannello ridisegna il riquadro senza una seconda chiamata.
+        app.MapGet("/admin/api/players/{id}/stash", (HttpContext context, string id) =>
+            Guard(context, auth, () =>
+            {
+                object state = service.GetPlayerStash(id);
+                return state == null ? Results.NotFound() : Results.Ok(state);
+            }));
+
+        app.MapPost("/admin/api/players/{id}/stash", async (HttpContext context, string id) =>
+            await GuardAsync(context, auth, async () =>
+            {
+                StashRequest body = await ReadBody<StashRequest>(context);
+                if (body == null)
+                    return Results.BadRequest(new { error = "Richiesta non valida." });
+                (bool ok, string error) = service.SetStashItem(id, body.itemId, body.count);
+                return ok ? Results.Ok(service.GetPlayerStash(id)) : Results.BadRequest(new { error });
+            }));
+
+        app.MapPost("/admin/api/players/{id}/stash/all", async (HttpContext context, string id) =>
+            await GuardAsync(context, auth, async () =>
+            {
+                StashAllRequest body = await ReadBody<StashAllRequest>(context);
+                if (body == null)
+                    return Results.BadRequest(new { error = "Richiesta non valida." });
+                (bool ok, string error) = service.SetAllStash(id, body.count);
+                return ok ? Results.Ok(service.GetPlayerStash(id)) : Results.BadRequest(new { error });
+            }));
+
         app.MapPost("/admin/api/players/{id}/reset", (HttpContext context, string id) =>
             Guard(context, auth, () => ToResult(service.ResetProgress(id))));
 
         app.MapPost("/admin/api/players/{id}/delete", (HttpContext context, string id) =>
             Guard(context, auth, () => ToResult(service.DeletePlayer(id))));
+
+        app.MapPost("/admin/api/runs/{id:long}/delete", (HttpContext context, long id) =>
+            Guard(context, auth, () => ToResult(service.DeleteCampaignRun(id))));
 
         // --- Versione client richiesta --------------------------------------
 
@@ -167,7 +213,52 @@ public static class AdminEndpoints
                 clientVersions.ResetToConfiguration();
                 return Results.Ok(Describe(clientVersions));
             }));
+
+        // --- Manutenzione ----------------------------------------------------
+        //
+        // La GET la interroga anche il polling del pannello: porta con sé i numeri
+        // che dicono se si può riavviare, non solo lo stato dell'interruttore.
+
+        app.MapGet("/admin/api/maintenance", (HttpContext context) =>
+            Guard(context, auth, () => Results.Ok(Describe(maintenance, rooms, presence))));
+
+        // Stesso cast a Delegate del client-version, e per la stessa ragione: senza
+        // {id} nella rotta un handler asincrono col solo HttpContext finirebbe
+        // sull'overload RequestDelegate, che scarta il risultato (ASP0016).
+        app.MapPost("/admin/api/maintenance", (Delegate)(async (HttpContext context) =>
+            await GuardAsync(context, auth, () =>
+                SaveMaintenanceAsync(context, maintenance, rooms, presence))));
     }
+
+    /// <summary>
+    /// Tipo di ritorno dichiarato di proposito, come per
+    /// <see cref="SaveClientVersionAsync"/>: dentro la lambda annidata i rami
+    /// Ok/BadRequest non venivano inferiti come <see cref="IResult"/>.
+    /// </summary>
+    private static async Task<IResult> SaveMaintenanceAsync(
+        HttpContext context, MaintenanceGate gate, RoomManager rooms, PresenceRegistry presence)
+    {
+        MaintenanceRequest body = await ReadBody<MaintenanceRequest>(context);
+        if (body == null)
+            return Results.BadRequest(new { error = "Richiesta non valida." });
+
+        (bool ok, string error) = gate.Update(body.enabled, body.message);
+        return ok
+            ? Results.Ok(Describe(gate, rooms, presence))
+            : Results.BadRequest(new { error });
+    }
+
+    private static object Describe(MaintenanceGate gate, RoomManager rooms, PresenceRegistry presence) => new
+    {
+        enabled = gate.IsActive,
+        message = gate.Message,
+        since = gate.SinceUtc?.ToString("O"),
+        maxMessageLength = MaintenanceGate.MaxMessageLength,
+        // Quanto resta da aspettare prima di poter riavviare senza far danni.
+        liveMatches = rooms.LiveMatchCount,
+        waitingRooms = rooms.WaitingRoomCount,
+        onlineNow = presence.OnlineCount
+    };
 
     /// <summary>
     /// Tipo di ritorno dichiarato di proposito: dentro una lambda annidata i rami

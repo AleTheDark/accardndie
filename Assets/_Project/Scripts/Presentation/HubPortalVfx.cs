@@ -20,6 +20,7 @@ namespace AccardND.Presentation
         }
 
         private RectTransform root;
+        private Canvas canvas;
         private Image glow;
         private Spark[] sparks;
         private Color tint;
@@ -60,6 +61,8 @@ namespace AccardND.Presentation
 
         private void Build(int sparkCount)
         {
+            canvas = root.GetComponentInParent<Canvas>();
+
             var glowObject = new GameObject("Portal Glow", typeof(RectTransform), typeof(Image));
             glowObject.transform.SetParent(root, false);
             RectTransform glowRect = (RectTransform)glowObject.transform;
@@ -111,6 +114,11 @@ namespace AccardND.Presentation
                 enabled = false;
                 return;
             }
+
+            // Venti scintille per portale, otto portali: animarle mentre l'hub
+            // sta sotto un modale significa ricostruire il canvas a vuoto.
+            if (!UiVfxBudget.ShouldAnimate(root, canvas))
+                return;
 
             float time = Time.unscaledTime;
             float lifetime = time - startedAt;

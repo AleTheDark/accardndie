@@ -5,19 +5,22 @@ namespace AccardND.Tests.EditMode
 {
     public sealed class RoomDifficultyRulesTests
     {
-        [TestCase(RoomDifficulty.Easy, "Accessibile", 6, 20, 5, false)]
-        [TestCase(RoomDifficulty.Normal, "Normale", 6, 25, 10, true)]
-        [TestCase(RoomDifficulty.Hard, "Diabolica", 24, 30, 15, true)]
-        public void RulesMatchCampaignDesign(RoomDifficulty difficulty, string name, int min, int max, int experience, bool advanced)
+        [TestCase(RoomDifficulty.Easy, "Accessibile", 6, 20, 8, 5, true, false, 1)]
+        [TestCase(RoomDifficulty.Normal, "Normale", 6, 25, 9, 10, true, false, 2)]
+        [TestCase(RoomDifficulty.Hard, "Diabolica", 24, 30, 10, 15, true, true, 4)]
+        public void RulesMatchCampaignDesign(RoomDifficulty difficulty, string name, int min, int max, int maxCardStrength, int experience, bool advanced, bool supremes, int startingMana)
         {
             RoomDifficultyRules rules = RoomDifficultyRules.For(difficulty);
             Assert.That(rules.DisplayName, Is.EqualTo(name));
             Assert.That(rules.MinimumFormationPower, Is.EqualTo(min));
             Assert.That(rules.MaximumFormationPower, Is.EqualTo(max));
+            Assert.That(rules.MaximumMonsterCardStrength, Is.EqualTo(maxCardStrength));
             Assert.That(rules.BaseExperience, Is.EqualTo(experience));
             Assert.That(rules.CpuUsesAbilities, Is.EqualTo(advanced));
             Assert.That(rules.CpuUsesMana, Is.EqualTo(advanced));
             Assert.That(rules.CpuUsesAttachments, Is.EqualTo(advanced));
+            Assert.That(rules.CpuUsesSupremes, Is.EqualTo(supremes));
+            Assert.That(rules.CpuStartingMana, Is.EqualTo(startingMana));
         }
 
         [TestCase(1, 1, 60, 40, 0)]

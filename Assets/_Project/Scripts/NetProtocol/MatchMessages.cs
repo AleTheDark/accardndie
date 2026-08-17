@@ -117,6 +117,7 @@ namespace AccardND.NetProtocol
         public bool becameSpirit;
         public bool overkill;
         public bool isCounter;
+        public bool interceptedByNecromancerMinion;
         public int bonus;
         public int amount;
         public int winner;

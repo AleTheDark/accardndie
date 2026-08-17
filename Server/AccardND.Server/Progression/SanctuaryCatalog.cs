@@ -21,13 +21,14 @@ public static class SanctuaryCatalog
     public const string TypeSecondAbility = "secondAbility";
     public const string TypeItem = "item";
     public const string TypeSlot = "slot";
-    public const string TypeChapter = "chapter";
+    public const string MerchantUpgradeRelicOneId = "merchant-upgrade-relic-1";
+    public const string MerchantUpgradeRelicTwoId = "merchant-upgrade-relic-2";
 
     /// <summary>Slot bisaccia disponibili senza acquisti.</summary>
     public const int BaseBagSlots = 2;
 
     /// <summary>Tetto assoluto: oltre questo la run smette di essere una serie di scelte.</summary>
-    public const int MaxBagSlots = 4;
+	public const int MaxBagSlots = 6;
 
     public const string KindCounter = "counter";
     public const string KindAccountLevel = "accountLevel";
@@ -69,11 +70,16 @@ public static class SanctuaryCatalog
     {
         var entries = new List<Entry>
         {
-            // Classi starter: concesse dal tutorial, mostrate nell'altare ma non acquistabili.
-            // Un altare con 6 slot su 9 racconterebbe male la storia.
-            StarterClass("mage", "Mago"),
+            // Il Guerriero e' la dotazione: lo consegna il primo modulo del tutorial, e senza
+            // di lui non ci sarebbe niente con cui giocare la prima stanza.
             StarterClass("warrior", "Guerriero"),
-            StarterClass("rogue", "Ladro"),
+
+            // Mago e Ladro si comprano, e il tutorial regala i vasetti giusti per farlo. Sono
+            // stati starter gratuiti per un periodo: il percorso a moduli li ha trasformati
+            // nel primo acquisto del giocatore, che e' anche la lezione su come si spende il
+            // miele. Vedi Docs/tutorial-progressivo-design.md §8.1.
+            AdvancedClass("mage", "Mago", 40),
+            AdvancedClass("rogue", "Ladro", 40),
 
             AdvancedClass("assassin", "Assassino", 40),
             AdvancedClass("hunter", "Cacciatore", 40),
@@ -90,47 +96,47 @@ public static class SanctuaryCatalog
         foreach (Entry classEntry in entries.Where(entry => entry.Type == TypeClass).ToArray())
             entries.Add(SecondAbility(classEntry.Id, classEntry.Name));
 
-        // Reliquie. Al Santuario si sblocca il diritto di comprare un oggetto: l'acquisto
-        // delle copie avviene poi al negozio. Quindi questi prezzi pagano un permesso
-        // permanente, non un pezzo, e stanno percio' ben sopra al costo di una singola copia.
+        // Consumabili del negozio. Sono disponibili a tutti fin dall'inizio: qui vivono
+        // soltanto definizione e prezzo di una copia, non uno sblocco del Santuario.
         // La gerarchia di forza resta quella del mercante in run:
-        // Detector < Defrost < DoppiaEXP < Empower < SigilloRubino < SecondaChance.
-        entries.Add(Item("detector", "Detector", 20,
-            "Sblocca il Detector al negozio: rivela il destino delle tre porte."));
-        entries.Add(Item("defrost", "Defrost", 25,
-            "Sblocca il Defrost al negozio: scongela le carte in cooldown."));
-        entries.Add(Item("double-exp", "Doppia EXP", 30,
-            "Sblocca la Doppia EXP al negozio: raddoppia l'esperienza di una stanza."));
-        entries.Add(Item("empower", "Empower", 40,
-            "Sblocca l'Empower al negozio: alza di uno step il dado Vigore in attacco."));
-        entries.Add(Item("sigillo-rubino", "Sigillo Rubino", 50,
-            "Sblocca il Sigillo Rubino al negozio: incide +2 permanente su una carta, una sola volta per carta."));
-        entries.Add(Item("second-chance", "Seconda Chance", 70,
-            "Sblocca la Seconda Chance al negozio: riporta nel mazzo le carte dal cimitero."));
+        // Detector < DoppiaEXP < Empower < SigilloRubino < SecondaChance.
+        entries.Add(Item("detector", "Detector", 5,
+            "Rivela il destino delle tre porte."));
+        entries.Add(Item("double-exp", "Doppia EXP", 7,
+            "Raddoppia l'esperienza di una stanza."));
+        entries.Add(Item("empower", "Empower", 10,
+            "Alza di uno step il dado Vigore in attacco."));
+        entries.Add(Item("sigillo-rubino", "Sigillo Rubino", 12,
+            "Incide +2 permanente su una carta, una sola volta per carta."));
+        entries.Add(Item("second-chance", "Seconda Chance", 17,
+            "Riporta nel mazzo le carte dal cimitero."));
+		entries.Add(Item("mana-5", "Mana +5", 5,
+			"Recupera 5 mana in qualsiasi momento, fino al massimo di 10."));
+		entries.Add(Item("mana-10", "Mana +10", 9,
+			"Recupera 10 mana in qualsiasi momento, fino al massimo di 10."));
+		entries.Add(Item("jolly", "Jolly", 20,
+			"Teletrasporta alla stanza scelta, anche da una stanza gia iniziata."));
 
-        entries.Add(Slot("bag-slot-3", "Terzo slot", 60));
-        entries.Add(Slot("bag-slot-4", "Quarto slot", 150));
+		entries.Add(Slot("bag-slot-3", "Terzo slot", 30));
+		entries.Add(Slot("bag-slot-4", "Quarto slot", 60));
+		entries.Add(Slot("bag-slot-5", "Quinto slot", 120));
+		entries.Add(Slot("bag-slot-6", "Sesto slot", 240));
 
-        // Capitoli. Il Santuario e' il solo banco dove si comprano: nella schermata
-        // Avventura un capitolo chiuso non si apre piu' pagando, si guarda e basta. Restano
-        // due strade per averlo, ed e' voluto che siano alternative: batti il boss del
-        // capitolo prima, oppure paghi per non aspettare.
-        foreach (ChapterCatalog.Chapter chapter in ChapterCatalog.All)
-            entries.Add(ChapterEntry(chapter));
+		entries.Add(LoadoutSlot(2, 50));
+		entries.Add(LoadoutSlot(3, 100));
+		entries.Add(LoadoutSlot(4, 200));
+
+		entries.Add(new Entry(TypeSlot, MerchantUpgradeRelicOneId,
+			"Reliquia del Fabbro I",
+			"Permette di potenziare una volta ogni pedina al banco Potenzia del Mercato.",
+			80, true, Array.Empty<Requirement>()));
+		entries.Add(new Entry(TypeSlot, MerchantUpgradeRelicTwoId,
+			"Reliquia del Fabbro II",
+			"Permette il secondo potenziamento di ogni pedina al Mercato.",
+			160, true, Array.Empty<Requirement>()));
 
         return entries.ToArray();
     }
-
-    private static Entry ChapterEntry(ChapterCatalog.Chapter chapter) => new(
-        TypeChapter,
-        chapter.Id,
-        chapter.Name,
-        chapter.Playable
-            ? "Accesso al capitolo. Si ottiene anche battendo il boss del capitolo precedente."
-            : "In arrivo: il capitolo esiste gia' nella campagna ma il suo boss non e' ancora pronto.",
-        chapter.HoneyCost,
-        ChapterCatalog.IsPurchasable(chapter),
-        Array.Empty<Requirement>());
 
     private static Entry StarterClass(string id, string name) => new(
         TypeClass, id, name, "Ottenuta completando il tutorial.", 0, false, Array.Empty<Requirement>());
@@ -161,14 +167,22 @@ public static class SanctuaryCatalog
         TypeItem, id, name, description, cost, true, Array.Empty<Requirement>());
 
     /// <summary>
-    /// Prezzo di una singola copia al negozio, derivato dal costo di sblocco. Provvisorio:
-    /// il listino vero arrivera' con la pagina del negozio. Tenerlo derivato evita per ora
-    /// una seconda tabella di numeri da mantenere allineata.
+    /// Prezzo di una singola copia al negozio. Per i consumabili HoneyCost e' direttamente
+    /// il prezzo di catalogo: non esiste piu' un distinto costo di sblocco.
     /// </summary>
-    public static int CopyCostOf(Entry entry) => Math.Max(1, entry.HoneyCost / 4);
+    public static int CopyCostOf(Entry entry) => Math.Max(1, entry.HoneyCost);
 
     private static Entry Slot(string id, string name, int cost) => new(
         TypeSlot, id, name, "Uno slot in piu' nella bisaccia.", cost, true, Array.Empty<Requirement>());
+
+    private static Entry LoadoutSlot(int number, int cost) => new(
+        TypeSlot,
+        $"loadout-slot-{number}",
+        $"Loadout {number}",
+        "Sblocca uno spazio aggiuntivo in cui salvare un mazzo PvP.",
+        cost,
+        true,
+        Array.Empty<Requirement>());
 }
 
 /// <summary>

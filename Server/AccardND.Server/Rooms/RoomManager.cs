@@ -84,6 +84,18 @@ public sealed class RoomManager
                     && (room.Host?.Identity?.PlayerId == playerId
                         || room.Guest?.Identity?.PlayerId == playerId));
 
+    /// <summary>
+    /// Partite ancora in corso. È il numero che dice se si può riavviare: un match
+    /// vive solo in memoria, quindi finché questo non è zero un riavvio annulla la
+    /// partita di qualcuno (vedi <see cref="MatchDrainService"/>).
+    /// </summary>
+    public int LiveMatchCount =>
+        roomsByCode.Values.Count(room => room.Session is { IsFinished: false });
+
+    /// <summary>Stanze aperte in attesa di un avversario: nessuna partita da salvare, ma vanno via al riavvio.</summary>
+    public int WaitingRoomCount =>
+        roomsByCode.Values.Count(room => room.Session == null);
+
     public void Remove(Room room)
     {
         if (room == null)

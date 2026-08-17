@@ -15,7 +15,6 @@ namespace AccardND.Editor
     {
         private const string OutputPath = "Server/AccardND.Server/cardcatalog.json";
 
-        [MenuItem("Accard N' Die/Esporta catalogo carte PvP")]
         public static void Export()
         {
             var entries = new List<string>();

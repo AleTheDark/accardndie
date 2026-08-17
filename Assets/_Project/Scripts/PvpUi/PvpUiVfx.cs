@@ -10,6 +10,9 @@ namespace AccardND.PvpUi
     /// </summary>
     public sealed class PvpUiVfx : MonoBehaviour
     {
+        public static RectTransform CreateDefeatPetals(Transform parent) =>
+            PvpMatchResultOverlay.CreateDefeatPetals(parent);
+
         private enum VfxStyle
         {
             RankedButton,
@@ -28,11 +31,8 @@ namespace AccardND.PvpUi
 
         private VfxStyle style;
         private RectTransform effectRoot;
+        private Canvas canvas;
         private Image pulse;
-        private RectTransform rotatingSigil;
-        private Image rotatingSigilImage;
-        private RectTransform counterSigil;
-        private Image counterSigilImage;
         private RectTransform shimmer;
         private Image shimmerImage;
         private Spark[] sparks;
@@ -115,21 +115,18 @@ namespace AccardND.PvpUi
 
         private void Build(int sparkCount)
         {
+            canvas = effectRoot.GetComponentInParent<Canvas>();
+
             pulse = CreateImage(
                 effectRoot, "Pulse", MmoUiTheme.GetRadialGlowSprite(),
                 Vector2.zero, Vector2.one, true);
 
             if (style == VfxStyle.RankAura)
             {
-                rotatingSigilImage = CreateImage(
-                    effectRoot, "Rotating Sigil", MmoUiTheme.GetRankCrestSprite(),
-                    new Vector2(-0.035f, -0.035f), new Vector2(1.035f, 1.035f), true);
-                rotatingSigil = rotatingSigilImage.rectTransform;
-
-                counterSigilImage = CreateImage(
-                    effectRoot, "Counter Sigil", MmoUiTheme.GetStarSprite(),
-                    new Vector2(0.13f, 0.13f), new Vector2(0.87f, 0.87f), true);
-                counterSigil = counterSigilImage.rectTransform;
+                // L'emblema di lega viene disegnato dal proprietario dell'aura. Un
+                // secondo stemma procedurale qui rimaneva leggibile attraverso le
+                // trasparenze dell'artwork e, al refresh dopo un'amichevole, sembrava
+                // un badge estraneo sovrapposto al rank.
             }
             else if (style == VfxStyle.RankedButton)
             {
@@ -177,6 +174,11 @@ namespace AccardND.PvpUi
                 return;
             }
 
+            // Questi bagliori stanno anche su bottoni dentro liste scorrevoli:
+            // fuori dallo schermo non c'e' motivo di continuare a pulsare.
+            if (!UiVfxBudget.ShouldAnimate(effectRoot, canvas))
+                return;
+
             float time = Time.unscaledTime;
             float breathing = 0.5f + 0.5f * Mathf.Sin(time * 2.15f);
             Color glowColor = tint;
@@ -198,22 +200,6 @@ namespace AccardND.PvpUi
 
         private void UpdateRankAura(float time)
         {
-            if (rotatingSigil == null || rotatingSigilImage == null
-                || counterSigil == null || counterSigilImage == null)
-            {
-                enabled = false;
-                return;
-            }
-
-            rotatingSigil.localEulerAngles = new Vector3(0f, 0f, time * 9f);
-            counterSigil.localEulerAngles = new Vector3(0f, 0f, -time * 14f);
-
-            Color sigilColor = tint;
-            sigilColor.a = 0.025f * intensity;
-            rotatingSigilImage.color = sigilColor;
-            sigilColor.a = 0.018f * intensity;
-            counterSigilImage.color = sigilColor;
-
             float width = Mathf.Max(1f, effectRoot.rect.width);
             float height = Mathf.Max(1f, effectRoot.rect.height);
             float radiusBase = Mathf.Min(width, height);

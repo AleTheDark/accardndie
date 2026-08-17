@@ -75,23 +75,6 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
-        public void ChooseClassAsync_ForwardsChoiceAndClearsPendingReward()
-        {
-            var server = new FakeServerClient
-            {
-                NextSnapshot = new SinglePlayerProgressSave { unlockedClasses = { "hunter" } }
-            };
-            var repo = new ServerSinglePlayerProgressRepository(
-                server, new LocalSinglePlayerProgressRepository(new InMemoryStore()));
-
-            Await(repo.ChooseClassAsync("hunter"));
-
-            Assert.That(server.LastChosenClassId, Is.EqualTo("hunter"));
-            Assert.That(repo.IsUnlocked(SinglePlayerUnlockType.Class, "hunter"), Is.True);
-            Assert.That(repo.Progress.pendingClassChoices, Is.Empty);
-        }
-
-        [Test]
         public void RefreshAsync_MirrorsServerCounters()
         {
             var server = new FakeServerClient
@@ -311,7 +294,6 @@ namespace AccardND.GameCore.Tests
             }
 
             public string LastClearedChapterBossId;
-            public string LastChosenClassId;
             public SanctuaryData NextSanctuary = new SanctuaryData();
 
             public Task<SanctuaryData> GetSanctuaryAsync() => Task.FromResult(NextSanctuary);
@@ -331,13 +313,25 @@ namespace AccardND.GameCore.Tests
                 return Task.FromResult(NextSanctuary);
             }
 
+            public IapEntitlementsData NextEntitlements = new IapEntitlementsData();
+            public IapRedeemResult NextRedeem = new IapRedeemResult();
+            public (string ProductId, string Receipt)? LastRedeem;
+
+            public Task<IapEntitlementsData> GetEntitlementsAsync() => Task.FromResult(NextEntitlements);
+
+            public Task<IapRedeemResult> RedeemPurchaseAsync(string productId, string receipt)
+            {
+                LastRedeem = (productId, receipt);
+                return Task.FromResult(NextRedeem);
+            }
+
             public TavernData NextTavern = new TavernData();
             public string LastClaimedQuestId;
             public bool TavernBonusClaimed;
 
             public Task<TavernData> GetTavernAsync() => Task.FromResult(NextTavern);
 
-            public Task<TavernData> ClaimTavernQuestAsync(string questId)
+            public Task<TavernData> ClaimTavernQuestAsync(string questId, int rewardMultiplier = 1)
             {
                 LastClaimedQuestId = questId;
                 return Task.FromResult(NextTavern);
@@ -347,6 +341,17 @@ namespace AccardND.GameCore.Tests
             {
                 TavernBonusClaimed = true;
                 return Task.FromResult(NextTavern);
+            }
+
+            public TalentData NextTalents = new TalentData();
+            public string LastBoughtTalentId;
+
+            public Task<TalentData> GetTalentsAsync() => Task.FromResult(NextTalents);
+
+            public Task<TalentData> BuyTalentAsync(string talentId)
+            {
+                LastBoughtTalentId = talentId;
+                return Task.FromResult(NextTalents);
             }
 
             public Task<SinglePlayerProgressSave> ClearChapterAsync(string bossId)
@@ -360,6 +365,15 @@ namespace AccardND.GameCore.Tests
             public Task<SinglePlayerRewardOutcome> ClaimTutorialRewardAsync(string tutorialRunId)
             {
                 LastTutorialRunId = tutorialRunId;
+                return Task.FromResult(NextReward);
+            }
+
+            public (string ModuleId, string RunId)? LastTutorialModule;
+
+            public Task<SinglePlayerRewardOutcome> ClaimTutorialModuleRewardAsync(
+                string moduleId, string moduleRunId)
+            {
+                LastTutorialModule = (moduleId, moduleRunId);
                 return Task.FromResult(NextReward);
             }
 
@@ -381,14 +395,6 @@ namespace AccardND.GameCore.Tests
                 return Task.FromResult(NextReward);
             }
 
-            public Task<SinglePlayerProgressSave> ChooseClassAsync(string classId)
-            {
-                LastChosenClassId = classId;
-                return ThrowOnPurchase != null
-                    ? Task.FromException<SinglePlayerProgressSave>(ThrowOnPurchase)
-                    : Task.FromResult(NextSnapshot);
-            }
-
             public Task<SinglePlayerRewardOutcome> ClaimLevelRewardsAsync() =>
                 Task.FromResult(NextReward);
 
@@ -396,6 +402,8 @@ namespace AccardND.GameCore.Tests
 
             public Task<SinglePlayerPendingAdRewardsData> GetPendingAdRewardsAsync() =>
                 Task.FromResult(NextPendingAdRewards);
+
+            public Task DismissPendingAdRewardAsync(string rewardClaimId) => Task.CompletedTask;
         }
 
         private sealed class InMemoryStore : ISinglePlayerProgressStore

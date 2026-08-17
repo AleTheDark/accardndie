@@ -22,7 +22,7 @@ namespace AccardND.GameCore.Pvp
 
     public static class PvpAura
     {
-        /// <summary>Stesse priorità della campagna: classe > famiglia > formazione.</summary>
+        /// <summary>Stesse priorità della campagna: classe > fazione > formazione.</summary>
         public static PvpAuraType Determine(IReadOnlyList<CombatCard> formation)
         {
             if (formation == null || formation.Count != 3)
@@ -72,16 +72,16 @@ namespace AccardND.GameCore.Pvp
     }
 
     /// <summary>Scala dei dadi vigore usata da Mage (abbassa) e aura Magic (alza):
-    /// D3-D4-D6-D8-D10-D12-D20, identica alla campagna.</summary>
+    /// D2-D4-D6-D8-D10-D12-D20, identica alla campagna.</summary>
     public static class PvpVigorScale
     {
         public static int Lower(int dieSides)
         {
-            if (dieSides <= 3)
-                return 3;
+            if (dieSides <= 2)
+                return 2;
             return dieSides switch
             {
-                4 => 3,
+                4 => 2,
                 6 => 4,
                 8 => 6,
                 10 => 8,
@@ -93,7 +93,7 @@ namespace AccardND.GameCore.Pvp
 
         public static int Raise(int dieSides)
         {
-            if (dieSides <= 3)
+            if (dieSides <= 2)
                 return 4;
             return dieSides switch
             {
@@ -117,7 +117,7 @@ namespace AccardND.GameCore.Pvp
         public static int StepsToMinimum(int dieSides)
         {
             int steps = 0;
-            while (dieSides > 3)
+            while (dieSides > 2)
             {
                 dieSides = Lower(dieSides);
                 steps++;

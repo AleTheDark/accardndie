@@ -38,7 +38,7 @@ public sealed class RankedAccountExperienceTests
     }
 
     [Fact]
-    public async Task Ranked_reward_can_be_tripled_by_ad_only_once()
+    public async Task Ranked_reward_can_be_multiplied_by_ad_only_once()
     {
         using var server = new TestServer();
         AccountIdentity playerA = server.RegisterAccount("ranked-adv-a");
@@ -62,6 +62,7 @@ public sealed class RankedAccountExperienceTests
             });
 
         Assert.Null(firstCode);
+        // Il video triplica: 10 di base piu' altri 20 concessi qui.
         Assert.Equal(20, first.grantedAccountExperience);
         Assert.Equal(30L, TotalExperience(server, playerA));
         Assert.Null(secondCode);

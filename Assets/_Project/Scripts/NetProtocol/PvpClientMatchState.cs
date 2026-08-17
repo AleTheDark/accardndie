@@ -45,6 +45,8 @@ namespace AccardND.NetProtocol
 
         /// <summary>Invisibilita' dell'Assassino: non selezionabile come bersaglio.</summary>
         public bool Untargetable;
+
+        public int NecromancerMinions;
     }
 
     public sealed class PvpClientDeploymentToken
@@ -83,6 +85,7 @@ namespace AccardND.NetProtocol
 
         /// <summary>Riserva di mana dei due giocatori, allineata dagli eventi del server.</summary>
         public int[] Mana { get; } = new int[2];
+        private readonly Dictionary<HeroClass, int>[] supremeUsesThisMatch = { new(), new() };
         public PvpAuraType[] Auras { get; } = new PvpAuraType[2];
         public bool[] FormationAuraUsed { get; } = new bool[2];
 
@@ -244,8 +247,17 @@ namespace AccardND.NetProtocol
                     if (card != null)
                     {
                         card.SupremeUsedThisRound = true;
+                        // La suprema conta come azione ai fini del recupero, ma non
+                        // consuma l'abilita' primaria: la UI deve continuare a
+                        // proporla e il server eseguira' il normale check del mana.
+                        card.AbilityUsedThisTurn = true;
                         if ((SupremeAbilityType)e.supreme == SupremeAbilityType.Vanish)
                             card.Untargetable = true;
+                    }
+                    if (e.player >= 0 && e.player < supremeUsesThisMatch.Length)
+                    {
+                        HeroClass heroClass = (HeroClass)e.ability;
+                        supremeUsesThisMatch[e.player][heroClass] = SupremeUsesThisMatch(e.player, heroClass) + 1;
                     }
                     break;
                 }
@@ -261,6 +273,20 @@ namespace AccardND.NetProtocol
                         card.AbilityUsedThisTurn = false;
                         card.AbilityArmed = false;
                         AddLog(GameText.Format(GameTextKeys.PvpLog.CardRevived, card.CardName, e.lives));
+                    }
+                    break;
+                }
+
+                case "NecromancerMinionsChanged":
+                {
+                    PvpClientCard card = CardAt(e.player, e.slot);
+                    if (card != null)
+                        card.NecromancerMinions = e.amount;
+                    if (e.bonus > 0 && e.player >= 0 && e.player < Boards.Length)
+                    {
+                        foreach (PvpClientCard ally in Boards[e.player])
+                            if (!ally.Eliminated)
+                                ally.PermanentBonus += e.bonus;
                     }
                     break;
                 }
@@ -431,6 +457,11 @@ namespace AccardND.NetProtocol
                 case HeroClass.Priest:
                     if (target != null)
                     {
+                        target.Inhibited = false;
+                        target.Marked = false;
+                        target.DiePenaltySteps = 0;
+                        if (target.PermanentBonus < 0)
+                            target.PermanentBonus = 0;
                         target.PendingBonus += e.magnitude;
                         if (target.PendingBonusKind != PvpPendingBonusKind.Fury)
                             target.PendingBonusKind = PvpPendingBonusKind.Blessing;
@@ -461,7 +492,7 @@ namespace AccardND.NetProtocol
                     attacker.AbilityUsed = true;
                 }
             }
-            if (defender != null)
+            if (defender != null && !e.interceptedByNecromancerMinion)
             {
                 defender.DiePenaltySteps = 0;
                 defender.Lives = e.defenderRemainingLives;
@@ -555,6 +586,25 @@ namespace AccardND.NetProtocol
                 foreach (PvpClientCard card in board)
                     card.AbilityUsedThisTurn = false;
             }
+        }
+
+        /// <summary>Costo autorevole ricostruito dagli eventi ricevuti nella partita.</summary>
+        public int SupremeCostFor(int player, HeroClass heroClass)
+        {
+            int uses = SupremeUsesThisMatch(player, heroClass);
+            return AbilityManaCosts.Supreme(heroClass) + uses * ManaRules.CreateDefault().SupremeRepeatSurcharge;
+        }
+
+		/// <summary>Numero autorevole di supreme della classe gia' usate dal giocatore.</summary>
+		public int SupremeUsesFor(int player, HeroClass heroClass) =>
+			SupremeUsesThisMatch(player, heroClass);
+
+        private int SupremeUsesThisMatch(int player, HeroClass heroClass)
+        {
+            return player >= 0 && player < supremeUsesThisMatch.Length
+                && supremeUsesThisMatch[player].TryGetValue(heroClass, out int uses)
+                ? uses
+                : 0;
         }
 
         private void RemoveFromHand(string definitionId)

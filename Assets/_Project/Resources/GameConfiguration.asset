@@ -46,7 +46,7 @@ MonoBehaviour:
     cpuDifficulty: 1
     killProbabilityWeight: 1000
     classAdvantageWeight: 100
-    weakerTargetWeight: 8
+    threatWeight: 8
     randomTieBreaker: 5
   responsiveLayout:
     portraitReferenceResolution: {x: 1080, y: 1920}
@@ -90,10 +90,6 @@ MonoBehaviour:
     minibossEveryRooms: 10
     finalBossRoom: 20
     bossFormationSize: 1
-    monsterRoomWeight: 60
-    merchantRoomWeight: 15
-    lootRoomWeight: 15
-    opportunityRoomWeight: 10
     lootRoomExperience: 10
     opportunityRoomExperience: 0
     merchantRoomExperience: 0
@@ -157,5 +153,5 @@ MonoBehaviour:
       cost: 18
     roundsToWinMatch: 2
     deployedCardLives: 2
-    turnTimerSeconds: 60
+    turnTimerSeconds: 30
     disconnectTimeoutSeconds: 120

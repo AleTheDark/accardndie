@@ -192,6 +192,22 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
+        public void PredeterminedDefenseRollAppliesResultWithoutConsumingRandom()
+        {
+            var golem = CreateOrderedGolem(new FixedRandomSource(6));
+
+            ComposableGolemDefenseResult defense = golem.DefendAgainstRoll(
+                attackerTotal: 12,
+                vigorDieSides: 8,
+                vigorRoll: 3);
+
+            Assert.That(defense.VigorRoll, Is.EqualTo(3));
+            Assert.That(defense.DefenseTotal, Is.EqualTo(11));
+            Assert.That(defense.Damage, Is.EqualTo(1));
+            Assert.That(golem.RollInitiative(20), Is.EqualTo(6));
+        }
+
+        [Test]
         public void SelectsHighestStrengthTargetBreakingTiesByInitiative()
         {
             var targets = new[]

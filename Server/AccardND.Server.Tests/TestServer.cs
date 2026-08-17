@@ -28,7 +28,11 @@ public sealed class TestServer : IDisposable
     {
         databasePath = Path.Combine(
             Path.GetTempPath(), $"accardnd-test-{Guid.NewGuid():N}.db");
-        Config = new ServerConfig { DatabaseFilePath = databasePath };
+        // Senza pool ogni connessione si chiude davvero quando viene rilasciata, quindi a
+        // fine test il file si cancella senza dover svuotare il pool globale del processo:
+        // xUnit fa girare le classi in parallelo, e quella chiamata globale strappava le
+        // connessioni anche ai database degli altri test.
+        Config = new ServerConfig { DatabaseFilePath = databasePath, DatabasePooling = false };
         Database = new AccardDatabase(Config);
         Accounts = new AccountService(Database, Config, NullLogger<AccountService>.Instance);
 
@@ -56,12 +60,26 @@ public sealed class TestServer : IDisposable
     public RequestDedupStore RestartAndCreateDedupStore() =>
         new(new AccardDatabase(Config), NullLogger<RequestDedupStore>.Instance);
 
+    public SessionTokenRegistry CreateSessionTokens() =>
+        new(Database, NullLogger<SessionTokenRegistry>.Instance);
+
+    /// <summary>Il registro come lo troverebbe un server appena riavviato: DB riaperto.</summary>
+    public SessionTokenRegistry RestartAndCreateSessionTokens() =>
+        new(new AccardDatabase(Config), NullLogger<SessionTokenRegistry>.Instance);
+
     public ClientVersionGate CreateClientVersionGate() =>
         new(Database, Config, NullLogger<ClientVersionGate>.Instance);
 
     /// <summary>Il gate come lo troverebbe un server appena riavviato: DB riaperto.</summary>
     public ClientVersionGate RestartAndCreateClientVersionGate() =>
         new(new AccardDatabase(Config), Config, NullLogger<ClientVersionGate>.Instance);
+
+    public MaintenanceGate CreateMaintenanceGate() =>
+        new(Database, NullLogger<MaintenanceGate>.Instance);
+
+    /// <summary>Come sopra: un'istanza nuova su un database nuovo simula il riavvio.</summary>
+    public MaintenanceGate RestartAndCreateMaintenanceGate() =>
+        new(new AccardDatabase(Config), NullLogger<MaintenanceGate>.Instance);
 
     public AccountIdentity RegisterAccount(string username)
     {
@@ -90,7 +108,6 @@ public sealed class TestServer : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         try
         {
             File.Delete(databasePath);

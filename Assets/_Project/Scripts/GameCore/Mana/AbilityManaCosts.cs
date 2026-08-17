@@ -6,7 +6,7 @@ namespace AccardND.GameCore.Mana
         /// <summary>Guerriero: +2 alla Potenza, +4 se e' l'unica pedina rimasta.</summary>
         Empower,
 
-        /// <summary>Ladro: ruba tutti i buff del bersaglio; se non ne ha, -2 Potenza.</summary>
+        /// <summary>Ladro: ruba un buff e 2 mana; se non ci sono buff, ruba 1 Potenza.</summary>
         StealBuffs,
 
         /// <summary>Mago: Palla di fuoco, colpisce tutti i nemici con un dado di vigore in meno.</summary>
@@ -50,7 +50,7 @@ namespace AccardND.GameCore.Mana
                 HeroClass.Barbarian => 0,    // GainRage, passiva
                 HeroClass.Hunter => 2,       // MarkTarget
                 HeroClass.Priest => 2,       // BlessAlly
-                HeroClass.Assassin => 2,     // InhibitEnemy
+                HeroClass.Assassin => 3,     // InhibitEnemy
                 HeroClass.Mage => 2,         // WeakenEnemyVigor
                 HeroClass.Paladin => 2,      // ProtectAlly
                 HeroClass.Warrior => 5,      // DoubleVigorSum
@@ -64,7 +64,7 @@ namespace AccardND.GameCore.Mana
         {
             return heroClass switch
             {
-                HeroClass.Paladin => 2,      // Riserva: unica sotto la fascia 3-5
+                HeroClass.Paladin => 2,      // Riserva: costo iniziale speciale, poi cresce di +1 a ogni riuso nel round
                 HeroClass.Warrior => 6,      // Empower
                 HeroClass.Rogue => 3,        // StealBuffs
                 HeroClass.Mage => 4,         // Fireball
@@ -72,7 +72,7 @@ namespace AccardND.GameCore.Mana
                 HeroClass.Barbarian => 4,    // WarHorn
                 HeroClass.Priest => 4,       // Dispel
                 HeroClass.Assassin => 5,     // Vanish
-                HeroClass.Necromancer => 5,  // RaiseMinions, stimato: da confermare
+                HeroClass.Necromancer => 8,  // RaiseMinions
                 _ => 4
             };
         }
@@ -95,11 +95,10 @@ namespace AccardND.GameCore.Mana
         }
 
         /// <summary>
-        /// La suprema del Necromante non e' ancora definita: il motore deve rifiutarla
-        /// invece di applicare un effetto inventato.
+        /// Tutte le supreme hanno una regola completa nel motore.
         /// </summary>
         public static bool IsSupremeImplemented(HeroClass heroClass) =>
-            heroClass != HeroClass.Necromancer;
+            true;
 
         /// <summary>
         /// Una suprema che non produce effetti in combattimento non puo' essere

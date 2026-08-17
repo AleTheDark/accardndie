@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<!-- I duelli online: piazzamento, leghe, MMR e stagioni.
+     I numeri vengono da tre file sul server, che sono l'autorita' e vanno riletti se
+     cambia il bilanciamento del competitivo:
+     - Server/AccardND.Server/Progression/RankedConfig.cs (MMR di partenza, piazzamento,
+       K-factor, larghezza delle divisioni, nomi delle leghe);
+     - RankedService.Describe() per come lega, divisione e punti si ricavano dall'MMR;
+     - SeasonConfig.cs per durata e soft reset di fine stagione.
+     Le soglie in MMR di ciascuna lega non sono scritte da nessuna parte nel codice: sono
+     il risultato di TierFloor + divisioni x DivisionWidth, quindi se uno di quei tre
+     numeri cambia, la tabella qui sotto va ricalcolata.
+     Gli emblemi sono gli stessi che il server usa in Hall of Fame (SiteLayout.RankEmblem). -->
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>I duelli online — AcCard N' Die</title>
+<meta name="description" content="Come funziona il competitivo di AcCard N' Die: cinque partite di piazzamento, cinque leghe con quattro divisioni, MMR nascosto, stagioni di novanta giorni e Hall of Fame.">
+<link rel="canonical" href="https://accardndie.com/duelli">
+<link rel="stylesheet" href="site.css?v=8019aee5">
+<link rel="apple-touch-icon" href="media/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3580486749764055" crossorigin="anonymous"></script>
+<script src="site.js?v=49ec8cb4" defer></script>
+</head>
+<body>
+
+<nav class="nav"><div class="wrap">
+  <a class="brand" href="/">AcCard N' Die</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu-links" hidden>Menu</button>
+  <div class="menu-links" id="menu-links">
+    <a href="/guida">Come si gioca</a>
+    <a href="/strategia">Strategia</a>
+    <a href="/classi">Le nove classi</a>
+    <a href="/carte">Database carte</a>
+    <a href="/campagna">Campagna</a>
+    <a href="/duelli" aria-current="page">Duelli</a>
+    <a href="/hall-of-fame">Hall of Fame</a>
+  </div>
+  <a class="nav-play" data-play data-play-label="Scarica" href="/game/">Gioca</a>
+</div></nav>
+
+<header class="band band-testata">
+  <div class="wrap">
+    <h1>I duelli online</h1>
+    <p class="lead">Stesse regole della campagna, contro una persona invece che contro una
+    stanza. Si gioca al meglio dei tre round, il grado arriva dopo cinque partite di
+    piazzamento e le stagioni si chiudono ogni novanta giorni, congelando la classifica nella
+    <a href="/hall-of-fame">Hall of Fame</a>.</p>
+    <div class="emblem-row">
+      <img class="emblem" src="media/ranks/nabbo.png" alt="" width="128" height="128">
+      <img class="emblem" src="media/ranks/apprendista.png" alt="" width="128" height="128">
+      <img class="emblem" src="media/ranks/esperto.png" alt="" width="128" height="128">
+      <img class="emblem" src="media/ranks/divino.png" alt="" width="128" height="128">
+      <img class="emblem" src="media/ranks/onnipotente.png" alt="" width="128" height="128">
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<h2>Com'è fatta una partita</h2>
+
+<p>Un duello è al <strong>meglio dei tre round</strong>: chi ne vince due vince la partita. Le
+regole del combattimento sono quelle di <a href="/guida">Come si gioca</a> — schieramento di
+tre carte, il triangolo delle fazioni, il mana, le aure — con tre differenze che cambiano il modo
+di giocare.</p>
+
+<div class="scroll">
+<table>
+  <caption>Cosa cambia rispetto alla campagna.</caption>
+  <tr><th>In arena</th><th>Perché conta</th></tr>
+  <tr><td>Il Vigore cresce <strong>col round</strong>, non col livello</td>
+      <td>D4 al primo round, D6 al secondo, D8 dal terzo: si resta in basso sulla scala, dove
+          una run di campagna arriva al D20.</td></tr>
+  <tr><td>Il mazzo <strong>lo componi tu, carta per carta</strong>, dentro un budget</td>
+      <td>Niente carte a caso: in campagna scegli campione e vice e il resto lo tira il gioco,
+          qui decidi tutte e nove.</td></tr>
+  <tr><td>Ogni carta schierata ha <strong>2 vite</strong></td>
+      <td>Un colpo perso non la elimina: i round durano più di quanto sembri, e le aure che si
+          nutrono di morti in campo scattano più tardi.</td></tr>
+  <tr><td><strong>30 secondi</strong> per mossa</td>
+      <td>C'è un timer. Le combinazioni lunghe da calcolare in campagna qui vanno sapute prima,
+          non pensate al momento.</td></tr>
+</table>
+</div>
+
+<p>Il dado è la differenza che si sente di più. Verso la fine di una run si tira il D20, e lì il
+matchup di fazione vale oltre <strong>tre punti</strong> di media; il dado più grosso che si vede
+in arena è il D8, dove ne vale <strong>1,31</strong>. Da qui viene tutto il resto: i
+combattimenti sono corti, le aure che maturano nel tempo non hanno tempo di maturare, e la
+Formazione — che non regala numeri ma toglie lo svantaggio in attacco — vale più che altrove.
+I conti sono in <a href="/strategia">Strategia</a>.</p>
+
+<div class="box">
+  <p>Una cosa che non si può portare in arena: il rincaro delle supreme <strong>non si azzera fra
+  i round</strong>. Vale per tutto il match, come in campagna vale per tutta la run. Uno
+  schieramento mono-classe che ha già speso la sua supreme al primo round la paga più cara al
+  secondo, e più cara ancora al terzo.</p>
+</div>
+
+<h2>Il loadout: nove carte, sessanta punti</h2>
+
+<p>Il mazzo d'arena si chiama <strong>loadout</strong>, e si compone una volta e si tiene. Le
+regole sono tre numeri:</p>
+
+<ul>
+  <li><strong>Nove carte</strong> esatte, e ogni carta una volta sola.</li>
+  <li><strong>Sessanta punti</strong> di budget.</li>
+  <li>Una carta costa <strong>quanto il suo valore</strong>: un 3 costa 3, un 10 costa 10.</li>
+</ul>
+
+<p>Da qui esce il vincolo vero: nove carte entro 60 punti vogliono dire una media di
+<strong>6,7 punti per carta</strong>. Non puoi schierare nove carte grosse, e nemmeno avvicinarti:
+ogni 10 che metti dentro sono dieci punti che mancano alle altre otto. Un loadout è sempre un
+compromesso fra due o tre carte che decidono e sei o sette che devono costare poco — e quali
+carte basse costano poco <em>e</em> fanno qualcosa è la domanda a cui risponde il
+<a href="/carte">database</a>, classe per classe.</p>
+
+<p>Sopra al budget ci sono anche dei tetti per valore, che limitano la <em>forma</em> del
+loadout:</p>
+
+<div class="scroll">
+<table class="grid">
+  <caption>Quante carte di ciascun valore alto puoi mettere.</caption>
+  <tr><th class="rowhead">Valore</th><th>10</th><th>9</th><th>8</th><th>7</th><th>6 e sotto</th></tr>
+  <tr><th class="rowhead">Massimo</th><td>1</td><td>2</td><td>3</td><td>4</td><td>nessun limite</td></tr>
+</table>
+</div>
+
+<p>I due vincoli non mordono nello stesso punto. Il massimo consentito dai tetti —
+un 10, due 9, tre 8 e quattro 7 — costerebbe <strong>80 punti</strong>, venti più del budget:
+quindi in pratica è sempre il budget a fermarti, e i tetti servono a impedire una forma
+specifica, non a limitare la spesa.</p>
+
+<h3>Come si compone</h3>
+
+<ol>
+  <li>Dalla lobby si apre <strong>LOADOUT</strong>.</li>
+  <li>Si sceglie prima una <strong>classe</strong> dalla griglia, poi si pescano le sue carte dal
+      catalogo. Ogni carta mostra <em>potenza</em> e <em>costo</em>, e <strong>INFO</strong> apre
+      la scheda con l'abilità.</li>
+  <li>Il riquadro in alto tiene il conto: <code>4/9 CARTE — 22/60 BUDGET</code>, e dice cosa
+      manca o cosa non torna.</li>
+  <li><strong>CONFERMA</strong> si accende solo quando il loadout è valido: nove carte, nessun
+      duplicato, tetti rispettati e budget non sforato. Se sfori, il gioco te lo dice prima, non
+      quando entri in coda.</li>
+</ol>
+
+<p>I loadout si tengono in <strong>slot separati</strong>, con le linguette in cima: il primo è
+compreso, gli altri si comprano al <a href="/rifugio">Santuario</a> — 50 miele il secondo,
+100 il terzo, 200 il quarto. Servono a non dover ricomporre tutto per cambiare piano.</p>
+
+<h2>Ranked e amichevoli: due liste di carte diverse</h2>
+
+<p>Questa è la differenza che conta di più, e il gioco la dice appena confermi il loadout, con
+una riga sola: <em>PUOI GIOCARE IN RANKED</em> oppure <em>PUOI GIOCARE SOLO IN AMICHEVOLE</em>.</p>
+
+<div class="scroll">
+<table>
+  <tr><th></th><th>Classificate</th><th>Amichevoli</th></tr>
+  <tr><td><strong>Cosa puoi mettere nel loadout</strong></td>
+      <td>Solo <strong>classi e supreme che hai sbloccato</strong>.</td>
+      <td><strong>Tutto</strong>: tutte e nove le classi e tutte le supreme, sbloccate o no.</td></tr>
+  <tr><td><strong>Conta per il grado</strong></td>
+      <td>Sì: MMR, lega, divisione, punti.</td>
+      <td>No. Il risultato non muove niente.</td></tr>
+  <tr><td><strong>A cosa serve</strong></td>
+      <td>Salire in <a href="/hall-of-fame">classifica</a>.</td>
+      <td>Provare una classe che non hai ancora, allenarsi, giocare con un amico.</td></tr>
+</table>
+</div>
+
+<p>La ragione è semplice: la classifica deve misurare come giochi, non cosa hai provato. Se in
+ranked si potesse schierare una classe non sbloccata, il grado direbbe qualcosa sulle classi
+disponibili e niente sul giocatore. Le amichevoli fanno il lavoro opposto — sono il posto dove
+capire se una classe ti piace <em>prima</em> di spendere 40 o 60 miele al
+<a href="/rifugio">Santuario</a> per averla.</p>
+
+<div class="box">
+  <p>Il controllo non è solo nell'interfaccia: quando entri in coda per una classificata il
+  <strong>server rivalida il loadout</strong> e rifiuta la coda elencando cosa manca — «Negromante:
+  classe non sbloccata». Le classi che possiedi le sa lui, non il tuo dispositivo.</p>
+</div>
+
+<h2>Il piazzamento: le prime cinque partite</h2>
+
+<p>Il grado non si vede subito. Le prime <strong>cinque partite</strong> sono di piazzamento:
+si gioca normalmente, ma il punteggio si muove in modo molto più ampio — così cinque partite
+bastano a capire più o meno dove stai, invece di venti. Finito il piazzamento il grado compare
+e da lì in avanti si muove con passi normali.</p>
+
+<p>Dietro c'è un punteggio Elo, chiamato <strong>MMR</strong>, che non si vede mai: tutti
+partono da 1000, e il grado che leggi è solo un modo di scrivere quel numero. È una scelta
+deliberata — un numero nascosto non si può inseguire, e non si può farmare.</p>
+
+<h2>Le cinque leghe</h2>
+
+<p>Ogni lega è divisa in <strong>quattro divisioni</strong>, numerate al contrario: si entra
+dalla IV e si esce dalla I. Dentro una divisione la posizione si misura in punti da 0 a 100.</p>
+
+<div class="scroll">
+<table>
+  <caption>Le cinque leghe e l'MMR che le separa.</caption>
+  <tr><th>Lega</th><th></th><th>MMR</th><th>Divisioni</th></tr>
+  <tr><td><img class="emblem" src="media/ranks/nabbo.png" alt="" width="128" height="128" loading="lazy"></td>
+      <td><strong>Nabbo</strong></td><td>800 – 1199</td><td>IV, III, II, I</td></tr>
+  <tr><td><img class="emblem" src="media/ranks/apprendista.png" alt="" width="128" height="128" loading="lazy"></td>
+      <td><strong>Apprendista</strong></td><td>1200 – 1599</td><td>IV, III, II, I</td></tr>
+  <tr><td><img class="emblem" src="media/ranks/esperto.png" alt="" width="128" height="128" loading="lazy"></td>
+      <td><strong>Esperto</strong></td><td>1600 – 1999</td><td>IV, III, II, I</td></tr>
+  <tr><td><img class="emblem" src="media/ranks/divino.png" alt="" width="128" height="128" loading="lazy"></td>
+      <td><strong>Divino</strong></td><td>2000 – 2399</td><td>IV, III, II, I</td></tr>
+  <tr><td><img class="emblem" src="media/ranks/onnipotente.png" alt="" width="128" height="128" loading="lazy"></td>
+      <td><strong>Onnipotente</strong></td><td>2400 e oltre</td><td>IV, III, II, I</td></tr>
+</table>
+</div>
+
+<p>Una divisione è larga <strong>100 punti di MMR</strong>, e i punti che vedi salire e scendere
+dopo una partita sono esattamente quelli: un punto lega è un punto di MMR. Venti divisioni in
+tutto separano il fondo dalla cima. Chi comincia parte da 1000, cioè <strong>Nabbo II</strong>:
+c'è spazio anche sotto.</p>
+
+<h2>Vincere netto conta più di vincere</h2>
+
+<p>Non tutte le vittorie valgono uguale, e la differenza non sta nell'avversario: sta nel
+punteggio.</p>
+
+<ul>
+  <li>Una vittoria <strong>2–0</strong> muove il punteggio per intero.</li>
+  <li>Una vittoria <strong>2–1</strong> lo muove per il <strong>70%</strong>.</li>
+</ul>
+
+<p>Il fattore è lo stesso per tutti e due i giocatori, quindi lo scambio resta a somma zero:
+chi vince senza concedere round sale di più, <em>e</em> chi perde combattendo scende di meno.
+Un 2–1 è mezza partita per entrambi. È l'unico posto del competitivo in cui il modo in cui hai
+vinto conta più del fatto che hai vinto — e in pratica significa che chiudere il terzo round
+non è una formalità: è il 30% del risultato.</p>
+
+<h3>Chi abbandona</h3>
+
+<p>Chi abbandona <strong>non prende niente</strong> dalla partita che ha lasciato. L'avversario
+sì, per intero. È la regola che rende inutile abbandonare a ripetizione con due account: uno
+dei due lati dello scambio non paga.</p>
+
+<h2>Le stagioni</h2>
+
+<p>Una stagione dura <strong>novanta giorni</strong>. Alla fine succedono tre cose, in
+quest'ordine:</p>
+
+<ol>
+  <li><strong>La classifica viene fotografata</strong> e pubblicata nella
+      <a href="/hall-of-fame">Hall of Fame</a>, dove resta per sempre: le stagioni chiuse non si
+      riscrivono.</li>
+  <li><strong>L'MMR viene dimezzato verso il punto di partenza.</strong> Non azzerato: chi era a
+      1600 riparte da 1300, chi era a 900 riparte da 950. Metà della distanza da 1000 resta.</li>
+  <li><strong>Comincia la stagione nuova</strong>, e con essa un piazzamento nuovo.</li>
+</ol>
+
+<div class="box">
+  <p><strong>Perché a metà e non da zero.</strong> Azzerare tutti allo stesso punto renderebbe
+  le prime settimane di ogni stagione un caos di partite squilibrate, con Onnipotenti che
+  incontrano principianti. Non resettare affatto renderebbe le stagioni un'etichetta senza
+  contenuto. A metà strada il grado va riguadagnato, ma i primi accoppiamenti hanno ancora senso.</p>
+</div>
+
+<h2>Cosa si porta a casa dall'arena</h2>
+
+<p>I duelli non pagano oro: quella è la valuta della campagna e vive dentro una run. Quello
+che l'arena alimenta è altro:</p>
+
+<ul>
+  <li><strong>Il grado e la posizione in classifica</strong>, che sono la ragione per cui ci si
+      gioca.</li>
+  <li><strong>I contatori</strong> delle partite giocate, delle vittorie e dei round vinti,
+      scritti dal server e senza tetto.</li>
+  <li><strong>Le quest della taverna</strong> che chiedono partite d'arena — al massimo
+      <strong>due al giorno</strong>, e non sono mai necessarie per prendere il premio della
+      giornata: chi non vuole giocare in arena arriva alla soglia con le sole quest di campagna.
+      Come funzionano è nel <a href="/rifugio">rifugio</a>.</li>
+</ul>
+
+<p>Il profilo, l'icona e il nickname sono gli stessi della campagna: è un solo account, e
+quello che fai in arena e quello che fai in campagna maturano sullo stesso giocatore. I tuoi
+numeri si guardano dalla pagina <a href="/statistiche">Statistiche</a>, accedendo con Google dal
+browser.</p>
+
+<h2>Cosa è pubblico</h2>
+
+<p>Nickname, icona del profilo e grado sono visibili agli altri giocatori: compaiono in partita,
+nella classifica dentro al gioco e nella <a href="/hall-of-fame">Hall of Fame</a> su questo
+sito, che è una pagina pubblica e indicizzata dai motori di ricerca. Non vengono mai mostrati
+l'indirizzo email né alcun dato di contatto, e se cancelli l'account il nickname sparisce anche
+dalle classifiche già archiviate. Il dettaglio è al punto 5
+dell'<a href="/privacy">informativa sulla privacy</a>.</p>
+
+<h2>Da dove continuare</h2>
+
+<ul>
+  <li><a href="/hall-of-fame">Hall of Fame</a> — la classifica vera, adesso.</li>
+  <li><a href="/strategia">Strategia</a> — perché in arena si gioca diverso.</li>
+  <li><a href="/guida">Come si gioca</a> — il regolamento completo.</li>
+  <li><a href="/campagna">La campagna</a> — l'altra modalità.</li>
+</ul>
+
+</main>
+
+<footer class="site"><div class="wrap">
+  <p><a href="/game/">Gioca</a> · <a href="/guida">Come si gioca</a> ·
+     <a href="/strategia">Strategia</a> · <a href="/classi">Le nove classi</a> ·
+     <a href="/carte">Database carte</a> · <a href="/campagna">Campagna</a> ·
+     <a href="/duelli">Duelli</a> · <a href="/rifugio">Il rifugio</a> ·
+     <a href="/faq">Domande frequenti</a> ·
+     <a href="/hall-of-fame">Hall of Fame</a> · <a href="/statistiche">Statistiche</a></p>
+  <p><a href="/chi-siamo">Chi siamo</a> · <a href="/contatti">Contatti</a> ·
+     <a href="/privacy">Privacy</a> · <a href="/account/delete">Cancellazione account</a></p>
+  <p><a href="https://www.youtube.com/@accardndie" rel="noopener">YouTube</a> ·
+     <a href="https://www.instagram.com/accardndie/" rel="noopener">Instagram</a> ·
+     <a href="https://www.tiktok.com/@accardndie" rel="noopener">TikTok</a></p>
+  <p>AcCard N' Die</p>
+</div></footer>
+
+</body>
+</html>

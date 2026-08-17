@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -18,6 +19,13 @@ namespace AccardND.Presentation
 public sealed partial class BattleBoardController
 {
 	private Coroutine scenarioBackgroundTransitionRoutine;
+	private Coroutine bossEntranceShakeRoutine;
+	private Image bossTransitionBlackout;
+	private Vector2 bossShakeOriginalPosition;
+	private Vector3 bossShakeOriginalScale;
+	private bool bossShakeTransformCaptured;
+	private bool seraphelBossPresentationActive;
+	private bool jurinashorBossPresentationActive;
 
 	public bool LoadScenario(RoomType roomType, RoomDifficulty difficulty, string bossId = null, string scenarioId = null)
 	{
@@ -39,16 +47,24 @@ public sealed partial class BattleBoardController
 		{
 			((MonoBehaviour)this).StopCoroutine(scenarioBackgroundTransitionRoutine);
 			scenarioBackgroundTransitionRoutine = null;
+			DestroyBossTransitionBlackout();
 			SetScenarioBackgroundAlpha(1f);
 		}
 		bragusBossPresentationActive = false;
 		trentorBossPresentationActive = false;
+		seraphelBossPresentationActive = false;
+		jurinashorBossPresentationActive = false;
+		seraphelEntranceVfxPlayed = false;
+		ResetBossPresentationUi();
 		currentScenario = scenario;
 		currentScenarioDisplayOverride = null;
 		RefreshScenarioBackground();
 		if ((Object)(object)cpuTitleText != (Object)null)
 		{
-			cpuTitleText.text = "CPU - IL MASTER   *   " + scenario.DisplayName.ToUpperInvariant();
+			cpuTitleText.text = GameText.GetOrFallbackSilent(
+				GameTextKeys.Combat.CpuMasterScenario,
+				"CPU - IL MASTER   *   {0}",
+				scenario.DisplayName.ToUpperInvariant());
 		}
 		AppendLog("SCENARIO - " + scenario.DisplayName + " [" + scenario.Id + "]");
 		return true;
@@ -56,11 +72,93 @@ public sealed partial class BattleBoardController
 
 	private Sprite CurrentScenarioBackgroundSprite()
 	{
+		// I tutorial usano sempre il campo base. Il controller e' persistente e puo'
+		// conservare il capitolo precedente (per esempio cosmic): quel fallback non
+		// deve avere precedenza sul fondale didattico.
+		if (adventureScriptedTutorialActive)
+		{
+			ScenarioDefinition tutorialScenario = (Object)(object)scenarioCatalog != (Object)null
+				? scenarioCatalog.FindById("default")
+				: null;
+			if ((Object)(object)tutorialScenario != (Object)null)
+			{
+				if (Screen.width > Screen.height && (Object)(object)tutorialScenario.BackgroundLandscape != (Object)null)
+					return tutorialScenario.BackgroundLandscape;
+				if ((Object)(object)tutorialScenario.Background != (Object)null)
+					return tutorialScenario.Background;
+			}
+			Sprite defaultBackground = Resources.Load<Sprite>("Backgrounds/bg_default");
+			if ((Object)(object)defaultBackground != (Object)null)
+				return defaultBackground;
+			return Resources.Load<Sprite>("Backgrounds/Background_terrain");
+		}
+
+		// Il capitolo attivo resta valorizzato anche nelle stanze intermedie. Il
+		// Mercato deve quindi usare il proprio ScenarioDefinition prima dei fallback
+		// che anticipano lo sfondo del boss del capitolo.
+		if (currentRoomType == RoomType.Merchant && (Object)(object)currentScenario != (Object)null)
+		{
+			if (Screen.width > Screen.height && (Object)(object)currentScenario.BackgroundLandscape != (Object)null)
+				return currentScenario.BackgroundLandscape;
+			if ((Object)(object)currentScenario.Background != (Object)null)
+				return currentScenario.Background;
+		}
+
+		bool jurinashorScenarioSelected = debugForceFirstRoomJurinashor
+			|| string.Equals(campaignScenarioBossId, JurinashorBossCardId, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(activeAdventureChapterId, "chapter-3", StringComparison.OrdinalIgnoreCase);
+		if (jurinashorBossPresentationActive)
+		{
+			string backgroundPath = activeJurinashorBoss != null && activeJurinashorBoss.IsPhaseTwo
+				? "Backgrounds/bg_jurinashor_phase_2"
+				: "Backgrounds/bg_jurinashor_phase_1";
+			Sprite phaseBackground = Resources.Load<Sprite>(backgroundPath);
+			if ((Object)(object)phaseBackground != (Object)null)
+				return phaseBackground;
+		}
+		if (jurinashorScenarioSelected && (Object)(object)scenarioCatalog != (Object)null)
+		{
+			ScenarioDefinition infestedScenario = scenarioCatalog.FindById("infested");
+			if ((Object)(object)infestedScenario != (Object)null)
+			{
+				if (Screen.width > Screen.height && (Object)(object)infestedScenario.BackgroundLandscape != (Object)null)
+					return infestedScenario.BackgroundLandscape;
+				if ((Object)(object)infestedScenario.Background != (Object)null)
+					return infestedScenario.Background;
+			}
+		}
+
+		if (seraphelBossPresentationActive)
+		{
+			string phaseBackground = activeSeraphelBoss != null && activeSeraphelBoss.IsPhaseTwo
+				? "Backgrounds/bg_seraphel_phase_2"
+				: "Backgrounds/bg_seraphel_phase_1";
+			Sprite seraphelBackground = Resources.Load<Sprite>(phaseBackground);
+			if ((Object)(object)seraphelBackground != (Object)null)
+				return seraphelBackground;
+		}
+
+		// La scena debug di Seraphel deve nascere direttamente su Lux. In particolare,
+		// non deve mostrare per un frame lo scenario conservato dal controller persistente
+		// del boss aperto in precedenza, prima che inizi il reveal di Seraphel.
+		bool seraphelScenarioSelected = debugForceFirstRoomSeraphel
+			|| string.Equals(campaignScenarioBossId, SeraphelBossCardId, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(activeAdventureChapterId, "chapter-4", StringComparison.OrdinalIgnoreCase);
+		if (seraphelScenarioSelected)
+		{
+			Sprite luxBackground = Resources.Load<Sprite>("Backgrounds/bg_lux");
+			if ((Object)(object)luxBackground != (Object)null)
+				return luxBackground;
+		}
+
 		// Lo sfondo con Trentor incorporato e' una risorsa esclusiva del reveal.
 		// Non passa dal catalogo scenari, cosi' la stanza parte sempre da
 		// "climbing" e non puo' cadere sul background di un altro boss.
+		bool trentorScenarioSelected = debugForceFirstRoomTrentor
+			|| string.Equals(campaignScenarioBossId, TrentorBossCardId, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(activeAdventureChapterId, "chapter-1", StringComparison.OrdinalIgnoreCase);
 		bool trentorRevealed = trentorBossPresentationActive
-			|| (debugForceFirstRoomTrentor
+			|| (trentorScenarioSelected
 				&& cpuCards != null
 				&& cpuCards.Any(card => card != null && IsTrentorBossProxy(card)));
 		if (trentorRevealed)
@@ -70,11 +168,31 @@ public sealed partial class BattleBoardController
 				return trentorBackground;
 		}
 
-		// Le scene debug dei boss partono dalla configurazione stanza predefinita e
-		// quindi non hanno ancora applicato lo ScenarioDefinition di campagna.
-		// Bragus deve comunque usare subito il suo background dedicato.
-		bool bragusRoom = bragusBossPresentationActive;
-		if (bragusRoom && (Object)(object)scenarioCatalog != (Object)null)
+		// Prima del reveal Trentor deve gia' mostrare Rampicanti. Il controller e'
+		// persistente e puo' conservare per alcuni frame lo scenario del boss aperto
+		// in precedenza (per esempio fog di Bragus), quindi qui la selezione debug e'
+		// l'autorita' sul fondale di preparazione.
+		if (trentorScenarioSelected && (Object)(object)scenarioCatalog != (Object)null)
+		{
+			ScenarioDefinition climbingScenario = scenarioCatalog.Select(
+				RoomType.Boss,
+				RoomDifficulty.Hard,
+				TrentorBossCardId,
+				"climbing");
+			if ((Object)(object)climbingScenario != (Object)null)
+			{
+				if (Screen.width > Screen.height && (Object)(object)climbingScenario.BackgroundLandscape != (Object)null)
+					return climbingScenario.BackgroundLandscape;
+				if ((Object)(object)climbingScenario.Background != (Object)null)
+					return climbingScenario.Background;
+			}
+		}
+
+		// Il fondale con Bragus incorporato appartiene al reveal, come quelli di
+		// Trentor e Seraphel. Deve avere precedenza sullo scenario di preparazione
+		// "fog", altrimenti lo stato di presentazione e' attivo ma bg_bragus non
+		// viene mai selezionato durante lo schieramento.
+		if (bragusBossPresentationActive && (Object)(object)scenarioCatalog != (Object)null)
 		{
 			ScenarioDefinition bragusScenario = scenarioCatalog.Select(
 				RoomType.Boss,
@@ -90,15 +208,65 @@ public sealed partial class BattleBoardController
 			}
 		}
 
+		// La scena BossDebug e il controller persistente non devono affidarsi a
+		// currentScenario, che puo' appartenere al test precedente. Il capitolo/boss
+		// selezionato decide sempre il fondale di preparazione.
+		string selectedBossScenarioId = SelectedBossScenarioId();
+		if (!string.IsNullOrWhiteSpace(selectedBossScenarioId)
+			&& (Object)(object)scenarioCatalog != (Object)null)
+		{
+			ScenarioDefinition selectedBossScenario = scenarioCatalog.FindById(selectedBossScenarioId);
+			if ((Object)(object)selectedBossScenario != (Object)null)
+			{
+				if (Screen.width > Screen.height && (Object)(object)selectedBossScenario.BackgroundLandscape != (Object)null)
+					return selectedBossScenario.BackgroundLandscape;
+				if ((Object)(object)selectedBossScenario.Background != (Object)null)
+					return selectedBossScenario.Background;
+			}
+		}
+
 		if ((Object)(object)currentScenario == (Object)null)
 		{
 			return Resources.Load<Sprite>("Backgrounds/Background_terrain");
+		}
+		if (string.Equals(currentScenario.Id, "lux", StringComparison.OrdinalIgnoreCase))
+		{
+			Sprite luxBackground = Resources.Load<Sprite>("Backgrounds/bg_lux");
+			if ((Object)(object)luxBackground != (Object)null)
+				return luxBackground;
 		}
 		if (Screen.width > Screen.height && (Object)(object)currentScenario.BackgroundLandscape != (Object)null)
 		{
 			return currentScenario.BackgroundLandscape;
 		}
 		return currentScenario.Background;
+	}
+
+	private string SelectedBossScenarioId()
+	{
+		if (string.Equals(activeAdventureChapterId, "chapter-1", StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(campaignScenarioBossId, TrentorBossCardId, StringComparison.OrdinalIgnoreCase)
+			|| debugForceFirstRoomTrentor)
+			return "climbing";
+		if (string.Equals(activeAdventureChapterId, "chapter-2", StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(campaignScenarioBossId, BragusBossCardId, StringComparison.OrdinalIgnoreCase)
+			|| debugForceFirstRoomBragus)
+			return "fog";
+		if (string.Equals(activeAdventureChapterId, "chapter-3", StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(campaignScenarioBossId, JurinashorBossCardId, StringComparison.OrdinalIgnoreCase)
+			|| debugForceFirstRoomJurinashor)
+			return "infested";
+		if (string.Equals(activeAdventureChapterId, "chapter-4", StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(campaignScenarioBossId, SeraphelBossCardId, StringComparison.OrdinalIgnoreCase)
+			|| debugForceFirstRoomSeraphel)
+			return "lux";
+		if (debugForceFirstRoomMedusa)
+			return "default";
+		if (string.Equals(activeAdventureChapterId, "chapter-7", StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(campaignScenarioBossId, PalatirBossCardId, StringComparison.OrdinalIgnoreCase)
+			|| debugForceFirstRoomPalatir)
+			return "cosmic";
+		return null;
 	}
 
 	private void RefreshScenarioBackground()
@@ -133,35 +301,129 @@ public sealed partial class BattleBoardController
 	{
 		if (scenarioBackgroundTransitionRoutine != null)
 			((MonoBehaviour)this).StopCoroutine(scenarioBackgroundTransitionRoutine);
+		DestroyBossTransitionBlackout();
 		scenarioBackgroundTransitionRoutine = ((MonoBehaviour)this).StartCoroutine(
 			TransitionToScenarioBackgroundRoutine());
 	}
 
 	private IEnumerator TransitionToScenarioBackgroundRoutine()
 	{
-		const float fadeOutDuration = 0.22f;
-		const float fadeInDuration = 0.38f;
+		const float fadeOutDuration = 0.18f;
+		const float fadeInDuration = 0.32f;
+		Image blackout = CreateBossTransitionBlackout();
+		bossTransitionBlackout = blackout;
 		float elapsed = 0f;
 		while (elapsed < fadeOutDuration)
 		{
 			elapsed += Time.unscaledDeltaTime;
-			SetScenarioBackgroundAlpha(1f - Mathf.SmoothStep(0f, 1f, elapsed / fadeOutDuration));
+			SetImageAlpha(blackout, Mathf.SmoothStep(0f, 1f, elapsed / fadeOutDuration));
 			yield return null;
 		}
 
-		SetScenarioBackgroundAlpha(0f);
+		SetImageAlpha(blackout, 1f);
 		RefreshScenarioBackground();
+		SetScenarioBackgroundAlpha(1f);
+		TriggerBossEntranceImpact();
 
 		elapsed = 0f;
 		while (elapsed < fadeInDuration)
 		{
 			elapsed += Time.unscaledDeltaTime;
-			SetScenarioBackgroundAlpha(Mathf.SmoothStep(0f, 1f, elapsed / fadeInDuration));
+			SetImageAlpha(blackout, 1f - Mathf.SmoothStep(0f, 1f, elapsed / fadeInDuration));
 			yield return null;
 		}
 
-		SetScenarioBackgroundAlpha(1f);
+		DestroyBossTransitionBlackout();
 		scenarioBackgroundTransitionRoutine = null;
+	}
+
+	private void DestroyBossTransitionBlackout()
+	{
+		if ((Object)(object)bossTransitionBlackout != (Object)null)
+			Object.Destroy(((Component)bossTransitionBlackout).gameObject);
+		bossTransitionBlackout = null;
+	}
+
+	private Image CreateBossTransitionBlackout()
+	{
+		if ((Object)(object)safeAreaRoot == (Object)null)
+			return null;
+
+		GameObject blackoutObject = new GameObject("Boss Transition Blackout",
+			typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+		RectTransform rect = blackoutObject.GetComponent<RectTransform>();
+		rect.SetParent((Transform)(object)safeAreaRoot, false);
+		rect.anchorMin = Vector2.zero;
+		rect.anchorMax = Vector2.one;
+		rect.offsetMin = new Vector2(-24f, -24f);
+		rect.offsetMax = new Vector2(24f, 24f);
+		rect.SetAsLastSibling();
+
+		Image image = blackoutObject.GetComponent<Image>();
+		image.color = new Color(0f, 0f, 0f, 0f);
+		image.raycastTarget = false;
+		return image;
+	}
+
+	private static void SetImageAlpha(Image image, float alpha)
+	{
+		if ((Object)(object)image == (Object)null)
+			return;
+		Color color = image.color;
+		color.a = Mathf.Clamp01(alpha);
+		image.color = color;
+	}
+
+	private void TriggerBossEntranceImpact()
+	{
+		if (bossEntranceShakeRoutine != null)
+		{
+			((MonoBehaviour)this).StopCoroutine(bossEntranceShakeRoutine);
+			RestoreBossShakeTransform();
+		}
+		bossEntranceShakeRoutine = ((MonoBehaviour)this).StartCoroutine(PlayBossEntranceShake());
+
+#if UNITY_ANDROID || UNITY_IOS
+		Handheld.Vibrate();
+#endif
+	}
+
+	private IEnumerator PlayBossEntranceShake()
+	{
+		if ((Object)(object)safeAreaRoot == (Object)null)
+		{
+			bossEntranceShakeRoutine = null;
+			yield break;
+		}
+
+		const float duration = 0.42f;
+		const float maximumOffset = 13f;
+		RectTransform root = safeAreaRoot;
+		bossShakeOriginalPosition = root.anchoredPosition;
+		bossShakeOriginalScale = ((Transform)root).localScale;
+		bossShakeTransformCaptured = true;
+		((Transform)root).localScale = bossShakeOriginalScale * 1.025f;
+
+		float elapsed = 0f;
+		while (elapsed < duration)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			float strength = 1f - Mathf.Clamp01(elapsed / duration);
+			root.anchoredPosition = bossShakeOriginalPosition + UnityEngine.Random.insideUnitCircle * (maximumOffset * strength);
+			yield return null;
+		}
+
+		RestoreBossShakeTransform();
+		bossEntranceShakeRoutine = null;
+	}
+
+	private void RestoreBossShakeTransform()
+	{
+		if (!bossShakeTransformCaptured || (Object)(object)safeAreaRoot == (Object)null)
+			return;
+		safeAreaRoot.anchoredPosition = bossShakeOriginalPosition;
+		((Transform)safeAreaRoot).localScale = bossShakeOriginalScale;
+		bossShakeTransformCaptured = false;
 	}
 
 	private void SetScenarioBackgroundAlpha(float alpha)
@@ -189,7 +451,10 @@ public sealed partial class BattleBoardController
 		currentScenarioDisplayOverride = displayOverride;
 		if ((Object)(object)cpuTitleText != (Object)null && !string.IsNullOrWhiteSpace(displayOverride))
 		{
-			cpuTitleText.text = "CPU - IL MASTER   *   " + displayOverride.ToUpperInvariant();
+			cpuTitleText.text = GameText.GetOrFallbackSilent(
+				GameTextKeys.Combat.CpuMasterScenario,
+				"CPU - IL MASTER   *   {0}",
+				displayOverride.ToUpperInvariant());
 		}
 		return true;
 	}
@@ -198,12 +463,25 @@ public sealed partial class BattleBoardController
 	{
 		// La scena debug Trentor non deve ereditare pendingScenarioId/campaignScenarioId
 		// da una sessione persistente (per esempio "fog" dopo Bragus).
-		if (debugForceFirstRoomTrentor)
+		if (currentRoomType == RoomType.Boss
+			&& (debugForceFirstRoomTrentor
+				|| string.Equals(campaignScenarioBossId, TrentorBossCardId, StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(activeAdventureChapterId, "chapter-1", StringComparison.OrdinalIgnoreCase)))
 			return LoadScenario(
 				RoomType.Boss,
 				RoomDifficulty.Hard,
 				TrentorBossCardId,
 				"climbing");
+		if (currentRoomType == RoomType.Boss
+			&& (debugForceFirstRoomSeraphel
+				|| string.Equals(campaignScenarioBossId, SeraphelBossCardId, StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(activeAdventureChapterId, "chapter-4", StringComparison.OrdinalIgnoreCase)))
+			return LoadScenario(RoomType.Boss, RoomDifficulty.Hard, SeraphelBossCardId, "lux");
+		if (currentRoomType == RoomType.Boss
+			&& (debugForceFirstRoomJurinashor
+				|| string.Equals(campaignScenarioBossId, JurinashorBossCardId, StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(activeAdventureChapterId, "chapter-3", StringComparison.OrdinalIgnoreCase)))
+			return LoadScenario(RoomType.Boss, RoomDifficulty.Hard, JurinashorBossCardId, "infested");
 
 		if (currentRoomType == RoomType.Monster)
 		{
@@ -219,6 +497,8 @@ public sealed partial class BattleBoardController
 
 	private void BeginRoomChoice()
 	{
+		ClearManaDeltaCallouts();
+		ClearEnemyManaDeltaCallouts();
 		((MonoBehaviour)this).StopAllCoroutines();
 		ClearDraftEntranceState();
 		StopMusic();
@@ -226,15 +506,16 @@ public sealed partial class BattleBoardController
 		inputLocked = true;
 		gameFinished = true;
 		canAdvanceToNextRoom = false;
-		currentMonsterTier = 2;
 		pendingScenarioId = null;
 		pendingRoomDifficulty = RoomDifficulty.Normal;
 		currentScenarioDisplayOverride = null;
 		activeComposableGolem = null;
 		activeMedusaBoss = null;
 		activeTrentorBoss = null;
+		activeJurinashorBoss = null;
 		activeBragusBoss = null;
 		activePalatirBoss = null;
+		activeSeraphelBoss = null;
 		playerAura = BattleAuraType.None;
 		cpuAura = BattleAuraType.None;
 		formationAuraUsed = false;
@@ -259,6 +540,7 @@ public sealed partial class BattleBoardController
 		// Punto di salvataggio autorevole: lo stato tra le stanze è coerente qui.
 		SaveCurrentRun();
 		PrepareCampaignDoors();
+		RefreshRoomChoiceCounter();
 		RefreshRoomChoiceLayout();
 		if ((Object)(object)roomChoicePanel != (Object)null)
 		{
@@ -273,6 +555,17 @@ public sealed partial class BattleBoardController
 		{
 			((MonoBehaviour)this).StartCoroutine(ChooseDebugMinibossDoor());
 		}
+	}
+
+	private void RefreshRoomChoiceCounter()
+	{
+		if ((Object)(object)roomChoiceCounterText == (Object)null)
+		{
+			return;
+		}
+
+		int roomNumber = runProgress != null ? runProgress.RoomsCleared + 1 : 1;
+		roomChoiceCounterText.text = GameText.Format(GameTextKeys.Combat.CpuHudRoom, roomNumber);
 	}
 
 	private IEnumerator ChooseDebugMinibossDoor()
@@ -388,10 +681,9 @@ public sealed partial class BattleBoardController
 				RegisterCampaignRoomRoll(roomRoll);
 			}
 			currentRoomType = roomRoll.RoomType;
-			currentMonsterTier = ((roomRoll.RoomType == RoomType.Monster) ?Mathf.Clamp(roomRoll.MonsterTier + ConsumeNextMonsterTierBonus(), 1, 4) : roomRoll.MonsterTier);
 			pendingScenarioId = roomRoll.ScenarioId;
 			pendingRoomDifficulty = currentRoomType == RoomType.Monster
-				? RollMonsterRoomDifficulty(runProgress.RoomsCleared + 1)
+				? ApplyNextMonsterDifficultyIncrease(RollMonsterRoomDifficulty(runProgress.RoomsCleared + 1))
 				: roomRoll.Difficulty;
 			if (currentRoomType == RoomType.Monster)
 			{
@@ -410,27 +702,31 @@ public sealed partial class BattleBoardController
 		ProgressionConfiguration progression = configuration.Progression;
 		if (ShouldForceMerchantDebugRoom())
 		{
-			return new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard);
+			return new CampaignRoomRoll(RoomType.Merchant, "god_merchant", RoomDifficulty.Hard);
 		}
 		if (ShouldForceFirstRoomComposableGolem())
 		{
-			return new CampaignRoomRoll(RoomType.Boss, 4, null, RoomDifficulty.Hard);
+			return new CampaignRoomRoll(RoomType.Boss, null, RoomDifficulty.Hard);
 		}
 		if (ShouldForceFirstRoomMedusa())
 		{
-			return new CampaignRoomRoll(RoomType.Boss, 4, "mirror", RoomDifficulty.Hard);
+			return new CampaignRoomRoll(RoomType.Boss, "default", RoomDifficulty.Hard);
 		}
 		if (ShouldForceFirstRoomTrentor())
 		{
-			return new CampaignRoomRoll(RoomType.Boss, 4, "climbing", RoomDifficulty.Hard);
+			return new CampaignRoomRoll(RoomType.Boss, "climbing", RoomDifficulty.Hard);
 		}
 		if (ShouldForceFirstRoomBragus())
 		{
-			return new CampaignRoomRoll(RoomType.Boss, 4, "fog", RoomDifficulty.Hard);
+			return new CampaignRoomRoll(RoomType.Boss, "fog", RoomDifficulty.Hard);
 		}
 		if (ShouldForceFirstRoomPalatir())
 		{
-			return new CampaignRoomRoll(RoomType.Boss, 4, "cosmic", RoomDifficulty.Hard);
+			return new CampaignRoomRoll(RoomType.Boss, "cosmic", RoomDifficulty.Hard);
+		}
+		if (ShouldForceFirstRoomSeraphel())
+		{
+			return new CampaignRoomRoll(RoomType.Boss, "lux", RoomDifficulty.Hard);
 		}
 		if (num == progression.FinalBossRoom || (progression.MinibossEveryRooms > 0 && num % progression.MinibossEveryRooms == 0))
 		{
@@ -439,7 +735,7 @@ public sealed partial class BattleBoardController
 			{
 				bossScenarioId = "mirror";
 			}
-			return new CampaignRoomRoll(RoomType.Boss, 4, bossScenarioId, RoomDifficulty.Hard);
+			return new CampaignRoomRoll(RoomType.Boss, bossScenarioId, RoomDifficulty.Hard);
 		}
 		return RollHiddenDoorRoom();
 	}
@@ -450,10 +746,10 @@ public sealed partial class BattleBoardController
 		// vecchie porte, ma ora ogni porta nascosta usa la stessa estrazione di stanza.
 		return RollAllowedDoorRoom(72, (int roll) => roll switch
 		{
-			<= 52 => MonsterRoomRoll(random.NextInclusive(1, 4)),
-			<= 66 => new CampaignRoomRoll(RoomType.Merchant, 0, "god_merchant", RoomDifficulty.Hard),
-			<= 69 => new CampaignRoomRoll(RoomType.Loot, 0, "loot", RoomDifficulty.Any),
-			_ => new CampaignRoomRoll(RoomType.UnexpectedOpportunity, 0, "unexpected_opportunity", RoomDifficulty.Any),
+			<= 52 => MonsterRoomRoll(),
+			<= 66 => new CampaignRoomRoll(RoomType.Merchant, "god_merchant", RoomDifficulty.Hard),
+			<= 69 => new CampaignRoomRoll(RoomType.Loot, "loot", RoomDifficulty.Any),
+			_ => new CampaignRoomRoll(RoomType.QuickChallenge, "quick_challenge", RoomDifficulty.Any),
 		});
 	}
 
@@ -467,7 +763,7 @@ public sealed partial class BattleBoardController
 				return RegisterCampaignRoomRoll(roomRoll);
 			}
 		}
-		return RegisterCampaignRoomRoll(MonsterRoomRoll(random.NextInclusive(1, 4)));
+		return RegisterCampaignRoomRoll(MonsterRoomRoll());
 	}
 
 	private bool IsCampaignRoomRollAllowed(CampaignRoomRoll roomRoll)
@@ -480,7 +776,7 @@ public sealed partial class BattleBoardController
 		{
 			return false;
 		}
-		if (rewardRoomsBlockedUntilMonster && (roomRoll.RoomType == RoomType.Loot || roomRoll.RoomType == RoomType.UnexpectedOpportunity))
+		if (rewardRoomsBlockedUntilMonster && (roomRoll.RoomType == RoomType.Loot || roomRoll.RoomType == RoomType.QuickChallenge))
 		{
 			return false;
 		}
@@ -498,34 +794,30 @@ public sealed partial class BattleBoardController
 		{
 			merchantRoomsBlockedUntilMonster = true;
 		}
-		else if (roomRoll.RoomType == RoomType.Loot || roomRoll.RoomType == RoomType.UnexpectedOpportunity)
+		else if (roomRoll.RoomType == RoomType.Loot || roomRoll.RoomType == RoomType.QuickChallenge)
 		{
 			rewardRoomsBlockedUntilMonster = true;
 		}
 		return roomRoll;
 	}
 
-	private static CampaignRoomRoll MonsterRoomRoll(int tier)
+	private static CampaignRoomRoll MonsterRoomRoll()
 	{
-		int num = Mathf.Clamp(tier, 1, 4);
-		return new CampaignRoomRoll(RoomType.Monster, num, null, num switch
-		{
-			1 => RoomDifficulty.Easy, 
-			2 => RoomDifficulty.Easy, 
-			3 => RoomDifficulty.Normal, 
-			_ => RoomDifficulty.Hard, 
-		});
+		return new CampaignRoomRoll(RoomType.Monster, null, RoomDifficulty.Any);
 	}
 
-	private int ConsumeNextMonsterTierBonus()
+	private RoomDifficulty ApplyNextMonsterDifficultyIncrease(RoomDifficulty difficulty)
 	{
-		int num = nextMonsterTierBonus;
-		nextMonsterTierBonus = 0;
-		if (num > 0)
+		int increase = nextMonsterDifficultyIncrease;
+		nextMonsterDifficultyIncrease = 0;
+		if (increase <= 0)
 		{
-			AppendLog($"PRESAGIO - il prossimo mostro sale di {num} tier.");
+			return difficulty;
 		}
-		return num;
+
+		RoomDifficulty increased = (RoomDifficulty)Mathf.Clamp((int)difficulty + increase, (int)RoomDifficulty.Easy, (int)RoomDifficulty.Hard);
+		AppendLog($"PRESAGIO - difficolta mostro aumentata a {RoomDifficultyRules.For(increased).DisplayName}.");
+		return increased;
 	}
 
 	private RoomDifficulty RollMonsterRoomDifficulty(int roomNumber)
@@ -586,16 +878,19 @@ public sealed partial class BattleBoardController
 		ClearLootRewardReveal();
 		retryComposableGolemForms = null;
 		retryComposableGolemHitPoints = null;
+		retrySeraphelHitPoints = null;
+		retryJurinashorHitPoints = null;
+		retryJurinashorPhaseTwo = false;
 		if ((Object)(object)roomChoicePanel != (Object)null)
 		{
 			roomChoicePanel.SetActive(false);
 		}
 		((Component)merchantBuyButton).gameObject.SetActive(false);
 		ConfigureActionButtonLayout(merchantVisible: false);
-		AppendLog("STANZA ESTRATTA - " + DescribeRoomRoll(new CampaignRoomRoll(currentRoomType, currentMonsterTier, pendingScenarioId, pendingRoomDifficulty)));
+		AppendLog("STANZA ESTRATTA - " + DescribeRoomRoll(new CampaignRoomRoll(currentRoomType, pendingScenarioId, pendingRoomDifficulty)));
 		if (!LoadCampaignRoomScenario())
 		{
-			currentScenarioDisplayOverride = DescribeRoomRoll(new CampaignRoomRoll(currentRoomType, currentMonsterTier, pendingScenarioId, pendingRoomDifficulty));
+			currentScenarioDisplayOverride = DescribeRoomRoll(new CampaignRoomRoll(currentRoomType, pendingScenarioId, pendingRoomDifficulty));
 			AppendLog("SCENARIO - fallback nome stanza: scenario non trovato o non valido.");
 		}
 		ActivateMinibossForCurrentRoom();
@@ -632,23 +927,33 @@ public sealed partial class BattleBoardController
 		activeComposableGolem = null;
 		activeMedusaBoss = null;
 		activeTrentorBoss = null;
+		activeJurinashorBoss = null;
 		activeBragusBoss = null;
 		activePalatirBoss = null;
 		if (currentRoomType != RoomType.Boss || !IsCurrentRoomMinibossRoom())
 		{
 			return;
 		}
-		if ((Object)(object)FindCardDefinition(ComposableGolemCardId) == (Object)null)
-		{
-			AppendLog("MINIBOSS - carta proxy Golem Componibile assente dal CardDatabase; miniboss non attivato.");
-			return;
-		}
 		MinibossKind miniboss = RollMinibossKind();
 		switch (miniboss)
 		{
 		case MinibossKind.ComposableGolem:
+			if ((Object)(object)FindCardDefinition(ComposableGolemCardId) == (Object)null)
+			{
+				AppendLog("MINIBOSS - carta proxy Golem Componibile assente dal CardDatabase; miniboss non attivato.");
+				break;
+			}
 			activeComposableGolem = CreateComposableGolemForCurrentRoom();
 			AppendLog("MINIBOSS - Golem Componibile entra nella stanza.");
+			break;
+		case MinibossKind.Medusa:
+			if ((Object)(object)FindCardDefinition(MedusaBossCardId) == (Object)null)
+			{
+				AppendLog("MINIBOSS - carta proxy Medusa assente dal CardDatabase; miniboss non attivato.");
+				break;
+			}
+			activeMedusaBoss = new MedusaBoss(random);
+			AppendLog("MINIBOSS - Medusa entra nella stanza 10.");
 			break;
 		}
 	}
@@ -697,9 +1002,14 @@ public sealed partial class BattleBoardController
 
 	private MinibossKind RollMinibossKind()
 	{
+		int roomNumber = runProgress?.RoomsCleared + 1 ?? 0;
+		if (roomNumber != 10)
+			return MinibossKind.ComposableGolem;
+
 		MinibossKind[] pool =
 		{
-			MinibossKind.ComposableGolem
+			MinibossKind.ComposableGolem,
+			MinibossKind.Medusa
 		};
 		return pool[random.NextInclusive(0, pool.Length - 1)];
 	}
@@ -752,7 +1062,7 @@ public sealed partial class BattleBoardController
 			CpuEncounterKind.Bragus => BuildBragusFormation(),
 			CpuEncounterKind.Palatir => BuildPalatirFormation(),
 			CpuEncounterKind.BossFormation => DrawStandardBossFormationForCurrentCombat(),
-			_ => DrawMonsterFormationForCurrentTier(),
+			_ => DrawMonsterFormationForCurrentDifficulty(),
 		};
 	}
 
@@ -820,6 +1130,18 @@ public sealed partial class BattleBoardController
 		return DrawStandardBossFormationForCurrentCombat();
 	}
 
+	private List<CardDefinition> BuildSeraphelFormation()
+	{
+		CardDefinition seraphel = FindCardDefinition(SeraphelBossCardId);
+		if ((Object)(object)seraphel != (Object)null)
+		{
+			activeSeraphelBoss ??= CreateSeraphelForCurrentRoom();
+			return new List<CardDefinition> { seraphel };
+		}
+		AppendLog("BOSS SERAPHEL - carta non trovata; uso fallback Boss.");
+		return DrawStandardBossFormationForCurrentCombat();
+	}
+
 	private List<CardDefinition> DrawStandardBossFormationForCurrentCombat()
 	{
 		if (!string.IsNullOrWhiteSpace(campaignScenarioBossId))
@@ -838,6 +1160,11 @@ public sealed partial class BattleBoardController
 					activeBragusBoss = new BragusBoss(random);
 					return BuildBragusFormation();
 				}
+				if (string.Equals(scenarioBoss.Id, JurinashorBossCardId, StringComparison.OrdinalIgnoreCase))
+				{
+					activeJurinashorBoss ??= new JurinashorBoss();
+					return new List<CardDefinition> { scenarioBoss };
+				}
 				if (string.Equals(scenarioBoss.Id, MedusaBossCardId, StringComparison.OrdinalIgnoreCase))
 				{
 					activeMedusaBoss = new MedusaBoss(random);
@@ -847,6 +1174,11 @@ public sealed partial class BattleBoardController
 				{
 					activePalatirBoss = new PalatirBoss(random);
 					return BuildPalatirFormation();
+				}
+				if (string.Equals(scenarioBoss.Id, SeraphelBossCardId, StringComparison.OrdinalIgnoreCase))
+				{
+					activeSeraphelBoss = CreateSeraphelForCurrentRoom();
+					return BuildSeraphelFormation();
 				}
 				return new List<CardDefinition> { scenarioBoss };
 			}
@@ -877,12 +1209,24 @@ public sealed partial class BattleBoardController
 			activePalatirBoss = new PalatirBoss(random);
 			return BuildPalatirFormation();
 		}
+		if (ShouldForceFirstRoomSeraphel())
+		{
+			activeSeraphelBoss = CreateSeraphelForCurrentRoom();
+			return BuildSeraphelFormation();
+		}
 		List<CardDefinition> result = formationDraftService.DrawBossCandidates(cardDatabase.Cards, configuration.Progression.BossFormationSize);
 		if (result.All((CardDefinition card) => card.Category != CardCategory.Boss))
 		{
 			AppendLog("BOSS FALLBACK - nessuna carta Boss disponibile; usato un Mostro come sostituto.");
 		}
 		return result;
+	}
+
+	private SeraphelBoss CreateSeraphelForCurrentRoom()
+	{
+		return retrySeraphelHitPoints.HasValue
+			? new SeraphelBoss(random, SeraphelBoss.DefaultHitPoints, retrySeraphelHitPoints.Value)
+			: new SeraphelBoss(random);
 	}
 
 	private CardDefinition FindCardDefinition(string id)
@@ -943,6 +1287,11 @@ public sealed partial class BattleBoardController
 		return debugForceFirstRoomPalatir && runProgress != null && runProgress.RoomsCleared == 0;
 	}
 
+	private bool ShouldForceFirstRoomSeraphel()
+	{
+		return debugForceFirstRoomSeraphel && runProgress != null && runProgress.RoomsCleared == 0;
+	}
+
 	private bool IsMedusaBossProxy(BattleCardState card)
 	{
 		return activeMedusaBoss != null
@@ -967,12 +1316,25 @@ public sealed partial class BattleBoardController
 			&& string.Equals(card.Definition.Id, BragusBossCardId, StringComparison.OrdinalIgnoreCase);
 	}
 
+	private bool IsJurinashorBossProxy(BattleCardState card)
+	{
+		return activeJurinashorBoss != null && card != null && !card.BelongsToPlayer
+			&& string.Equals(card.Definition.Id, JurinashorBossCardId, StringComparison.OrdinalIgnoreCase);
+	}
+
 	private bool IsPalatirBossProxy(BattleCardState card)
 	{
 		return activePalatirBoss != null
 			&& card != null
 			&& !card.BelongsToPlayer
 			&& string.Equals(card.Definition.Id, PalatirBossCardId, StringComparison.OrdinalIgnoreCase);
+	}
+
+	private bool IsSeraphelBossProxy(BattleCardState card)
+	{
+		return activeSeraphelBoss != null && card != null && !card.BelongsToPlayer
+			&& (string.Equals(card.Definition.Id, SeraphelBossCardId, StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(card.Definition.Id, SeraphelPhaseTwoCardId, StringComparison.OrdinalIgnoreCase));
 	}
 }
 }

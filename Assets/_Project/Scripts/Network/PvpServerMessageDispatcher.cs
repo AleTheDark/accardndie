@@ -36,9 +36,39 @@ namespace AccardND.Network
             MessageTypes.RoomLeave
         };
 
-        private const float MaxBackoffSeconds = 30f;
-        private const float OfflineGraceSeconds = 60f;
+        /// <summary>
+        /// I quattro tempi della rete, che vanno letti insieme:
+        /// - <see cref="MaxBackoffSeconds"/> (qui): ogni quanto, al massimo, si ritenta.
+        ///   Sta sotto la grazia del server perché dentro quella finestra devono starci
+        ///   più tentativi, non uno solo arrivato tardi.
+        /// - <see cref="OfflineGraceSeconds"/> (qui): quanto una richiesta in volo
+        ///   sopravvive alla rete assente. Pari alla grazia di riconnessione del server
+        ///   (ServerConfig.DisconnectTimeoutSeconds, 120s): oltre quella il tavolo è
+        ///   perso comunque, e tenere in vita la richiesta non serve più a niente.
+        /// - l'attesa delle schermate (AccountServerSession.WaitUntilReadyAsync, 12s):
+        ///   più corta di proposito, è quanto si fa aspettare un giocatore davanti a un
+        ///   pannello vuoto prima di ripiegare sui dati locali. La riconnessione va
+        ///   avanti lo stesso e la schermata si aggiorna quando torna.
+        /// - la grazia di riconnessione del match, che vive sul server ed è l'unica
+        ///   autorevole: il client non la decide, la legge da match.resume.
+        /// </summary>
+        private const float MaxBackoffSeconds = 15f;
+
+        /// <inheritdoc cref="MaxBackoffSeconds"/>
+        private const float OfflineGraceSeconds = 120f;
+
         private const int MaxOutboxEntries = 64;
+
+        /// <summary>
+        /// Timeout consecutivi dopo i quali un socket che si dichiara ancora aperto
+        /// viene dato per morto. Serve al caso peggiore della rete assente: quando la
+        /// connessione muore senza che il sistema operativo se ne accorga (NAT che
+        /// scade, portale captive, proxy in mezzo) il receive loop non finisce mai e
+        /// nessuno segnala la caduta. Senza questo il giocatore resta a guardare
+        /// richieste che scadono a una a una, senza badge e senza riconnessione.
+        /// Due e non uno: un singolo timeout può essere solo un server lento.
+        /// </summary>
+        private const int TimeoutsBeforeAssumingDeadSocket = 2;
 
         private sealed class PendingRequest
         {
@@ -82,6 +112,12 @@ namespace AccardND.Network
         private float nextAttemptAt;
         private bool reconnecting;
         private bool handshaking;
+
+        /// <summary>
+        /// Richieste scadute di fila senza che dal server arrivasse più niente.
+        /// Qualunque messaggio in arrivo lo azzera: è la prova che il socket è vivo.
+        /// </summary>
+        private int consecutiveTimeouts;
 
         public PvpServerMessageDispatcher(PvpServerClient client)
         {
@@ -221,6 +257,7 @@ namespace AccardND.Network
 
             if (client.PollDisconnected())
             {
+                consecutiveTimeouts = 0;
                 reconnectAttempt = 0;
                 nextAttemptAt = Time.realtimeSinceStartup;
                 foreach (PendingRequest request in pending)
@@ -229,6 +266,7 @@ namespace AccardND.Network
             }
 
             ExpireTimedOutRequests();
+            DropSocketIfDead();
 
             if (!client.IsConnected && CanReconnect && !reconnecting
                 && Time.realtimeSinceStartup >= nextAttemptAt)
@@ -240,7 +278,38 @@ namespace AccardND.Network
         private void DrainIncoming()
         {
             while (client.TryDequeueMessage(out Envelope envelope))
+            {
+                // Un messaggio, qualunque messaggio, dice che il socket è vivo.
+                consecutiveTimeouts = 0;
                 Route(envelope);
+            }
+        }
+
+        /// <summary>
+        /// Chiude di sua iniziativa un socket che si dichiara aperto ma non risponde
+        /// più, e fa ripartire la riconnessione dal primo tentativo. È l'unico modo di
+        /// accorgersi di una rete sparita in silenzio: la caduta "vera" arriva dal
+        /// receive loop, che in questo caso non finisce mai.
+        /// </summary>
+        private void DropSocketIfDead()
+        {
+            if (consecutiveTimeouts < TimeoutsBeforeAssumingDeadSocket
+                || !client.IsConnected || !CanReconnect || reconnecting)
+            {
+                return;
+            }
+
+            Debug.LogWarning(
+                "[Net] Il server non risponde più su una connessione ancora aperta: la chiudo e riparto.");
+            consecutiveTimeouts = 0;
+            // Chiudere di proposito non conta come caduta (PollDisconnected resta muto):
+            // la caduta la annunciamo qui, una volta sola.
+            client.Dispose();
+            foreach (PendingRequest request in pending)
+                request.AwaitingResponse = false;
+            reconnectAttempt = 0;
+            nextAttemptAt = Time.realtimeSinceStartup;
+            Disconnected?.Invoke();
         }
 
         private void Route(Envelope envelope)
@@ -266,6 +335,12 @@ namespace AccardND.Network
                 if (!expired)
                     continue;
 
+                // Scaduta mentre il socket si dichiarava aperto: o il server è lento, o
+                // quella connessione è già morta e nessuno ce l'ha detto. Il conteggio
+                // distingue i due casi (vedi DropSocketIfDead).
+                if (client.IsConnected && request.AwaitingResponse)
+                    consecutiveTimeouts++;
+
                 request.Completion.TrySetException(new TimeoutException(
                     client.IsConnected
                         ? "Timeout richiesta server."
@@ -287,15 +362,26 @@ namespace AccardND.Network
                 // altrui non deve poter chiudere una richiesta.
                 bool matchesId = !string.IsNullOrEmpty(envelope.requestId)
                     && envelope.requestId == request.RequestId;
-                bool matchesType = envelope.type == request.ExpectedType
-                    || envelope.type == MessageTypes.Error;
-                if (!matchesType)
-                    continue;
 
                 // Le risposte del server portano il requestId; quelle senza arrivano da
                 // percorsi che non lo ricopiano e restano correlate per tipo, come prima.
                 if (!matchesId && !string.IsNullOrEmpty(envelope.requestId))
                     continue;
+
+                if (envelope.type == MessageTypes.Error)
+                {
+                    // Un errore chiude una richiesta solo se ne porta l'id. Gli errori
+                    // spontanei - una mossa PvP rifiutata, un avviso di stanza - viaggiano
+                    // senza id e prima facevano match con qualunque pendente: bastava
+                    // giocare una carta fuori turno per far fallire l'acquisto al
+                    // Santuario che stava viaggiando in quel momento.
+                    if (!matchesId)
+                        continue;
+                }
+                else if (envelope.type != request.ExpectedType)
+                {
+                    continue;
+                }
 
                 request.Completion.TrySetResult(envelope);
                 pending.RemoveAt(index);
@@ -334,13 +420,14 @@ namespace AccardND.Network
                 }
 
                 reconnectAttempt = 0;
+                consecutiveTimeouts = 0;
                 await FlushAsync();
                 Reconnected?.Invoke();
             }
             catch (Exception exception)
             {
-                ScheduleNextAttempt();
-                Debug.Log($"[Net] Riconnessione fallita ({exception.Message}): nuovo tentativo fra {LastDelay():0.#}s.");
+                float delay = ScheduleNextAttempt();
+                Debug.Log($"[Net] Riconnessione fallita ({exception.Message}): nuovo tentativo fra {delay:0.#}s.");
             }
             finally
             {
@@ -373,17 +460,18 @@ namespace AccardND.Network
             }
         }
 
-        /// <summary>Attese crescenti con un pizzico di casualità, per non ripartire tutti insieme.</summary>
-        private void ScheduleNextAttempt()
+        /// <summary>
+        /// Attese crescenti con un pizzico di casualità, per non ripartire tutti insieme.
+        /// Restituisce il ritardo davvero schedulato: la parte casuale va estratta una
+        /// volta sola, o si finisce per annunciarne uno e aspettarne un altro.
+        /// </summary>
+        private float ScheduleNextAttempt()
         {
             reconnectAttempt++;
-            nextAttemptAt = Time.realtimeSinceStartup + LastDelay();
-        }
-
-        private float LastDelay()
-        {
             float baseDelay = Mathf.Min(MaxBackoffSeconds, Mathf.Pow(2f, Mathf.Max(0, reconnectAttempt - 1)));
-            return baseDelay + UnityEngine.Random.Range(0f, Mathf.Min(1f, baseDelay * 0.25f));
+            float delay = baseDelay + UnityEngine.Random.Range(0f, Mathf.Min(1f, baseDelay * 0.25f));
+            nextAttemptAt = Time.realtimeSinceStartup + delay;
+            return delay;
         }
 
         /// <summary>

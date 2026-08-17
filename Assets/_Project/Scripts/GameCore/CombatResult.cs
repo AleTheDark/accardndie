@@ -113,6 +113,32 @@ namespace AccardND.GameCore
 
         /// <summary>Abilita' di classe attivate dalle pedine del giocatore nella run.</summary>
         public int AbilitiesUsed { get; private set; }
+
+        /// <summary>
+        /// Consumabili usati nella run, da qualunque parte arrivino: bisaccia, bottino delle
+        /// stanze o acquisto al mercante. La bisaccia si conta a parte (per scalare la scorta),
+        /// ma per le quest della taverna un oggetto usato e' un oggetto usato.
+        /// </summary>
+        public int ItemsUsed { get; private set; }
+
+        /// <summary>Supreme attivate dalle pedine del giocatore nella run.</summary>
+        public int SupremesUsed { get; private set; }
+
+        /// <summary>Sfide veloci portate a termine: la rinuncia non conta.</summary>
+        public int QuickChallengesCompleted { get; private set; }
+
+        /// <summary>Acquisti conclusi al mercante, carte e oggetti insieme.</summary>
+        public int MerchantPurchases { get; private set; }
+
+        /// <summary>
+        /// Oro guadagnato avventurandosi (stanze e prove lampo). Vendite e rimborsi del
+        /// mercante non contano: sono spostamenti di oro gia' guadagnato, e farli contare
+        /// renderebbe la quest completabile comprando e rivendendo la stessa carta.
+        /// </summary>
+        public int GoldEarned { get; private set; }
+
+        /// <summary>Livelli guadagnati nella run, sommati anche fra piu' passaggi nella stessa stanza.</summary>
+        public int LevelsGained { get; private set; }
         public int MasterLevel => Math.Min(maximumLevel, Math.Max(PlayerLevel, 1 + RoomsCleared / roomsPerMasterLevel));
         public int PlayerVigorDieSides => vigorDiceByLevel[PlayerLevel - 1];
         public int MasterVigorDieSides => vigorDiceByLevel[MasterLevel - 1];
@@ -145,13 +171,20 @@ namespace AccardND.GameCore
 
         public RoomReward CompleteMonsterRoom(IEnumerable<int> defeatedMonsterStrengths, int baseExperience, int experienceMultiplier)
         {
+            return CompleteMonsterRoom(defeatedMonsterStrengths, baseExperience, experienceMultiplier, 1);
+        }
+
+        public RoomReward CompleteMonsterRoom(IEnumerable<int> defeatedMonsterStrengths, int baseExperience,
+            int experienceMultiplier, int rewardDivisor)
+        {
             if (defeatedMonsterStrengths == null) throw new ArgumentNullException(nameof(defeatedMonsterStrengths));
             if (baseExperience < 0) throw new ArgumentOutOfRangeException(nameof(baseExperience));
+            if (rewardDivisor < 1) throw new ArgumentOutOfRangeException(nameof(rewardDivisor));
             int defeatedExperience = 0;
             foreach (int strength in defeatedMonsterStrengths)
                 defeatedExperience += Math.Max(0, strength);
             int gold = MerchantEconomy.MonsterRoomGold(RoomsCleared + 1, baseExperience, defeatedExperience);
-            return CompleteRoom(baseExperience, defeatedExperience, experienceMultiplier, gold);
+            return CompleteRoom(baseExperience, defeatedExperience, experienceMultiplier, gold, rewardDivisor);
         }
 
         // Il miniboss premia una cifra fissa: niente esperienza stanza, forza dei mostri o bonus.
@@ -192,6 +225,41 @@ namespace AccardND.GameCore
             AbilitiesUsed++;
         }
 
+        /// <summary>Registra un consumabile usato, indipendentemente dalla sua provenienza.</summary>
+        public void RecordItemUsed()
+        {
+            ItemsUsed++;
+        }
+
+        /// <summary>Registra una suprema attivata da una pedina del giocatore.</summary>
+        public void RecordSupremeUsed()
+        {
+            SupremesUsed++;
+        }
+
+        /// <summary>Registra una Sfida veloce portata a termine (la rinuncia non la chiama).</summary>
+        public void RecordQuickChallengeCompleted()
+        {
+            QuickChallengesCompleted++;
+        }
+
+        /// <summary>Registra un acquisto concluso al mercante, carta o oggetto che sia.</summary>
+        public void RecordMerchantPurchase()
+        {
+            MerchantPurchases++;
+        }
+
+        /// <summary>
+        /// Segna oro guadagnato dall'avventura. Separato da <see cref="AddGold"/> perche'
+        /// quello serve anche a restituire oro (vendite, rimborsi di un acquisto fallito):
+        /// contarli sarebbe un rubinetto aperto verso le quest della taverna.
+        /// </summary>
+        public void RecordGoldEarned(int amount)
+        {
+            if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
+            GoldEarned += amount;
+        }
+
         public RoomReward CompleteNonCombatRoom(int experienceReward)
         {
             return CompleteNonCombatRoom(experienceReward, 1);
@@ -203,14 +271,20 @@ namespace AccardND.GameCore
             return CompleteRoom(experienceReward, 0, experienceMultiplier);
         }
 
-        private RoomReward CompleteRoom(int roomExperience, int defeatedExperience, int experienceMultiplier, int goldReward = 0)
+        private RoomReward CompleteRoom(int roomExperience, int defeatedExperience, int experienceMultiplier,
+            int goldReward = 0, int rewardDivisor = 1)
         {
             experienceMultiplier = Math.Max(1, experienceMultiplier);
+            rewardDivisor = Math.Max(1, rewardDivisor);
             roomExperience *= experienceMultiplier;
             defeatedExperience *= experienceMultiplier;
+            roomExperience /= rewardDivisor;
+            defeatedExperience /= rewardDivisor;
+            goldReward /= rewardDivisor;
             int gained = roomExperience + defeatedExperience;
             int levelsGained = AddExperience(gained);
             AddGold(goldReward);
+            RecordGoldEarned(goldReward);
             RoomsCleared++;
             return new RoomReward(roomExperience, defeatedExperience, levelsGained, goldReward);
         }
@@ -229,6 +303,7 @@ namespace AccardND.GameCore
             }
             if (PlayerLevel >= maximumLevel)
                 CurrentExperience = 0;
+            LevelsGained += PlayerLevel - previousLevel;
             return PlayerLevel - previousLevel;
         }
 
@@ -267,7 +342,9 @@ namespace AccardND.GameCore
         /// </summary>
         public void RestoreProgress(int playerLevel, int currentExperience, int totalExperience,
             int availableExperience, int roomsCleared, int enemiesDefeated = 0, int minibossesDefeated = 0,
-            int diceRolled = 0, int abilitiesUsed = 0, int gold = 0)
+            int diceRolled = 0, int abilitiesUsed = 0, int gold = 0, int supremesUsed = 0,
+            int quickChallengesCompleted = 0, int merchantPurchases = 0, int goldEarned = 0,
+            int levelsGained = 0, int itemsUsed = 0)
         {
             if (playerLevel < 1 || playerLevel > maximumLevel)
                 throw new ArgumentOutOfRangeException(nameof(playerLevel));
@@ -280,6 +357,12 @@ namespace AccardND.GameCore
             if (diceRolled < 0) throw new ArgumentOutOfRangeException(nameof(diceRolled));
             if (abilitiesUsed < 0) throw new ArgumentOutOfRangeException(nameof(abilitiesUsed));
             if (gold < 0) throw new ArgumentOutOfRangeException(nameof(gold));
+            if (supremesUsed < 0) throw new ArgumentOutOfRangeException(nameof(supremesUsed));
+            if (quickChallengesCompleted < 0) throw new ArgumentOutOfRangeException(nameof(quickChallengesCompleted));
+            if (merchantPurchases < 0) throw new ArgumentOutOfRangeException(nameof(merchantPurchases));
+            if (goldEarned < 0) throw new ArgumentOutOfRangeException(nameof(goldEarned));
+            if (levelsGained < 0) throw new ArgumentOutOfRangeException(nameof(levelsGained));
+            if (itemsUsed < 0) throw new ArgumentOutOfRangeException(nameof(itemsUsed));
 
             PlayerLevel = playerLevel;
             // Al livello massimo l'invariante della classe tiene CurrentExperience a 0.
@@ -292,6 +375,12 @@ namespace AccardND.GameCore
             DiceRolled = diceRolled;
             AbilitiesUsed = abilitiesUsed;
             Gold = gold;
+            SupremesUsed = supremesUsed;
+            QuickChallengesCompleted = quickChallengesCompleted;
+            MerchantPurchases = merchantPurchases;
+            GoldEarned = goldEarned;
+            LevelsGained = levelsGained;
+            ItemsUsed = itemsUsed;
         }
 
         private static int[] BuildRepeatedExperienceThresholds(int experiencePerLevel, int maximumLevel)
@@ -316,20 +405,32 @@ namespace AccardND.GameCore
         public static int ScaleByRoom(int baseCost, int roomsCleared)
         {
             if (baseCost < 0) throw new ArgumentOutOfRangeException(nameof(baseCost));
-            return CeilPercentage(baseCost, RoomBandPercentages[RoomBand(roomsCleared)]);
+            return baseCost;
         }
 
         public static int ApplyCaravanTax(int cost, int purchasesThisVisit)
         {
             if (cost < 0) throw new ArgumentOutOfRangeException(nameof(cost));
             if (purchasesThisVisit < 0) throw new ArgumentOutOfRangeException(nameof(purchasesThisVisit));
-            decimal multiplier = 1m;
-            for (int purchase = 0; purchase < purchasesThisVisit; purchase++) multiplier *= 1.5m;
-            return (int)Math.Ceiling(cost * multiplier);
+            return cost;
         }
 
-        public static int CardCost(int strength, int roomsCleared) =>
-            ScaleByRoom(12 + Math.Max(0, strength) * 3, roomsCleared);
+        public static int CardCost(int strength, int roomsCleared)
+        {
+            int value = Math.Max(0, strength);
+            if (value <= 3) return 12;
+            if (value <= 6) return 18;
+            if (value <= 9) return 26;
+            return 36;
+        }
+
+        public static int UpgradeCost(int currentStrength, int upgradesAlreadyBought)
+        {
+            if (upgradesAlreadyBought < 0) throw new ArgumentOutOfRangeException(nameof(upgradesAlreadyBought));
+            int value = Math.Max(0, currentStrength);
+            int baseCost = value <= 3 ? 14 : value <= 6 ? 20 : value <= 9 ? 28 : 38;
+            return upgradesAlreadyBought == 0 ? baseCost : CeilPercentage(baseCost, 150);
+        }
 
         public static int RecoveryCost(int strength, int roomsCleared) =>
             Math.Max(3, CeilPercentage(CardCost(strength, roomsCleared), 70));

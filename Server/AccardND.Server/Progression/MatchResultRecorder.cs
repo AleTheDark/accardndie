@@ -1,3 +1,4 @@
+using AccardND.GameCore;
 using AccardND.Server.Data;
 using Microsoft.Data.Sqlite;
 
@@ -7,6 +8,13 @@ namespace AccardND.Server.Progression;
 /// Registra l'esito di una partita: una riga in match_history e gli aggregati
 /// player_stats (lifetime + stagione) in un'unica transazione. Punto di aggancio
 /// che nelle fasi successive orchestrerà anche MMR/rank e sblocchi.
+///
+/// Solo il matchmaking produce partite classificate. Quelle giocate in una stanza
+/// (pubblica, protetta o privata) sono amichevoli: si fermano a match_history, che
+/// è lo storico del pannello admin, e non toccano niente di quello che i giocatori
+/// vedono - né statistiche, né MMR, né quest, né esperienza. Il confine sta qui e
+/// non nelle query di lettura: un aggregato scritto una volta di troppo poi non si
+/// sa più da dove ripulirlo.
 /// </summary>
 /// <summary>Esito della registrazione, per comporre i messaggi match.result.</summary>
 public sealed record MatchRecordResult(
@@ -95,6 +103,13 @@ public sealed class MatchResultRecorder
             insert.ExecuteNonQuery();
         }
 
+        // Amichevole: lo storico è tutto quello che se ne tiene.
+        if (!outcome.Ranked)
+        {
+            transaction.Commit();
+            return MatchRecordResult.Unranked;
+        }
+
         foreach (string scope in new[] { "lifetime", seasonScope })
         {
             UpdateScope(connection, transaction, outcome.PlayerA.PlayerId, scope,
@@ -106,6 +121,9 @@ public sealed class MatchResultRecorder
         // Contatori per le quest della taverna. Restano separati da player_stats perche'
         // quelli sono aggregati di scope (lifetime/stagione) mentre le quest lavorano sulla
         // differenza rispetto a un baseline giornaliero, che vive in player_counters.
+        // Anche questi si fermano alle classificate: le quest sono l'unica fonte di miele,
+        // e una stanza privata fra due complici e' la partita piu' facile da produrre in
+        // serie che ci sia.
         CampaignCounters.RecordPvpMatch(connection, transaction, outcome.PlayerA.PlayerId,
             aWon, forfeit && aLost, outcome.ScoreA);
         CampaignCounters.RecordPvpMatch(connection, transaction, outcome.PlayerB.PlayerId,
@@ -113,12 +131,15 @@ public sealed class MatchResultRecorder
 
         PlayerRankedDelta deltaA = null;
         PlayerRankedDelta deltaB = null;
-        bool isRanked = outcome.Ranked && outcome.Winner is 0 or 1;
+        // Una partita senza vincitore (lo spegnimento del server) sta negli aggregati come
+        // partita giocata, ma non ha un esito da dare all'MMR.
+        bool isRanked = outcome.Winner is 0 or 1;
         if (isRanked)
         {
             ApplyMatchResult applied = ranked.ApplyMatch(
                 connection, transaction,
-                outcome.PlayerA.PlayerId, outcome.PlayerB.PlayerId, outcome.Winner, seasonId);
+                outcome.PlayerA.PlayerId, outcome.PlayerB.PlayerId, outcome.Winner,
+                outcome.ScoreA, outcome.ScoreB, seasonId);
             deltaA = applied.A;
             deltaB = applied.B;
 
@@ -136,7 +157,8 @@ public sealed class MatchResultRecorder
 			? GrantRankedRoundExperience(connection, transaction, outcome.PlayerB.PlayerId, outcome.RoomCode, outcome.ScoreB)
 			: null;
 
-        // Gli achievement si valutano sempre (anche nelle amichevoli): usano gli aggregati appena scritti.
+        // Gli achievement leggono gli aggregati appena scritti: le amichevoli non li muovono,
+        // quindi non c'e' niente da rivalutare (si e' già tornati sopra).
         IReadOnlyList<string> achievementsA =
             achievements.EvaluateAfterMatch(connection, transaction, outcome.PlayerA.PlayerId, seasonId);
         IReadOnlyList<string> achievementsB =
@@ -161,7 +183,8 @@ public sealed class MatchResultRecorder
 				INSERT OR IGNORE INTO single_player_progress
 					(player_id, account_level, account_experience, account_total_experience,
 					 account_experience_to_next_level, updated_at)
-				VALUES ($id, 1, 0, 0, 100, $now)";
+				VALUES ($id, 1, 0, 0, $next, $now)";
+			ensure.Parameters.AddWithValue("$next", AccountLevelCurve.ExperienceToNext(1));
 			ensure.Parameters.AddWithValue("$id", playerId);
 			ensure.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
 			ensure.ExecuteNonQuery();
@@ -185,41 +208,44 @@ public sealed class MatchResultRecorder
 
 		int level;
 		int current;
+		int total;
 		using (SqliteCommand read = connection.CreateCommand())
 		{
 			read.Transaction = transaction;
-			read.CommandText = "SELECT account_level, account_experience FROM single_player_progress WHERE player_id=$id";
+			read.CommandText = @"SELECT account_level, account_experience, account_total_experience
+				FROM single_player_progress WHERE player_id=$id";
 			read.Parameters.AddWithValue("$id", playerId);
 			using SqliteDataReader reader = read.ExecuteReader();
 			reader.Read();
 			level = reader.GetInt32(0);
-			current = reader.GetInt32(1) + experience;
+			current = reader.GetInt32(1);
+			total = reader.GetInt32(2);
 		}
-		int levelsGained = 0;
-		while (current >= 100)
-		{
-			current -= 100;
-			level++;
-			levelsGained++;
-		}
+
+		// La curva la possiede AccountLevelCurve. Qui c'era una copia a mano della vecchia
+		// soglia fissa a 100: con una curva vera sarebbe divergita dal ramo campagna, e il
+		// livello sarebbe salito a ritmi diversi a seconda di dove veniva guadagnata l'exp.
+		AccountLevelProgress progress = AccountLevelCurve.Apply(level, current, total, experience);
 		using (SqliteCommand update = connection.CreateCommand())
 		{
 			update.Transaction = transaction;
 			update.CommandText = @"
 				UPDATE single_player_progress SET
 					account_level=$level, account_experience=$current,
-					account_total_experience=account_total_experience+$xp,
+					account_total_experience=$total,
+					account_experience_to_next_level=$next,
 					pending_level_rewards=pending_level_rewards+$levels,
 					updated_at=$now WHERE player_id=$id";
-			update.Parameters.AddWithValue("$level", level);
-			update.Parameters.AddWithValue("$current", current);
-			update.Parameters.AddWithValue("$xp", experience);
-			update.Parameters.AddWithValue("$levels", levelsGained);
+			update.Parameters.AddWithValue("$level", progress.Level);
+			update.Parameters.AddWithValue("$current", progress.Experience);
+			update.Parameters.AddWithValue("$total", progress.TotalExperience);
+			update.Parameters.AddWithValue("$next", progress.ExperienceToNextLevel);
+			update.Parameters.AddWithValue("$levels", progress.LevelsGained);
 			update.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
 			update.Parameters.AddWithValue("$id", playerId);
 			update.ExecuteNonQuery();
 		}
-		return new AccountExperienceReward(claimId, experience, levelsGained);
+		return new AccountExperienceReward(claimId, experience, progress.LevelsGained);
 	}
 
     private static void UpdateScope(

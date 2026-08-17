@@ -15,7 +15,7 @@ EditorBuildSettings:
     path: Assets/Scenes/Debug/MinibossGolemDebug.unity
     guid: 3dbaa4ce33a24fce943f913a9ec159c1
   - enabled: 0
-    path: Assets/Scenes/Debug/BragusBossDebug.unity
+    path: Assets/Scenes/Debug/BossDebug.unity
     guid: 3aa169b9161f40929fe2c5e7c0de956c
   - enabled: 0
     path: Assets/Scenes/Debug/MerchantDebug.unity

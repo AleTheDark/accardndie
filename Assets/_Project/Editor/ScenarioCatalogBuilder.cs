@@ -14,7 +14,6 @@ namespace AccardND.Editor
         private const string DataFolder = "Assets/_Project/Data/Scenarios";
         private const string CatalogPath = "Assets/_Project/Resources/ScenarioCatalog.asset";
 
-        [MenuItem("Accard N' Die/Reimport Scenario Backgrounds", priority = 39)]
         public static void ReimportAndRebuild()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -27,7 +26,6 @@ namespace AccardND.Editor
             Rebuild();
         }
 
-        [MenuItem("Accard N' Die/Rebuild Scenario Catalog", priority = 40)]
         public static void Rebuild()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -93,7 +91,6 @@ namespace AccardND.Editor
             Debug.Log($"[Accard N' Die] Catalogo scenari aggiornato: {definitions.Count} scenari.");
         }
 
-        [MenuItem("Accard N' Die/Open Scenario Catalog", priority = 41)]
         private static void OpenCatalog()
         {
             ScenarioCatalog catalog = AssetDatabase.LoadAssetAtPath<ScenarioCatalog>(CatalogPath);
@@ -120,11 +117,11 @@ namespace AccardND.Editor
                 "low_merchant" => new(id, "Mercato", RoomType.Merchant, RoomDifficulty.Hard, string.Empty),
                 "god_merchant" => new(id, "Mercato", RoomType.Merchant, RoomDifficulty.Hard, string.Empty),
                 "loot" => new(id, "Ricompensa", RoomType.Loot, RoomDifficulty.Any, string.Empty),
-                "unexpected_opportunity" => new(id, "Imprevisto o Opportunità", RoomType.UnexpectedOpportunity, RoomDifficulty.Any, string.Empty),
+                "quick_challenge" => new(id, "Sfida Veloce", RoomType.QuickChallenge, RoomDifficulty.Any, string.Empty),
                 "climbing" => new(id, "Rampicanti", RoomType.Boss, RoomDifficulty.Any, "trentor"),
                 "trentor" => new(id, "Bosco di Trentor", RoomType.Boss, RoomDifficulty.Any, "trentor"),
                 "toxic" => new(id, "Esalazioni Tossiche", RoomType.Boss, RoomDifficulty.Any, "kronn"),
-                "infested" => new(id, "Infestata", RoomType.Boss, RoomDifficulty.Any, "draktharr"),
+                "infested" => new(id, "Infestata", RoomType.Boss, RoomDifficulty.Any, "boss-jurinashor"),
                 "lux" => new(id, "Illuminata", RoomType.Boss, RoomDifficulty.Any, "boss-seraphel"),
                 "cosmic" => new(id, "Cosmica", RoomType.Boss, RoomDifficulty.Any, "boss-palatir"),
                 "fog" => new(id, "Nebbia", RoomType.Boss, RoomDifficulty.Any, "boss-bragus"),

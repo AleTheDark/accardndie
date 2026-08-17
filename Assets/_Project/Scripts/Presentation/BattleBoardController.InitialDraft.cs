@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AccardND.GameCore;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -166,13 +167,23 @@ public sealed partial class BattleBoardController
 		cardInspectionDraftConfirmButton.interactable = selected || initialDraftSelectedIndices.Count < InitialDraftSelectionLimit();
 		if ((Object)(object)cardInspectionDraftConfirmButtonText != (Object)null)
 		{
-			cardInspectionDraftConfirmButtonText.text = selected ? "RIMUOVI" : "SELEZIONA";
+			cardInspectionDraftConfirmButtonText.text = selected
+				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftRemove, "RIMUOVI")
+				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftSelect, "SELEZIONA");
 		}
 		((Component)cardInspectionDraftConfirmButton).transform.SetAsLastSibling();
 	}
 
 	private void ConfirmInspectedInitialDraftOffer()
 	{
+		if (inspectedPvpLoadoutAddAction != null)
+		{
+			UnityAction addAction = inspectedPvpLoadoutAddAction;
+			inspectedPvpLoadoutAddAction = null;
+			addAction.Invoke();
+			CloseCardInspection();
+			return;
+		}
 		if (inspectedCampaignConsumableActive)
 		{
 			ConfirmInspectedCampaignConsumable();
@@ -201,7 +212,9 @@ public sealed partial class BattleBoardController
 		int selectionLimit = InitialDraftSelectionLimit();
 		if (initialDraftSelectedIndices.Count != selectionLimit)
 		{
-			ShowInitialDraftNotice(initialDraftChoosingCaptain ? "Prima scegli il tuo capitano." : $"Scegli {selectionLimit} carte prima di confermare.");
+			ShowInitialDraftNotice(initialDraftChoosingCaptain
+				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftChooseCaptainFirst, "Prima scegli il tuo capitano.")
+				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftChooseCardsFirst, "Scegli {0} carte prima di confermare.", selectionLimit));
 			return;
 		}
 		List<CardDefinition> selected = initialDraftSelectedIndices
@@ -252,19 +265,23 @@ public sealed partial class BattleBoardController
 		RefreshInitialDraftLayout();
 		if ((Object)(object)initialDraftHeadingText != (Object)null)
 		{
-			initialDraftHeadingText.text = initialDraftChoosingCaptain ? "SCEGLI IL CAPITANO" : "DRAFT DEL MAZZO";
+			initialDraftHeadingText.text = initialDraftChoosingCaptain
+				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftChooseCaptain, "SCEGLI IL CAPITANO")
+				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftTitle, "DRAFT DEL MAZZO");
 		}
 		if ((Object)(object)initialDraftStatusText != (Object)null)
 		{
-			string captain = initialDraftCaptainClass.HasValue ?$"CAPITANO {HeroClassDisplayName(initialDraftCaptainClass.Value).ToUpperInvariant()}  -  " : string.Empty;
-			initialDraftStatusText.text = captain + $"MAZZO {initialDraftDeck.Count}/{configuration.DeckBuilding.DeckSize}";
+			string captain = initialDraftCaptainClass.HasValue
+				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftCaptainStatus, "CAPITANO {0}  -  ", HeroClassDisplayName(initialDraftCaptainClass.Value).ToUpperInvariant())
+				: string.Empty;
+			initialDraftStatusText.text = captain + GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftStatus, "MAZZO {0}/{1}", initialDraftDeck.Count, configuration.DeckBuilding.DeckSize);
 		}
 		if ((Object)(object)initialDraftPromptText != (Object)null)
 		{
 			initialDraftPromptText.color = new Color(0.88f, 0.92f, 0.96f);
 			initialDraftPromptText.text = initialDraftChoosingCaptain
-				? "Scegli una carta capitano: guidera' le offerte successive."
-				: $"Tocca una carta per leggerla, poi seleziona {InitialDraftSelectionLimit()} carte.";
+				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftCaptainPrompt, "Scegli una carta capitano: guiderà le offerte successive.")
+				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftCardsPrompt, "Tocca una carta per leggerla, poi seleziona {0} carte.", InitialDraftSelectionLimit());
 		}
 		RefreshInitialDraftOffers();
 		RefreshInitialDraftDeckPreview();
@@ -338,7 +355,9 @@ public sealed partial class BattleBoardController
 		initialDraftConfirmButton.interactable = initialDraftSelectedIndices.Count == limit;
 		if ((Object)(object)initialDraftConfirmButtonText != (Object)null)
 		{
-			initialDraftConfirmButtonText.text = initialDraftChoosingCaptain ? "SCEGLI" : $"CONFERMA {limit}";
+			initialDraftConfirmButtonText.text = initialDraftChoosingCaptain
+				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftChoose, "SCEGLI")
+				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftConfirm, "CONFERMA {0}", limit);
 		}
 	}
 

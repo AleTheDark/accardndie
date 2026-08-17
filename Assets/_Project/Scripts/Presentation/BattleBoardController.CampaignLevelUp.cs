@@ -1,5 +1,6 @@
 using System.Collections;
 using AccardND.GameCore;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -38,7 +39,11 @@ public sealed partial class BattleBoardController
         title.fontSize = 40;
         title.fontStyle = FontStyle.Normal;
         title.resizeTextForBestFit = false;
-        title.text = "NUOVO LIVELLO!";
+        title.text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.LevelUpTitle, "NUOVO LIVELLO!");
+        AccardND.Battlefield.EditableRuntimeText.BindLocalized(
+            title,
+            GameTextKeys.Campaign.LevelUpTitle,
+            "NUOVO LIVELLO!");
         title.color = new Color(0.95f, 0.79f, 0.34f);
         SetRect(title.rectTransform, new Vector2(0.06f, 0.73f), new Vector2(0.94f, 0.93f));
 
@@ -50,7 +55,15 @@ public sealed partial class BattleBoardController
         campaignLevelUpBodyText.horizontalOverflow = HorizontalWrapMode.Wrap;
         SetRect(campaignLevelUpBodyText.rectTransform, new Vector2(0.08f, 0.34f), new Vector2(0.92f, 0.71f));
 
-        Button nextRoomButton = CreateButton("Next Room After Level Up", dialog.transform, font, "PROSSIMA STANZA");
+        Button nextRoomButton = CreateButton(
+            "Next Room After Level Up",
+            dialog.transform,
+            font,
+            GameText.GetOrFallbackSilent(GameTextKeys.Campaign.NextRoom, "PROSSIMA STANZA"));
+        AccardND.Battlefield.EditableRuntimeText.BindLocalized(
+            nextRoomButton.GetComponentInChildren<Text>(),
+            GameTextKeys.Campaign.NextRoom,
+            "PROSSIMA STANZA");
         nextRoomButton.onClick.AddListener(new UnityAction(ContinueAfterCampaignLevelUp));
         ApplyMerchantRoomCta(nextRoomButton, nextRoomButton.GetComponentInChildren<Text>(),
             "UI/CampaignRestyle/campaign_cta_blue", preserveAspect: false);
@@ -101,7 +114,9 @@ public sealed partial class BattleBoardController
             if ((Object)(object)combatExperienceFill != (Object)null)
                 combatExperienceFill.rectTransform.anchorMax = Vector2.one;
             if ((Object)(object)combatExperienceText != (Object)null)
-                combatExperienceText.text = "LIVELLO MASSIMO";
+                combatExperienceText.text = GameText.GetOrFallbackSilent(
+                    GameTextKeys.Campaign.MaxLevel,
+                    "LIVELLO MASSIMO");
         }
 
         combatExperienceFillRoutine = null;
@@ -129,17 +144,27 @@ public sealed partial class BattleBoardController
             combatExperienceFill.rectTransform.anchorMax = new Vector2(
                 maximum > 0 ? Mathf.Clamp01((float)current / maximum) : 1f, 1f);
         if ((Object)(object)combatExperienceText != (Object)null)
-            combatExperienceText.text = maximum > 0 ? $"{current} / {maximum} EXP" : "LIVELLO MASSIMO";
+            combatExperienceText.text = maximum > 0
+                ? GameText.GetOrFallbackSilent(
+                    GameTextKeys.Campaign.ExperienceProgress,
+                    "{0} / {1} EXP",
+                    current,
+                    maximum)
+                : GameText.GetOrFallbackSilent(GameTextKeys.Campaign.MaxLevel, "LIVELLO MASSIMO");
     }
 
     private void ShowCampaignLevelUpPopup()
     {
         if (campaignLevelUpPopup == null || runProgress == null)
             return;
-        campaignLevelUpBodyText.text = $"Sei salito al livello {runProgress.PlayerLevel}!\n\n" +
-            $"Il tuo dado Vigore viene potenziato a <b>D{runProgress.PlayerVigorDieSides}</b>.";
+        campaignLevelUpBodyText.text = GameText.GetOrFallbackSilent(
+            GameTextKeys.Campaign.LevelUpBody,
+            "Sei salito al livello {0}!\n\nIl tuo dado Vigore viene potenziato a <b>D{1}</b>.",
+            runProgress.PlayerLevel,
+            runProgress.PlayerVigorDieSides);
         campaignLevelUpPopup.SetActive(true);
         campaignLevelUpPopup.transform.SetAsLastSibling();
+        PlayLevelUpSfx();
     }
 
     private void ContinueAfterCampaignLevelUp()

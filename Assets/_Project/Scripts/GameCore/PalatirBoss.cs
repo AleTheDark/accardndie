@@ -95,6 +95,12 @@ namespace AccardND.GameCore
         public int MaxHitPoints { get; }
         public int HitPoints { get; private set; }
         public bool IsDefeated => HitPoints <= 0;
+
+        /// <summary>Rimette il boss come l'aveva lasciato una battaglia salvata a meta'.</summary>
+        public void Restore(int hitPoints)
+        {
+            HitPoints = Math.Clamp(hitPoints, 0, MaxHitPoints);
+        }
         public bool HasActiveShields => activeShields.Count > 0;
         public IReadOnlyCollection<ClassFamily> ActiveShields => activeShields;
 

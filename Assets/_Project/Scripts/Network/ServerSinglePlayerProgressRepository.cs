@@ -112,10 +112,54 @@ namespace AccardND.Network
             return data;
         }
 
+        /// <summary>
+        /// Entitlement degli acquisti a valuta reale. Come il Santuario, e' una fotografia
+        /// per la UI: gli sblocchi veri arrivano dalla progressione autoritativa.
+        /// </summary>
+        public async Task<IapEntitlementsData> GetEntitlementsAsync()
+        {
+            IapEntitlementsData data = await server.GetEntitlementsAsync();
+            IsSynced = true;
+            return data;
+        }
+
+        /// <summary>
+        /// Riscatta una ricevuta. Se il server concede, gli sblocchi sono gia' applicati
+        /// lato server: la cache di progressione va riallineata dal chiamante.
+        /// </summary>
+        public async Task<IapRedeemResult> RedeemPurchaseAsync(string productId, string receipt)
+        {
+            IapRedeemResult result = await server.RedeemPurchaseAsync(productId, receipt);
+            IsSynced = true;
+            return result;
+        }
+
         /// <summary>Sostituisce la bisaccia scelta per la prossima run.</summary>
         public async Task<SanctuaryData> SetSanctuaryBagAsync(string[] itemIds)
         {
             SanctuaryData data = await server.SetSanctuaryBagAsync(itemIds);
+            IsSynced = true;
+            return data;
+        }
+
+        /// <summary>
+        /// L'albero dei talenti valutato dal server. Come il Santuario non tocca la cache:
+        /// e' una fotografia per la UI.
+        /// </summary>
+        public async Task<TalentData> GetTalentsAsync()
+        {
+            TalentData data = await server.GetTalentsAsync();
+            IsSynced = true;
+            return data;
+        }
+
+        /// <summary>
+        /// Compra un rango di talento. Spende punti e cambia il pacchetto modificatori,
+        /// quindi la cache di progressione va poi riallineata con <see cref="RefreshAsync"/>.
+        /// </summary>
+        public async Task<TalentData> BuyTalentAsync(string talentId)
+        {
+            TalentData data = await server.BuyTalentAsync(talentId);
             IsSynced = true;
             return data;
         }
@@ -135,9 +179,9 @@ namespace AccardND.Network
         /// Riscuote una quest della taverna. Concede miele, quindi la cache di progressione
         /// va poi riallineata con <see cref="RefreshAsync"/>.
         /// </summary>
-        public async Task<TavernData> ClaimTavernQuestAsync(string questId)
+        public async Task<TavernData> ClaimTavernQuestAsync(string questId, int rewardMultiplier = 1)
         {
-            TavernData data = await server.ClaimTavernQuestAsync(questId);
+            TavernData data = await server.ClaimTavernQuestAsync(questId, rewardMultiplier);
             IsSynced = true;
             return data;
         }
@@ -165,6 +209,20 @@ namespace AccardND.Network
         public async Task<SinglePlayerRewardOutcome> ClaimTutorialRewardAsync(string tutorialRunId)
         {
             SinglePlayerRewardOutcome outcome = await server.ClaimTutorialRewardAsync(tutorialRunId);
+            cache.ApplyAuthoritative(outcome.Progress);
+            IsSynced = true;
+            return outcome;
+        }
+
+        /// <summary>
+        /// Chiude un modulo del tutorial progressivo. Cosa concede lo decide il catalogo del
+        /// server: qui si manda solo l'id del modulo e si rispecchia lo stato che torna.
+        /// </summary>
+        public async Task<SinglePlayerRewardOutcome> ClaimTutorialModuleRewardAsync(
+            string moduleId, string moduleRunId)
+        {
+            SinglePlayerRewardOutcome outcome =
+                await server.ClaimTutorialModuleRewardAsync(moduleId, moduleRunId);
             cache.ApplyAuthoritative(outcome.Progress);
             IsSynced = true;
             return outcome;
@@ -212,6 +270,12 @@ namespace AccardND.Network
             return data;
         }
 
+        public async Task DismissPendingAdRewardAsync(string rewardClaimId)
+        {
+            await server.DismissPendingAdRewardAsync(rewardClaimId);
+            IsSynced = true;
+        }
+
         /// <summary>Applica il triplicatore pubblicitario a una reward gia concessa.</summary>
         public async Task<SinglePlayerRewardOutcome> ClaimAdMultiplierAsync(string rewardClaimId, string adImpressionId)
         {
@@ -219,13 +283,6 @@ namespace AccardND.Network
             cache.ApplyAuthoritative(outcome.Progress);
             IsSynced = true;
             return outcome;
-        }
-
-        public async Task ChooseClassAsync(string classId)
-        {
-            SinglePlayerProgressSave snapshot = await server.ChooseClassAsync(classId);
-            cache.ApplyAuthoritative(snapshot);
-            IsSynced = true;
         }
 
         public async Task<SinglePlayerRewardOutcome> ClaimLevelRewardsAsync()

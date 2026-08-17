@@ -119,8 +119,12 @@ await matchResultRecorder.RecordAsync(result);   // callback iniettato nel Room/
 5. A ciascun giocatore un messaggio **`match.result`** con delta LP, tier prima/dopo,
    eventuale promozione/retrocessione, unlock ottenuti → overlay di fine partita.
 
-> Solo le partite **ranked** toccano MMR/tier. Stanze con codice = amichevoli (contano solo
-> in stat "amichevoli", niente MMR). Il matchmaking a coda = ranked. Flag `ranked` sul match.
+> Solo le partite **ranked** contano: MMR/tier, `player_stats` (W/L, streak, win rate),
+> hall of fame, achievement, contatori delle quest ed esperienza account. Il matchmaking a
+> coda = ranked; ogni stanza (pubblica, protetta o privata) = amichevole. Un'amichevole si
+> ferma alla riga in `match_history` col flag `ranked = 0`: la si vede solo dal pannello
+> admin (elenco partite, scheda giocatore, colonna "amich." nella stagione). Il filtro sta
+> in `MatchResultRecorder`, una volta sola, non nelle query di lettura.
 
 ### Aggiunte al protocollo (`NetProtocol/MessageTypes` + DTO)
 
@@ -172,6 +176,12 @@ Caching locale del profilo per non ri-richiedere a ogni schermata; invalidazione
 - **MMR** = Elo. Start 1000. K=40 durante i **placement** (prime ~5 partite, tier nascosto),
   K=24 a regime, K=16 oltre un MMR alto (anti-inflazione).
   `expected = 1/(1+10^((mmrOpp-mmr)/400))`, `mmr += K*(score-expected)` con score 1/0.
+- **Margine**: il risultato in round pesa sul movimento. Il fattore vale 1 quando il perdente
+  non vince nessun round e `CloseMatchFactor` (0.7 di default, in `serverconfig.json`) quando
+  arriva a un round dal pareggio, interpolato in mezzo per formati più lunghi del meglio di tre:
+  `mmr += K*margine*(score-expected)`. Quindi **2-0 dà più LP di 2-1** e **0-2 ne toglie più di
+  1-2**. Il fattore è lo stesso per i due giocatori, così lo scambio resta a somma zero. Un
+  abbandono a tavolino senza round giocati vale pieno.
 - **Tier** (bande di MMR crescenti), 5 livelli attuali (rinominabili: sono in `serverconfig.json`,
   non hard-coded), ognuno con **divisioni IV→I**:
   `Nabbo → Apprendista → Esperto → Divino → Onnipotente`.
@@ -206,6 +216,11 @@ Caching locale del profilo per non ri-richiedere a ogni schermata; invalidazione
 - `halloffame.list` (stagioni disponibili) + `halloffame.data(season_id)` paginata con tier
   finale, MMR finale, W/L, ranking. Include il "personal best" del richiedente.
 - Le prime posizioni concedono **icone/titoli esclusivi** (source `halloffame`), non riottenibili.
+- **Pagina web pubblica** su `accardndie.com/hall-of-fame` (`Web/HallOfFamePageEndpoints`): stagione
+  in corso dal vivo (`ranked_state`) e stagioni chiuse dagli snapshot, primi 100, senza accesso e
+  senza cookie. Mostra solo nickname, grado e W/S delle classificate: mai player_id, email o MMR.
+  In classifica ci va solo chi ha giocato almeno una partita nella stagione — il soft reset crea
+  una riga per tutti, e senza filtro la stagione nuova nascerebbe già ordinata.
 
 ---
 

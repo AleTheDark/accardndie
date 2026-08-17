@@ -16,6 +16,17 @@ public sealed class ServerConfig
     /// <summary>File SQLite (relativo alla cartella del binario se non assoluto).</summary>
     public string DatabaseFilePath { get; set; } = "accardnd.db";
 
+    /// <summary>
+    /// Pool di connessioni SQLite. Acceso in produzione, dove riaprire il file a ogni query
+    /// costerebbe. Lo spengono i test: con il pool acceso una connessione restituita resta
+    /// fisicamente aperta, e l'unico modo di liberare il file usa e getta e'
+    /// <c>SqliteConnection.ClearAllPools()</c>, che e' globale al processo - quindi un test
+    /// che finisce chiude di colpo le connessioni in pool di tutti i test in parallelo,
+    /// database WAL compresi, che a quel punto vengono checkpointati sotto il naso di chi
+    /// li sta ancora usando.
+    /// </summary>
+    public bool DatabasePooling { get; set; } = true;
+
     /// <summary>Project ID di Unity (dashboard UGS). Vuoto = auth UGS disattivata.</summary>
     public string UgsProjectId { get; set; } = string.Empty;
     public string UgsIssuer { get; set; } = "https://player-auth.services.api.unity.com";
@@ -26,6 +37,9 @@ public sealed class ServerConfig
 
     /// <summary>Broker OAuth Google per i client senza browser integrato (Android nativo).</summary>
     public GoogleOAuthConfig GoogleOAuth { get; set; } = new();
+
+    /// <summary>Verifica delle ricevute di Google Play. Vedi GooglePlayConfig.</summary>
+    public GooglePlayConfig GooglePlay { get; set; } = new();
 
     /// <summary>Versione di client ammessa all'accesso. Vedi ClientVersionConfig.</summary>
     public ClientVersionConfig ClientVersion { get; set; } = new();
@@ -88,7 +102,7 @@ public sealed class ServerConfig
     /// <summary>Pannello admin web (dashboard + gestione DB). Vedi AdminConfig.</summary>
     public AdminConfig Admin { get; set; } = new();
 
-    /// <summary>Famiglie di mostri della campagna: sconfiggerle sblocca l'icona corrispondente.</summary>
+    /// <summary>Fazioni di mostri della campagna: sconfiggerle sblocca l'icona corrispondente.</summary>
     public string[] CampaignMonsters { get; set; } =
         { "goblin", "skeleton", "animal", "darkelf", "chimera", "alien", "whitealien", "spirit", "faceless", "champion" };
 
@@ -185,6 +199,41 @@ public sealed class GoogleOAuthConfig
     /// <summary>Senza secret il broker resta spento e Android ripiega sull'account locale.</summary>
     public bool IsEnabled =>
         !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ResolveClientSecret());
+}
+
+/// <summary>
+/// Verifica delle ricevute di Google Play. Ogni acquisto arriva al server come JSON firmato
+/// da Google con la chiave RSA dell'app: la chiave pubblica corrispondente si copia da Play
+/// Console (Monetizza con Play &gt; Configurazione monetizzazione &gt; Licenza) e con quella si
+/// controlla la firma qui, senza chiamare nessuna API esterna.
+///
+/// Il limite di questo controllo va conosciuto: dice "questa ricevuta l'ha emessa Google per
+/// questa app" e nient'altro. Un rimborso o una revoca successiva non si vedono: per quelli
+/// serve la Play Developer API, che chiede un service account. Fino ad allora un acquisto
+/// rimborsato resta sbloccato.
+///
+/// Senza chiave la verifica e' spenta e il server rifiuta ogni riscatto: meglio un negozio
+/// che non concede niente che uno che regala classi a chiunque mandi un JSON.
+/// </summary>
+public sealed class GooglePlayConfig
+{
+    /// <summary>
+    /// Chiave pubblica RSA dell'app in base64, come la mostra Play Console. Consigliato
+    /// lasciarla vuota qui e passarla via env var ACCARDND_PLAY_LICENSE_KEY.
+    /// </summary>
+    public string LicenseKey { get; set; } = string.Empty;
+
+    /// <summary>Deve coincidere con l'applicationIdentifier della build Android.</summary>
+    public string PackageName { get; set; } = "com.apesolution.accardndie";
+
+    public string ResolveLicenseKey()
+    {
+        string fromEnv = Environment.GetEnvironmentVariable("ACCARDND_PLAY_LICENSE_KEY");
+        return string.IsNullOrWhiteSpace(fromEnv) ? LicenseKey : fromEnv;
+    }
+
+    /// <summary>Senza chiave pubblica non si riscatta niente.</summary>
+    public bool IsEnabled => !string.IsNullOrWhiteSpace(ResolveLicenseKey());
 }
 
 /// <summary>

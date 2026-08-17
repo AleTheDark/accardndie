@@ -58,7 +58,6 @@ public sealed partial class BattleBoardController
 	private void EnterLootRoomDebugRoom()
 	{
 		currentRoomType = RoomType.Loot;
-		currentMonsterTier = 0;
 		pendingScenarioId = "loot";
 		pendingRoomDifficulty = RoomDifficulty.Any;
 		if (!LoadCampaignRoomScenario())

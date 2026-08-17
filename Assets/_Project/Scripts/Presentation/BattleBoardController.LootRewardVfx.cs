@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using AccardND.GameData;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,6 +10,7 @@ namespace AccardND.Presentation
 public sealed partial class BattleBoardController
 {
 	private const float LootRewardRevealDuration = 0.95f;
+	private const float LootRewardFireworksVolume = 0.35f;
 	private static Sprite lootRewardParticleSprite;
 	private GameObject activeLootRewardRevealRoot;
 	private Coroutine activeLootRewardFireworksRoutine;
@@ -27,7 +29,19 @@ public sealed partial class BattleBoardController
 		}
 	}
 
+	private IEnumerator PlayLootRewardReveal(CampaignConsumableType reward)
+	{
+		yield return PlaySingleLootRewardReveal(null, reward);
+	}
+
 	private IEnumerator PlaySingleLootRewardReveal(CardDefinition reward)
+	{
+		yield return PlaySingleLootRewardReveal(reward, null);
+	}
+
+	private IEnumerator PlaySingleLootRewardReveal(
+		CardDefinition reward,
+		CampaignConsumableType? consumable)
 	{
 		ClearLootRewardReveal();
 		GameObject root = new GameObject("Loot Reward AAA Reveal", typeof(RectTransform), typeof(CanvasGroup));
@@ -45,6 +59,7 @@ public sealed partial class BattleBoardController
 		CanvasGroup group = root.GetComponent<CanvasGroup>();
 		group.alpha = 0f;
 		group.blocksRaycasts = false;
+		StartLootRewardFireworksSfx(root);
 
 		Image veil = CreateLootRewardImage("Loot Reward Veil", root.transform, new Color(0.015f, 0.01f, 0.03f, 0.86f));
 		Stretch(veil.rectTransform);
@@ -66,7 +81,14 @@ public sealed partial class BattleBoardController
 		// Rye è già pesante e ha un dettaglio inline: il bold+italic sintetico
 		// lo impasta, quindi il titolo resta in stile normale.
 		Text title = CreateText("Loot Reward Title", root.transform, LootRewardTitleFont(), 38, FontStyle.Normal, TextAnchor.MiddleCenter);
-		title.text = "RICOMPENSA OTTENUTA";
+		title.alignment = TextAnchor.MiddleCenter;
+		title.text = GameText.GetLocalizedFallback(
+			GameTextKeys.Campaign.RewardReady,
+			"RICOMPENSA OTTENUTA",
+			"REWARD RECEIVED",
+			"BELOHNUNG ERHALTEN",
+			"RECOMPENSA OBTENIDA",
+			"RÉCOMPENSE OBTENUE");
 		title.color = new Color(1f, 0.88f, 0.48f, 1f);
 		Outline titleOutline = ((Component)title).gameObject.AddComponent<Outline>();
 		titleOutline.effectColor = new Color(0.28f, 0.12f, 0.02f, 0.95f);
@@ -82,15 +104,40 @@ public sealed partial class BattleBoardController
 		titleRect.sizeDelta = new Vector2(780f, 82f);
 		titleRect.localScale = Vector3.one * 1.3f;
 
-		PrototypeCardView card = PrototypeCardView.Create(root.transform, reward, configuration);
-		card.SetInteractable(false);
-		card.SetLayoutIgnored(true);
-		card.SetAlpha(0f);
-		RectTransform cardRect = card.RectTransform;
+		PrototypeCardView card = null;
+		Image consumableIcon = null;
+		Text consumableName = null;
+		RectTransform cardRect;
+		if ((Object)(object)reward != (Object)null)
+		{
+			card = PrototypeCardView.Create(root.transform, reward, configuration);
+			card.SetInteractable(false);
+			card.SetLayoutIgnored(true);
+			card.SetAlpha(0f);
+			cardRect = card.RectTransform;
+			cardRect.sizeDelta = new Vector2(330f, 492f);
+		}
+		else
+		{
+			CampaignConsumableType item = consumable.Value;
+			consumableIcon = CreateLootRewardImage("Loot Consumable Reward", root.transform, Color.clear);
+			consumableIcon.sprite = LoadSpriteResource("UI/" + CampaignConsumableResourceName(item));
+			consumableIcon.preserveAspect = true;
+			cardRect = consumableIcon.rectTransform;
+			cardRect.sizeDelta = new Vector2(390f, 390f);
+
+			consumableName = CreateText("Loot Consumable Name", root.transform, LootRewardTitleFont(), 34, FontStyle.Normal, TextAnchor.MiddleCenter);
+			consumableName.text = CampaignConsumableName(item).ToUpperInvariant();
+			consumableName.color = Color.clear;
+			RectTransform nameRect = consumableName.rectTransform;
+			nameRect.anchorMin = nameRect.anchorMax = new Vector2(0.5f, 0.5f);
+			nameRect.pivot = new Vector2(0.5f, 0.5f);
+			nameRect.anchoredPosition = new Vector2(0f, -363f);
+			nameRect.sizeDelta = new Vector2(720f, 70f);
+		}
 		cardRect.anchorMin = new Vector2(0.5f, 0.5f);
 		cardRect.anchorMax = new Vector2(0.5f, 0.5f);
 		cardRect.pivot = new Vector2(0.5f, 0.5f);
-		cardRect.sizeDelta = new Vector2(330f, 492f);
 
 		List<LootRewardParticle> particles = CreateLootRewardFireworks(root.transform);
 
@@ -104,7 +151,12 @@ public sealed partial class BattleBoardController
 			float pulse = 1f + Mathf.Sin(t * Mathf.PI * 8f) * 0.035f;
 
 			group.alpha = appear;
-			card.SetAlpha(appear);
+			if (card != null)
+				card.SetAlpha(appear);
+			if (consumableIcon != null)
+				consumableIcon.color = new Color(1f, 1f, 1f, appear);
+			if (consumableName != null)
+				consumableName.color = new Color(1f, 0.88f, 0.48f, appear);
 			cardRect.anchoredPosition = Vector2.LerpUnclamped(new Vector2(0f, -210f), new Vector2(0f, -18f), settle);
 			cardRect.localScale = Vector3.one * Mathf.LerpUnclamped(1.72f, 1.34f * pulse, settle);
 			cardRect.localRotation = Quaternion.Euler(0f, 0f, Mathf.LerpUnclamped(-10f, 2f * Mathf.Sin(t * Mathf.PI * 2f), settle));
@@ -122,7 +174,12 @@ public sealed partial class BattleBoardController
 		}
 
 		group.alpha = 1f;
-		card.SetAlpha(1f);
+		if (card != null)
+			card.SetAlpha(1f);
+		if (consumableIcon != null)
+			consumableIcon.color = Color.white;
+		if (consumableName != null)
+			consumableName.color = new Color(1f, 0.88f, 0.48f, 1f);
 		cardRect.anchoredPosition = new Vector2(0f, -18f);
 		cardRect.localScale = Vector3.one * 1.34f;
 		cardRect.localRotation = Quaternion.identity;
@@ -141,6 +198,25 @@ public sealed partial class BattleBoardController
 			Object.Destroy((Object)(object)activeLootRewardRevealRoot);
 			activeLootRewardRevealRoot = null;
 		}
+	}
+
+	private static void StartLootRewardFireworksSfx(GameObject root)
+	{
+		AudioClip clip = Resources.Load<AudioClip>("SFX/loot_fireworks");
+		if ((Object)(object)clip == (Object)null)
+			return;
+		AudioSource source = root.AddComponent<AudioSource>();
+		source.clip = clip;
+		source.playOnAwake = false;
+		source.loop = true;
+		source.spatialBlend = 0f;
+		source.ignoreListenerPause = true;
+		bool muted = PlayerPrefs.GetInt(AccardND.Battlefield.BattleSfxPlayer.MutedPlayerPrefsKey, 0) != 0;
+		float settingsVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(
+			AccardND.Battlefield.BattleSfxPlayer.VolumePlayerPrefsKey,
+			1f));
+		source.volume = muted ? 0f : LootRewardFireworksVolume * settingsVolume;
+		source.Play();
 	}
 
 	private IEnumerator PlayPersistentLootRewardFireworks(

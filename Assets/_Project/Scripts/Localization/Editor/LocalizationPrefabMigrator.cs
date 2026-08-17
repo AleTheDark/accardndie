@@ -9,7 +9,6 @@ namespace AccardND.Localization.Editor
     {
         private const string PrefabFolder = "Assets/_Project/Resources/UI/Prefabs";
 
-        [MenuItem("Accard N' Die/Localization/Migrate UI Prefabs", priority = 82)]
         public static void MigrateUiPrefabs()
         {
             if (!AssetDatabase.IsValidFolder(PrefabFolder))

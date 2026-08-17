@@ -1,0 +1,15 @@
+# Regole R8 aggiuntive per la build di release.
+# Vengono appese a proguard-unity.txt (vedi mainTemplate.gradle, consumerProguardFiles).
+
+# --- Repackaging (raccomandato dal pannello "Ottimizzazione app" della Play Console) ---
+# Sposta tutte le classi offuscate nel package radice: DEX piu' compatto e piu' difficile
+# da leggere. Le classi tenute con -keep qui sotto non vengono ne' rinominate ne' spostate.
+-repackageclasses ''
+
+# --- Unity IAP ---
+# Unity Purchasing 5.x chiama Google Play Billing da C# via AndroidJavaClass/AndroidJavaObject
+# usando i nomi delle classi come stringhe (es. "com.android.billingclient.api.BillingClient").
+# Senza questi keep l'offuscamento romperebbe gli acquisti in-app in silenzio.
+-keep class com.android.billingclient.api.** { *; }
+-keep class com.android.vending.billing.** { *; }
+-keep class com.google.android.gms.common.** { *; }

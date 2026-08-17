@@ -61,8 +61,8 @@ PlayerSettings:
   iosUseCustomAppBackgroundBehavior: 0
   allowedAutorotateToPortrait: 1
   allowedAutorotateToPortraitUpsideDown: 1
-  allowedAutorotateToLandscapeRight: 1
-  allowedAutorotateToLandscapeLeft: 1
+  allowedAutorotateToLandscapeRight: 0
+  allowedAutorotateToLandscapeLeft: 0
   useOSAutorotation: 1
   use32BitDisplayBuffer: 1
   preserveFramebufferAlpha: 0
@@ -143,7 +143,7 @@ PlayerSettings:
   loadStoreDebugModeEnabled: 0
   visionOSBundleVersion: 1.0
   tvOSBundleVersion: 1.0
-  bundleVersion: 0.12.0
+  bundleVersion: 0.19.0
   preloadedAssets:
   - {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   - {fileID: 11400000, guid: c124371ab35853645a9183ad35edec0f, type: 2}
@@ -170,6 +170,7 @@ PlayerSettings:
   applicationIdentifier:
     Android: com.apesolution.accardndie
     Standalone: com.Unity-Technologies.com.unity.template.urp-blank
+    WebGL: com.apesolution.accardndie
     iPhone: com.Unity-Technologies.com.unity.template.urp-blank
   buildNumber:
     Standalone: 0
@@ -177,7 +178,7 @@ PlayerSettings:
     iPhone: 0
     tvOS: 0
   overrideDefaultApplicationIdentifier: 1
-  AndroidBundleVersionCode: 3
+  AndroidBundleVersionCode: 10
   AndroidMinSdkVersion: 25
   AndroidTargetSdkVersion: 36
   AndroidPreferredInstallLocation: 1
@@ -264,11 +265,11 @@ PlayerSettings:
   useCustomMainManifest: 0
   useCustomLauncherManifest: 0
   useCustomMainGradleTemplate: 1
-  useCustomLauncherGradleManifest: 0
+  useCustomLauncherGradleManifest: 1
   useCustomBaseGradleTemplate: 0
   useCustomGradlePropertiesTemplate: 1
   useCustomGradleSettingsTemplate: 1
-  useCustomProguardFile: 0
+  useCustomProguardFile: 1
   AndroidTargetArchitectures: 2
   AndroidAllowedArchitectures: -13
   AndroidSplashScreenScale: 0
@@ -292,7 +293,7 @@ PlayerSettings:
     height: 180
     banner: {fileID: 0}
   androidGamepadSupportLevel: 0
-  AndroidMinifyRelease: 0
+  AndroidMinifyRelease: 1
   AndroidMinifyDebug: 0
   AndroidValidateAppBundleSize: 1
   AndroidAppBundleSizeToValidate: 150
@@ -474,43 +475,43 @@ PlayerSettings:
       m_Kind: 0
       m_SubKind: 
     - m_Textures:
-      - {fileID: 2800000, guid: b2f74c1a9d3e4a6f8c05e17d4b93af62, type: 3}
-      - {fileID: 2800000, guid: c7d1e0a5364b4f8290ab7c46d2e51938, type: 3}
+      - {fileID: 2800000, guid: 8f0b1c6a2e1247f0a65d4e7f930f9a31, type: 3}
+      - {fileID: 2800000, guid: 8f0b1c6a2e1247f0a65d4e7f930f9a31, type: 3}
       m_Width: 432
       m_Height: 432
       m_Kind: 2
       m_SubKind: 
     - m_Textures:
-      - {fileID: 2800000, guid: b2f74c1a9d3e4a6f8c05e17d4b93af62, type: 3}
-      - {fileID: 2800000, guid: c7d1e0a5364b4f8290ab7c46d2e51938, type: 3}
+      - {fileID: 2800000, guid: 8f0b1c6a2e1247f0a65d4e7f930f9a31, type: 3}
+      - {fileID: 2800000, guid: 8f0b1c6a2e1247f0a65d4e7f930f9a31, type: 3}
       m_Width: 324
       m_Height: 324
       m_Kind: 2
       m_SubKind: 
     - m_Textures:
-      - {fileID: 2800000, guid: b2f74c1a9d3e4a6f8c05e17d4b93af62, type: 3}
-      - {fileID: 2800000, guid: c7d1e0a5364b4f8290ab7c46d2e51938, type: 3}
+      - {fileID: 2800000, guid: 8f0b1c6a2e1247f0a65d4e7f930f9a31, type: 3}
+      - {fileID: 2800000, guid: 8f0b1c6a2e1247f0a65d4e7f930f9a31, type: 3}
       m_Width: 216
       m_Height: 216
       m_Kind: 2
       m_SubKind: 
     - m_Textures:
-      - {fileID: 2800000, guid: b2f74c1a9d3e4a6f8c05e17d4b93af62, type: 3}
-      - {fileID: 2800000, guid: c7d1e0a5364b4f8290ab7c46d2e51938, type: 3}
+      - {fileID: 2800000, guid: 8f0b1c6a2e1247f0a65d4e7f930f9a31, type: 3}
+      - {fileID: 2800000, guid: 8f0b1c6a2e1247f0a65d4e7f930f9a31, type: 3}
       m_Width: 162
       m_Height: 162
       m_Kind: 2
       m_SubKind: 
     - m_Textures:
-      - {fileID: 2800000, guid: b2f74c1a9d3e4a6f8c05e17d4b93af62, type: 3}
-      - {fileID: 2800000, guid: c7d1e0a5364b4f8290ab7c46d2e51938, type: 3}
+      - {fileID: 2800000, guid: 8f0b1c6a2e1247f0a65d4e7f930f9a31, type: 3}
+      - {fileID: 2800000, guid: 8f0b1c6a2e1247f0a65d4e7f930f9a31, type: 3}
       m_Width: 108
       m_Height: 108
       m_Kind: 2
       m_SubKind: 
     - m_Textures:
-      - {fileID: 2800000, guid: b2f74c1a9d3e4a6f8c05e17d4b93af62, type: 3}
-      - {fileID: 2800000, guid: c7d1e0a5364b4f8290ab7c46d2e51938, type: 3}
+      - {fileID: 2800000, guid: 8f0b1c6a2e1247f0a65d4e7f930f9a31, type: 3}
+      - {fileID: 2800000, guid: 8f0b1c6a2e1247f0a65d4e7f930f9a31, type: 3}
       m_Width: 81
       m_Height: 81
       m_Kind: 2
@@ -876,7 +877,8 @@ PlayerSettings:
   scriptingBackend:
     Android: 1
   il2cppCompilerConfiguration: {}
-  il2cppCodeGeneration: {}
+  il2cppCodeGeneration:
+    Android: 1
   il2cppStacktraceInformation: {}
   managedStrippingLevel: {}
   incrementalIl2cppBuild: {}
@@ -947,7 +949,8 @@ PlayerSettings:
   XboxOneOverrideIdentityName: 
   XboxOneOverrideIdentityPublisher: 
   vrEditorSettings: {}
-  cloudServicesEnabled: {}
+  cloudServicesEnabled:
+    Purchasing: 0
   luminIcon:
     m_Name: 
     m_ModelFolderPath: 

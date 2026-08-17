@@ -27,18 +27,20 @@ namespace AccardND.GameData
         public CampaignCardZone Zone { get; internal set; }
         public int PermanentItemBonus { get; internal set; }
         public bool HasRubySeal { get; internal set; }
+        public int MerchantUpgradeCount { get; internal set; }
     }
 
     /// <summary>Voce di uno snapshot del mazzo, per il save/resume della campagna.</summary>
     public readonly struct CampaignCardRestoreEntry
     {
-        public CampaignCardRestoreEntry(CardDefinition definition, CampaignCardZone zone, int instanceId, int permanentItemBonus = 0, bool hasRubySeal = false)
+        public CampaignCardRestoreEntry(CardDefinition definition, CampaignCardZone zone, int instanceId, int permanentItemBonus = 0, bool hasRubySeal = false, int merchantUpgradeCount = 0)
         {
             Definition = definition;
             Zone = zone;
             InstanceId = instanceId;
             PermanentItemBonus = Math.Max(0, permanentItemBonus);
             HasRubySeal = hasRubySeal;
+            MerchantUpgradeCount = Math.Max(0, merchantUpgradeCount);
         }
 
         public CardDefinition Definition { get; }
@@ -46,6 +48,7 @@ namespace AccardND.GameData
         public int InstanceId { get; }
         public int PermanentItemBonus { get; }
         public bool HasRubySeal { get; }
+        public int MerchantUpgradeCount { get; }
     }
 
     public sealed class CampaignDeckState
@@ -88,7 +91,8 @@ namespace AccardND.GameData
                 {
                     Zone = entry.Zone,
                     PermanentItemBonus = entry.PermanentItemBonus,
-                    HasRubySeal = entry.HasRubySeal
+                    HasRubySeal = entry.HasRubySeal,
+                    MerchantUpgradeCount = entry.MerchantUpgradeCount
                 });
                 if (entry.InstanceId > maxInstanceId)
                     maxInstanceId = entry.InstanceId;
@@ -137,6 +141,30 @@ namespace AccardND.GameData
                 return false;
             card.PermanentItemBonus += bonus;
             card.HasRubySeal = true;
+            return true;
+        }
+
+        /// <summary>
+        /// Il bonus permanente della "Tempra del fabbro": si applica a mazzo appena forgiato,
+        /// prima che la run cominci, e vale come primo potenziamento del mercante.
+        /// </summary>
+        public bool TryApplyForgeTemper(CampaignCardInstance card)
+        {
+            if (card == null || !cards.Contains(card) || card.MerchantUpgradeCount > 0)
+                return false;
+            card.PermanentItemBonus++;
+            card.MerchantUpgradeCount = 1;
+            return true;
+        }
+
+        public bool TryApplyMerchantUpgrade(CampaignCardInstance card, int maximumUpgrades = 2)
+        {
+            if (card == null || maximumUpgrades < 1 || !cards.Contains(card)
+                || card.Zone == CampaignCardZone.Graveyard
+                || card.MerchantUpgradeCount >= maximumUpgrades)
+                return false;
+            card.PermanentItemBonus++;
+            card.MerchantUpgradeCount++;
             return true;
         }
 

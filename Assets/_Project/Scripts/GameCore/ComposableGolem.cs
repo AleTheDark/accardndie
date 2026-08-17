@@ -197,6 +197,22 @@ namespace AccardND.GameCore
         public ComposableGolemFormStats NextForm => forms[(activeFormIndex + 1) % forms.Length];
         public IReadOnlyList<ComposableGolemFormStats> Forms => forms;
 
+        /// <summary>
+        /// Rimette il golem come l'aveva lasciato una battaglia salvata a meta'. Gli HP e
+        /// le forme (con i bonus di potenza accumulati) arrivano dal costruttore; qui
+        /// restano il punto del ciclo e il dado d'iniziativa gia' tirato, che deve restare
+        /// quello - e' il numero che il giocatore ha in campo davanti agli occhi.
+        /// </summary>
+        public void Restore(int activeForm, int roundsInActiveForm, int? initiative)
+        {
+            activeFormIndex = forms.Length == 0 ? 0 : ((activeForm % forms.Length) + forms.Length) % forms.Length;
+            RoundsInActiveForm = Math.Clamp(roundsInActiveForm, 0, roundsPerForm);
+            Initiative = initiative;
+        }
+
+        /// <summary>Indice della forma attiva: serve a salvarla e a ritrovarla identica.</summary>
+        public int ActiveFormIndex => activeFormIndex;
+
         public int RollInitiative(int initiativeDieSides)
         {
             if (initiativeDieSides < 2)
@@ -238,16 +254,33 @@ namespace AccardND.GameCore
             int vigorDieSides,
             int powerModifier)
         {
+            if (vigorDieSides < 2)
+                throw new ArgumentOutOfRangeException(nameof(vigorDieSides));
+
+            return DefendAgainstRoll(
+                attackerTotal,
+                vigorDieSides,
+                random.NextInclusive(1, vigorDieSides),
+                powerModifier);
+        }
+
+        public ComposableGolemDefenseResult DefendAgainstRoll(
+            int attackerTotal,
+            int vigorDieSides,
+            int vigorRoll,
+            int powerModifier = 0)
+        {
             if (attackerTotal < 1)
                 throw new ArgumentOutOfRangeException(nameof(attackerTotal));
             if (vigorDieSides < 2)
                 throw new ArgumentOutOfRangeException(nameof(vigorDieSides));
+            if (vigorRoll < 1 || vigorRoll > vigorDieSides)
+                throw new ArgumentOutOfRangeException(nameof(vigorRoll));
             if (IsDefeated)
                 throw new InvalidOperationException("A defeated golem cannot defend.");
 
             ComposableGolemFormStats form = ActiveForm;
             int hitPointsBefore = HitPoints;
-            int vigorRoll = random.NextInclusive(1, vigorDieSides);
             int defenseTotal = form.Power + powerModifier + vigorRoll;
             int damage = Math.Max(0, attackerTotal - defenseTotal);
             int healing = form.Form == ComposableGolemForm.Glass

@@ -19,7 +19,6 @@ namespace AccardND.Editor
             EditorApplication.delayCall += BuildIfMissing;
         }
 
-        [MenuItem("Accard N' Die/Rebuild Composable Golem Assets", priority = 42)]
         public static void RebuildAll()
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode)

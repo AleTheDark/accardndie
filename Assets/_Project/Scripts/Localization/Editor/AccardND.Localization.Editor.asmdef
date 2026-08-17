@@ -3,6 +3,7 @@
   "rootNamespace": "AccardND.Localization.Editor",
   "references": [
     "AccardND.Localization",
+    "AccardND.GameData",
     "Unity.Localization",
     "Unity.Localization.Editor"
   ],

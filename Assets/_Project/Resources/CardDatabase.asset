@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: CardDatabase
   m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDatabase
   cards:
+  - {fileID: 11400000, guid: 76bfaed912fe4a6aa531b1db9de7fc44, type: 2}
+  - {fileID: 11400000, guid: 1b8f6e4c9d2a47af8c51e7930b6d42aa, type: 2}
   - {fileID: 11400000, guid: 25d67ef101944d7197b95bf7ac809d4b, type: 2}
   - {fileID: 11400000, guid: 87cb4e3ea9194b08a3194f9b320843a3, type: 2}
   - {fileID: 11400000, guid: 705e93840d424a14fa5a7507e5622c94, type: 2}
@@ -121,3 +123,5 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 138a1be9d51e4d31a32e869bfd8aac79, type: 2}
   - {fileID: 11400000, guid: 14c8e06638c240e7b8123ae3c4a32adf, type: 2}
   - {fileID: 11400000, guid: d0e5f60718293ab4c5d6e7f8293a4b5c, type: 2}
+  - {fileID: 11400000, guid: 43edc84bef788ea45bae06e129ee1a1e, type: 2}
+  - {fileID: 11400000, guid: 34aca496aa5963f46b8c2a114701f037, type: 2}

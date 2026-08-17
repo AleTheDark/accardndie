@@ -21,6 +21,8 @@ public sealed class MessageRouter
     private readonly HallOfFameService hallOfFame;
     private readonly AchievementService achievements;
     private readonly SinglePlayerProgressService singlePlayerProgress;
+    private readonly TalentService talents;
+    private readonly IapPurchaseService purchases;
     private readonly PresenceRegistry presence;
     private readonly FriendService friends;
     private readonly MatchResultRecorder resultRecorder;
@@ -29,6 +31,7 @@ public sealed class MessageRouter
     private readonly SessionTokenRegistry sessionTokens;
     private readonly RequestDedupStore requestDedup;
     private readonly ClientVersionGate clientVersions;
+    private readonly MaintenanceGate maintenance;
     private readonly ILogger<MessageRouter> logger;
 
     /// <summary>
@@ -41,13 +44,17 @@ public sealed class MessageRouter
     {
         MessageTypes.SinglePlayerPurchaseUnlock,
         MessageTypes.SinglePlayerClaimTutorialReward,
+        MessageTypes.SinglePlayerClaimTutorialModule,
         MessageTypes.SinglePlayerClaimDeathReward,
         MessageTypes.SinglePlayerClaimAdMultiplier,
+        MessageTypes.SinglePlayerPendingAdRewardDismiss,
         MessageTypes.SinglePlayerClearChapter,
         MessageTypes.SanctuaryBuyItem,
+        MessageTypes.IapRedeem,
         MessageTypes.SanctuarySetBag,
         MessageTypes.TavernClaimQuest,
         MessageTypes.TavernClaimBonus,
+        MessageTypes.TalentsBuy,
         MessageTypes.NicknameSet,
         MessageTypes.ProfileSetIcon,
         MessageTypes.CampaignReportKills,
@@ -81,6 +88,8 @@ public sealed class MessageRouter
         HallOfFameService hallOfFame,
         AchievementService achievements,
         SinglePlayerProgressService singlePlayerProgress,
+        TalentService talents,
+        IapPurchaseService purchases,
         PresenceRegistry presence,
         FriendService friends,
         MatchResultRecorder resultRecorder,
@@ -88,6 +97,7 @@ public sealed class MessageRouter
         SessionTokenRegistry sessionTokens,
         RequestDedupStore requestDedup,
         ClientVersionGate clientVersions,
+        MaintenanceGate maintenance,
         ILogger<MessageRouter> logger)
     {
         this.config = config;
@@ -102,6 +112,8 @@ public sealed class MessageRouter
         this.hallOfFame = hallOfFame;
         this.achievements = achievements;
         this.singlePlayerProgress = singlePlayerProgress;
+        this.talents = talents;
+        this.purchases = purchases;
         this.presence = presence;
         this.friends = friends;
         this.resultRecorder = resultRecorder;
@@ -109,6 +121,7 @@ public sealed class MessageRouter
         this.sessionTokens = sessionTokens;
         this.requestDedup = requestDedup;
         this.clientVersions = clientVersions;
+        this.maintenance = maintenance;
         this.logger = logger;
         loadoutRules = config.ToLoadoutRules();
     }
@@ -123,7 +136,22 @@ public sealed class MessageRouter
                 Envelope envelope = await connection.ReceiveAsync(cancellation);
                 if (envelope == null)
                     break;
-                await DispatchAsync(connection, envelope, cancellation);
+                try
+                {
+                    await DispatchAsync(connection, envelope, cancellation);
+                }
+                catch (Exception exception)
+                {
+                    // Una query o un singolo comando difettoso non deve chiudere il
+                    // WebSocket: causerebbe un ciclo infinito di resume/richiesta.
+                    logger.LogError(
+                        exception,
+                        "Errore gestendo {Type} per {ConnectionId}.",
+                        envelope.type, connection.ConnectionId);
+                    await connection.SendErrorAsync(
+                        ErrorCodes.ServerError,
+                        "Il server non ha potuto completare la richiesta.", cancellation);
+                }
             }
         }
         catch (OperationCanceledException)
@@ -188,6 +216,12 @@ public sealed class MessageRouter
             case MessageTypes.AuthLogin:
             case MessageTypes.AuthUgs:
             case MessageTypes.AuthSession:
+                // La manutenzione precede il controllo di versione: si accende
+                // proprio per pubblicare una build nuova, e "stiamo lavorando"
+                // è più vero (e più utile) di "aggiorna il gioco" mentre la
+                // build nuova non è ancora online.
+                if (await RejectDuringMaintenanceAsync(connection, cancellation))
+                    return;
                 if (await RejectOutdatedClientAsync(connection, envelope, cancellation))
                     return;
                 break;
@@ -255,6 +289,11 @@ public sealed class MessageRouter
             case MessageTypes.LeaderboardGet:
                 await connection.SendAsync(
                     MessageTypes.LeaderboardData, BuildLeaderboardData(), cancellation);
+                break;
+            case MessageTypes.AdventureLeaderboardGet:
+                await connection.SendAsync(
+                    MessageTypes.AdventureLeaderboardData,
+                    ranked.GetAdventureLeaderboard(LeaderboardLimit), cancellation);
                 break;
             case MessageTypes.ProfileGet:
                 await connection.SendAsync(
@@ -333,6 +372,32 @@ public sealed class MessageRouter
                     singlePlayerProgress.GetSanctuary(connection.Identity),
                     cancellation);
                 break;
+            case MessageTypes.TalentsGet:
+                await connection.SendAsync(
+                    MessageTypes.TalentsData,
+                    talents.GetTalents(connection.Identity),
+                    cancellation);
+                break;
+            case MessageTypes.TalentsBuy:
+            {
+                var request = ClientConnection.ParsePayload<TalentBuyRequest>(envelope);
+                await SendTalentResultAsync(
+                    connection, talents.BuyTalent(connection.Identity, request), cancellation);
+                break;
+            }
+            case MessageTypes.IapGet:
+                await connection.SendAsync(
+                    MessageTypes.IapData, purchases.GetEntitlements(connection.Identity), cancellation);
+                break;
+            case MessageTypes.IapRedeem:
+            {
+                var request = ClientConnection.ParsePayload<IapRedeemRequest>(envelope);
+                await connection.SendAsync(
+                    MessageTypes.IapRedeemResult,
+                    purchases.Redeem(connection.Identity, request),
+                    cancellation);
+                break;
+            }
             case MessageTypes.TavernGet:
                 await connection.SendAsync(
                     MessageTypes.TavernData,
@@ -385,6 +450,13 @@ public sealed class MessageRouter
                     connection, singlePlayerProgress.ClaimTutorialReward(connection.Identity, request), cancellation);
                 break;
             }
+            case MessageTypes.SinglePlayerClaimTutorialModule:
+            {
+                var request = ClientConnection.ParsePayload<SinglePlayerTutorialModuleRequest>(envelope);
+                await SendRewardResultAsync(
+                    connection, singlePlayerProgress.ClaimTutorialModuleReward(connection.Identity, request), cancellation);
+                break;
+            }
             case MessageTypes.SinglePlayerRunStarted:
             {
                 var request = ClientConnection.ParsePayload<SinglePlayerRunStartRequest>(envelope);
@@ -414,6 +486,16 @@ public sealed class MessageRouter
                     singlePlayerProgress.GetPendingAdRewards(connection.Identity),
                     cancellation);
                 break;
+            case MessageTypes.SinglePlayerPendingAdRewardDismiss:
+            {
+                var request = ClientConnection.ParsePayload<SinglePlayerDismissPendingAdRewardRequest>(envelope);
+                var result = singlePlayerProgress.DismissPendingAdReward(connection.Identity, request);
+                if (result.Error != null)
+                    await connection.SendErrorAsync(result.ErrorCode, result.Error, cancellation);
+                else
+                    await connection.SendAsync(MessageTypes.SinglePlayerPendingAdRewardDismissed, new { }, cancellation);
+                break;
+            }
             case MessageTypes.SinglePlayerClaimLevelRewards:
             {
                 await SendRewardResultAsync(
@@ -471,6 +553,20 @@ public sealed class MessageRouter
         await connection.SendAsync(MessageTypes.SanctuaryData, outcome.Data, cancellation);
     }
 
+    private static async Task SendTalentResultAsync(
+        ClientConnection connection,
+        (TalentData Data, string ErrorCode, string Error) outcome,
+        CancellationToken cancellation)
+    {
+        if (outcome.Data == null)
+        {
+            await connection.SendErrorAsync(outcome.ErrorCode, outcome.Error, cancellation);
+            return;
+        }
+
+        await connection.SendAsync(MessageTypes.TalentsData, outcome.Data, cancellation);
+    }
+
     private static async Task SendTavernResultAsync(
         ClientConnection connection,
         (TavernData Data, string ErrorCode, string Error) outcome,
@@ -511,6 +607,37 @@ public sealed class MessageRouter
         }
 
         await connection.SendAsync(MessageTypes.SinglePlayerRewardResult, outcome.Result, cancellation);
+    }
+
+    /// <summary>
+    /// Portone chiuso per manutenzione: nessuno entra, qualunque sia il modo in cui
+    /// prova ad autenticarsi, riaggancio di sessione compreso. Come per il cancello
+    /// di versione la connessione resta aperta ma senza identità, e la risposta dice
+    /// esplicitamente "manutenzione" invece di un errore generico che il client
+    /// riproverebbe all'infinito.
+    ///
+    /// Chi sta già giocando non viene toccato: è un drain, si aspetta che finiscano.
+    /// </summary>
+    private async Task<bool> RejectDuringMaintenanceAsync(
+        ClientConnection connection, CancellationToken cancellation)
+    {
+        if (!maintenance.IsActive)
+            return false;
+
+        logger.LogInformation(
+            "Accesso rifiutato su {ConnectionId}: server in manutenzione.", connection.ConnectionId);
+
+        string message = maintenance.Message;
+        await connection.SendAsync(MessageTypes.AuthResponse, new AuthResponse
+        {
+            ok = false,
+            error = string.IsNullOrWhiteSpace(message)
+                ? "Il server è in manutenzione. Riprova fra poco."
+                : message,
+            maintenance = true,
+            maintenanceMessage = message
+        }, cancellation);
+        return true;
     }
 
     /// <summary>
@@ -616,7 +743,11 @@ public sealed class MessageRouter
                 connection.ConnectionId);
             await connection.SendAsync(
                 MessageTypes.SessionKicked,
-                new SessionKickedMessage { message = SessionUsedElsewhereMessage },
+                new SessionKickedMessage
+                {
+                    localizationKey = ServerTextKeys.SessionUsedElsewhere,
+                    message = SessionUsedElsewhereMessage
+                },
                 cancellation);
         }
 
@@ -906,6 +1037,7 @@ public sealed class MessageRouter
                     connection.Identity.Username, previous.ConnectionId);
                 await previous.SendAsync(MessageTypes.SessionKicked, new SessionKickedMessage
                 {
+                    localizationKey = ServerTextKeys.SessionUsedElsewhere,
                     message = SessionUsedElsewhereMessage
                 });
                 // Senza revoca il client sloggato rientrerebbe da solo con la
@@ -964,24 +1096,24 @@ public sealed class MessageRouter
         var request = ClientConnection.ParsePayload<FriendChallengeRequest>(envelope);
         if (string.IsNullOrEmpty(request?.playerId))
         {
-            await connection.SendErrorAsync(ErrorCodes.InvalidAction, "Amico non valido.", cancellation);
+            await connection.SendErrorAsync(ErrorCodes.InvalidAction, "Amico non valido.", cancellation, ServerTextKeys.FriendInvalid);
             return;
         }
         if (!friends.AreFriends(connection.Identity.PlayerId, request.playerId))
         {
-            await connection.SendErrorAsync(ErrorCodes.InvalidAction, "Non è tra i tuoi amici.", cancellation);
+            await connection.SendErrorAsync(ErrorCodes.InvalidAction, "Non è tra i tuoi amici.", cancellation, ServerTextKeys.FriendNotAdded);
             return;
         }
 
         ClientConnection target = presence.GetConnection(request.playerId);
         if (target == null)
         {
-            await connection.SendErrorAsync(ErrorCodes.InvalidAction, "L'amico non è online.", cancellation);
+            await connection.SendErrorAsync(ErrorCodes.InvalidAction, "L'amico non è online.", cancellation, ServerTextKeys.FriendOffline);
             return;
         }
         if (target.CurrentRoom != null)
         {
-            await connection.SendErrorAsync(ErrorCodes.InvalidAction, "L'amico è già occupato.", cancellation);
+            await connection.SendErrorAsync(ErrorCodes.InvalidAction, "L'amico è già occupato.", cancellation, ServerTextKeys.FriendBusy);
             return;
         }
 
@@ -1046,6 +1178,18 @@ public sealed class MessageRouter
         if (loadout == null)
             return;
 
+        IReadOnlyList<string> eligibilityFailures = RankedLoadoutEligibility.GetFailures(
+            loadout, singlePlayerProgress.GetProgress(connection.Identity));
+        if (eligibilityFailures.Count > 0)
+        {
+            string details = string.Join("\n", eligibilityFailures.Select(failure => $"- {failure}"));
+            await connection.SendErrorAsync(
+                ErrorCodes.RankedLoadoutRequirements,
+                $"Non hai i requisiti per usare questa loadout in ranked:\n{details}",
+                cancellation);
+            return;
+        }
+
         int mmr = ranked.GetProgress(connection.Identity.PlayerId, seasons.ActiveSeasonId).Mmr;
         (QueueEntry first, QueueEntry second)? pair = queue.Enqueue(connection, loadout, mmr);
         if (pair == null)
@@ -1089,6 +1233,7 @@ public sealed class MessageRouter
             await opponent.SendAsync(MessageTypes.MatchOpponentLeft, new ErrorMessage
             {
                 code = "opponent_left",
+                localizationKey = ServerTextKeys.MatchOpponentLeft,
                 message = "L'avversario ha lasciato la partita."
             }, cancellation);
     }
@@ -1104,7 +1249,10 @@ public sealed class MessageRouter
             }, cancellation);
         }
 
-        room.Session = new MatchSession(room, config, resultRecorder);
+        room.Session = new MatchSession(
+            room, config, resultRecorder,
+            identity => RankedLoadoutEligibility.UnlockedSupremesOf(
+                singlePlayerProgress.GetProgress(identity)));
         await NotifyFriendsPresenceAsync(room.Host.Identity.PlayerId, PresenceRegistry.InMatch);
         await NotifyFriendsPresenceAsync(room.Guest.Identity.PlayerId, PresenceRegistry.InMatch);
         await room.Session.StartAsync(cancellation);
@@ -1185,6 +1333,7 @@ public sealed class MessageRouter
             await opponent.SendAsync(MessageTypes.MatchOpponentLeft, new ErrorMessage
             {
                 code = "opponent_left",
+                localizationKey = ServerTextKeys.MatchOpponentLeft,
                 message = "L'avversario ha lasciato la partita."
             });
     }
@@ -1267,6 +1416,7 @@ public sealed class MessageRouter
                 await remaining.SendAsync(MessageTypes.MatchOpponentLeft, new ErrorMessage
                 {
                     code = "opponent_left",
+                    localizationKey = ServerTextKeys.MatchOpponentTimeout,
                     message = "L'avversario non è rientrato in tempo."
                 });
             }

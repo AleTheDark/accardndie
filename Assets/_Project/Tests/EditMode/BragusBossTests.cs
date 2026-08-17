@@ -44,6 +44,11 @@ namespace AccardND.GameCore.Tests
             Assert.That(result.Counterattacks, Is.True);
             Assert.That(result.CounterTotal, Is.EqualTo(BragusBoss.CardStrength + 5));
             Assert.That(result.TargetDefenseTotal, Is.EqualTo(7 + 6));
+            Assert.That(result.TargetDefenseRoll.HasSecondRoll, Is.True);
+            Assert.That(result.TargetDefenseRoll.FirstRoll, Is.EqualTo(2));
+            Assert.That(result.TargetDefenseRoll.SecondRoll, Is.EqualTo(6));
+            Assert.That(result.TargetDefenseRoll.SelectedRoll, Is.EqualTo(6));
+            Assert.That(result.TargetDefenseRoll.SelectionMode, Is.EqualTo(VigorSelectionMode.Highest));
             Assert.That(result.CounterDefeatsAttacker, Is.True);
         }
 

@@ -9,9 +9,29 @@ namespace AccardND.NetProtocol
         public int accountLevel;
         public int accountExperience;
         public int accountTotalExperience;
+        /// <summary>
+        /// Quanta esperienza serve <em>in tutto</em> per il livello successivo: e' il
+        /// denominatore della barra, non quanta ne manca.
+        /// </summary>
         public int accountExperienceToNextLevel;
+
         public int pendingLevelRewards;
+
+        /// <summary>Punti talento non ancora spesi.</summary>
+        public int talentPoints;
+
+        /// <summary>Punti talento guadagnati in tutto, spesi compresi. Solo per la UI.</summary>
+        public int talentPointsEarned;
+
         public bool tutorialCompleted;
+
+        /// <summary>
+        /// Moduli del tutorial progressivo gia' portati a termine. Da qui derivano tutti i
+        /// cancelli dell'onboarding: e' l'unico stato del percorso, e non esiste un secondo
+        /// contatore che potrebbe sfasarsi.
+        /// </summary>
+        public string[] completedTutorialModules;
+
         public bool hardcoreUnlocked;
         public string[] unlockedChapters;
         public string[] unlockedStages;
@@ -31,12 +51,6 @@ namespace AccardND.NetProtocol
         public string[] unlockedSlots;
 
         /// <summary>
-        /// Oggetti sbloccati al Santuario, cioe' quelli che il negozio puo' vendere.
-        /// Sbloccare non da' copie: quelle si comprano.
-        /// </summary>
-        public string[] unlockedItems;
-
-        /// <summary>
         /// Consumabili scelti per la prossima run. Viaggiano con la progressione, non solo
         /// col catalogo del Santuario: la run deve poterli caricare senza che il giocatore
         /// sia passato dal Santuario in questa sessione.
@@ -48,6 +62,13 @@ namespace AccardND.NetProtocol
         /// progresso verso i requisiti del Santuario.
         /// </summary>
         public PlayerCounterData[] counters;
+
+        /// <summary>
+        /// I modificatori dei talenti gia' risolti per la prossima run. Viaggiano con la
+        /// progressione perche' la run deve poterli caricare senza essere passata dalla
+        /// schermata dei talenti in questa sessione, esattamente come la bisaccia.
+        /// </summary>
+        public TalentLoadoutData talentLoadout;
     }
 
     /// <summary>Un contatore cumulativo del giocatore.</summary>
@@ -70,12 +91,6 @@ namespace AccardND.NetProtocol
     }
 
     [Serializable]
-    public sealed class SinglePlayerChooseClassRequest
-    {
-        public string classId;
-    }
-
-    [Serializable]
     public sealed class SinglePlayerPurchaseUnlockRequest
     {
         public string type;
@@ -86,6 +101,20 @@ namespace AccardND.NetProtocol
     public sealed class SinglePlayerTutorialRewardRequest
     {
         public string tutorialRunId;
+    }
+
+    /// <summary>
+    /// Fine di un modulo del tutorial progressivo. Il client dichiara solo quale modulo ha
+    /// portato a termine: cosa spetti a quel modulo lo decide il catalogo del server.
+    /// Idempotente per <c>moduleId</c>, come tutte le reward.
+    /// </summary>
+    [Serializable]
+    public sealed class SinglePlayerTutorialModuleRequest
+    {
+        public string moduleId;
+
+        /// <summary>Riferimento del client, solo per ritrovare la riscossione nei log.</summary>
+        public string moduleRunId;
     }
 
     /// <summary>
@@ -131,11 +160,30 @@ namespace AccardND.NetProtocol
         /// <summary>Abilita' di classe attivate dalle pedine del giocatore nella run.</summary>
         public int abilitiesUsed;
 
-        /// <summary>Consumabili usati nella run (lunghezza di <see cref="consumedItemIds"/>).</summary>
+        /// <summary>
+        /// Consumabili usati nella run, di qualunque provenienza: bisaccia, bottino delle stanze
+        /// o acquisto al mercante usato subito. Non e' la lunghezza di
+        /// <see cref="consumedItemIds"/>, che copre solo la bisaccia.
+        /// </summary>
         public int itemsUsed;
 
         /// <summary>Esperienza guadagnata nella run, al lordo di quella spesa dal mercante.</summary>
         public int experienceEarned;
+
+        /// <summary>Supreme attivate dalle pedine del giocatore nella run.</summary>
+        public int supremesUsed;
+
+        /// <summary>Sfide veloci portate a termine nella run: la rinuncia non conta.</summary>
+        public int quickChallengesCompleted;
+
+        /// <summary>Acquisti conclusi al mercante nella run, carte e oggetti insieme.</summary>
+        public int merchantPurchases;
+
+        /// <summary>Oro guadagnato nelle stanze e nelle prove lampo, al netto di vendite e rimborsi.</summary>
+        public int goldEarned;
+
+        /// <summary>Livelli guadagnati nella run.</summary>
+        public int levelsGained;
 
         /// <summary>Id dei boss e miniboss sconfitti nella run, per i contatori per-boss.</summary>
         public string[] defeatedBossIds;
@@ -145,6 +193,13 @@ namespace AccardND.NetProtocol
         /// dalla scorta. Quelli non usati restano al giocatore.
         /// </summary>
         public string[] consumedItemIds;
+
+        /// <summary>
+        /// Oggetti trovati nelle stanze o comprati al mercante e mai usati: il server li versa
+        /// nella scorta permanente. La run finita non se li porta via, restano disponibili per
+        /// la bisaccia della prossima.
+        /// </summary>
+        public string[] keptItemIds;
     }
 
     [Serializable]
@@ -152,6 +207,12 @@ namespace AccardND.NetProtocol
     {
         public string rewardClaimId;
         public string adImpressionId;
+    }
+
+    [Serializable]
+    public sealed class SinglePlayerDismissPendingAdRewardRequest
+    {
+        public string rewardClaimId;
     }
 
     /// <summary>
@@ -173,6 +234,10 @@ namespace AccardND.NetProtocol
 
         /// <summary>EXP account che il video aggiungerebbe (base * (moltiplicatore - 1)).</summary>
         public int extraAccountExperience;
+
+        /// <summary>Miele gia' accreditato e miele aggiuntivo ottenibile col video.</summary>
+        public int baseHoney;
+        public int extraHoney;
 
         /// <summary>Capitolo della run, quando la reward viene da una campagna.</summary>
         public string chapterId;
@@ -207,5 +272,11 @@ namespace AccardND.NetProtocol
         public int grantedHoney;
         public int grantedAccountExperience;
         public int levelsGained;
+
+        /// <summary>
+        /// Punti talento consegnati dalla riscossione dei livelli. Sostituisce il miele che
+        /// il livello pagava prima: e' quello che la schermata di level-up deve annunciare.
+        /// </summary>
+        public int grantedTalentPoints;
     }
 }

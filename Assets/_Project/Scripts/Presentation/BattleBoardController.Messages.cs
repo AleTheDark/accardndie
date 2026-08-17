@@ -182,11 +182,31 @@ public sealed partial class BattleBoardController
 
 	private void SetBattlefieldMessage(string message)
 	{
+		currentBattlefieldMessage = message;
 		if ((Object)(object)messageText != (Object)null)
 		{
-			messageText.text = message;
+			messageText.text = GameText.GetAuto(message);
 			UpdateMessageTextLayout();
 			HideNormalMessagePanelDuringAdventureTutorial();
+		}
+	}
+
+	/// <summary>
+	/// Riapplica solo i testi persistenti già sullo schermo. Non richiama
+	/// SetTurnBanner: quello aggiornerebbe anche moneta e colori del turno.
+	/// </summary>
+	private void RefreshRetainedCombatTextLocale()
+	{
+		if ((Object)(object)messageText != (Object)null && !string.IsNullOrEmpty(currentBattlefieldMessage))
+		{
+			messageText.text = GameText.GetAuto(currentBattlefieldMessage);
+			UpdateMessageTextLayout();
+		}
+
+		if ((Object)(object)turnBannerText != (Object)null && !string.IsNullOrEmpty(currentTurnBannerLabel))
+		{
+			turnBannerText.text = GameText.GetAuto(currentTurnBannerLabel);
+			UpdateMessageTextLayout();
 		}
 	}
 
@@ -274,13 +294,14 @@ public sealed partial class BattleBoardController
 
 	private bool IsSingleActionNonCombatHudVisible()
 	{
-		return (currentRoomType == RoomType.Loot || currentRoomType == RoomType.UnexpectedOpportunity)
+		return (currentRoomType == RoomType.Loot || currentRoomType == RoomType.QuickChallenge)
 			&& IsActionButtonVisible(restartButton)
 			&& !IsActionButtonVisible(merchantBuyButton);
 	}
 
 	private void SetTurnBanner(bool playerTurn, string label, bool defeat = false, bool campaignEnded = false)
 	{
+		currentTurnBannerLabel = label;
 		campaignEndedBannerVisible = campaignEnded;
 		SetTurnCoinState(playerTurn, !defeat && !campaignEnded);
 		if ((Object)(object)turnBannerImage != (Object)null)
@@ -295,7 +316,8 @@ public sealed partial class BattleBoardController
 		}
 		if ((Object)(object)turnBannerText != (Object)null)
 		{
-			turnBannerText.text = label;
+			turnBannerText.alignment = TextAnchor.MiddleCenter;
+			turnBannerText.text = GameText.GetAuto(label);
 			UpdateMessageTextLayout();
 		}
 	}
@@ -373,7 +395,7 @@ public sealed partial class BattleBoardController
 
 		logText.horizontalOverflow = HorizontalWrapMode.Wrap;
 		logText.verticalOverflow = VerticalWrapMode.Truncate;
-		SetRect(logText.rectTransform, new Vector2(0.035f, 0.035f), new Vector2(0.965f, 0.895f));
+		SetRect(logText.rectTransform, new Vector2(0.035f, 0.035f), new Vector2(0.965f, 0.875f));
 	}
 
 	private int EstimateVisibleLogEntries()
@@ -428,27 +450,7 @@ public sealed partial class BattleBoardController
 			RefreshSfxOptionsUi();
 			RefreshMusicOptionsUi();
 			RefreshLanguageOptionsUi();
-			RefreshPrivacyOptionsButton();
 		}
-	}
-
-	/// <summary>
-	/// Il bottone delle opzioni privacy compare solo dove serve. Non e' una scelta estetica:
-	/// dove il consenso e' stato raccolto Google pretende che il giocatore possa tornare
-	/// sulle proprie scelte, e dove non e' mai stato chiesto (fuori dall'Europa, o senza
-	/// pubblicita' del tutto) un bottone che apre un modulo vuoto e' solo confusione.
-	/// </summary>
-	private void RefreshPrivacyOptionsButton()
-	{
-		if ((Object)(object)optionsPrivacyButton == (Object)null)
-			return;
-		((Component)optionsPrivacyButton).gameObject.SetActive(AccardND.Ads.AdConsent.IsPrivacyOptionsRequired);
-	}
-
-	private async void ShowPrivacyOptions()
-	{
-		CloseOptionsPanel();
-		await AccardND.Ads.AdConsent.ShowPrivacyOptionsAsync();
 	}
 
 	private void CloseOptionsPanel()
@@ -513,15 +515,13 @@ public sealed partial class BattleBoardController
 
 	private void OpenLogFromOptions()
 	{
-		if ((Object)(object)optionsPanel != (Object)null)
-		{
-			CloseOptionsPanel();
-		}
-		if ((Object)(object)logPanel != (Object)null)
-		{
-			logPanel.SetActive(true);
-			RefreshLogText();
-		}
+		if ((Object)(object)logPanel == (Object)null)
+			return;
+
+		CloseOptionsPanel();
+		logPanel.SetActive(true);
+		logPanel.transform.SetAsLastSibling();
+		RefreshLogText();
 	}
 
 	private void ReturnToMainMenuFromOptions()
@@ -637,7 +637,7 @@ public sealed partial class BattleBoardController
 		}
 	}
 
-	private void ConfirmReturnToMainMenu()
+	private async void ConfirmReturnToMainMenu()
 	{
 		if (returnToMenuConfirmIsSurrender)
 		{
@@ -680,6 +680,10 @@ public sealed partial class BattleBoardController
 		pendingHints.Clear();
 		hintActive = false;
 
+		// Gli oggetti della bisaccia venivano scalati solo dal riepilogo di fine run.
+		// Uscendo dal menu, ReturnToStart azzera quel riepilogo: registriamo quindi gli
+		// eventuali consumi prima di distruggere lo stato della campagna.
+		await PersistConsumedBagItemsOnCampaignExitAsync();
 		ReturnToStart();
 	}
 }

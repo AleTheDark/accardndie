@@ -56,6 +56,15 @@ public sealed class GoogleIdTokenReader
             return null;
         }
 
+        return TryReadVerifiedEmail(idToken, keys);
+    }
+
+    /// <summary>
+    /// La verifica vera, separata dal recupero delle chiavi: cosi' e' provabile
+    /// firmando un token con una chiave di prova, senza chiamare Google.
+    /// </summary>
+    internal string TryReadVerifiedEmail(string idToken, IList<SecurityKey> keys)
+    {
         var parameters = new TokenValidationParameters
         {
             ValidIssuers = ValidIssuers,
@@ -70,7 +79,15 @@ public sealed class GoogleIdTokenReader
 
         try
         {
-            var handler = new JwtSecurityTokenHandler();
+            // MapInboundClaims = false e' obbligatorio, non una preferenza di stile:
+            // lasciato al valore predefinito, l'handler rinomina "email" nel claim
+            // SAML "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+            // e la ricerca per "email" qui sotto torna sempre null. Il token risulta
+            // valido, la mail sparisce, e ogni accesso Google finisce con "non e'
+            // stato possibile verificare il tuo account". "email_verified" invece non
+            // e' nella tabella di rimappatura: passava, ed e' il motivo per cui il
+            // guasto sembrava arrivare dal nulla.
+            var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
             System.Security.Claims.ClaimsPrincipal principal =
                 handler.ValidateToken(idToken, parameters, out _);
 

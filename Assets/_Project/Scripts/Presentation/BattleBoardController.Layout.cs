@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -45,6 +45,7 @@ public sealed partial class BattleBoardController
 			RefreshCampaignModeSelectionLayout();
 			RefreshAdventureChapterLayout();
 			RefreshSanctuaryLayout();
+			RefreshShopLayout();
 			RefreshLibraryLayout();
 			RefreshRoomChoiceLayout();
 			RefreshCardInspectionLayout();
@@ -56,10 +57,6 @@ public sealed partial class BattleBoardController
 			canvasScaler.referenceResolution = (flag ?responsiveLayout.PortraitReferenceResolution : responsiveLayout.LandscapeReferenceResolution);
 			canvasScaler.matchWidthOrHeight = (flag ?1f : (flag2 ?0.25f : 0f));
 			ApplyCombatHudRefactorLayout();
-			if (turnOrder.Count > 0 && playerCards.Count > 0)
-			{
-				RefreshCombatPawnCarousel(animate: false);
-			}
 			Canvas.ForceUpdateCanvases();
 			Rect rect = safeAreaRoot.rect;
 			float width = rect.width;
@@ -82,10 +79,11 @@ public sealed partial class BattleBoardController
 			bool flag3 = (currentRoomType == RoomType.Monster || currentRoomType == RoomType.Boss) && (draftActive || deploymentDraftActive || playerCards.Count > 0 || cpuCards.Count > 0);
 			bool flag4 = IsMerchantActionHudVisible() || IsSingleActionNonCombatHudVisible();
 			bool merchantActionHud = IsMerchantActionHudVisible();
+			bool isRoomChoiceActive = IsRoomChoiceActive();
 			bool useNonCombatArchiveButtonPosition = currentRoomType == RoomType.Merchant
 				|| currentRoomType == RoomType.Loot
-				|| currentRoomType == RoomType.UnexpectedOpportunity
-				|| IsRoomChoiceActive();
+				|| currentRoomType == RoomType.QuickChallenge
+				|| isRoomChoiceActive;
 			float anchor = ((!flag3) ?(flag ?0.775f : (flag2 ?0.845f : 0.79f)) : (flag ?0.76f : (flag2 ?0.845f : 0.79f)));
 			anchor += OpponentFormationLift;
 			anchor = ClampBattlefieldAnchor(anchor, num11, height, flag ?0.055f : 0.08f, (!flag3) ?(flag ?0.87f : (flag2 ?0.995f : 0.94f)) : (flag ?0.835f : (flag2 ?0.995f : 0.94f)));
@@ -96,7 +94,62 @@ public sealed partial class BattleBoardController
 				anchor2 += LandscapePlayerFormationLift;
 			}
 			anchor2 = ClampBattlefieldAnchor(anchor2, num11, height, flag ?0.06f : 0.025f, Mathf.Max(0.12f, anchor - num11 / Mathf.Max(1f, height) - 0.035f));
+			// La fila del giocatore puo' essere in volo verso la posa di
+			// battaglia, e ConfigureBattlefieldRow ne riscrive ancore e misure:
+			// la posa interpolata va messa da parte e restituita subito dopo,
+			// girando al tween il valore appena calcolato come nuovo bersaglio.
+			bool rowTransitionInFlight = IsRoutineAlive(playerBattlefieldRowTransitionCoroutine, playerRowTransitionFrame)
+				&& (Object)(object)playerRow != (Object)null;
+			Vector2 rowPoseAnchorMin = rowTransitionInFlight ?playerRow.anchorMin : Vector2.zero;
+			Vector2 rowPoseAnchorMax = rowTransitionInFlight ?playerRow.anchorMax : Vector2.zero;
+			Vector2 rowPoseSize = rowTransitionInFlight ?playerRow.sizeDelta : Vector2.zero;
+			Vector2 rowPosePosition = rowTransitionInFlight ?playerRow.anchoredPosition : Vector2.zero;
+			// In PvP il carosello e' gia' in posa e ogni messaggio del server
+			// ripassa da qui: la griglia rimetterebbe le pedine in fila, quindi la
+			// posa attuale si mette da parte e si rimette subito dopo.
+			bool pvpCarouselOwnsPawns = IsPvpCombatCarouselActive;
+			// La stessa protezione serve anche in campagna finche' una rotazione e'
+			// in volo: li' il carosello non riscrive la posa (la insegue la sua
+			// coroutine), quindi la griglia di formazione appena scritta resterebbe
+			// a schermo per quel frame - le pedine tornano di colpo agli slot dello
+			// schieramento e il frame dopo sono di nuovo al loro posto. E' lo stesso
+			// microscatto gia' corretto in PvP.
+			bool carouselOwnsPawns = pvpCarouselOwnsPawns
+				|| IsRoutineAlive(carouselRotationRoutine, carouselRotationFrame);
+			if (carouselOwnsPawns)
+			{
+				CaptureCombatPawnPoses();
+			}
 			ConfigureBattlefieldRow(playerRow, playerCards, width2, num11, num11, num7, anchor2);
+			if (rowTransitionInFlight)
+			{
+				RetargetPlayerBattlefieldRowTransition(rowPoseAnchorMin, rowPoseAnchorMax, rowPoseSize, rowPosePosition);
+			}
+			// Il carosello ha l'ultima parola sulle pedine. Girando prima di
+			// ConfigureBattlefieldRow le sue posizioni venivano sovrascritte
+			// dalla griglia di formazione, e la coda dell'animazione le
+			// rimetteva a posto solo il frame dopo: un frame sbagliato in mezzo
+			// a due giusti, cioe' il microscatto dello schieramento.
+			if (pvpCarouselOwnsPawns)
+			{
+				// Ripristinata la posa, il carosello si accorge da solo se c'e'
+				// davvero qualcosa da muovere: a turno invariato non muove nulla,
+				// al cambio di pedina attiva anima la rotazione partendo da dove
+				// le pedine erano - non dalla fila appena scritta.
+				RestoreCombatPawnPoses();
+				RefreshCombatPawnCarousel(animate: true);
+			}
+			else if (turnOrder.Count > 0 && playerCards.Count > 0)
+			{
+				// Con la rotazione in volo la posa interpolata torna al suo posto e
+				// la coroutine prosegue da li'; a riposo lo snapshot e' vuoto e
+				// RefreshCombatPawnCarousel scrive comunque la posa finale.
+				if (carouselOwnsPawns)
+				{
+					RestoreCombatPawnPoses();
+				}
+				RefreshCombatPawnCarousel(animate: false);
+			}
 			int num12 = (((Object)(object)playerHandRow != (Object)null) ?((Transform)playerHandRow).childCount : 0);
 			if (num12 > 0)
 			{
@@ -125,7 +178,7 @@ public sealed partial class BattleBoardController
 			if (flag)
 			{
 				SetRect(tableGlowRect, new Vector2(0.025f, 0.035f), new Vector2(0.975f, 0.965f));
-				SetRect(topInfoBarRect, new Vector2(0.035f, 0.952f), new Vector2(0.7f, 0.992f));
+				SetRect(topInfoBarRect, new Vector2(0.25f, 0.93f), new Vector2(0.75f, 0.995f));
 				if (playerHud != null)
 				{
 					playerHud.Rect.anchorMin = new Vector2(0.2275f, 0.002f);
@@ -133,7 +186,7 @@ public sealed partial class BattleBoardController
 					playerHud.Rect.offsetMin = new Vector2(0f, 11f);
 					playerHud.Rect.offsetMax = new Vector2(0f, 11f);
 				}
-				SetRect(cpuHud.Rect, new Vector2(0.2275f, 0.907f), new Vector2(0.7725f, 0.992f));
+				Stretch(cpuHud.Rect, 0f);
 				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.81f, 0.917f), new Vector2(0.982f, 0.995f));
 				if ((Object)(object)settingsButtonLabel != (Object)null)
 				{
@@ -174,10 +227,10 @@ public sealed partial class BattleBoardController
 			else
 			{
 				SetRect(tableGlowRect, flag2 ?new Vector2(0.04f, 0.105f) : new Vector2(0.08f, 0.13f), flag2 ?new Vector2(0.96f, 0.895f) : new Vector2(0.92f, 0.87f));
-				SetRect(topInfoBarRect, flag2 ?new Vector2(0.05f, 0.925f) : new Vector2(0.08f, 0.93f), new Vector2(0.73f, 0.985f));
+				SetRect(topInfoBarRect, new Vector2(0.25f, 0.91f), new Vector2(0.75f, 0.985f));
 				if (playerHud != null)
 					SetRect(playerHud.Rect, flag2 ?new Vector2(0.385f, 0.035f) : new Vector2(0.385f, 0.035f), flag2 ?new Vector2(0.615f, 0.197f) : new Vector2(0.615f, 0.198f));
-				SetRect(cpuHud.Rect, flag2 ?new Vector2(0.385f, 0.823f) : new Vector2(0.385f, 0.822f), flag2 ?new Vector2(0.615f, 0.985f) : new Vector2(0.615f, 0.985f));
+				Stretch(cpuHud.Rect, 0f);
 				SetRect((RectTransform)((Component)logButton).transform, new Vector2(0.84f, 0.852f), new Vector2(0.995f, 0.992f));
 				if ((Object)(object)settingsButtonLabel != (Object)null)
 				{
@@ -213,9 +266,13 @@ public sealed partial class BattleBoardController
 			{
 				// Posizione calibrata per Mercato, Loot, Imprevisto e Scelta Via.
 				RectTransform optionsButtonRect = (RectTransform)((Component)logButton).transform;
-				optionsButtonRect.anchorMin = optionsButtonRect.anchorMax = new Vector2(1f, 1f);
+				optionsButtonRect.anchorMin = optionsButtonRect.anchorMax = isRoomChoiceActive
+					? new Vector2(1f, 0.5f)
+					: new Vector2(1f, 1f);
 				optionsButtonRect.pivot = new Vector2(0.5f, 0.5f);
-				optionsButtonRect.anchoredPosition = new Vector2(-94.5f, -76f);
+				optionsButtonRect.anchoredPosition = isRoomChoiceActive
+					? new Vector2(-92f, -624f)
+					: new Vector2(-94.5f, -76f);
 				optionsButtonRect.sizeDelta = new Vector2(153f, 136f);
 
 				implementationArchiveButtonRect.anchorMin = implementationArchiveButtonRect.anchorMax = new Vector2(1f, 0f);
@@ -229,6 +286,7 @@ public sealed partial class BattleBoardController
 			}
 			ApplyCompactChromeVisibility(flag);
 			ApplyResponsiveTextSizing(flag);
+			ApplySeraphelExclusiveLayout();
 			Canvas.ForceUpdateCanvases();
 			ResizeTimelineTiles();
 		}
@@ -236,7 +294,9 @@ public sealed partial class BattleBoardController
 
 	private void ApplyResponsiveTextSizing(bool compact)
 	{
-		SetResponsiveText(topInfoText, compact ?24 : 19, compact ?18 : 13);
+		if ((Object)(object)topInfoText != (Object)null)
+			((Component)topInfoText).gameObject.SetActive(!IsBossFightHudActive());
+		SetResponsiveText(topInfoText, 50, 24);
 		SetResponsiveText(roundText, compact ?24 : 20, compact ?18 : 14);
 		SetResponsiveText(campaignZoneText, compact ?22 : 18, compact ?16 : 13);
 		SetResponsiveText(cpuTitleText, compact ?28 : 25, compact ?20 : 17);
@@ -245,6 +305,11 @@ public sealed partial class BattleBoardController
 		SetResponsiveText(turnBannerText, compact ?30 : 24, compact ?22 : 17);
 		SetResponsiveHudText(playerHud, compact);
 		SetResponsiveHudText(cpuHud, compact);
+		if (cpuHud != null && (Object)(object)cpuHud.DiceText != (Object)null)
+		{
+			cpuHud.DiceText.fontSize = IsBossFightHudActive() ?35 : 40;
+			cpuHud.DiceText.resizeTextForBestFit = false;
+		}
 		if ((Object)(object)hudTooltipText != (Object)null)
 		{
 			SetResponsiveText(hudTooltipText, compact ?24 : 18, compact ?18 : 13);
@@ -304,7 +369,11 @@ public sealed partial class BattleBoardController
 		if (cpuHud != null && (Object)(object)cpuHud.Rect != (Object)null)
 		{
 			((Component)cpuHud.Rect).gameObject.SetActive(
-				combatChromeVisible && !bragusBossPresentationActive && !trentorBossPresentationActive);
+				combatChromeVisible
+				&& currentRoomType != RoomType.Boss
+				&& !bragusBossPresentationActive
+				&& !trentorBossPresentationActive
+				&& !seraphelBossPresentationActive);
 		}
 		if ((Object)(object)cpuTitleText != (Object)null)
 		{
@@ -312,7 +381,10 @@ public sealed partial class BattleBoardController
 		}
 		if ((Object)(object)topInfoBarRect != (Object)null)
 		{
-			((Component)topInfoBarRect).gameObject.SetActive(false);
+			((Component)topInfoBarRect).gameObject.SetActive(
+				combatChromeVisible
+				&& currentRoomType == RoomType.Monster
+				&& !IsBossFightHudActive());
 		}
 		if ((Object)(object)roundText != (Object)null)
 		{
@@ -421,7 +493,7 @@ public sealed partial class BattleBoardController
 		}
 	}
 
-	private static void ConfigureBattlefieldRow(RectTransform row, IReadOnlyList<BattleCardState> cards, float width, float cardWidth, float cardHeight, float spacing, float verticalAnchor)
+	private void ConfigureBattlefieldRow(RectTransform row, IReadOnlyList<BattleCardState> cards, float width, float cardWidth, float cardHeight, float spacing, float verticalAnchor)
 	{
 		row.anchorMin = new Vector2(0.5f, verticalAnchor);
 		row.anchorMax = new Vector2(0.5f, verticalAnchor);
@@ -439,7 +511,9 @@ public sealed partial class BattleBoardController
 			num = ((cards.Count > 0) ?1 : 0);
 			if (num != 0)
 			{
-				num2 = cards.Count((BattleCardState card) => card != null && (Object)(object)card.View != (Object)null);
+				num2 = cards.Count(card => card != null
+					&& !IsJurinashorSword(card)
+					&& (Object)(object)card.View != (Object)null);
 				goto IL_0093;
 			}
 		}
@@ -463,7 +537,9 @@ public sealed partial class BattleBoardController
 			for (int num7 = 0; num7 < cards.Count; num7++)
 			{
 				BattleCardState battleCardState = cards[num7];
-				if (battleCardState != null && !((Object)(object)battleCardState.View == (Object)null))
+				if (battleCardState != null
+					&& !IsJurinashorSword(battleCardState)
+					&& !((Object)(object)battleCardState.View == (Object)null))
 				{
 					RectTransform rectTransform = battleCardState.View.RectTransform;
 					bool backdropBoss = battleCardState.View.IsBackdropBossPresentation;
@@ -473,7 +549,9 @@ public sealed partial class BattleBoardController
 					int visualIndex = GetDeploymentVisualIndex(num6, num3);
 					rectTransform.anchoredPosition = new Vector2(
 						num5 + num4 * (float)visualIndex,
-						backdropBoss ? -cardHeight * 0.48f : 0f);
+						battleCardState.View.IsSeraphelBackdropPresentation
+							? -cardHeight * 0.30f
+							: backdropBoss ? -cardHeight * 0.48f : 0f);
 					num6++;
 				}
 			}

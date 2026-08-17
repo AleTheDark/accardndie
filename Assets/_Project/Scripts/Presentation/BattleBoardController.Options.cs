@@ -15,13 +15,23 @@ namespace AccardND.Presentation
 /// </summary>
 public sealed partial class BattleBoardController
 {
-	private const float OptionsSectionHeight = 38f;
+	private const float OptionsSectionHeight = 50f;
 
-	private const float OptionsRowHeight = 78f;
+	private const float OptionsRowHeight = 100f;
 
-	private const float OptionsActionRowHeight = 88f;
+	private const float OptionsActionRowHeight = 112f;
 
-	private const float OptionsLanguageItemHeight = 66f;
+	private const float OptionsLanguageItemHeight = 84f;
+
+	private const int OptionsTitleFontSize = 36;
+
+	private const int OptionsSectionFontSize = 21;
+
+	private const int OptionsLabelFontSize = 23;
+
+	private const int OptionsValueFontSize = 25;
+
+	private const int OptionsButtonFontSize = 26;
 
 	private static readonly Color OptionsGold = new Color(0.95f, 0.79f, 0.34f);
 
@@ -32,6 +42,8 @@ public sealed partial class BattleBoardController
 	private Button languageComboButton;
 
 	private Text languageComboLabel;
+
+	private Image languageComboFlag;
 
 	private RectTransform languageComboRect;
 
@@ -86,7 +98,7 @@ public sealed partial class BattleBoardController
 		optionsPanelRect.anchorMax = new Vector2(0.5f, 0.5f);
 		optionsPanelRect.pivot = new Vector2(0.5f, 0.5f);
 		optionsPanelRect.anchoredPosition = Vector2.zero;
-		optionsPanelRect.sizeDelta = new Vector2(880f, 700f);
+		optionsPanelRect.sizeDelta = new Vector2(1100f, 700f);
 
 		Canvas panelCanvas = optionsPanel.AddComponent<Canvas>();
 		panelCanvas.overrideSorting = true;
@@ -94,8 +106,8 @@ public sealed partial class BattleBoardController
 		optionsPanel.AddComponent<GraphicRaycaster>();
 
 		VerticalLayoutGroup column = optionsPanel.AddComponent<VerticalLayoutGroup>();
-		column.padding = new RectOffset(34, 34, 26, 26);
-		column.spacing = 12f;
+		column.padding = new RectOffset(42, 42, 34, 34);
+		column.spacing = 16f;
 		column.childAlignment = TextAnchor.UpperCenter;
 		column.childControlWidth = true;
 		column.childControlHeight = true;
@@ -114,10 +126,10 @@ public sealed partial class BattleBoardController
 			"SFX",
 			GameTextKeys.Options.SfxVolume,
 			"EFFETTI",
-			DecreaseSfxVolume,
-			IncreaseSfxVolume,
+			SetSfxVolume,
 			ToggleSfxMute,
 			out sfxVolumeText,
+			out sfxVolumeSlider,
 			out sfxMuteButton,
 			out sfxMuteButtonText);
 		CreateAudioOptionRow(
@@ -126,10 +138,10 @@ public sealed partial class BattleBoardController
 			"Music",
 			GameTextKeys.Options.MusicVolume,
 			"MUSICA",
-			DecreaseMusicVolume,
-			IncreaseMusicVolume,
+			SetMusicVolume,
 			ToggleMusicMute,
 			out musicVolumeText,
+			out musicVolumeSlider,
 			out musicMuteButton,
 			out musicMuteButtonText);
 
@@ -154,6 +166,7 @@ public sealed partial class BattleBoardController
 	private void OnDestroy()
 	{
 		GameText.LocaleChanged -= HandleOptionsLocaleChanged;
+		GameText.LocaleChanged -= HandleGameLocaleChanged;
 	}
 
 	/// <summary>
@@ -170,12 +183,13 @@ public sealed partial class BattleBoardController
 
 	private void CreateOptionsTitle(Transform parent, Font font)
 	{
-		Text title = CreateText("Options Title", parent, font, 26, FontStyle.Bold, TextAnchor.MiddleCenter);
+		Text title = CreateText("Options Title", parent, font, OptionsTitleFontSize, FontStyle.Bold, TextAnchor.MiddleCenter);
 		MmoUiTheme.StyleAsTitle(title);
+		SetOptionsTextSize(title, OptionsTitleFontSize);
 		title.color = OptionsGold;
 		title.text = GameText.GetOrFallbackSilent(GameTextKeys.Options.Title, "OPZIONI");
 		EditableRuntimeText.BindLocalized(title, GameTextKeys.Options.Title, "OPZIONI");
-		SetOptionsCellSize(title, 0f, 1f, 58f);
+		SetOptionsCellSize(title, 0f, 1f, 78f);
 	}
 
 	private static void CreateOptionsSection(
@@ -192,7 +206,7 @@ public sealed partial class BattleBoardController
 		element.minHeight = OptionsSectionHeight;
 		element.preferredHeight = OptionsSectionHeight;
 
-		Text label = CreateText(name + " Label", root.transform, font, 16, FontStyle.Bold, TextAnchor.LowerLeft);
+		Text label = CreateText(name + " Label", root.transform, font, OptionsSectionFontSize, FontStyle.Bold, TextAnchor.LowerLeft);
 		label.color = OptionsGold;
 		label.text = GameText.GetOrFallbackSilent(key, italianFallback);
 		EditableRuntimeText.BindLocalized(label, key, italianFallback);
@@ -207,44 +221,40 @@ public sealed partial class BattleBoardController
 		ruleRect.offsetMax = new Vector2(0f, 2f);
 	}
 
-	/// <summary>Riga "etichetta - + valore + muto", identica per effetti e musica.</summary>
+	/// <summary>Riga con cursore del volume, percentuale e comando muto.</summary>
 	private void CreateAudioOptionRow(
 		Transform parent,
 		Font font,
 		string name,
 		string labelKey,
 		string labelItalianFallback,
-		UnityEngine.Events.UnityAction decrease,
-		UnityEngine.Events.UnityAction increase,
+		UnityEngine.Events.UnityAction<float> setVolume,
 		UnityEngine.Events.UnityAction toggleMute,
 		out Text valueText,
+		out Slider volumeSlider,
 		out Button muteButton,
 		out Text muteButtonText)
 	{
 		RectTransform row = CreateOptionsRow(name + " Volume Row", parent, OptionsRowHeight);
 
-		Text label = CreateText(name + " Volume Label", row, font, 17, FontStyle.Bold, TextAnchor.MiddleLeft);
+		Text label = CreateText(name + " Volume Label", row, font, OptionsLabelFontSize, FontStyle.Bold, TextAnchor.MiddleLeft);
 		label.color = OptionsLabel;
 		label.text = GameText.GetOrFallbackSilent(labelKey, labelItalianFallback);
 		EditableRuntimeText.BindLocalized(label, labelKey, labelItalianFallback);
 		SetOptionsCellSize(label, 200f, 1f);
 
-		Button downButton = CreateButton(name + " Volume Down", row, font, "-");
-		downButton.onClick.AddListener(decrease);
-		SetOptionsCellSize(downButton, 84f, 0f);
+		volumeSlider = CreateVolumeSlider(name + " Volume Slider", row, setVolume);
+		SetOptionsCellSize(volumeSlider, 320f, 0f);
 
-		valueText = CreateText(name + " Volume Value", row, font, 19, FontStyle.Bold, TextAnchor.MiddleCenter);
+		valueText = CreateText(name + " Volume Value", row, font, OptionsValueFontSize, FontStyle.Bold, TextAnchor.MiddleCenter);
 		valueText.color = OptionsGold;
-		SetOptionsCellSize(valueText, 130f, 0f);
+		SetOptionsCellSize(valueText, 110f, 0f);
 		KeepTextDynamic(valueText);
 
-		Button upButton = CreateButton(name + " Volume Up", row, font, "+");
-		upButton.onClick.AddListener(increase);
-		SetOptionsCellSize(upButton, 84f, 0f);
-
 		muteButton = CreateButton(name + " Mute", row, font, "MUTE");
+		SetOptionsTextSize(muteButton.GetComponentInChildren<Text>(), OptionsButtonFontSize);
 		muteButton.onClick.AddListener(toggleMute);
-		SetOptionsCellSize(muteButton, 160f, 0f);
+		SetOptionsCellSize(muteButton, 150f, 0f);
 		muteButtonText = muteButton.GetComponentInChildren<Text>();
 		KeepTextDynamic(muteButtonText);
 	}
@@ -253,7 +263,7 @@ public sealed partial class BattleBoardController
 	{
 		RectTransform row = CreateOptionsRow("Language Row", parent, OptionsRowHeight);
 
-		Text label = CreateText("Language Label", row, font, 17, FontStyle.Bold, TextAnchor.MiddleLeft);
+		Text label = CreateText("Language Label", row, font, OptionsLabelFontSize, FontStyle.Bold, TextAnchor.MiddleLeft);
 		label.color = OptionsLabel;
 		label.text = GameText.GetOrFallbackSilent(GameTextKeys.Options.LanguageLabel, "LINGUA DI GIOCO");
 		EditableRuntimeText.BindLocalized(label, GameTextKeys.Options.LanguageLabel, "LINGUA DI GIOCO");
@@ -266,9 +276,14 @@ public sealed partial class BattleBoardController
 		SetOptionsCellSize(languageComboButton, 320f, 0f);
 
 		languageComboLabel = languageComboButton.GetComponentInChildren<Text>();
+		SetOptionsTextSize(languageComboLabel, OptionsButtonFontSize);
 		languageComboLabel.alignment = TextAnchor.MiddleLeft;
-		SetRect(languageComboLabel.rectTransform, new Vector2(0.06f, 0.12f), new Vector2(0.8f, 0.88f));
+		SetRect(languageComboLabel.rectTransform, new Vector2(0.2f, 0.12f), new Vector2(0.8f, 0.88f));
 		KeepTextDynamic(languageComboLabel);
+
+		languageComboFlag = CreateImage("Language Combo Flag", languageComboButton.transform, Color.white);
+		languageComboFlag.preserveAspect = true;
+		SetRect(languageComboFlag.rectTransform, new Vector2(0.06f, 0.28f), new Vector2(0.16f, 0.72f));
 
 		Image caret = CreateImage("Language Combo Caret", languageComboButton.transform, OptionsGold);
 		caret.sprite = MmoUiTheme.GetCaretSprite();
@@ -300,16 +315,6 @@ public sealed partial class BattleBoardController
 		auraButton.onClick.AddListener(OpenAuraCodexFromOptions);
 		SetOptionsCellSize(auraButton, 220f, 1f);
 
-		optionsPrivacyButton = CreateOptionsButton(
-			"Options Privacy",
-			row,
-			font,
-			GameTextKeys.Options.Privacy,
-			"PRIVACY",
-			MmoUiTheme.ButtonVariant.Violet);
-		optionsPrivacyButton.onClick.AddListener(ShowPrivacyOptions);
-		SetOptionsCellSize(optionsPrivacyButton, 220f, 1f);
-		optionsPrivacyButton.gameObject.SetActive(false);
 	}
 
 	private void CreateOptionsActionRow(Transform parent, Font font)
@@ -397,14 +402,20 @@ public sealed partial class BattleBoardController
 			SetOptionsCellSize(item, 0f, 1f, OptionsLanguageItemHeight);
 
 			Text itemLabel = item.GetComponentInChildren<Text>();
+			SetOptionsTextSize(itemLabel, OptionsButtonFontSize);
 			itemLabel.alignment = TextAnchor.MiddleLeft;
-			SetRect(itemLabel.rectTransform, new Vector2(0.1f, 0.12f), new Vector2(0.94f, 0.88f));
+			SetRect(itemLabel.rectTransform, new Vector2(0.23f, 0.12f), new Vector2(0.94f, 0.88f));
 			KeepTextDynamic(itemLabel);
+
+			Image flag = CreateImage("Language Item Flag", item.transform, Color.white);
+			flag.sprite = LocaleFlagSprites.Get(code);
+			flag.preserveAspect = true;
+			SetRect(flag.rectTransform, new Vector2(0.1f, 0.28f), new Vector2(0.19f, 0.72f));
 
 			Image marker = CreateImage("Language Item Marker", item.transform, OptionsGold);
 			marker.sprite = MmoUiTheme.GetSolidCircleSprite();
 			marker.preserveAspect = true;
-			SetRect(marker.rectTransform, new Vector2(0.035f, 0.4f), new Vector2(0.075f, 0.6f));
+			SetRect(marker.rectTransform, new Vector2(0.035f, 0.4f), new Vector2(0.07f, 0.6f));
 			languageComboItems.Add(new LanguageComboItem(code, marker));
 		}
 
@@ -493,6 +504,8 @@ public sealed partial class BattleBoardController
 				? GameText.GetOrFallbackSilent(GameTextKeys.Options.LanguageUnavailable, "NON DISPONIBILE")
 				: name;
 		}
+		if (languageComboFlag != null)
+			languageComboFlag.sprite = LocaleFlagSprites.Get(current);
 
 		for (int index = 0; index < languageComboItems.Count; index++)
 		{
@@ -536,8 +549,59 @@ public sealed partial class BattleBoardController
 
 		Text label = button.GetComponentInChildren<Text>();
 		if (label != null)
+		{
+			SetOptionsTextSize(label, OptionsButtonFontSize);
 			EditableRuntimeText.BindLocalized(label, key, italianFallback);
+		}
 		return button;
+	}
+
+	private static void SetOptionsTextSize(Text target, int fontSize)
+	{
+		if (target == null)
+			return;
+
+		target.resizeTextForBestFit = false;
+		target.fontSize = fontSize;
+	}
+
+	private static Slider CreateVolumeSlider(
+		string name,
+		Transform parent,
+		UnityEngine.Events.UnityAction<float> setVolume)
+	{
+		GameObject root = new GameObject(name, typeof(RectTransform), typeof(Slider));
+		root.transform.SetParent(parent, false);
+		Slider slider = root.GetComponent<Slider>();
+		slider.minValue = 0f;
+		slider.maxValue = 1f;
+		slider.wholeNumbers = false;
+		slider.direction = Slider.Direction.LeftToRight;
+
+		Image background = CreateImage("Background", root.transform, new Color(0.05f, 0.13f, 0.16f, 1f));
+		// CreateImage disabilita i raycast per gli elementi decorativi. Lo slider,
+		// invece, deve ricevere il pointer down sia sulla traccia sia sulla maniglia.
+		background.raycastTarget = true;
+		SetRect(background.rectTransform, new Vector2(0f, 0.4f), new Vector2(1f, 0.6f));
+
+		GameObject fillArea = new GameObject("Fill Area", typeof(RectTransform));
+		fillArea.transform.SetParent(root.transform, false);
+		RectTransform fillAreaRect = fillArea.GetComponent<RectTransform>();
+		SetRect(fillAreaRect, new Vector2(0.035f, 0.4f), new Vector2(0.965f, 0.6f));
+
+		Image fill = CreateImage("Fill", fillArea.transform, OptionsGold);
+		Stretch(fill.rectTransform);
+		slider.fillRect = fill.rectTransform;
+
+		Image handle = CreateImage("Handle", root.transform, OptionsGold);
+		handle.raycastTarget = true;
+		handle.sprite = MmoUiTheme.GetSolidCircleSprite();
+		handle.preserveAspect = true;
+		SetRect(handle.rectTransform, new Vector2(0f, 0.2f), new Vector2(0.1f, 0.8f));
+		slider.handleRect = handle.rectTransform;
+		slider.targetGraphic = handle;
+		slider.onValueChanged.AddListener(setVolume);
+		return slider;
 	}
 
 	private static void SetOptionsCellSize(
@@ -584,10 +648,10 @@ public sealed partial class BattleBoardController
 		// Al primo passaggio il canvas puo' non avere ancora una larghezza: in quel
 		// caso resta la misura di riferimento, che il layout successivo corregge.
 		float available = optionsPanelRect.parent is RectTransform parentRect ? parentRect.rect.width : 0f;
-		float width = portrait ? 960f : 900f;
+		float width = portrait ? 1100f : 1100f;
 		if (available > 1f)
 		{
-			width = Mathf.Min(width, available * (portrait ? 0.94f : 0.52f));
+			width = Mathf.Min(width, available * (portrait ? 0.94f : 0.6f));
 		}
 		optionsPanelRect.sizeDelta = new Vector2(width, optionsPanelRect.sizeDelta.y);
 

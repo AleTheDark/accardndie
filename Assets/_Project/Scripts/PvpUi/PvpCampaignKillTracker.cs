@@ -5,7 +5,7 @@ using UnityEngine;
 namespace AccardND.PvpUi
 {
     /// <summary>
-    /// Tiene traccia in locale (PlayerPrefs) delle famiglie di mostri sconfitte in
+    /// Tiene traccia in locale (PlayerPrefs) delle fazioni di mostri sconfitte in
     /// campagna, così il client PvP può sincronizzarle col server al login e sbloccare
     /// le icone corrispondenti. È cosmetico: la fiducia sul client è accettabile.
     /// </summary>
@@ -15,7 +15,7 @@ namespace AccardND.PvpUi
         private const string BossKey = "pvp-campaign-bosses";
         private const char Separator = ',';
 
-        /// <summary>Registra la famiglia di un mostro sconfitto (es. "goblin").</summary>
+        /// <summary>Registra la fazione di un mostro sconfitto (es. "goblin").</summary>
         public static void RecordDefeat(string monsterFamily)
         {
             if (string.IsNullOrWhiteSpace(monsterFamily))
@@ -26,7 +26,7 @@ namespace AccardND.PvpUi
                 Save(defeated);
         }
 
-        /// <summary>Estrae la famiglia da un id carta "&lt;valore&gt;-&lt;famiglia&gt;-&lt;classe&gt;" e la registra.</summary>
+        /// <summary>Estrae la fazione da un id carta "&lt;valore&gt;-&lt;fazione&gt;-&lt;classe&gt;" e la registra.</summary>
         public static void RecordDefeatFromCardId(string cardId)
         {
             if (string.IsNullOrEmpty(cardId))
@@ -36,7 +36,7 @@ namespace AccardND.PvpUi
                 RecordDefeat(parts[1]);
         }
 
-        /// <summary>Tutte le famiglie sconfitte finora.</summary>
+        /// <summary>Tutte le fazioni sconfitte finora.</summary>
         public static string[] All() => Load().ToArray();
 
         /// <summary>Registra un boss sconfitto in campagna per gli sblocchi profilo.</summary>

@@ -52,7 +52,7 @@ namespace AccardND.GameCore
         public const int RootsVigorPenaltySteps = 1;
         public const int RootsEveryTurns = 2;
 
-        private readonly IRandomSource random;
+        private readonly CombatDiceRoller dice;
 
         public TrentorBoss(IRandomSource random)
             : this(random, DefaultHitPoints)
@@ -61,7 +61,7 @@ namespace AccardND.GameCore
 
         public TrentorBoss(IRandomSource random, int maxHitPoints)
         {
-            this.random = random ?? throw new ArgumentNullException(nameof(random));
+            dice = new CombatDiceRoller(random);
             if (maxHitPoints < 1)
                 throw new ArgumentOutOfRangeException(nameof(maxHitPoints));
 
@@ -72,6 +72,16 @@ namespace AccardND.GameCore
         public int MaxHitPoints { get; }
         public int HitPoints { get; private set; }
         public int TurnsTaken { get; private set; }
+
+        /// <summary>
+        /// Rimette il boss come l'aveva lasciato una battaglia salvata a meta'. I turni
+        /// giocati contano quanto gli HP: e' da quelli che dipende cosa fa al prossimo.
+        /// </summary>
+        public void Restore(int hitPoints, int turnsTaken)
+        {
+            HitPoints = Math.Clamp(hitPoints, 0, MaxHitPoints);
+            TurnsTaken = Math.Max(0, turnsTaken);
+        }
         public bool IsDefeated => HitPoints <= 0;
 
         public TrentorDefenseResult ApplyResolvedDefense(int attackerTotal, int defenseRoll, int defenseTotal)
@@ -93,7 +103,11 @@ namespace AccardND.GameCore
             return new TrentorDefenseResult(attackerTotal, defenseRoll, defenseTotal, damage, hitPointsBefore, HitPoints);
         }
 
-        public TrentorAttackResult Attack(CombatCard target, int targetDefenseDieSides, bool targetIsMarked)
+        public TrentorAttackResult Attack(
+            CombatCard target,
+            int targetDefenseDieSides,
+            bool targetIsMarked,
+            int targetHighRollChancePercent = 0)
         {
             if (target == null)
                 throw new ArgumentNullException(nameof(target));
@@ -104,7 +118,7 @@ namespace AccardND.GameCore
 
             TurnsTaken++;
             int attackRoll = RollVigor(DefaultVigorDieSides, ClassMatchup.Compare(HeroClass.Hunter, target.HeroClass));
-            int targetRoll = random.NextInclusive(1, targetDefenseDieSides);
+            int targetRoll = dice.Roll(targetDefenseDieSides, targetHighRollChancePercent);
             int markedBonus = targetIsMarked ? MarkedTargetAttackBonus : 0;
             int attackTotal = CardStrength + attackRoll + markedBonus;
             int targetDefenseTotal = target.Strength + targetRoll;
@@ -114,11 +128,11 @@ namespace AccardND.GameCore
 
         private int RollVigor(int dieSides, MatchupResult matchup)
         {
-            int first = random.NextInclusive(1, dieSides);
+            int first = dice.Roll(dieSides);
             if (matchup == MatchupResult.Neutral)
                 return first;
 
-            int second = random.NextInclusive(1, dieSides);
+            int second = dice.Roll(dieSides);
             return matchup == MatchupResult.Advantage ? Math.Max(first, second) : Math.Min(first, second);
         }
     }

@@ -20,7 +20,12 @@ public static class AdminUnlockCatalog
     public const string TypeChapter = "chapter";
     public const string TypeChapterCleared = "chapterCleared";
 
-    /// <summary>Classi consegnate dal tutorial: tornano da sole finche' il tutorial risulta fatto.</summary>
+    /// <summary>
+    /// Classi consegnate dal vecchio tutorial monolitico: tornano da sole finche' il flag
+    /// <c>tutorial_completed</c> risulta alzato, quindi dal pannello non si possono togliere
+    /// una per una. Oggi il percorso regala il solo Guerriero e fa comprare le altre due, ma
+    /// il flag conserva la vecchia dotazione per chi ce l'ha.
+    /// </summary>
     public static readonly string[] StarterClassIds = { "mage", "warrior", "rogue" };
 
     /// <summary>
@@ -87,17 +92,21 @@ public static class AdminUnlockCatalog
             "Nel gioco non sono ancora acquistabili: qui si concedono lo stesso per provarle.",
             SanctuaryEntries(SanctuaryCatalog.TypeSecondAbility)),
 
-        new Group(SanctuaryCatalog.TypeItem, "Oggetti",
-            "Sbloccano il diritto di comprarli al negozio; le copie si prendono li' col miele.",
-            SanctuaryEntries(SanctuaryCatalog.TypeItem)),
-
         new Group(SanctuaryCatalog.TypeSlot, "Slot bisaccia",
             "Si sommano ai due slot di partenza, fino a quattro.",
             SanctuaryEntries(SanctuaryCatalog.TypeSlot)),
 
+        // I capitoli non stanno nel catalogo del Santuario perche' non si comprano: in gioco
+        // si aprono solo battendo il boss del capitolo prima. Qui restano perche' concederli
+        // a mano e' l'unico modo di portare un account di prova a meta' campagna.
         new Group(TypeChapter, "Capitoli",
-            "Accesso al capitolo. In gioco arriva battendo il boss del capitolo prima, oppure comprandolo al Santuario.",
-            SanctuaryEntries(TypeChapter)),
+            "Accesso al capitolo. In gioco arriva solo battendo il boss del capitolo prima.",
+            ChapterCatalog.All
+                .Select(chapter => new Entry(
+                    chapter.Id,
+                    chapter.Name,
+                    chapter.Playable ? null : "boss non ancora pronto"))
+                .ToArray()),
 
         new Group(TypeChapterCleared, "Capitoli completati",
             "Boss finale battuto. Non si compra: si guadagna vincendo, e consegna la classe premio del capitolo.",
@@ -112,9 +121,33 @@ public static class AdminUnlockCatalog
             new[] { new Entry("hardcore", "Hardcore", "Normalmente 50 miele.") }),
 
         new Group(TypeTutorial, "Tutorial",
-            "Togliendolo il gioco lo riproporra' al prossimo avvio.",
-            new[] { new Entry(TypeTutorial, "Tutorial completato", "Consegna classi base e primo capitolo.") })
+            "Togliendolo il gioco lo riproporra' al prossimo avvio, moduli compresi.",
+            new[] { new Entry(TypeTutorial, "Tutorial completato", "Consegna classi base e primo capitolo.") }),
+
+        // I moduli del percorso progressivo. Da qui si porta un account di prova a meta'
+        // onboarding senza rigiocarlo: e' l'unico modo di collaudare un cancello senza
+        // rifare tutte le lezioni che stanno prima.
+        new Group(TutorialModuleCatalog.UnlockType, "Moduli tutorial",
+            "Percorso di onboarding. Segnarne uno apre i cancelli fino a li'; le ricompense del modulo non vengono concesse.",
+            TutorialModuleCatalog.All
+                .Select(module => new Entry(module.Id, module.Name, DescribeModuleReward(module)))
+                .ToArray())
     };
+
+    /// <summary>Cosa consegnerebbe il modulo se lo riscuotesse il gioco, in una riga.</summary>
+    private static string DescribeModuleReward(TutorialModuleCatalog.Module module)
+    {
+        var parts = new List<string>();
+        int honey = TutorialModuleCatalog.HoneyOf(module);
+        if (honey > 0)
+            parts.Add(honey + " miele per la classe " + module.PaysForClassId);
+        parts.AddRange(module.ClassIds.Select(classId => "classe " + classId));
+        parts.AddRange(module.ChapterIds.Select(chapterId => "capitolo " + chapterId));
+        parts.AddRange(module.ItemIds.Select(itemId => "oggetto " + itemId));
+        if (module.CompletesTutorial)
+            parts.Add("chiude il tutorial");
+        return parts.Count == 0 ? null : string.Join(" · ", parts);
+    }
 
     private static Entry[] SanctuaryEntries(string type) => SanctuaryCatalog.All
         .Where(entry => entry.Type == type)

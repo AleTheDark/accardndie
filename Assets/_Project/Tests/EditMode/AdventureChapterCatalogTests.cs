@@ -63,6 +63,15 @@ namespace AccardND.GameCore.Tests
             Assert.That(rewards, Is.Unique);
         }
 
+		[Test]
+		public void Completing_chapter_four_rewards_the_priest_class()
+		{
+			AdventureChapter chapter = AdventureChapterCatalog.Find("chapter-4");
+
+			Assert.That(chapter, Is.Not.Null);
+			Assert.That(chapter.RewardClassId, Is.EqualTo("priest"));
+		}
+
         [Test]
         public void The_tutorial_hands_over_the_first_chapter()
         {
@@ -93,7 +102,7 @@ namespace AccardND.GameCore.Tests
         {
             Assert.That(AdventureChapterCatalog.FindByBoss("trentor")?.Id, Is.EqualTo("chapter-1"));
             Assert.That(AdventureChapterCatalog.FindByBoss("boss-bragus")?.Id, Is.EqualTo("chapter-2"));
-            Assert.That(AdventureChapterCatalog.FindByBoss("boss-medusa")?.Id, Is.EqualTo("chapter-6"));
+			Assert.That(AdventureChapterCatalog.FindByBoss("boss-medusa"), Is.Null);
             Assert.That(AdventureChapterCatalog.FindByBoss("boss-palatir")?.Id, Is.EqualTo("chapter-7"));
             Assert.That(AdventureChapterCatalog.FindByBoss("carta-inventata"), Is.Null);
         }

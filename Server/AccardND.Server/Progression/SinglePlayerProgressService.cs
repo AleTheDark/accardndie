@@ -1,3 +1,4 @@
+using AccardND.GameCore;
 using AccardND.NetProtocol;
 using AccardND.Server.Accounts;
 using AccardND.Server.Data;
@@ -11,7 +12,13 @@ public sealed class SinglePlayerProgressService
 {
     private readonly AccardDatabase database;
 
-    private static readonly string[] StarterClassIds =
+    /// <summary>
+    /// Le classi che il vecchio tutorial monolitico consegnava gratis. Non e' piu' la
+    /// dotazione di partenza - oggi il percorso regala il solo Guerriero e fa comprare Mago e
+    /// Ladro col miele che dona (§8.1 del design) - ma resta la dotazione di chi quel
+    /// tutorial lo aveva gia' finito: a nessuno si toglie quello che aveva.
+    /// </summary>
+    private static readonly string[] LegacyTutorialClassIds =
     {
         "mage",
         "warrior",
@@ -30,10 +37,29 @@ public sealed class SinglePlayerProgressService
     // resterebbe fermo un giorno intero prima di poter entrare in campagna.
     private const string TutorialRewardChapterId = ChapterCatalog.TutorialChapterId;
     private const int AdMultiplier = 3;
+
+    // Il video moltiplica l'exp account di una run gia' conclusa.
+    //
+    // E' stato x2 per un breve periodo, per paura che x3 sopra il x2.5 del settimo capitolo
+    // facesse una run da x7.5. Quel timore nasceva da un conto sbagliato: dava per scontato
+    // che una run arrivasse al tetto delle 5000, mentre una run completa di 25 stanze ne
+    // produce circa 650 (una stanza mostro paga 5-15 di base piu' la forza dei caduti, un
+    // miniboss 50). Il x7.5 vero vale quindi ~490 di exp account, non migliaia: e' una run
+    // ottima, non un salto di livelli.
+    //
+    // Con la curva nuova - dove un livello costa 100 + 25 per livello - il video e' quello
+    // che tiene il ritmo su valori umani. Vedi Docs/talenti-design.md.
     private const int AccountAdMultiplier = 3;
-    private const int AccountExperiencePerLevel = 100;
-    private const int HoneyPerAccountLevel = 5;
+
+    // Rete contro un client che mente sull'esperienza di run, non un tetto di bilanciamento:
+    // una run vera ne produce circa un decimo, quindi non lo tocca mai.
     private const int DeathRewardExperienceCeiling = 5000;
+
+    /// <summary>
+    /// Punti per la prima uccisione del boss di un capitolo. Sono la sola sorgente di punti
+    /// che non passa dal livello: premiano l'avanzamento in campagna invece del tempo
+    /// passato a giocare, e su sette capitoli valgono 21 punti in tutto.
+    /// </summary>
 
     // Per quanto un x3 mai riscosso resta in offerta nel profilo. Una finestra serve: senza,
     // il giocatore che torna dopo mesi si trova una pila di video da guardare e il momento
@@ -93,9 +119,21 @@ public sealed class SinglePlayerProgressService
         using SqliteTransaction transaction = connection.BeginTransaction();
         EnsureProgressRow(connection, transaction, identity.PlayerId);
 
-        string error = TavernQuests.ClaimQuest(connection, transaction, identity.PlayerId, request?.questId);
+        int rewardMultiplier = request?.rewardMultiplier ?? 0;
+        if (rewardMultiplier == 0)
+            rewardMultiplier = 1;
+        if (rewardMultiplier != 1 && rewardMultiplier != 5)
+            return (null, ErrorCodes.InvalidProgressionRequest, "Moltiplicatore ricompensa non valido.");
+
+        string error = TavernQuests.ClaimQuest(
+            connection, transaction, identity.PlayerId, request?.questId, rewardMultiplier);
         if (error != null)
             return (null, ErrorCodes.InvalidProgressionRequest, error);
+
+        if (rewardMultiplier == 1
+            && TavernQuests.TryDescribe(request?.questId, out TavernQuests.QuestDefinition quest))
+            RecordClaim(connection, transaction, NewClaimId(), identity.PlayerId, "tavern",
+                TavernQuests.HoneyRewardFor(quest.Difficulty), 0, request?.questId);
 
         TavernData data = BuildTavern(connection, transaction, identity.PlayerId);
         transaction.Commit();
@@ -129,11 +167,8 @@ public sealed class SinglePlayerProgressService
     }
 
     /// <summary>
-    /// Compra una copia di un consumabile e la mette nella scorta. E' l'operazione del
-    /// negozio, non del Santuario: il Santuario sblocca il diritto di comprare, il negozio
-    /// vende i pezzi. Per questo l'oggetto deve gia' risultare sbloccato.
-    /// Il prezzo per copia arrivera' col listino del negozio; per ora e' una frazione del
-    /// costo di sblocco, cosi' la funzione e' utilizzabile ma non regala niente.
+    /// Compra una copia di un consumabile e la mette nella scorta. Tutti i consumabili del
+    /// catalogo sono acquistabili fin dall'inizio; il Santuario gestisce soltanto gli slot.
     /// </summary>
     public (SanctuaryData Data, string ErrorCode, string Error) BuyItem(
         AccountIdentity identity,
@@ -148,8 +183,6 @@ public sealed class SinglePlayerProgressService
         EnsureProgressRow(connection, transaction, identity.PlayerId);
 
         SinglePlayerProgressData current = ReadProgress(connection, identity.PlayerId, transaction);
-        if (!IsAlreadyUnlocked(current, "item", itemId))
-            return (null, ErrorCodes.InvalidProgressionRequest, "Oggetto non ancora sbloccato al Santuario.");
 
         int copyCost = SanctuaryCatalog.CopyCostOf(entry);
         string offerId = NormalizeKey(request?.offerId);
@@ -209,7 +242,7 @@ public sealed class SinglePlayerProgressService
         var context = new SanctuaryRequirementContext(progress);
         var entries = new List<SanctuaryEntryData>();
 
-        foreach (SanctuaryCatalog.Entry entry in SanctuaryCatalog.All)
+        foreach (SanctuaryCatalog.Entry entry in SanctuaryCatalog.All.Where(entry => entry.Type != SanctuaryCatalog.TypeItem))
         {
             var requirements = new SanctuaryRequirementData[entry.Requirements.Length];
             for (int index = 0; index < entry.Requirements.Length; index++)
@@ -235,7 +268,7 @@ public sealed class SinglePlayerProgressService
                 name = entry.Name,
                 description = entry.Description,
                 honeyCost = entry.HoneyCost,
-                copyCost = entry.Type == SanctuaryCatalog.TypeItem ? SanctuaryCatalog.CopyCostOf(entry) : 0,
+                copyCost = 0,
                 owned = owned,
                 available = entry.Available && IsSanctuaryEntryOfferable(progress, entry),
                 requirementsMet = context.AreAllMet(entry.Requirements),
@@ -247,6 +280,22 @@ public sealed class SinglePlayerProgressService
         {
             honey = progress.honey,
             entries = entries.ToArray(),
+            shopCatalog = SanctuaryCatalog.All
+                .Where(entry => entry.Type == SanctuaryCatalog.TypeItem)
+                .Select(entry => new SanctuaryEntryData
+                {
+                    type = entry.Type,
+                    id = entry.Id,
+                    name = entry.Name,
+                    description = entry.Description,
+                    honeyCost = entry.HoneyCost,
+                    copyCost = SanctuaryCatalog.CopyCostOf(entry),
+                    owned = true,
+                    available = true,
+                    requirementsMet = true,
+                    requirements = Array.Empty<SanctuaryRequirementData>()
+                })
+                .ToArray(),
             bagSlots = SanctuaryBag.ReadSlots(connection, transaction, playerId),
             stash = SanctuaryBag.ReadStash(connection, transaction, playerId),
             bag = progress.bagItems,
@@ -261,7 +310,7 @@ public sealed class SinglePlayerProgressService
     {
         string rotation = ShopRotationKey();
         var unlocked = SanctuaryCatalog.All
-            .Where(entry => entry.Type == SanctuaryCatalog.TypeItem && IsAlreadyUnlocked(progress, "item", entry.Id))
+            .Where(entry => entry.Type == SanctuaryCatalog.TypeItem)
             .OrderBy(entry => StableShopValue(playerId + "|" + rotation + "|" + entry.Id))
             .Take(3)
             .ToArray();
@@ -321,33 +370,41 @@ public sealed class SinglePlayerProgressService
     }
 
     /// <summary>
-    /// Cosa si puo' comprare adesso, a parita' di miele. Slot e capitoli si comprano in
-    /// ordine: il quarto slot prima del terzo farebbe pagare di piu' per lo stesso passo, e
-    /// un capitolo qualsiasi comprato subito renderebbe la campagna una lista invece di un
-    /// percorso.
+    /// Cosa si puo' comprare adesso, a parita' di miele. Gli slot si comprano in ordine:
+    /// il quarto prima del terzo farebbe pagare di piu' per lo stesso passo.
     /// </summary>
     private static bool IsSanctuaryEntryOfferable(SinglePlayerProgressData progress, SanctuaryCatalog.Entry entry)
     {
-        if (entry.Type == SanctuaryCatalog.TypeChapter)
-        {
-            if (!ChapterCatalog.TryGetById(entry.Id, out ChapterCatalog.Chapter chapter))
-                return false;
-            string prerequisite = ChapterCatalog.PurchasePrerequisiteOf(chapter);
-            return prerequisite == null || IsAlreadyUnlocked(progress, "chapter", prerequisite);
-        }
+		if (entry.Type == SanctuaryCatalog.TypeSlot &&
+			entry.Id == SanctuaryCatalog.MerchantUpgradeRelicTwoId)
+		{
+			return IsAlreadyUnlocked(progress, SanctuaryCatalog.TypeSlot,
+				SanctuaryCatalog.MerchantUpgradeRelicOneId);
+		}
 
-        if (entry.Type != SanctuaryCatalog.TypeSlot || entry.Id != "bag-slot-4")
-            return true;
-        return IsAlreadyUnlocked(progress, "slot", "bag-slot-3");
-    }
+		if (entry.Type == SanctuaryCatalog.TypeSlot &&
+			entry.Id.StartsWith("loadout-slot-", StringComparison.OrdinalIgnoreCase) &&
+			int.TryParse(entry.Id["loadout-slot-".Length..], out int loadoutSlot))
+		{
+			return loadoutSlot <= 2 || IsAlreadyUnlocked(
+				progress, SanctuaryCatalog.TypeSlot, $"loadout-slot-{loadoutSlot - 1}");
+		}
+
+		if (entry.Type != SanctuaryCatalog.TypeSlot ||
+			!entry.Id.StartsWith("bag-slot-", StringComparison.OrdinalIgnoreCase) ||
+			!int.TryParse(entry.Id["bag-slot-".Length..], out int slotNumber) ||
+			slotNumber <= SanctuaryCatalog.BaseBagSlots + 1)
+		{
+			return true;
+		}
+
+		return IsAlreadyUnlocked(progress, SanctuaryCatalog.TypeSlot, $"bag-slot-{slotNumber - 1}");
+	}
 
     /// <summary>Perche' una voce a catalogo non e' acquistabile, detto al giocatore.</summary>
     private static string UnavailableReason(SanctuaryCatalog.Entry entry) => entry.Type switch
     {
         SanctuaryCatalog.TypeClass => "Classe base: si sblocca completando il tutorial.",
-        SanctuaryCatalog.TypeChapter when entry.HoneyCost <= 0 =>
-            "Primo capitolo: si sblocca completando il tutorial.",
-        SanctuaryCatalog.TypeChapter => "Capitolo in arrivo: il suo boss non e' ancora pronto.",
         _ => "Non ancora acquistabile."
     };
 
@@ -360,12 +417,18 @@ public sealed class SinglePlayerProgressService
         if (string.IsNullOrEmpty(type) || string.IsNullOrEmpty(id))
             return (null, ErrorCodes.InvalidProgressionRequest, "Unlock non valido.");
 
-        // Il completamento di un capitolo si guadagna giocando, non si compra.
+        // I capitoli non si comprano: si aprono battendo il boss del capitolo precedente, e
+        // completarli si guadagna giocando. Il Santuario li ha venduti per un periodo, quindi
+        // il rifiuto deve dire come si ottengono davvero invece di lasciar credere a un
+        // problema di prezzo o di catalogo.
+        if (type == "chapter")
+            return (null, ErrorCodes.InvalidProgressionRequest,
+                "Un capitolo si apre battendo il boss del capitolo precedente.");
         if (type == "chapterCleared")
             return (null, ErrorCodes.InvalidProgressionRequest, "Un capitolo si completa giocandolo.");
 
-        // Le voci del Santuario (classi, tecniche) prendono costo e prove dal catalogo; capitoli
-        // e modalita' restano sul listino semplice.
+        // Le voci del Santuario (classi, tecniche) prendono costo e prove dal catalogo; le
+        // modalita' restano sul listino semplice.
         SanctuaryCatalog.Entry catalogEntry = null;
         int cost;
         if (SanctuaryCatalog.TryGetEntry(type, id, out catalogEntry))
@@ -374,8 +437,7 @@ public sealed class SinglePlayerProgressService
                 return (null, ErrorCodes.InvalidProgressionRequest, UnavailableReason(catalogEntry));
             cost = catalogEntry.HoneyCost;
         }
-        else if (type == "class" || type == "secondAbility" || type == "slot" ||
-                 type == "item" || type == "chapter")
+        else if (type == "class" || type == "secondAbility" || type == "slot" || type == "item")
         {
             return (null, ErrorCodes.InvalidProgressionRequest, "Voce non presente nel Santuario.");
         }
@@ -389,8 +451,12 @@ public sealed class SinglePlayerProgressService
         EnsureProgressRow(connection, transaction, identity.PlayerId);
 
         SinglePlayerProgressData current = ReadProgress(connection, identity.PlayerId, transaction);
-        if (type == "class" && !current.tutorialCompleted)
-            return (null, ErrorCodes.InvalidProgressionRequest, "Completa il tutorial prima di sbloccare nuove classi.");
+        if (type == "class" && !current.tutorialCompleted
+            && !IsTutorialGiftClass(current, id))
+        {
+            return (null, ErrorCodes.InvalidProgressionRequest,
+                "Durante il tutorial puoi sbloccare soltanto la classe indicata dal percorso.");
+        }
 
         if (IsAlreadyUnlocked(current, type, id))
         {
@@ -400,10 +466,7 @@ public sealed class SinglePlayerProgressService
 
         if (catalogEntry != null && !IsSanctuaryEntryOfferable(current, catalogEntry))
         {
-            return (null, ErrorCodes.InvalidProgressionRequest,
-                catalogEntry.Type == SanctuaryCatalog.TypeChapter
-                    ? "Sblocca prima il capitolo precedente."
-                    : "Sblocca prima lo slot precedente.");
+            return (null, ErrorCodes.InvalidProgressionRequest, "Sblocca prima lo slot precedente.");
         }
 
         // Le prove si valutano sullo stesso snapshot che il client ha visto: senza questo
@@ -445,6 +508,22 @@ public sealed class SinglePlayerProgressService
         return (progress, null, null);
     }
 
+    private static bool IsTutorialGiftClass(SinglePlayerProgressData progress, string classId)
+    {
+        if (progress?.completedTutorialModules == null || string.IsNullOrWhiteSpace(classId))
+            return false;
+
+        foreach (TutorialModuleCatalog.Module module in TutorialModuleCatalog.All)
+        {
+            if (!string.Equals(module.PaysForClassId, classId, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (progress.completedTutorialModules.Any(completed =>
+                    string.Equals(completed, module.Id, StringComparison.OrdinalIgnoreCase)))
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Registra il completamento di un capitolo a partire dal boss finale sconfitto e concede
     /// (senza costo) la classe premio del capitolo e l'accesso a quelli successivi. Idempotente:
@@ -470,9 +549,21 @@ public sealed class SinglePlayerProgressService
         using SqliteTransaction transaction = connection.BeginTransaction();
         EnsureProgressRow(connection, transaction, identity.PlayerId);
 
-        GrantUnlock(connection, transaction, identity.PlayerId, "chapterCleared", chapterId);
+        bool firstClear = GrantUnlock(
+            connection, transaction, identity.PlayerId, "chapterCleared", chapterId);
         foreach (string unlockedChapterId in ChapterCatalog.UnlocksAfterClearing(chapterId))
             GrantUnlock(connection, transaction, identity.PlayerId, "chapter", unlockedChapterId);
+
+        // Punti talento per la prima uccisione del boss del capitolo. Una tantum e non
+        // farmabile: rigiocare il capitolo continua a dare esperienza, ma i punti li paga
+        // solo la prima volta, ed e' quello che li rende una spinta ad andare avanti invece
+        // che a ripetere il capitolo piu' comodo.
+        if (firstClear)
+            GrantTalentPoints(
+                connection,
+                transaction,
+                identity.PlayerId,
+                AccountLevelCurve.TalentPointsPerFirstChapterClear);
 
         // La classe premio del capitolo. Resta comprabile al Santuario col miele: chi la
         // guadagna qui non paga, chi non arriva in fondo al capitolo puo' ancora prenderla
@@ -532,12 +623,92 @@ public sealed class SinglePlayerProgressService
             update.ExecuteNonQuery();
         }
 
-        GrantStarterClasses(connection, transaction, identity.PlayerId);
+        GrantLegacyTutorialClasses(connection, transaction, identity.PlayerId);
         GrantUnlock(connection, transaction, identity.PlayerId, "chapter", TutorialRewardChapterId);
 
         SinglePlayerProgressData progress = ReadProgress(connection, identity.PlayerId, transaction);
         transaction.Commit();
         return (BuildReward(progress, claimId, 0), null, null);
+    }
+
+    /// <summary>
+    /// Chiude un modulo del tutorial progressivo e ne consegna la ricompensa.
+    /// Idempotente per modulo: la riga in <c>single_player_unlocks</c> e' insieme lo stato
+    /// del percorso e la guardia contro la doppia riscossione, quindi non serve un secondo
+    /// contatore che potrebbe sfasarsi da quello che il giocatore ha davvero finito.
+    ///
+    /// Cosa spetta a un modulo lo dice <see cref="TutorialModuleCatalog"/>: il client manda
+    /// solo l'id. E i moduli si riscuotono in fila - un client modificato non puo' saltare
+    /// all'ultimo per portarsi a casa capitolo e oggetto senza aver giocato niente.
+    /// </summary>
+    public (SinglePlayerRewardResult Result, string ErrorCode, string Error) ClaimTutorialModuleReward(
+        AccountIdentity identity,
+        SinglePlayerTutorialModuleRequest request)
+    {
+        string moduleId = Normalize(request?.moduleId);
+        if (!TutorialModuleCatalog.TryGet(moduleId, out TutorialModuleCatalog.Module module))
+            return (null, ErrorCodes.InvalidProgressionRequest, "Modulo del tutorial sconosciuto.");
+
+        using SqliteConnection connection = database.Open();
+        using SqliteTransaction transaction = connection.BeginTransaction();
+        EnsureProgressRow(connection, transaction, identity.PlayerId);
+
+        string[] completed = ReadUnlocks(
+            connection, transaction, identity.PlayerId, TutorialModuleCatalog.UnlockType);
+
+        if (Array.IndexOf(completed, module.Id) >= 0)
+        {
+            // Gia' riscosso: risposta idempotente, niente di nuovo concesso.
+            SinglePlayerProgressData unchanged = ReadProgress(connection, identity.PlayerId, transaction);
+            transaction.Commit();
+            return (BuildReward(unchanged, null, 0), null, null);
+        }
+
+        foreach (string requiredId in TutorialModuleCatalog.RequiredBefore(module))
+        {
+            if (Array.IndexOf(completed, requiredId) < 0)
+                return (null, ErrorCodes.InvalidProgressionRequest,
+                    "I moduli del tutorial vanno completati in ordine.");
+        }
+
+        int honey = TutorialModuleCatalog.HoneyOf(module);
+        string claimId = NewClaimId();
+        RecordClaim(connection, transaction, claimId, identity.PlayerId, "tutorial-module",
+            honey, 0, Normalize(request?.moduleRunId));
+
+        if (honey > 0)
+            GrantHoney(connection, transaction, identity.PlayerId, honey);
+
+        foreach (string classId in module.ClassIds)
+            GrantUnlock(connection, transaction, identity.PlayerId, "class", classId);
+        foreach (string chapterId in module.ChapterIds)
+            GrantUnlock(connection, transaction, identity.PlayerId, "chapter", chapterId);
+        foreach (string itemId in module.ItemIds)
+            SanctuaryBag.AddToStash(connection, transaction, identity.PlayerId, itemId, 1);
+
+        GrantUnlock(connection, transaction, identity.PlayerId,
+            TutorialModuleCatalog.UnlockType, module.Id);
+
+        if (module.CompletesTutorial)
+            MarkTutorialCompleted(connection, transaction, identity.PlayerId);
+
+        SinglePlayerProgressData progress = ReadProgress(connection, identity.PlayerId, transaction);
+        transaction.Commit();
+        return (BuildReward(progress, claimId, honey), null, null);
+    }
+
+    private static void MarkTutorialCompleted(
+        SqliteConnection connection, SqliteTransaction transaction, string playerId)
+    {
+        using SqliteCommand update = connection.CreateCommand();
+        update.Transaction = transaction;
+        update.CommandText = @"
+            UPDATE single_player_progress
+            SET tutorial_completed = 1, updated_at = $now
+            WHERE player_id = $player";
+        update.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
+        update.Parameters.AddWithValue("$player", playerId);
+        update.ExecuteNonQuery();
     }
 
     /// <summary>
@@ -611,6 +782,7 @@ public sealed class SinglePlayerProgressService
         // gonfiare i contatori.
         CampaignCounters.RecordRunSummary(connection, transaction, identity.PlayerId, request);
         SanctuaryBag.ConsumeFromStash(connection, transaction, identity.PlayerId, request?.consumedItemIds);
+        SanctuaryBag.AddRunLootToStash(connection, transaction, identity.PlayerId, request?.keptItemIds);
         int levelsGained = GrantAccountExperience(connection, transaction, identity.PlayerId, baseAccountExperience);
 
         SinglePlayerProgressData progress = ReadProgress(connection, identity.PlayerId, transaction);
@@ -641,15 +813,16 @@ public sealed class SinglePlayerProgressService
         using SqliteCommand query = connection.CreateCommand();
         query.CommandText = @"
             SELECT c.claim_id, c.reward_type, c.base_account_experience, c.created_at,
-                   r.chapter_id, r.rooms_cleared
+                   c.base_honey, r.chapter_id, r.rooms_cleared
             FROM single_player_reward_claims c
             LEFT JOIN campaign_runs r
                 ON r.player_id = c.player_id AND r.client_run_ref = c.source_ref
             WHERE c.player_id = $player
-              AND c.reward_type = 'death'
+              AND c.reward_type IN ('death', 'tavern')
               AND c.multiplier = 1
               AND c.ad_impression_id IS NULL
-              AND c.base_account_experience > 0
+              AND c.dismissed_at IS NULL
+              AND (c.base_account_experience > 0 OR c.base_honey > 0)
               AND c.created_at >= $cutoff
             ORDER BY c.created_at DESC
             LIMIT $limit";
@@ -669,8 +842,11 @@ public sealed class SinglePlayerProgressService
                 rewardType = reader.GetString(1),
                 baseAccountExperience = baseAccountExperience,
                 extraAccountExperience = baseAccountExperience * (AccountAdMultiplier - 1),
-                chapterId = reader.IsDBNull(4) ? null : reader.GetString(4),
-                roomsCleared = reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
+                baseHoney = reader.GetInt32(4),
+                extraHoney = reader.GetInt32(4) *
+                    ((reader.GetString(1) == "tavern" ? 5 : AdMultiplier) - 1),
+                chapterId = reader.IsDBNull(5) ? null : reader.GetString(5),
+                roomsCleared = reader.IsDBNull(6) ? 0 : reader.GetInt32(6),
                 createdAt = createdAt,
                 hoursLeft = HoursLeft(createdAt, now)
             });
@@ -719,11 +895,13 @@ public sealed class SinglePlayerProgressService
         int baseHoney;
         int baseAccountExperience;
         int multiplier;
+        string rewardType;
         using (SqliteCommand query = connection.CreateCommand())
         {
             query.Transaction = transaction;
             query.CommandText = @"
-                SELECT base_honey, base_account_experience, multiplier FROM single_player_reward_claims
+                SELECT base_honey, base_account_experience, multiplier, reward_type
+                FROM single_player_reward_claims
                 WHERE claim_id = $claim AND player_id = $player";
             query.Parameters.AddWithValue("$claim", claimRef);
             query.Parameters.AddWithValue("$player", identity.PlayerId);
@@ -733,6 +911,7 @@ public sealed class SinglePlayerProgressService
             baseHoney = reader.GetInt32(0);
             baseAccountExperience = reader.GetInt32(1);
             multiplier = reader.GetInt32(2);
+            rewardType = reader.GetString(3);
         }
 
         if (multiplier > 1)
@@ -749,7 +928,8 @@ public sealed class SinglePlayerProgressService
         // baseHoney e' zero per ogni tipo di reward da quando le quest della taverna sono
         // l'unico rubinetto di miele: il moltiplicatore pubblicitario oggi vale solo sull'EXP
         // account. Il calcolo resta perche' e' la reward a decidere la propria base, non l'ad.
-        int extraHoney = baseHoney * (AdMultiplier - 1);
+        int appliedMultiplier = rewardType == "tavern" ? 5 : AdMultiplier;
+        int extraHoney = baseHoney * (appliedMultiplier - 1);
         int extraAccountExperience = baseAccountExperience * (AccountAdMultiplier - 1);
         using (SqliteCommand update = connection.CreateCommand())
         {
@@ -758,7 +938,7 @@ public sealed class SinglePlayerProgressService
                 UPDATE single_player_reward_claims
                 SET multiplier = $mult, ad_impression_id = $ad, multiplied_at = $now
                 WHERE claim_id = $claim AND player_id = $player";
-            update.Parameters.AddWithValue("$mult", AdMultiplier);
+            update.Parameters.AddWithValue("$mult", appliedMultiplier);
             update.Parameters.AddWithValue("$ad", adId);
             update.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
             update.Parameters.AddWithValue("$claim", claimRef);
@@ -773,9 +953,32 @@ public sealed class SinglePlayerProgressService
         return (BuildReward(progress, claimRef, extraHoney, extraAccountExperience, levelsGained), null, null);
     }
 
+    public (string ErrorCode, string Error) DismissPendingAdReward(
+        AccountIdentity identity, SinglePlayerDismissPendingAdRewardRequest request)
+    {
+        string claimRef = Normalize(request?.rewardClaimId);
+        if (string.IsNullOrEmpty(claimRef))
+            return (ErrorCodes.InvalidProgressionRequest, "Messaggio non valido.");
+
+        using SqliteConnection connection = database.Open();
+        using SqliteCommand update = connection.CreateCommand();
+        update.CommandText = @"
+            UPDATE single_player_reward_claims SET dismissed_at = $now
+            WHERE claim_id = $claim AND player_id = $player
+              AND multiplier = 1 AND ad_impression_id IS NULL";
+        update.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
+        update.Parameters.AddWithValue("$claim", claimRef);
+        update.Parameters.AddWithValue("$player", identity.PlayerId);
+        if (update.ExecuteNonQuery() == 0)
+            return (ErrorCodes.RewardClaimNotFound, "Messaggio non trovato.");
+        return (null, null);
+    }
+
     /// <summary>
     /// Riscuote in un'unica operazione atomica i level-up ancora da notificare. Il client
     /// puo' solo chiedere il claim: conteggio e accredito restano interamente sul server.
+    ///
+    /// Paga in punti talento, non piu' in miele: vedi <see cref="TalentPointsForLevels"/>.
     /// </summary>
     public (SinglePlayerRewardResult Result, string ErrorCode, string Error) ClaimLevelRewards(
         AccountIdentity identity)
@@ -785,24 +988,34 @@ public sealed class SinglePlayerProgressService
         EnsureProgressRow(connection, transaction, identity.PlayerId);
 
         int pendingLevels;
+        int currentLevel;
         using (SqliteCommand query = connection.CreateCommand())
         {
             query.Transaction = transaction;
-            query.CommandText = @"SELECT pending_level_rewards FROM single_player_progress
-                WHERE player_id = $player";
+            query.CommandText = @"SELECT pending_level_rewards, account_level
+                FROM single_player_progress WHERE player_id = $player";
             query.Parameters.AddWithValue("$player", identity.PlayerId);
-            pendingLevels = Math.Max(0, Convert.ToInt32(query.ExecuteScalar()));
+            using SqliteDataReader reader = query.ExecuteReader();
+            reader.Read();
+            pendingLevels = Math.Max(0, reader.GetInt32(0));
+            currentLevel = Math.Max(1, reader.GetInt32(1));
         }
 
-        int honey = pendingLevels * HoneyPerAccountLevel;
+        // I livelli non riscossi sono per forza gli ultimi raggiunti: sapere quali sono e'
+        // quello che serve per il bonus dei livelli tondi, e si ricava dal contatore senza
+        // doverne tenere un secondo in tabella.
+        int points = TalentPointsForLevels(currentLevel - pendingLevels, currentLevel);
         using (SqliteCommand update = connection.CreateCommand())
         {
             update.Transaction = transaction;
             update.CommandText = @"
                 UPDATE single_player_progress
-                SET honey = honey + $honey, pending_level_rewards = 0, updated_at = $now
+                SET talent_points = talent_points + $points,
+                    talent_points_earned = talent_points_earned + $points,
+                    pending_level_rewards = 0,
+                    updated_at = $now
                 WHERE player_id = $player";
-            update.Parameters.AddWithValue("$honey", honey);
+            update.Parameters.AddWithValue("$points", points);
             update.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
             update.Parameters.AddWithValue("$player", identity.PlayerId);
             update.ExecuteNonQuery();
@@ -810,15 +1023,66 @@ public sealed class SinglePlayerProgressService
 
         SinglePlayerProgressData progress = ReadProgress(connection, identity.PlayerId, transaction);
         transaction.Commit();
-        return (BuildReward(progress, null, honey, levelsGained: pendingLevels), null, null);
+        return (
+            BuildReward(progress, null, 0, levelsGained: pendingLevels, grantedTalentPoints: points),
+            null,
+            null);
     }
 
+    /// <summary>
+    /// Accredita punti talento fuori dal giro dei livelli. Alza anche il totale guadagnato,
+    /// che e' lo storico su cui il profilo e il pannello admin ragionano.
+    /// </summary>
+    private static void GrantTalentPoints(
+        SqliteConnection connection, SqliteTransaction transaction, string playerId, int points)
+    {
+        if (points <= 0)
+            return;
+
+        using SqliteCommand update = connection.CreateCommand();
+        update.Transaction = transaction;
+        update.CommandText = @"
+            UPDATE single_player_progress
+            SET talent_points = talent_points + $points,
+                talent_points_earned = talent_points_earned + $points,
+                updated_at = $now
+            WHERE player_id = $player";
+        update.Parameters.AddWithValue("$points", points);
+        update.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
+        update.Parameters.AddWithValue("$player", playerId);
+        update.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Punti talento consegnati salendo da <paramref name="fromLevel"/> (escluso) a
+    /// <paramref name="toLevel"/> (incluso). La regola sta in
+    /// <see cref="AccountLevelCurve.TalentPointsForLevels"/>, accanto alla curva di
+    /// esperienza: il popup di level-up deve annunciare la stessa cifra che qui viene
+    /// accreditata, e per farlo il client compila quello stesso sorgente.
+    /// </summary>
+    internal static int TalentPointsForLevels(int fromLevel, int toLevel) =>
+        AccountLevelCurve.TalentPointsForLevels(fromLevel, toLevel);
+
+    /// <summary>
+    /// L'esperienza account di una run: un decimo di quella guadagnata giocando, per il
+    /// moltiplicatore del capitolo.
+    ///
+    /// Il tetto vale sull'esperienza di run, non sul risultato: il moltiplicatore deve
+    /// poterlo superare, altrimenti oltre le 5000 di run tutti i capitoli tornerebbero a
+    /// pagare uguale ed esisterebbe solo sulla carta.
+    ///
+    /// La catena completa di moltiplicatori e': capitolo (qui), poi il video su una reward
+    /// gia' concessa (<see cref="ClaimAdMultiplier"/>). Il pass stagionale, quando arrivera',
+    /// e' un terzo fattore e va messo qui accanto al capitolo, non sul video: deve valere
+    /// anche per chi non guarda annunci, altrimenti premia due volte la stessa cosa.
+    /// </summary>
     private static int CalculateAccountExperience(SinglePlayerDeathRewardRequest request)
     {
         if (request == null)
             return 0;
         int farmedExperience = Math.Clamp(request.matchExperience, 0, DeathRewardExperienceCeiling);
-        return farmedExperience / 10;
+        int percent = ChapterCatalog.AccountExperiencePercentOf(request.chapterId);
+        return farmedExperience / 10 * percent / 100;
     }
 
     private static SinglePlayerRewardResult BuildReward(
@@ -826,13 +1090,15 @@ public sealed class SinglePlayerProgressService
         string claimId,
         int grantedHoney,
         int grantedAccountExperience = 0,
-        int levelsGained = 0) => new()
+        int levelsGained = 0,
+        int grantedTalentPoints = 0) => new()
     {
         progress = progress,
         rewardClaimId = claimId,
         grantedHoney = grantedHoney,
         grantedAccountExperience = grantedAccountExperience,
-        levelsGained = levelsGained
+        levelsGained = levelsGained,
+        grantedTalentPoints = grantedTalentPoints
     };
 
     private static string NewClaimId() => Guid.NewGuid().ToString("N");
@@ -991,15 +1257,7 @@ public sealed class SinglePlayerProgressService
             }
         }
 
-        current += amount;
-        total += amount;
-        int levelsGained = 0;
-        while (current >= AccountExperiencePerLevel)
-        {
-            current -= AccountExperiencePerLevel;
-            level++;
-            levelsGained++;
-        }
+        AccountLevelProgress progress = AccountLevelCurve.Apply(level, current, total, amount);
 
         using SqliteCommand update = connection.CreateCommand();
         update.Transaction = transaction;
@@ -1012,15 +1270,15 @@ public sealed class SinglePlayerProgressService
                 pending_level_rewards = pending_level_rewards + $levels,
                 updated_at = $now
             WHERE player_id = $player";
-        update.Parameters.AddWithValue("$level", level);
-        update.Parameters.AddWithValue("$xp", current);
-        update.Parameters.AddWithValue("$total", total);
-        update.Parameters.AddWithValue("$next", AccountExperiencePerLevel);
-        update.Parameters.AddWithValue("$levels", levelsGained);
+        update.Parameters.AddWithValue("$level", progress.Level);
+        update.Parameters.AddWithValue("$xp", progress.Experience);
+        update.Parameters.AddWithValue("$total", progress.TotalExperience);
+        update.Parameters.AddWithValue("$next", progress.ExperienceToNextLevel);
+        update.Parameters.AddWithValue("$levels", progress.LevelsGained);
         update.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
         update.Parameters.AddWithValue("$player", playerId);
         update.ExecuteNonQuery();
-        return levelsGained;
+        return progress.LevelsGained;
     }
 
     private static bool TryFindDeathClaim(
@@ -1074,13 +1332,17 @@ public sealed class SinglePlayerProgressService
             "secondAbility" => progress.unlockedSecondAbilities,
             "chapterCleared" => progress.clearedChapters,
             "slot" => progress.unlockedSlots,
-            "item" => progress.unlockedItems,
             _ => Array.Empty<string>()
         };
         return Array.IndexOf(list ?? Array.Empty<string>(), id) >= 0;
     }
 
-    private static void GrantUnlock(
+    /// <summary>
+    /// Concede uno sblocco. Restituisce <c>true</c> solo se la riga non c'era: e' la
+    /// "prima volta", ed e' quello che serve a pagare i premi una tantum senza tenere un
+    /// secondo contatore che potrebbe sfasarsi dagli sblocchi veri.
+    /// </summary>
+    private static bool GrantUnlock(
         SqliteConnection connection,
         SqliteTransaction transaction,
         string playerId,
@@ -1096,7 +1358,7 @@ public sealed class SinglePlayerProgressService
         insert.Parameters.AddWithValue("$type", type);
         insert.Parameters.AddWithValue("$id", id);
         insert.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
-        insert.ExecuteNonQuery();
+        return insert.ExecuteNonQuery() > 0;
     }
 
     private static void EnsureProgressRow(SqliteConnection connection, SqliteTransaction transaction, string playerId)
@@ -1109,7 +1371,7 @@ public sealed class SinglePlayerProgressService
                  account_experience_to_next_level, tutorial_completed, hardcore_unlocked, updated_at)
             VALUES ($player, 0, 1, 0, 0, $next, 0, 0, $now)";
         insert.Parameters.AddWithValue("$player", playerId);
-        insert.Parameters.AddWithValue("$next", AccountExperiencePerLevel);
+        insert.Parameters.AddWithValue("$next", AccountLevelCurve.ExperienceToNext(1));
         insert.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
         insert.ExecuteNonQuery();
 
@@ -1123,10 +1385,24 @@ public sealed class SinglePlayerProgressService
         if (!HasCompletedTutorial(connection, transaction, playerId))
             return;
 
-        GrantStarterClasses(connection, transaction, playerId);
+        GrantLegacyTutorialClasses(connection, transaction, playerId);
         // Anche per chi aveva finito il tutorial quando ancora pagava miele: il primo
         // capitolo era comprabile con quei 60 vasetti, ora e' parte della dotazione.
         GrantUnlock(connection, transaction, playerId, "chapter", TutorialRewardChapterId);
+        BackfillTutorialModules(connection, transaction, playerId);
+    }
+
+    /// <summary>
+    /// Chi aveva finito il vecchio tutorial monolitico si vede segnare tutti i moduli del
+    /// percorso nuovo: per lui l'onboarding e' finito, e i cancelli devono trovarlo aperto.
+    /// Nessuna ricompensa retroattiva - i moduli risultano riscossi, non da riscuotere -
+    /// e nessuna migrazione da lanciare a mano: succede al primo contatto dell'account.
+    /// </summary>
+    private static void BackfillTutorialModules(
+        SqliteConnection connection, SqliteTransaction transaction, string playerId)
+    {
+        foreach (string moduleId in TutorialModuleCatalog.AllIds)
+            GrantUnlock(connection, transaction, playerId, TutorialModuleCatalog.UnlockType, moduleId);
     }
 
     private static int ReadHoney(
@@ -1152,7 +1428,8 @@ public sealed class SinglePlayerProgressService
             query.CommandText = @"
                 SELECT honey, account_level, account_experience, account_total_experience,
                        account_experience_to_next_level, pending_level_rewards,
-                       tutorial_completed, hardcore_unlocked
+                       tutorial_completed, hardcore_unlocked,
+                       talent_points, talent_points_earned
                 FROM single_player_progress
                 WHERE player_id = $player";
             query.Parameters.AddWithValue("$player", playerId);
@@ -1163,10 +1440,17 @@ public sealed class SinglePlayerProgressService
                 data.accountLevel = Math.Max(1, reader.GetInt32(1));
                 data.accountExperience = Math.Max(0, reader.GetInt32(2));
                 data.accountTotalExperience = Math.Max(0, reader.GetInt32(3));
-                data.accountExperienceToNextLevel = Math.Max(1, reader.GetInt32(4));
                 data.pendingLevelRewards = Math.Max(0, reader.GetInt32(5));
                 data.tutorialCompleted = reader.GetInt32(6) != 0;
                 data.hardcoreUnlocked = reader.GetInt32(7) != 0;
+                data.talentPoints = Math.Max(0, reader.GetInt32(8));
+                data.talentPointsEarned = Math.Max(0, reader.GetInt32(9));
+
+                // La soglia si ricalcola dal livello invece di fidarsi della colonna: le
+                // righe scritte prima della curva hanno tutte 100 in tabella, e senza questo
+                // la barra resterebbe sbagliata fino al primo level-up successivo.
+                data.accountExperienceToNextLevel =
+                    AccountLevelCurve.ExperienceToNext(data.accountLevel);
             }
         }
 
@@ -1174,14 +1458,16 @@ public sealed class SinglePlayerProgressService
         data.unlockedStages = ReadUnlocks(connection, transaction, playerId, "stage");
         data.unlockedClasses = ReadUnlocks(connection, transaction, playerId, "class");
         if (data.tutorialCompleted)
-            data.unlockedClasses = MergeStarterClasses(data.unlockedClasses);
+            data.unlockedClasses = MergeLegacyTutorialClasses(data.unlockedClasses);
         data.unlockedScenarios = ReadUnlocks(connection, transaction, playerId, "scenario");
         data.unlockedSecondAbilities = ReadUnlocks(connection, transaction, playerId, "secondAbility");
         data.clearedChapters = ReadUnlocks(connection, transaction, playerId, "chapterCleared");
         data.unlockedSlots = ReadUnlocks(connection, transaction, playerId, "slot");
-        data.unlockedItems = ReadUnlocks(connection, transaction, playerId, "item");
+        data.completedTutorialModules =
+            ReadUnlocks(connection, transaction, playerId, TutorialModuleCatalog.UnlockType);
         data.bagItems = SanctuaryBag.ReadBag(connection, transaction, playerId);
         data.counters = CampaignCounters.Read(connection, transaction, playerId);
+        data.talentLoadout = TalentService.BuildLoadoutFor(connection, transaction, playerId);
         return data;
     }
 
@@ -1201,19 +1487,28 @@ public sealed class SinglePlayerProgressService
         return result != null && result != DBNull.Value && Convert.ToInt32(result) != 0;
     }
 
-    private static void GrantStarterClasses(
+    /// <summary>
+    /// Rimette le tre classi del vecchio tutorial. Si chiama solo per chi quel tutorial lo
+    /// aveva finito: il percorso nuovo consegna il Guerriero dal catalogo dei moduli e le
+    /// altre due le fa comprare.
+    /// </summary>
+    private static void GrantLegacyTutorialClasses(
         SqliteConnection connection,
         SqliteTransaction transaction,
         string playerId)
     {
-        foreach (string classId in StarterClassIds)
+        foreach (string classId in LegacyTutorialClassIds)
             GrantUnlock(connection, transaction, playerId, "class", classId);
     }
 
-    private static string[] MergeStarterClasses(string[] unlockedClasses)
+    /// <summary>
+    /// Chi ha il flag del vecchio tutorial vede sempre le sue tre classi, anche se le righe
+    /// di unlock non ci sono: e' la garanzia che nessuno perda la dotazione con cui giocava.
+    /// </summary>
+    private static string[] MergeLegacyTutorialClasses(string[] unlockedClasses)
     {
         var result = new List<string>(unlockedClasses ?? Array.Empty<string>());
-        foreach (string classId in StarterClassIds)
+        foreach (string classId in LegacyTutorialClassIds)
         {
             if (result.IndexOf(classId) < 0)
                 result.Add(classId);

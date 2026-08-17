@@ -1,6 +1,7 @@
 using System;
 using AccardND.GameCore;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace AccardND.GameData
 {
@@ -79,8 +80,16 @@ namespace AccardND.GameData
         public int MaximumCopiesPerCard => maximumCopiesPerCard;
         public int[] StrengthWeights => strengthWeights;
 
-        public DeckBuildingRules ToRules() => new(
-            startingEssence,
+        public DeckBuildingRules ToRules() => ToRules(null);
+
+        /// <summary>
+        /// Le regole della forgia con i talenti applicati. L'unica leva e' l'essenza di
+        /// partenza: uno sconto sul prezzo unitario si moltiplicherebbe per i nove acquisti
+        /// del mazzo e varrebbe il 60% di potere d'acquisto in piu', che non e' un talento
+        /// ma un'altra forgia.
+        /// </summary>
+        public DeckBuildingRules ToRules(TalentLoadoutSave talents) => new(
+            TalentRunModifiers.StartingEssence(startingEssence, talents),
             deckSize,
             combatHandSize,
             formationSize,
@@ -134,10 +143,6 @@ namespace AccardND.GameData
         [SerializeField, Min(1)] private int minibossEveryRooms = 10;
         [SerializeField, Min(2)] private int finalBossRoom = 25;
         [SerializeField, Min(1)] private int bossFormationSize = 1;
-        [SerializeField, Min(0)] private int monsterRoomWeight = 60;
-        [SerializeField, Min(0)] private int merchantRoomWeight = 15;
-        [SerializeField, Min(0)] private int lootRoomWeight = 15;
-        [SerializeField, Min(0)] private int opportunityRoomWeight = 10;
         [SerializeField, Min(0)] private int lootRoomExperience = 10;
         [SerializeField, Min(0)] private int opportunityRoomExperience = 0;
         [SerializeField, Min(0)] private int merchantRoomExperience = 0;
@@ -157,10 +162,6 @@ namespace AccardND.GameData
         public int MinibossEveryRooms => minibossEveryRooms;
         public int FinalBossRoom => finalBossRoom;
         public int BossFormationSize => bossFormationSize;
-        public int MonsterRoomWeight => monsterRoomWeight;
-        public int MerchantRoomWeight => merchantRoomWeight;
-        public int LootRoomWeight => lootRoomWeight;
-        public int OpportunityRoomWeight => opportunityRoomWeight;
         public int LootRoomExperience => lootRoomExperience;
         public int OpportunityRoomExperience => opportunityRoomExperience;
         public int MerchantRoomExperience => merchantRoomExperience;
@@ -314,9 +315,18 @@ namespace AccardND.GameData
 
         [Header("CPU")]
         [SerializeField] private CpuDifficultySetting cpuDifficulty = CpuDifficultySetting.Normal;
+
+        [Tooltip("Punti che vale una probabilita' di uccisione del 100%.")]
         [SerializeField, Min(0)] private int killProbabilityWeight = 1000;
+
+        [Tooltip("Preferenza per il vantaggio di classe, sopra al calcolo di probabilita'.")]
         [SerializeField, Min(0)] private int classAdvantageWeight = 100;
-        [SerializeField, Min(0)] private int weakerTargetWeight = 8;
+
+        [Tooltip("Punti per ogni punto di Potenza effettiva del bersaglio: la CPU va a togliere di mezzo le pedine piu' grosse.")]
+        [FormerlySerializedAs("weakerTargetWeight")]
+        [SerializeField, Min(0)] private int threatWeight = 8;
+
+        [Tooltip("Distrazione della CPU fuori da Diabolica, in punti percentuali di probabilita'. 0 = precisa come in Diabolica.")]
         [SerializeField, Min(0)] private int randomTieBreaker = 5;
 
         public int InitiativeDieSides => initiativeDieSides;
@@ -328,7 +338,7 @@ namespace AccardND.GameData
         public CpuDifficultySetting CpuDifficulty => cpuDifficulty;
         public int KillProbabilityWeight => killProbabilityWeight;
         public int ClassAdvantageWeight => classAdvantageWeight;
-        public int WeakerTargetWeight => weakerTargetWeight;
+        public int ThreatWeight => threatWeight;
         public int RandomTieBreaker => randomTieBreaker;
 
 #if UNITY_EDITOR

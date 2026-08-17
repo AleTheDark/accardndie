@@ -12,6 +12,33 @@ sta qui e non nel template WebGL perche' cambiarla non deve richiedere una build
 | `apple-touch-icon.png` | icona di "Aggiungi a Home" delle pagine del sito | `StoreAssets/GooglePlay/app-icon-512.png` a 180x180 |
 | `bg/hero.jpg`, `bg/banda-classi.jpg`, `bg/banda-inizia.jpg`, `bg/banda-testata.jpg` | le fasce a tutta larghezza (`.band` in site.css) | arte degli scenari in `Assets/_Project/Art/Scenarios/*_landscape.png`, a 1280px e JPEG qualita' 68 |
 | `classi/*.png` | stemmi delle nove classi in `classi.html`, `carte.html` e homepage | ritagliati da `Assets/Resources/UI/DeckBuilder/class_icons_atlas.png` usando i rettangoli delle sprite nel suo `.meta` |
+| `ranks/*.png` | emblemi delle cinque leghe accanto al grado, in `/hall-of-fame` e `/statistiche` | da `Assets/_Project/Resources/UI/MultiplayerRestyle/Ranks/rank_*_v1.png`, ritagliati sull'alfa e riportati a 128x128 |
+
+Gli emblemi delle leghe hanno un nome per tier (`nabbo`, `apprendista`, `esperto`,
+`divino`, `onnipotente`, gli stessi di `RankedConfig.Tiers`) e non il nome del file
+Unity: e' `SiteLayout.RankBadge` a fare l'accoppiamento, e un tier senza file esce
+come solo testo. Gli originali sono PNG da 200-400 KB con misure diverse fra loro;
+la riduzione li ritaglia sul contenuto e li centra in un quadrato di 128, cosi' in
+tabella si incolonnano. Il comando, con Pillow:
+
+```
+python -c "
+from PIL import Image
+import os
+src='Assets/_Project/Resources/UI/MultiplayerRestyle/Ranks'
+dst='Docs/web/media/ranks'
+S=128
+for n in ['nabbo','apprendista','esperto','divino','onnipotente']:
+    im=Image.open(os.path.join(src,f'rank_{n}_v1.png')).convert('RGBA')
+    im=im.crop(im.getbbox())
+    w,h=im.size
+    s=S/max(w,h)
+    im=im.resize((max(1,round(w*s)),max(1,round(h*s))),Image.LANCZOS)
+    c=Image.new('RGBA',(S,S),(0,0,0,0))
+    c.paste(im,((S-im.size[0])//2,(S-im.size[1])//2),im)
+    c.save(os.path.join(dst,f'{n}.png'),optimize=True)
+"
+```
 
 Gli stemmi vanno rigenerati se cambia l'atlante. I rettangoli stanno nel `.meta`
 dell'atlante, con l'origine in **basso** a sinistra: per ritagliarli con qualunque

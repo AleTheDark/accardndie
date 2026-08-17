@@ -55,6 +55,12 @@ namespace AccardND.NetProtocol
         public int honey;
         public SanctuaryEntryData[] entries;
 
+        /// <summary>
+        /// Catalogo completo dei consumabili acquistabili al negozio. Non sono sblocchi del
+        /// Santuario: ogni voce e' disponibile a tutti fin dall'inizio.
+        /// </summary>
+        public SanctuaryEntryData[] shopCatalog;
+
         /// <summary>Slot bisaccia disponibili (base piu' quelli acquistati).</summary>
         public int bagSlots;
 

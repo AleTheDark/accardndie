@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d42e105f465d48f43a32e6d78f6b8cf6, type: 3}
+  m_Name: boss-seraphel
+  m_EditorClassIdentifier: AccardND.GameData::AccardND.GameData.CardDefinition
+  id: boss-seraphel
+  displayName: Seraphel
+  category: 1
+  artwork: {fileID: 21300000, guid: b8d1ce1a305acac4680f8aaa44a55170, type: 3}
+  strength: 8
+  hasHeroClass: 1
+  heroClass: 8
+  rulesText: "Fase I - Sacerdotessa della Luce. \nPotenza 8, Vigore D10, 80 HP.\n\nLuce Rigenerante: quando raggiunge 10 Mana, li consuma e recupera 4 HP, fino a un massimo di 80.\n\nSigillo Sacro: se supera la difesa non elimina il bersaglio, ma applica 1 Sigillo.\n\nCondanna Crescente: +2 al totale d'attacco per ogni Sigillo gia presente sul bersaglio.\n\nCondanna dei Tre Sigilli: a 3 Sigilli il bersaglio muore automaticamente."

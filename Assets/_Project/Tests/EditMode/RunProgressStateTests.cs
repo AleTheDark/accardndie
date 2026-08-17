@@ -167,21 +167,34 @@ namespace AccardND.GameCore.Tests
             Assert.That(dice[3], Is.EqualTo(10));
         }
 
+        [Test]
+        public void CompleteMonsterRoom_WithForfeitPenalty_HalvesFinalExperienceAndGold()
+        {
+            var progress = CreateProgress();
+
+            RoomReward reward = progress.CompleteMonsterRoom(new[] { 5, 8 }, 10, 2, 2);
+
+            // Double EXP is applied first: (10 + 13) * 2 / 2 = 23.
+            Assert.That(reward.RoomExperience, Is.EqualTo(10));
+            Assert.That(reward.DefeatedMonsterExperience, Is.EqualTo(13));
+            Assert.That(reward.Gold, Is.EqualTo(4));
+            Assert.That(progress.CurrentExperience, Is.EqualTo(23));
+            Assert.That(progress.Gold, Is.EqualTo(4));
+        }
+
         [TestCase(0, 100)]
-        [TestCase(5, 125)]
-        [TestCase(10, 155)]
-        [TestCase(15, 190)]
-        [TestCase(20, 230)]
-        public void MerchantEconomy_RoomScalingUsesFiveRoomBands(int roomsCleared, int expected)
+        [TestCase(5, 100)]
+        [TestCase(20, 100)]
+        public void MerchantEconomy_PricesStayFixedAcrossRooms(int roomsCleared, int expected)
         {
             Assert.That(MerchantEconomy.ScaleByRoom(100, roomsCleared), Is.EqualTo(expected));
         }
 
         [TestCase(0, 100)]
-        [TestCase(1, 150)]
-        [TestCase(2, 225)]
-        [TestCase(3, 338)]
-        public void MerchantEconomy_CaravanTaxCompounds(int purchases, int expected)
+        [TestCase(1, 100)]
+        [TestCase(2, 100)]
+        [TestCase(3, 100)]
+        public void MerchantEconomy_RepeatedPurchasesDoNotAddHiddenTax(int purchases, int expected)
         {
             Assert.That(MerchantEconomy.ApplyCaravanTax(100, purchases), Is.EqualTo(expected));
         }
@@ -189,12 +202,16 @@ namespace AccardND.GameCore.Tests
         [Test]
         public void MerchantEconomy_PricesIncomeAndRecoveryScaleTogether()
         {
-            Assert.That(MerchantEconomy.CardCost(6, 0), Is.EqualTo(30));
-            Assert.That(MerchantEconomy.CardCost(6, 20), Is.EqualTo(69));
+            Assert.That(MerchantEconomy.CardCost(3, 0), Is.EqualTo(12));
+            Assert.That(MerchantEconomy.CardCost(6, 20), Is.EqualTo(18));
+            Assert.That(MerchantEconomy.CardCost(9, 0), Is.EqualTo(26));
+            Assert.That(MerchantEconomy.CardCost(10, 20), Is.EqualTo(36));
             Assert.That(MerchantEconomy.MonsterRoomGold(1, 10, 20), Is.EqualTo(10));
             Assert.That(MerchantEconomy.MonsterRoomGold(21, 10, 20), Is.EqualTo(18));
-            Assert.That(MerchantEconomy.RecoveryCost(6, 0), Is.EqualTo(21));
-            Assert.That(MerchantEconomy.RecoveryCost(6, 20), Is.EqualTo(49));
+            Assert.That(MerchantEconomy.RecoveryCost(6, 0), Is.EqualTo(13));
+            Assert.That(MerchantEconomy.RecoveryCost(6, 20), Is.EqualTo(13));
+            Assert.That(MerchantEconomy.UpgradeCost(6, 0), Is.EqualTo(20));
+            Assert.That(MerchantEconomy.UpgradeCost(7, 1), Is.EqualTo(42));
         }
 
         private static RunProgressState CreateProgress()

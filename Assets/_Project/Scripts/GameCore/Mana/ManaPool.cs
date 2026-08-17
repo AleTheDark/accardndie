@@ -6,12 +6,12 @@ namespace AccardND.GameCore.Mana
     /// <summary>
     /// Riserva di mana di un giocatore. E' globale: tutte le pedine attingono alla stessa
     /// cassa. Tiene anche il contatore che alimenta l'unico sovrapprezzo del gioco:
-    /// le supreme gia' usate per classe nel round.
+    /// le supreme gia' usate per classe nella partita/run.
     /// </summary>
     public sealed class ManaPool
     {
         private readonly ManaRules rules;
-        private readonly Dictionary<HeroClass, int> supremeUsesThisRound = new();
+        private readonly Dictionary<HeroClass, int> supremeUsesThisRun = new();
         private int current;
 
         public ManaPool(ManaRules rules = null)
@@ -28,18 +28,18 @@ namespace AccardND.GameCore.Mana
         public void StartRun()
         {
             current = rules.RunStart;
-            supremeUsesThisRound.Clear();
+            supremeUsesThisRun.Clear();
         }
 
         /// <summary>
         /// Inizio stanza o round: il mana persiste, ma risale al pavimento se e' sceso sotto.
-        /// Il contatore di ripetizione delle supreme si azzera.
+        /// Il contatore di ripetizione delle supreme persiste: ogni nuovo uso deve
+        /// continuare ad aumentare il costo per tutta la partita/run.
         /// </summary>
         public void StartRound()
         {
             if (current < rules.RoundFloor)
                 current = rules.RoundFloor;
-            supremeUsesThisRound.Clear();
         }
 
         /// <summary>
@@ -51,14 +51,35 @@ namespace AccardND.GameCore.Mana
 
         /// <summary>
         /// Costo effettivo della suprema: base + una tacca per ogni suprema della stessa
-        /// classe gia' usata nel round. Vedi Docs/mana-design.md.
+        /// classe gia' usata nella partita/run. Vedi Docs/mana-design.md.
         /// </summary>
         public int CostOfSupreme(HeroClass heroClass) =>
             AbilityManaCosts.Supreme(heroClass)
             + SupremeRepeatSurcharge(heroClass);
 
         public int SupremeUses(HeroClass heroClass) =>
-            supremeUsesThisRound.TryGetValue(heroClass, out int uses) ? uses : 0;
+            supremeUsesThisRun.TryGetValue(heroClass, out int uses) ? uses : 0;
+
+        /// <summary>
+        /// Le supreme gia' usate, per classe. Serve al salvataggio di una run: senza
+        /// questo contatore una campagna ripresa rimetterebbe le supreme al prezzo base,
+        /// e il sovrapprezzo di ripetizione si azzererebbe a ogni riapertura del gioco.
+        /// </summary>
+        public IReadOnlyDictionary<HeroClass, int> SupremeUsesByClass => supremeUsesThisRun;
+
+        /// <summary>Ripristino da salvataggio: riserva e contatore delle supreme insieme.</summary>
+        public void Restore(int value, IEnumerable<KeyValuePair<HeroClass, int>> supremeUses)
+        {
+            Restore(value);
+            supremeUsesThisRun.Clear();
+            if (supremeUses == null)
+                return;
+            foreach (KeyValuePair<HeroClass, int> used in supremeUses)
+            {
+                if (used.Value > 0)
+                    supremeUsesThisRun[used.Key] = used.Value;
+            }
+        }
 
         public bool CanAfford(int cost) => cost <= current;
 
@@ -77,7 +98,7 @@ namespace AccardND.GameCore.Mana
         /// <summary>Registra l'uso di una suprema ai fini del sovrapprezzo di ripetizione.</summary>
         public void RegisterSupremeUse(HeroClass heroClass)
         {
-            supremeUsesThisRound[heroClass] = SupremeUses(heroClass) + 1;
+            supremeUsesThisRun[heroClass] = SupremeUses(heroClass) + 1;
         }
 
         /// <summary>Guadagno di mana, sempre limitato dal tetto. Restituisce quanto e' stato effettivamente aggiunto.</summary>

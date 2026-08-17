@@ -30,9 +30,12 @@ namespace AccardND.Battlefield
         private Transform diePivot;
         private Camera renderCamera;
         private GameObject die;
+        private EmpoweredDiceFireVfx empoweredFire;
+        private bool empowered;
         private int dieSides = -1;
         private HeroClass dieClass;
         private List<DieFace> dieFaces = new List<DieFace>();
+        private readonly List<MeshFilter> crumbleSourceFilters = new List<MeshFilter>();
         private Coroutine rollCoroutine;
         private bool homeCaptured;
         private Vector2 homeAnchoredPosition;
@@ -45,6 +48,7 @@ namespace AccardND.Battlefield
         private float bounceCurveSeed;
         private float bounceCurveSign;
         private bool bouncing;
+        private readonly List<MeshCrumbleFragment> activeCrumbleFragments = new List<MeshCrumbleFragment>();
 
         /// <summary>Esiste il modello 3D per questo numero di facce?</summary>
         public static bool IsSupported(int sides)
@@ -52,10 +56,10 @@ namespace AccardND.Battlefield
             return Resources.Load<GameObject>($"DnD_Dice/Mesh/00_D{ResolveSides(sides)}") != null;
         }
 
-        // Il D3 logico non ha modello: si tira un D6 (il valore 1-3 esiste comunque).
+        // Il D2 logico usa il modello D4: il risultato deciso dalla logica resta 1 o 2.
         private static int ResolveSides(int sides)
         {
-            return sides == 3 ? 6 : sides;
+            return sides == 2 ? 4 : sides;
         }
 
         public static Dice3DRollView Create(Transform parent)
@@ -95,7 +99,9 @@ namespace AccardND.Battlefield
 
         private void BuildRig()
         {
-            renderTexture = new RenderTexture(TextureSize, TextureSize, 16, RenderTextureFormat.ARGB32)
+            // 24 bit garantiscono depth + stencil: la stencil protegge il valore
+            // finale dalle particelle senza spegnere guscio, luce o pulsazione.
+            renderTexture = new RenderTexture(TextureSize, TextureSize, 24, RenderTextureFormat.ARGB32)
             {
                 name = "Die 3D RT",
                 antiAliasing = 4
@@ -135,6 +141,16 @@ namespace AccardND.Battlefield
             light.range = 8f;
             light.intensity = 2.2f;
             light.color = Color.white;
+            empoweredFire = EmpoweredDiceFireVfx.Create(diePivot);
+        }
+
+        public void SetEmpowered(bool value)
+        {
+            // L'aura non viene toccata qui: LateUpdate la ridipinge ogni frame
+            // e leggera' 'empowered' da se'. Scriverla adesso significherebbe
+            // vederla sovrascritta prima ancora del frame successivo.
+            empowered = value;
+            empoweredFire?.SetActive(value);
         }
 
         /// <summary>
@@ -144,12 +160,19 @@ namespace AccardND.Battlefield
         public void StartScriptedRoll(int sides, HeroClass heroClass, int result, float duration)
         {
             gameObject.SetActive(true);
+            SetArcaneOutlinesVisible(true);
             EnsureDie(ResolveSides(sides), heroClass);
+            empoweredFire?.ConfigureForClass(heroClass);
             if (die != null)
                 die.SetActive(true);
             ConfigureArcaneMagic(heroClass);
+            SetEmpowered(empowered);
+            empoweredFire?.SetSettled(false);
             if (rollCoroutine != null)
                 StopCoroutine(rollCoroutine);
+            // Un dado che rotola e rimbalza e' esattamente il momento in cui i
+            // sessanta frame si vedono: il tiro se li prende, Hide() li ridà.
+            FrameRateGovernor.Acquire(this);
             rollCoroutine = StartCoroutine(SpiralRollRoutine(result, duration));
         }
 
@@ -165,7 +188,13 @@ namespace AccardND.Battlefield
             if (material == null)
                 return;
             foreach (Renderer renderer in die.GetComponentsInChildren<Renderer>(true))
+            {
+                // Il glow contestuale ridipinge il dado, non il fuoco: guscio e
+                // maschera tengono i propri material.
+                if (renderer.GetComponent<EmpoweredDiceVfxPart>() != null)
+                    continue;
                 renderer.sharedMaterial = material;
+            }
 
             // Anche aura e trail devono rispettare gli override contestuali,
             // ad esempio blu giocatore e rosso nemico durante l'iniziativa.
@@ -189,12 +218,14 @@ namespace AccardND.Battlefield
 
         public void Hide()
         {
+            FrameRateGovernor.Release(this);
             if (rollCoroutine != null)
             {
                 StopCoroutine(rollCoroutine);
                 rollCoroutine = null;
             }
             bouncing = false;
+            CleanupMeshCrumbleFragments();
             if (homeCaptured)
                 viewRect.anchoredPosition = homeAnchoredPosition;
             if (die != null)
@@ -207,21 +238,274 @@ namespace AccardND.Battlefield
             if (renderTexture != null)
                 ClearRenderTexture(renderTexture);
             gameObject.SetActive(false);
+
+            // La vista viene riutilizzata tra tiri diversi. Spegnere soltanto
+            // il GameObject del fuoco lasciava il flag `empowered` latente:
+            // un successivo StartScriptedRoll che non configura esplicitamente
+            // l'Empower (per esempio alcuni tiri contestuali) poteva riaccenderlo.
+            SetEmpowered(false);
         }
 
-        private void CreateArcaneDieAura()
+        /// <summary>
+        /// Frantuma la mesh realmente renderizzata dal dado. I triangoli del modello
+        /// vengono divisi in blocchi spaziali che conservano materiali e prospettiva 3D.
+        /// </summary>
+        public IEnumerator PlayMeshCrumble()
         {
-            // Gli outline usano l'alpha della RenderTexture: l'aura segue quindi
-            // la vera silhouette del dado 3D, non crea dischi o decal sul campo.
-            arcaneShadowOutline = gameObject.AddComponent<Outline>();
-            arcaneShadowOutline.effectColor = new Color(0f, 0f, 0f, 0.92f);
-            arcaneShadowOutline.effectDistance = new Vector2(10f, -10f);
-            arcaneShadowOutline.useGraphicAlpha = true;
+            if (die == null)
+                yield break;
 
-            arcaneClassOutline = gameObject.AddComponent<Outline>();
-            arcaneClassOutline.effectColor = new Color(0.2f, 0.5f, 1f, 0.86f);
-            arcaneClassOutline.effectDistance = new Vector2(-5f, 5f);
-            arcaneClassOutline.useGraphicAlpha = true;
+            // Gli Outline UI duplicano l'intera RenderTexture. Quando il dado e'
+            // diviso in frammenti, ogni copia offset sembra quindi uno strato
+            // aggiuntivo della mesh invece di una semplice aura sul dado intero.
+            SetArcaneOutlinesVisible(false);
+
+            // Il dado scartato da vantaggio/svantaggio deve tornare al suo aspetto
+            // normale prima di sgretolarsi: l'Empower riguarda il tiro, non i
+            // frammenti del dado eliminato.
+            SetEmpowered(false);
+
+            if (rollCoroutine != null)
+            {
+                StopCoroutine(rollCoroutine);
+                rollCoroutine = null;
+            }
+            bouncing = false;
+            renderCamera.enabled = true;
+
+            CleanupMeshCrumbleFragments();
+            List<MeshCrumbleFragment> fragments = BuildMeshCrumbleFragments();
+            activeCrumbleFragments.AddRange(fragments);
+            if (fragments.Count == 0)
+            {
+                die.SetActive(false);
+                yield return new WaitForSecondsRealtime(0.68f);
+                yield break;
+            }
+
+            const float fractureDelay = 0.16f;
+            float elapsed = 0f;
+            Quaternion settledRotation = diePivot.localRotation;
+            while (elapsed < fractureDelay)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float progress = Mathf.Clamp01(elapsed / fractureDelay);
+                float shake = Mathf.Sin(progress * Mathf.PI * 10f) * (1f - progress) * 2.8f;
+                diePivot.localRotation = settledRotation * Quaternion.Euler(shake, -shake * 0.6f, shake * 0.45f);
+                yield return null;
+            }
+            diePivot.localRotation = settledRotation;
+            die.SetActive(false);
+            foreach (MeshCrumbleFragment fragment in fragments)
+                fragment.Root.SetActive(true);
+
+            const float crumbleDuration = 0.52f;
+            elapsed = 0f;
+            while (elapsed < crumbleDuration)
+            {
+                float delta = Time.unscaledDeltaTime;
+                elapsed += delta;
+                float progress = Mathf.Clamp01(elapsed / crumbleDuration);
+                foreach (MeshCrumbleFragment fragment in fragments)
+                {
+                    // Hide() puo' arrivare a meta' sgretolamento (uscita dalla
+                    // battaglia, tiro annullato) e distruggere i frammenti: la
+                    // coroutine vive sulla carta, non su questa vista, e non si
+                    // ferma da sola.
+                    if (fragment.Root == null)
+                        continue;
+                    fragment.Velocity += Vector3.down * (2.8f * delta);
+                    fragment.Root.transform.position += fragment.Velocity * delta;
+                    fragment.Root.transform.rotation = Quaternion.AngleAxis(
+                        fragment.SpinSpeed * delta,
+                        fragment.SpinAxis) * fragment.Root.transform.rotation;
+                    float scale = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.58f, 1f, progress));
+                    fragment.Root.transform.localScale = fragment.InitialScale * scale;
+                }
+                yield return null;
+            }
+
+            foreach (MeshCrumbleFragment fragment in fragments)
+            {
+                if (fragment.Mesh != null)
+                    Destroy(fragment.Mesh);
+                if (fragment.Root != null)
+                    Destroy(fragment.Root);
+            }
+            activeCrumbleFragments.Clear();
+        }
+
+        private void CleanupMeshCrumbleFragments()
+        {
+            foreach (MeshCrumbleFragment fragment in activeCrumbleFragments)
+            {
+                if (fragment.Mesh != null)
+                    Destroy(fragment.Mesh);
+                if (fragment.Root != null)
+                    Destroy(fragment.Root);
+            }
+            activeCrumbleFragments.Clear();
+        }
+
+        private List<MeshCrumbleFragment> BuildMeshCrumbleFragments()
+        {
+            var output = new List<MeshCrumbleFragment>();
+            foreach (MeshFilter sourceFilter in crumbleSourceFilters)
+            {
+                // Le sorgenti vengono catturate prima che l'Empower aggiunga i
+                // propri duplicati alla gerarchia. In questo modo lo
+                // sgretolamento non dipende affatto dallo stato o dalla
+                // struttura interna del VFX.
+                if (sourceFilter == null)
+                    continue;
+
+                Mesh sourceMesh = sourceFilter.sharedMesh;
+                MeshRenderer sourceRenderer = sourceFilter.GetComponent<MeshRenderer>();
+                if (sourceMesh == null || sourceRenderer == null || !sourceMesh.isReadable)
+                    continue;
+
+                Vector3[] sourceVertices = sourceMesh.vertices;
+                Bounds bounds = sourceMesh.bounds;
+                Vector3 size = bounds.size;
+                var cells = new Dictionary<int, List<int>[]>();
+                for (int subMesh = 0; subMesh < sourceMesh.subMeshCount; subMesh++)
+                {
+                    int[] triangles = sourceMesh.GetTriangles(subMesh);
+                    for (int triangle = 0; triangle + 2 < triangles.Length; triangle += 3)
+                    {
+                        Vector3 center = (sourceVertices[triangles[triangle]]
+                            + sourceVertices[triangles[triangle + 1]]
+                            + sourceVertices[triangles[triangle + 2]]) / 3f;
+                        int x = SpatialCell(center.x, bounds.min.x, size.x);
+                        int y = SpatialCell(center.y, bounds.min.y, size.y);
+                        int z = SpatialCell(center.z, bounds.min.z, size.z);
+                        int key = x + y * 3 + z * 9;
+                        if (!cells.TryGetValue(key, out List<int>[] cellSubMeshes))
+                        {
+                            cellSubMeshes = new List<int>[sourceMesh.subMeshCount];
+                            for (int index = 0; index < cellSubMeshes.Length; index++)
+                                cellSubMeshes[index] = new List<int>();
+                            cells.Add(key, cellSubMeshes);
+                        }
+                        cellSubMeshes[subMesh].Add(triangles[triangle]);
+                        cellSubMeshes[subMesh].Add(triangles[triangle + 1]);
+                        cellSubMeshes[subMesh].Add(triangles[triangle + 2]);
+                    }
+                }
+
+                foreach (KeyValuePair<int, List<int>[]> cell in cells)
+                {
+                    Mesh fragmentMesh = CopyMeshTriangles(sourceMesh, cell.Value);
+                    if (fragmentMesh == null)
+                        continue;
+
+                    // Ogni pezzo deve ruotare attorno al proprio baricentro. Se
+                    // conservasse le coordinate della mesh sorgente orbiterebbe
+                    // invece attorno al centro del dado, producendo l'effetto a
+                    // "petali" che si vede durante lo sgretolamento.
+                    Vector3 sourceLocalCenter = fragmentMesh.bounds.center;
+                    RecenterMesh(fragmentMesh, sourceLocalCenter);
+
+                    var fragmentObject = new GameObject("Die Mesh Fragment", typeof(MeshFilter), typeof(MeshRenderer));
+                    fragmentObject.transform.SetParent(diePivot, false);
+                    fragmentObject.transform.position = sourceFilter.transform.TransformPoint(sourceLocalCenter);
+                    fragmentObject.transform.rotation = sourceFilter.transform.rotation;
+                    fragmentObject.transform.localScale = WorldScaleRelativeTo(sourceFilter.transform, diePivot);
+                    fragmentObject.GetComponent<MeshFilter>().sharedMesh = fragmentMesh;
+                    fragmentObject.GetComponent<MeshRenderer>().sharedMaterials = sourceRenderer.sharedMaterials;
+
+                    Vector3 directionFromDie = fragmentObject.transform.position - diePivot.position;
+                    Vector3 direction = directionFromDie.sqrMagnitude > 0.0001f
+                        ? directionFromDie.normalized
+                        : Random.onUnitSphere;
+                    output.Add(new MeshCrumbleFragment
+                    {
+                        Root = fragmentObject,
+                        Mesh = fragmentMesh,
+                        InitialScale = fragmentObject.transform.localScale,
+                        Velocity = direction * Random.Range(0.65f, 1.25f) + Vector3.up * Random.Range(0.05f, 0.45f),
+                        SpinAxis = Random.onUnitSphere,
+                        SpinSpeed = Random.Range(150f, 420f)
+                    });
+                    fragmentObject.SetActive(false);
+                }
+            }
+            return output;
+        }
+
+        private static void RecenterMesh(Mesh mesh, Vector3 center)
+        {
+            Vector3[] vertices = mesh.vertices;
+            for (int index = 0; index < vertices.Length; index++)
+                vertices[index] -= center;
+            mesh.vertices = vertices;
+            mesh.RecalculateBounds();
+        }
+
+        private static Vector3 WorldScaleRelativeTo(Transform source, Transform parent)
+        {
+            Vector3 sourceScale = source.lossyScale;
+            Vector3 parentScale = parent.lossyScale;
+            return new Vector3(
+                SafeScaleRatio(sourceScale.x, parentScale.x),
+                SafeScaleRatio(sourceScale.y, parentScale.y),
+                SafeScaleRatio(sourceScale.z, parentScale.z));
+        }
+
+        private static float SafeScaleRatio(float value, float divisor)
+        {
+            return Mathf.Abs(divisor) > 0.0001f ? value / divisor : value;
+        }
+
+        private static int SpatialCell(float value, float minimum, float size)
+        {
+            if (size <= 0.0001f)
+                return 1;
+            return Mathf.Clamp(Mathf.FloorToInt((value - minimum) / size * 3f), 0, 2);
+        }
+
+        private static Mesh CopyMeshTriangles(Mesh source, List<int>[] sourceTriangles)
+        {
+            Vector3[] vertices = source.vertices;
+            Vector3[] normals = source.normals;
+            Vector2[] uv = source.uv;
+            var copiedVertices = new List<Vector3>();
+            var copiedNormals = new List<Vector3>();
+            var copiedUv = new List<Vector2>();
+            var copiedTriangles = new List<int>[sourceTriangles.Length];
+            for (int subMesh = 0; subMesh < sourceTriangles.Length; subMesh++)
+            {
+                copiedTriangles[subMesh] = new List<int>();
+                foreach (int sourceIndex in sourceTriangles[subMesh])
+                {
+                    copiedTriangles[subMesh].Add(copiedVertices.Count);
+                    copiedVertices.Add(vertices[sourceIndex]);
+                    copiedNormals.Add(normals.Length == vertices.Length ? normals[sourceIndex] : Vector3.up);
+                    copiedUv.Add(uv.Length == vertices.Length ? uv[sourceIndex] : Vector2.zero);
+                }
+            }
+            if (copiedVertices.Count == 0)
+                return null;
+
+            var mesh = new Mesh { name = source.name + " Crumble Fragment" };
+            mesh.SetVertices(copiedVertices);
+            mesh.SetNormals(copiedNormals);
+            mesh.SetUVs(0, copiedUv);
+            mesh.subMeshCount = copiedTriangles.Length;
+            for (int subMesh = 0; subMesh < copiedTriangles.Length; subMesh++)
+                mesh.SetTriangles(copiedTriangles[subMesh], subMesh);
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        private sealed class MeshCrumbleFragment
+        {
+            public GameObject Root;
+            public Mesh Mesh;
+            public Vector3 InitialScale;
+            public Vector3 Velocity;
+            public Vector3 SpinAxis;
+            public float SpinSpeed;
         }
 
         private void ConfigureArcaneMagic(HeroClass heroClass)
@@ -234,6 +518,27 @@ namespace AccardND.Battlefield
                 arcaneTrail.Configure(glow, viewRect);
         }
 
+        private void CreateArcaneDieAura()
+        {
+            arcaneShadowOutline = gameObject.AddComponent<Outline>();
+            arcaneShadowOutline.effectColor = new Color(0f, 0f, 0f, 0.92f);
+            arcaneShadowOutline.effectDistance = new Vector2(10f, -10f);
+            arcaneShadowOutline.useGraphicAlpha = true;
+
+            arcaneClassOutline = gameObject.AddComponent<Outline>();
+            arcaneClassOutline.effectColor = new Color(0.2f, 0.5f, 1f, 0.86f);
+            arcaneClassOutline.effectDistance = new Vector2(-5f, 5f);
+            arcaneClassOutline.useGraphicAlpha = true;
+        }
+
+        private void SetArcaneOutlinesVisible(bool visible)
+        {
+            if (arcaneShadowOutline != null)
+                arcaneShadowOutline.enabled = visible;
+            if (arcaneClassOutline != null)
+                arcaneClassOutline.enabled = visible;
+        }
+
         private void LateUpdate()
         {
             if (arcaneShadowOutline == null || !gameObject.activeInHierarchy)
@@ -242,14 +547,12 @@ namespace AccardND.Battlefield
             float time = Time.unscaledTime;
             float distortionA = Mathf.Sin(time * 8.7f + GetInstanceID() * 0.013f);
             float distortionB = Mathf.Sin(time * 13.1f + 1.9f);
-            arcaneShadowOutline.effectDistance = new Vector2(
-                9.5f + distortionA * 2.8f,
-                -9.5f + distortionB * 2.4f);
-            arcaneClassOutline.effectDistance = new Vector2(
-                -4.8f + distortionB * 1.9f,
-                4.8f + distortionA * 1.7f);
+            arcaneShadowOutline.effectDistance = new Vector2(9.5f + distortionA * 2.8f, -9.5f + distortionB * 2.4f);
+            arcaneClassOutline.effectDistance = new Vector2(-4.8f + distortionB * 1.9f, 4.8f + distortionA * 1.7f);
             arcaneShadowOutline.effectColor = new Color(0.005f, 0.008f, 0.018f, 0.86f + distortionB * 0.07f);
             float shimmer = 0.78f + (distortionA + 1f) * 0.08f;
+            if (empowered)
+                shimmer = Mathf.Min(1f, shimmer + 0.16f);
             arcaneClassOutline.effectColor = new Color(
                 Mathf.Lerp(arcaneGlowColor.r, 1f, 0.08f + Mathf.Max(0f, distortionB) * 0.1f),
                 Mathf.Lerp(arcaneGlowColor.g, 1f, 0.08f + Mathf.Max(0f, distortionB) * 0.1f),
@@ -288,19 +591,7 @@ namespace AccardND.Battlefield
 
         private static Color ArcaneClassColor(HeroClass heroClass)
         {
-            return heroClass switch
-            {
-                HeroClass.Hunter => new Color(1f, 0.32f, 0.01f),
-                HeroClass.Assassin => new Color(0.78f, 0.08f, 0.035f),
-                HeroClass.Warrior => new Color(0.52f, 0.55f, 0.6f),
-                HeroClass.Mage => new Color(0.56f, 0.16f, 0.86f),
-                HeroClass.Paladin => new Color(1f, 0.72f, 0.07f),
-                HeroClass.Rogue => new Color(0.025f, 0.025f, 0.035f),
-                HeroClass.Barbarian => new Color(0.48f, 0.22f, 0.07f),
-                HeroClass.Necromancer => new Color(0.34f, 0.94f, 0.07f),
-                HeroClass.Priest => new Color(0.82f, 0.88f, 1f),
-                _ => new Color(0.38f, 0.28f, 1f)
-            };
+            return ClassDice3D.GlowColor(heroClass);
         }
 
         private static void ClearRenderTexture(RenderTexture target)
@@ -325,10 +616,13 @@ namespace AccardND.Battlefield
             dieSides = sides;
             dieClass = heroClass;
             dieFaces.Clear();
+            crumbleSourceFilters.Clear();
             if (die == null)
                 return;
 
             NormalizeDie(die.transform, sides);
+            crumbleSourceFilters.AddRange(die.GetComponentsInChildren<MeshFilter>(true));
+            empoweredFire?.BindDie(die);
             // Le normali vanno riportate nello spazio del pivot (che è ciò che
             // ruotiamo): se l'FBX ha una rotazione di import sulla root, usarle
             // nello spazio del modello inclinerebbe ogni atterraggio.
@@ -435,7 +729,10 @@ namespace AccardND.Battlefield
             bouncing = false;
             if (arcaneTrail != null)
                 arcaneTrail.StopEmission();
+            if (empowered)
+                empoweredFire?.SetSettled(true);
             rollCoroutine = null;
+            FrameRateGovernor.Release(this);
         }
 
         private static Vector2 PolarSpiralOffset(
@@ -543,6 +840,7 @@ namespace AccardND.Battlefield
             viewRect.anchoredPosition = homeAnchoredPosition;
             bouncing = false;
             rollCoroutine = null;
+            FrameRateGovernor.Release(this);
         }
 
         // Limiti dell'offset (rispetto alla posizione di riposo) perché il
@@ -800,6 +1098,7 @@ namespace AccardND.Battlefield
 
         private void OnDestroy()
         {
+            FrameRateGovernor.Release(this);
             if (renderTexture != null)
             {
                 renderTexture.Release();

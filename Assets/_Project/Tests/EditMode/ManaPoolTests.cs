@@ -120,13 +120,13 @@ namespace AccardND.GameCore.Tests
         }
 
         [Test]
-        public void StartRound_ResetsSupremeEscalation()
+        public void StartRound_PreservesSupremeEscalation()
         {
             var pool = new ManaPool();
             pool.RegisterSupremeUse(HeroClass.Mage);
             pool.StartRound();
 
-            Assert.That(pool.CostOfSupreme(HeroClass.Mage), Is.EqualTo(4));
+            Assert.That(pool.CostOfSupreme(HeroClass.Mage), Is.EqualTo(5));
         }
 
         // --- Riserva del Paladino ---
@@ -197,7 +197,7 @@ namespace AccardND.GameCore.Tests
                 if (heroClass == HeroClass.Paladin)
                     Assert.That(cost, Is.EqualTo(2));
                 else
-                    Assert.That(cost, Is.InRange(3, 6), $"suprema di {heroClass} fuori dalla fascia 3-6");
+                    Assert.That(cost, Is.InRange(2, 8), $"suprema di {heroClass} fuori dalla fascia 2-8");
             }
         }
 
@@ -225,6 +225,12 @@ namespace AccardND.GameCore.Tests
             Assert.That(AbilityManaCosts.Primary(HeroClass.Rogue), Is.EqualTo(0));
         }
 
+        [Test]
+        public void AssassinInhibit_CostsThreeMana()
+        {
+            Assert.That(AbilityManaCosts.Primary(HeroClass.Assassin), Is.EqualTo(3));
+        }
+
 		[Test]
 		public void SharedActionPolicy_DefinesActivatableClassesAndActivationRewards()
 		{
@@ -242,12 +248,12 @@ namespace AccardND.GameCore.Tests
 		}
 
         [Test]
-        public void NecromancerSupreme_IsNotImplementedYet()
+        public void NecromancerSupreme_IsImplementedAtEightMana()
         {
-            Assert.That(AbilityManaCosts.IsSupremeImplemented(HeroClass.Necromancer), Is.False);
+            Assert.That(AbilityManaCosts.IsSupremeImplemented(HeroClass.Necromancer), Is.True);
+            Assert.That(AbilityManaCosts.Supreme(HeroClass.Necromancer), Is.EqualTo(8));
             foreach (HeroClass heroClass in System.Enum.GetValues(typeof(HeroClass)))
-                if (heroClass != HeroClass.Necromancer)
-                    Assert.That(AbilityManaCosts.IsSupremeImplemented(heroClass), Is.True);
+                Assert.That(AbilityManaCosts.IsSupremeImplemented(heroClass), Is.True);
         }
 
         [Test]

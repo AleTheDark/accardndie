@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<!-- Guida di strategia.
+     Divisione con le pagine vicine, da rispettare quando si aggiunge roba: guida.html
+     dice COSA fanno le regole, classi.html cosa fa ogni classe, questa pagina COSA
+     CONVIENE fare - ed e' l'unica delle tre in cui e' legittimo mettere un'opinione,
+     purche' poggi su un numero verificabile.
+     Le medie dei dadi nella tabella sono calcolate esatte (media del massimo e del
+     minimo di due dadi uguali), non stimate: se cambia la scala del Vigore in
+     GameConfiguration.vigorDiceByLevel vanno ricalcolate. -->
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strategia — AcCard N' Die</title>
+<meta name="description" content="Come si gioca bene ad AcCard N' Die: quanto vale davvero il vantaggio sui dadi, quando conviene il monoclasse, come si spende il mana e i cinque errori che costano più partite.">
+<link rel="canonical" href="https://accardndie.com/strategia">
+<link rel="stylesheet" href="site.css?v=8019aee5">
+<link rel="apple-touch-icon" href="media/apple-touch-icon.png">
+<meta name="theme-color" content="#14100c">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3580486749764055" crossorigin="anonymous"></script>
+<script src="site.js?v=49ec8cb4" defer></script>
+</head>
+<body>
+
+<nav class="nav"><div class="wrap">
+  <a class="brand" href="/">AcCard N' Die</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="menu-links" hidden>Menu</button>
+  <div class="menu-links" id="menu-links">
+    <a href="/guida">Come si gioca</a>
+    <a href="/strategia" aria-current="page">Strategia</a>
+    <a href="/classi">Le nove classi</a>
+    <a href="/carte">Database carte</a>
+    <a href="/campagna">Campagna</a>
+    <a href="/duelli">Duelli</a>
+    <a href="/hall-of-fame">Hall of Fame</a>
+  </div>
+  <a class="nav-play" data-play data-play-label="Scarica" href="/game/">Gioca</a>
+</div></nav>
+
+<header class="band band-testata">
+  <div class="wrap">
+    <h1>Strategia</h1>
+    <p class="lead">Le regole stanno in <a href="/guida">Come si gioca</a>. Questa pagina
+    è il passo dopo: cosa conviene farne. Ogni consiglio qui sotto poggia su un numero del
+    gioco, non su un'impressione — e dove il numero dice il contrario dell'istinto, lo dice
+    chiaro.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<h2>La prima cosa da capire: il dado non è un bonus</h2>
+
+<p>Il triangolo delle fazioni non regala punti. Cambia <em>come</em> tiri: due dadi tenendo il
+migliore in vantaggio, un dado solo in neutro, due dadi tenendo il peggiore in svantaggio.
+Sembra un dettaglio, ed è invece il fatto più importante del gioco, perché il valore del
+vantaggio <strong>non è fisso: cresce col dado</strong>.</p>
+
+<p>Queste sono le medie vere, calcolate sulla scala del Vigore:</p>
+
+<div class="scroll">
+<table class="grid">
+  <caption>Media del tiro secondo il matchup. Il vantaggio e lo svantaggio spostano la media
+  della stessa quantità, in direzioni opposte.</caption>
+  <tr><th class="rowhead">Vigore</th><th>D4</th><th>D6</th><th>D8</th><th>D10</th><th>D12</th><th>D20</th></tr>
+  <tr><th class="rowhead">Neutro</th><td>2,50</td><td>3,50</td><td>4,50</td><td>5,50</td><td>6,50</td><td>10,50</td></tr>
+  <tr><th class="rowhead">Vantaggio</th><td>3,13</td><td>4,47</td><td>5,81</td><td>7,15</td><td>8,49</td><td>13,83</td></tr>
+  <tr><th class="rowhead">Svantaggio</th><td>1,88</td><td>2,53</td><td>3,19</td><td>3,85</td><td>4,51</td><td>7,17</td></tr>
+  <tr><th class="rowhead">Quanto sposta</th><td>±0,63</td><td>±0,97</td><td>±1,31</td><td>±1,65</td><td>±1,99</td><td>±3,33</td></tr>
+</table>
+</div>
+
+<div class="box">
+  <p><strong>La conseguenza pratica.</strong> Sul D4 il matchup vale meno di un punto, cioè
+  meno della differenza fra una carta da 4 e una da 5: nelle prime stanze di una run puoi
+  quasi ignorarlo. Sul D20 vale <strong>oltre tre punti</strong>, più di qualunque abilità del
+  gioco: nel finale il matchup <em>è</em> la partita. Chi schiera lo stesso mazzo con lo stesso
+  criterio dall'inizio alla fine sta giocando bene per metà run e male per l'altra metà.</p>
+</div>
+
+<h2>Lo scalino: dove il gioco si decide davvero</h2>
+
+<p>Molti effetti non aggiungono numeri, spostano una carta di uno scalino sulla scala
+<code>D2 → D4 → D6 → D8 → D10 → D12 → D20</code>. Sembra un effetto uniforme. Non lo è:</p>
+
+<div class="scroll">
+<table>
+  <caption>Quanto costa in media scendere di uno scalino.</caption>
+  <tr><th>Scalino</th><th>Media prima</th><th>Media dopo</th><th>Quanto perdi</th></tr>
+  <tr><td><strong>D20 → D12</strong></td><td>10,50</td><td>6,50</td><td><strong>−4,00</strong></td></tr>
+  <tr><td>D12 → D10</td><td>6,50</td><td>5,50</td><td>−1,00</td></tr>
+  <tr><td>D10 → D8</td><td>5,50</td><td>4,50</td><td>−1,00</td></tr>
+  <tr><td>D8 → D6</td><td>4,50</td><td>3,50</td><td>−1,00</td></tr>
+  <tr><td>D6 → D4</td><td>3,50</td><td>2,50</td><td>−1,00</td></tr>
+  <tr><td>D4 → D2</td><td>2,50</td><td>1,50</td><td>−1,00</td></tr>
+</table>
+</div>
+
+<p>La scala ha un buco in cima: tra D12 e D20 non c'è il D16, quindi il primo scalino
+<strong>vale quanto gli altri quattro insieme</strong>. Da qui escono due regole che valgono
+per tutta la partita:</p>
+
+<ul>
+  <li><strong>L'abilità del Mage è quattro volte più forte contro un nemico al D20.</strong>
+      Costa 2 mana in ogni caso, ma toglie 4 punti di media a un nemico di livello massimo e
+      solo 1 a tutti gli altri. Tenere il Mage per il boss non è pazienza, è aritmetica.</li>
+  <li><strong>L'Aura Magic, che alza il dado di difesa di uno scalino, difende meglio chi è
+      già in alto.</strong> Al D12 vale +4 in difesa; al D6, +1.</li>
+</ul>
+
+<h2>Tre carte su sei: cosa compra ciascuna aura</h2>
+
+<p>La scelta dello schieramento non è "prendi le tre più forti". Con tre carte scatta
+<strong>una sola aura</strong>, e le tre strade non sono equivalenti: comprano cose diverse e
+si pagano in modi diversi.</p>
+
+<div class="scroll">
+<table>
+  <tr><th>Strada</th><th>Cosa ottieni</th><th>Cosa paghi</th><th>Quando conviene</th></tr>
+  <tr>
+    <td><strong>Formazione</strong><br>1 Might + 1 Cunning + 1 Magic</td>
+    <td>In attacco lo svantaggio di fazione diventa neutro. Sempre, senza limiti di volte.</td>
+    <td>È l'unica aura che non dà numeri: non aumenta la Potenza di nessuno.</td>
+    <td>Quando <strong>non sai cosa hai davanti</strong>: prime stanze di una run, e ogni
+        partita d'arena contro uno sconosciuto.</td>
+  </tr>
+  <tr>
+    <td><strong>Mono-fazione</strong><br>3 classi diverse, stessa fazione</td>
+    <td>Un'aura solida più tre abilità che fanno cose diverse.</td>
+    <td>Una fazione sola: contro il tuo contro-colore tiri tre volte con svantaggio.</td>
+    <td>Quando <strong>sai</strong> cosa hai davanti e non è il tuo contro-colore.</td>
+  </tr>
+  <tr>
+    <td><strong>Mono-classe</strong><br>3 carte della stessa classe</td>
+    <td>L'effetto più potente del gioco, e tre abilità identiche che si rinforzano.</td>
+    <td>Lo stesso problema di matchup, <em>più</em> le supreme che rincarano (vedi sotto).</td>
+    <td>Quando lo sai, o quando il combattimento sarà abbastanza lungo da far maturare
+        l'aura.</td>
+  </tr>
+</table>
+</div>
+
+<h3>Quanto vale, in punti, la Formazione</h3>
+
+<p>Si può quantificare. La Formazione trasforma un attacco in svantaggio in un attacco neutro:
+guadagni esattamente la colonna "quanto sposta" della prima tabella, ogni volta che attacchi
+in svantaggio. Al D8 sono <strong>1,31 punti per attacco</strong>; al D20, 3,33.</p>
+
+<p>L'Aura Might, per confronto, dà <strong>+1 permanente a tutte le tue carte Might a ogni
+morte in campo</strong>, tua o avversaria. Su sei pedine, un combattimento che va lungo ne
+vede cadere quattro o cinque: quello è +4 o +5 su ognuna delle tue tre carte, cioè molto più
+di quanto la Formazione possa accumulare. E su un combattimento corto è zero.</p>
+
+<div class="box">
+  <p><strong>Il criterio, in una riga.</strong> La Formazione paga <em>subito</em> e paga
+  sempre poco; le aure di fazione e di classe pagano <em>tardi</em> e possono pagare molto.
+  Scegli la Formazione quando temi di perdere in fretta, il mono quando pensi di poter tirare
+  la cosa per le lunghe.</p>
+</div>
+
+<h2>Il vero limite non sono le carte, è il mana</h2>
+
+<p>Un'abilità si può rifare ogni turno: non c'è un contatore di usi. Quello che ti ferma è la
+riserva, che parte da <strong>3</strong>, ha per tetto <strong>10</strong> ed è
+<strong>condivisa da tutta la squadra</strong>. Con l'attacco che costa 1 e il +1 di fine
+attivazione, un turno di soli attacchi è a saldo zero: il mana non si consuma attaccando, si
+consuma usando abilità.</p>
+
+<p>Le entrate sono tre, e la seconda è quella che si dimentica:</p>
+
+<ul>
+  <li><strong>+1</strong> a fine attivazione di una pedina.</li>
+  <li><strong>+3</strong> se una pedina rinuncia del tutto al turno. <em>Saltare è una mossa,
+      non una resa:</em> è l'unica voce che ti rimette in pari in fretta, e vale il triplo
+      dell'altra.</li>
+  <li><strong>+1</strong> ogni volta che una tua pedina para un colpo — che è il motivo per cui
+      il Paladin, che para con vantaggio, è anche una macchina da mana.</li>
+</ul>
+
+<p>Da qui il costo delle abilità si legge diversamente. Un Warrior a 5 mana ne usa una e resta
+a secco per due turni. Un Mage a 2 può abbassare il dado dello stesso bersaglio turno dopo
+turno finché la riserva regge, e con tre Mage in campo tre volte per turno. <strong>Le abilità
+economiche non sono le più deboli: sono quelle che si possono ripetere</strong>, e in un gioco
+dove il limite è la riserva, la ripetibilità è la statistica che conta.</p>
+
+<h3>Barbarian e Rogue non costano niente</h3>
+
+<p>Le loro abilità sono passive. In una squadra a corto di mana valgono più di quanto dice la
+scheda, perché lasciano tutta la riserva alle altre due pedine. Un Rogue accanto a due
+attivatori è una scelta di economia, non di combattimento.</p>
+
+<h2>La suprema rincara, e il mono-classe la paga due volte</h2>
+
+<p>Ogni supreme costa mana, da 2 a 8 secondo la classe — ma il prezzo <strong>sale a ogni
+riuso della supreme di quella classe</strong>: la seconda costa 1 in più, la terza 2 in più. E
+il conto <strong>non si azzera a fine stanza</strong>: vale per tutta la run, o per tutto il
+match d'arena.</p>
+
+<p>È l'unico posto del gioco in cui l'aura di classe ti costa qualcosa. Tre Warrior hanno una
+supreme a prezzo pieno e due in salita, e continuano a pagare il rincaro nelle stanze
+successive; uno schieramento misto ne ha tre a prezzo pieno. Con la Palla di Fuoco del Mage a
+4 mana, tre Mage pagano 4, 5 e 6: quindici mana per tre lanci, contro un tetto di dieci.</p>
+
+<div class="box">
+  <p>Il costo di una supreme non misura il danno, misura quanto toglie all'avversario. La
+  Riserva del Paladino non fa male a nessuno e costa 2 — perché non toglie niente, dà.
+  L'Invisibilità dell'Assassino non fa danno diretto e costa 5, perché per un'attivazione lo
+  toglie dal tavolo. Se stai valutando una supreme dal danno che fa, la stai leggendo con la
+  metrica sbagliata.</p>
+</div>
+
+<h2>L'ordine dei turni è metà del gioco</h2>
+
+<p>Due classi regalano il loro bonus a qualcun altro: l'<strong>Hunter</strong>, che marca un
+nemico e dà +2 (+4 con l'aura) a chi lo attacca dopo, e il <strong>Priest</strong>, che
+benedice un alleato e gli dà +2 (+3) al prossimo attacco. Per entrambe vale la stessa regola:
+<strong>un bonus al "prossimo attacco" serve solo se qualcuno attacca subito</strong>. Marcare
+un bersaglio che nessuno colpirà in questo turno è un turno buttato e 2 mana spesi.</p>
+
+<p>Due dettagli che cambiano il conto:</p>
+
+<ul>
+  <li><strong>I marchi dell'Hunter non si sommano</strong>, le benedizioni del Priest sì. Tre
+      Hunter sullo stesso nemico sprecano due turni; due Priest sullo stesso alleato fanno
+      +6.</li>
+  <li><strong>Sui boss il marchio non si consuma</strong> (con l'aura Hunter). Contro un boss
+      l'Hunter smette di essere un preparatore e diventa un moltiplicatore permanente: è il suo
+      scontro migliore in tutto il gioco.</li>
+</ul>
+
+<h2>Cinque errori che costano più partite</h2>
+
+<ol>
+  <li><strong>Schierare le tre carte più alte.</strong> Tre carte da 6, 7 e 8 senza sinergia
+      valgono regolarmente meno di tre carte da 4 che accendono un'aura di classe. Il valore è
+      la <em>base</em> della Potenza, non il totale.</li>
+  <li><strong>Spendere l'abilità del Warrior su un bersaglio che cadrebbe comunque.</strong>
+      Costa 5 mana, il massimo del gioco, e il secondo dado è di uno scalino inferiore: alza il
+      massimo senza garantire niente. Va spesa dove decide qualcosa.</li>
+  <li><strong>Non saltare mai.</strong> Il +3 di una pedina che rinuncia al turno è la
+      manovra di recupero più efficiente del gioco, e la maggior parte dei giocatori non la usa
+      perché sembra un turno perso.</li>
+  <li><strong>Mandare il Barbarian solo dove può vincere.</strong> È l'unica classe pagata per
+      fallire: ogni scambio perso è +2 (+3 con l'aura) in attacco <em>e</em> in difesa, senza
+      tetto. Un Barbarian mandato contro un muro non è un turno buttato, è il turno che lo
+      carica — a patto di scaricare la Furia sul bersaglio giusto, perché la prima vittoria
+      azzera il conto.</li>
+  <li><strong>Trattare le sette carte casuali come un mazzo progettato.</strong> Del mazzo di
+      partenza scegli solo il campione e il vice: le altre sette te le dà il caso. Il piano non si
+      fa prima di vederle, si fa su quelle che sono uscite — e si aggiusta dal
+      <a href="/rifugio">mercante</a>, che è l'unico posto dove decidi ancora qualcosa sul
+      mazzo.</li>
+</ol>
+
+<h2>Cosa cambia fra campagna e arena</h2>
+
+<div class="scroll">
+<table>
+  <tr><th></th><th><a href="/campagna">Campagna</a></th><th><a href="/duelli">Arena</a></th></tr>
+  <tr><td>Vigore</td><td>Parte dal D4 e cresce col livello della run, fino al D20</td>
+      <td>Parte dal D4 e cresce col round: D6 al secondo, D8 dal terzo</td></tr>
+  <tr><td>Il mazzo</td><td>Scegli campione e vice, le altre sette carte escono a caso</td>
+      <td>Lo componi tutto: nove carte entro 60 punti di budget</td></tr>
+  <tr><td>Cosa hai davanti</td><td>Lo scenario lo suggerisce: c'è un indizio, e ogni scenario
+      ha un solo boss</td><td>Uno sconosciuto, di cui non sai niente</td></tr>
+  <tr><td>Durata</td><td>Venti stanze: il mazzo cresce, il livello sale, le aure lunghe
+      maturano</td><td>Al massimo tre round, e ogni carta ha due vite</td></tr>
+  <tr><td>Tempo per decidere</td><td>Quanto vuoi</td><td>Trenta secondi per mossa</td></tr>
+  <tr><td>Aura consigliata</td><td>Cambia lungo la run — Formazione all'inizio, mono quando
+      sai e quando il dado è alto</td><td>Formazione, salvo che tu abbia motivo di pensare
+      altro</td></tr>
+</table>
+</div>
+
+<p>Le differenze vere sono due, e tirano nella stessa direzione. La prima è il dado: in arena si
+resta in basso sulla scala, dove il matchup vale poco più di un punto e le aure lunghe non hanno
+tempo di maturare — vince chi gioca bene i primi due turni. In campagna, dalla decima stanza in
+avanti, il dado è grosso e il matchup pesa più di ogni altra cosa in campo.</p>
+
+<p>La seconda è il mazzo: in campagna te lo trovi, in arena lo progetti. Il piano di una run si
+fa <em>dopo</em> aver visto le sette carte uscite e si aggiusta dal mercante; in arena il piano
+è il loadout, e le tre carte che schieri le hai già scelte quando hai speso i sessanta punti.
+Le regole complete del loadout sono in <a href="/duelli">I duelli online</a>.</p>
+
+<h2>Da dove continuare</h2>
+
+<ul>
+  <li><a href="/guida">Come si gioca</a> — il regolamento completo, con tutti i numeri.</li>
+  <li><a href="/classi">Le nove classi</a> — abilità, aura e supreme di ciascuna.</li>
+  <li><a href="/carte">Database carte</a> — le 81 carte, e quali conviene comprare.</li>
+  <li><a href="/campagna">La campagna</a> — struttura di una run, capitoli e boss.</li>
+  <li><a href="/rifugio">Il rifugio</a> — taverna, negozio, Santuario e talenti.</li>
+</ul>
+
+</main>
+
+<footer class="site"><div class="wrap">
+  <p><a href="/game/">Gioca</a> · <a href="/guida">Come si gioca</a> ·
+     <a href="/strategia">Strategia</a> · <a href="/classi">Le nove classi</a> ·
+     <a href="/carte">Database carte</a> · <a href="/campagna">Campagna</a> ·
+     <a href="/duelli">Duelli</a> · <a href="/rifugio">Il rifugio</a> ·
+     <a href="/faq">Domande frequenti</a> ·
+     <a href="/hall-of-fame">Hall of Fame</a> · <a href="/statistiche">Statistiche</a></p>
+  <p><a href="/chi-siamo">Chi siamo</a> · <a href="/contatti">Contatti</a> ·
+     <a href="/privacy">Privacy</a> · <a href="/account/delete">Cancellazione account</a></p>
+  <p><a href="https://www.youtube.com/@accardndie" rel="noopener">YouTube</a> ·
+     <a href="https://www.instagram.com/accardndie/" rel="noopener">Instagram</a> ·
+     <a href="https://www.tiktok.com/@accardndie" rel="noopener">TikTok</a></p>
+  <p>AcCard N' Die</p>
+</div></footer>
+
+</body>
+</html>

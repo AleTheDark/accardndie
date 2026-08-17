@@ -30,10 +30,14 @@ namespace AccardND.Presentation
 
         private IEnumerator Start()
         {
-            Application.targetFrameRate = 60;
+            // Il trailer e' un'animazione continua: tiene il frame rate alto
+            // per tutta la sua durata invece di lasciarlo decidere al governor.
+            AccardND.Battlefield.FrameRateGovernor.Acquire(this);
             BuildView();
             yield return PlayTrailer();
         }
+
+        private void OnDisable() => AccardND.Battlefield.FrameRateGovernor.Release(this);
 
         private void BuildView()
         {

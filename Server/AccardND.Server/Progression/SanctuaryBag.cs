@@ -76,6 +76,39 @@ public static class SanctuaryBag
     }
 
     /// <summary>
+    /// Tetto di oggetti che una singola run puo' versare nella scorta. Il bottino di run e'
+    /// deciso dal client, quindi vale la stessa logica dei cap sui contatori: un numero fuori
+    /// portata per una run onesta, che limita il danno di un client manipolato.
+    /// </summary>
+    private const int MaxRunLootPerRun = 12;
+
+    /// <summary>
+    /// Versa nella scorta gli oggetti trovati nelle stanze o comprati al mercante e mai usati.
+    /// La run che finisce non se li porta via: restano da mettere in bisaccia la volta dopo.
+    /// La bisaccia non si tocca, la selezione la fa il giocatore al Santuario.
+    /// </summary>
+    public static void AddRunLootToStash(
+        SqliteConnection connection, SqliteTransaction transaction, string playerId, IEnumerable<string> itemIds)
+    {
+        if (itemIds == null)
+            return;
+
+        int added = 0;
+        foreach (string rawId in itemIds)
+        {
+            if (added >= MaxRunLootPerRun)
+                return;
+
+            string itemId = Normalize(rawId);
+            if (string.IsNullOrEmpty(itemId) || !SanctuaryCatalog.TryGetEntry(SanctuaryCatalog.TypeItem, itemId, out _))
+                continue;
+
+            AddToStash(connection, transaction, playerId, itemId, 1);
+            added++;
+        }
+    }
+
+    /// <summary>
     /// Scala dalla scorta i consumabili usati in una run. Un oggetto esaurito esce anche
     /// dalla bisaccia: lasciarcelo mostrerebbe uno slot pieno che alla run successiva parte
     /// vuoto senza spiegazioni.

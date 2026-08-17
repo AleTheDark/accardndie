@@ -1,0 +1,8 @@
+{
+  "name": "AccardND.Iap",
+  "rootNamespace": "AccardND.Iap",
+  "references": [
+    "Unity.Purchasing",
+    "AccardND.NetProtocol"
+  ]
+}

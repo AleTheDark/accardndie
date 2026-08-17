@@ -61,7 +61,7 @@ public sealed class ChapterProgressionTests
         Assert.Contains("chapter-4", after.unlockedChapters);
         Assert.Contains("chapter-5", after.unlockedChapters);
         Assert.Contains("chapter-6", after.unlockedChapters);
-        // Il sesto e' giocabile: la catena si ferma li', il settimo si guadagna battendo Medusa.
+		// Il sesto e' il gate in attesa del nuovo boss: non si deve saltare al settimo.
         Assert.DoesNotContain("chapter-7", after.unlockedChapters);
     }
 
@@ -79,26 +79,16 @@ public sealed class ChapterProgressionTests
         Assert.Single(after.unlockedClasses, id => id == "hunter");
     }
 
-    [Fact]
-    public void A_chapter_cannot_be_bought_before_the_one_that_comes_first()
-    {
-        using var server = new TestServer();
-        var progress = new SinglePlayerProgressService(server.Database);
-        AccountIdentity player = server.RegisterAccount("impaziente");
-        GiveHoney(server, player.PlayerId, 1000);
-
-        // Il tutorial non e' fatto: nemmeno il primo capitolo e' in mano, quindi il secondo
-        // non si compra per quanto miele si abbia.
-        (_, string code, string error) = progress.PurchaseUnlock(
-            player, new SinglePlayerPurchaseUnlockRequest { type = "chapter", id = "chapter-2" });
-
-        Assert.Equal(ErrorCodes.InvalidProgressionRequest, code);
-        // Il miele c'e': deve rifiutare per l'ordine, non per il prezzo.
-        Assert.Contains("capitolo precedente", error);
-    }
-
-    [Fact]
-    public void A_chapter_without_its_boss_is_not_for_sale()
+    /// <summary>
+    /// I capitoli non sono in vendita: si aprono battendo il boss del capitolo precedente.
+    /// Il Santuario li ha venduti per un periodo, quindi la richiesta d'acquisto puo' ancora
+    /// arrivare da un client vecchio, e deve essere rifiutata senza scalare miele.
+    /// </summary>
+    [Theory]
+    [InlineData("chapter-2")]
+    [InlineData("chapter-3")]
+    [InlineData("chapter-7")]
+    public void A_chapter_is_not_for_sale(string chapterId)
     {
         using var server = new TestServer();
         var progress = new SinglePlayerProgressService(server.Database);
@@ -106,33 +96,17 @@ public sealed class ChapterProgressionTests
         progress.ClaimTutorialReward(player, new SinglePlayerTutorialRewardRequest());
         GiveHoney(server, player.PlayerId, 1000);
 
-        // Il terzo capitolo esiste in tabella ma Jurinashor non e' ancora scritto: vendere
-        // l'accesso vorrebbe dire incassare miele per una schermata vuota.
         (_, string code, string error) = progress.PurchaseUnlock(
-            player, new SinglePlayerPurchaseUnlockRequest { type = "chapter", id = "chapter-3" });
+            player, new SinglePlayerPurchaseUnlockRequest { type = "chapter", id = chapterId });
 
         Assert.Equal(ErrorCodes.InvalidProgressionRequest, code);
-        Assert.Contains("in arrivo", error);
-    }
+        // Il rifiuto deve dire come si ottiene davvero: il miele c'e', non e' un problema
+        // di prezzo, e un messaggio generico manderebbe il giocatore a cercare un banco.
+        Assert.Contains("battendo il boss", error);
 
-    [Fact]
-    public void The_second_chapter_can_be_bought_after_the_tutorial()
-    {
-        using var server = new TestServer();
-        var progress = new SinglePlayerProgressService(server.Database);
-        AccountIdentity player = server.RegisterAccount("pagante");
-        progress.ClaimTutorialReward(player, new SinglePlayerTutorialRewardRequest());
-        GiveHoney(server, player.PlayerId, 1000);
-
-        (SinglePlayerProgressData after, string code, string error) = progress.PurchaseUnlock(
-            player, new SinglePlayerPurchaseUnlockRequest { type = "chapter", id = "chapter-2" });
-
-        Assert.Null(code);
-        Assert.Null(error);
-        Assert.Contains("chapter-2", after.unlockedChapters);
-        Assert.Equal(1000 - 25, after.honey);
-        // Comprare l'accesso non e' averlo giocato: la classe premio resta da guadagnare.
-        Assert.DoesNotContain("barbarian", after.unlockedClasses);
+        SinglePlayerProgressData after = progress.GetProgress(player);
+        Assert.DoesNotContain(chapterId, after.unlockedChapters);
+        Assert.Equal(1000, after.honey);
     }
 
     [Fact]
@@ -199,7 +173,7 @@ public sealed class ChapterProgressionTests
         ChapterRemapMigration.RunIfNeeded(server.Database, NullLogger.Instance);
         SinglePlayerProgressData after = new SinglePlayerProgressService(server.Database).GetProgress(player);
 
-        Assert.Contains("priest", after.unlockedClasses);
+        Assert.Contains("paladin", after.unlockedClasses);
         Assert.DoesNotContain("hunter", after.unlockedClasses);
         Assert.DoesNotContain("barbarian", after.unlockedClasses);
         Assert.DoesNotContain("necromancer", after.unlockedClasses);

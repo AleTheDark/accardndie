@@ -20,6 +20,14 @@ public sealed class RankedConfig
     /// <summary>K-factor Elo a regime.</summary>
     public int StandardK { get; set; } = 24;
 
+    /// <summary>
+    /// Quanto pesa una partita vinta all'ultimo round rispetto a una vinta netta.
+    /// Un 2-0 muove l'MMR pieno, un 2-1 lo muove per questa frazione: chi vince
+    /// senza concedere round sale di piu', chi perde combattendo scende di meno.
+    /// Il fattore e' lo stesso per entrambi, quindi lo scambio resta a somma zero.
+    /// </summary>
+    public double CloseMatchFactor { get; set; } = 0.7;
+
     /// <summary>Ampiezza in MMR di una divisione.</summary>
     public int DivisionWidth { get; set; } = 100;
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Threading.Tasks;
+using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -65,8 +66,8 @@ namespace AccardND.Ads
             while (remaining > 0f && !skipped)
             {
                 countdown.text = format == AdFormat.Rewarded
-                    ? $"RICOMPENSA FRA {Mathf.CeilToInt(remaining)}"
-                    : $"CHIUDIBILE FRA {Mathf.CeilToInt(remaining)}";
+                    ? GameText.GetOrFallbackSilent(GameTextKeys.Ads.FakeCountdownReward, "RICOMPENSA FRA {0}", Mathf.CeilToInt(remaining))
+                    : GameText.GetOrFallbackSilent(GameTextKeys.Ads.FakeCountdownClose, "CHIUDIBILE FRA {0}", Mathf.CeilToInt(remaining));
                 remaining -= Time.unscaledDeltaTime;
                 yield return null;
             }
@@ -77,11 +78,13 @@ namespace AccardND.Ads
             }
             else
             {
-                countdown.text = format == AdFormat.Rewarded ? "RICOMPENSA SBLOCCATA" : string.Empty;
+                countdown.text = format == AdFormat.Rewarded
+                    ? GameText.GetOrFallbackSilent(GameTextKeys.Ads.FakeRewardUnlocked, "RICOMPENSA SBLOCCATA")
+                    : string.Empty;
                 bool closed = false;
                 close.onClick.AddListener(() => closed = true);
                 close.interactable = true;
-                close.GetComponentInChildren<Text>().text = "CHIUDI";
+                close.GetComponentInChildren<Text>().text = GameText.Get(GameTextKeys.Common.Close);
                 while (!closed)
                     yield return null;
             }
@@ -111,12 +114,14 @@ namespace AccardND.Ads
             Stretch(background.rectTransform, Vector2.zero, Vector2.one);
 
             Text banner = CreateText(background.transform, "Banner", font, 26, TextAnchor.MiddleCenter);
-            banner.text = "AD DI PROVA - NESSUNA RETE COLLEGATA";
+            banner.text = GameText.GetOrFallbackSilent(GameTextKeys.Ads.FakeBanner, "AD DI PROVA - NESSUNA RETE COLLEGATA");
             banner.color = new Color(0.98f, 0.42f, 0.32f);
             Stretch(banner.rectTransform, new Vector2(0.05f, 0.86f), new Vector2(0.95f, 0.95f));
 
             Text title = CreateText(background.transform, "Title", font, 44, TextAnchor.MiddleCenter);
-            title.text = format == AdFormat.Rewarded ? "VIDEO CON RICOMPENSA" : "INTERSTITIAL";
+            title.text = format == AdFormat.Rewarded
+                ? GameText.GetOrFallbackSilent(GameTextKeys.Ads.FakeRewardedTitle, "VIDEO CON RICOMPENSA")
+                : GameText.GetOrFallbackSilent(GameTextKeys.Ads.FakeInterstitialTitle, "INTERSTITIAL");
             title.color = new Color(0.95f, 0.79f, 0.34f);
             Stretch(title.rectTransform, new Vector2(0.05f, 0.6f), new Vector2(0.95f, 0.74f));
 

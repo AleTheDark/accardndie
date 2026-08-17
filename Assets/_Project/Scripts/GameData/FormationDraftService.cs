@@ -36,7 +36,11 @@ namespace AccardND.GameData
 
             var result = new List<CardDefinition>(count);
             for (int index = 0; index < bosses.Count && result.Count < count; index++)
+            {
+                if (bosses[index].Id.EndsWith("-phase-2", StringComparison.OrdinalIgnoreCase))
+                    continue;
                 result.Add(bosses[index]);
+            }
             for (int index = 0; index < monsters.Count && result.Count < count; index++)
                 result.Add(monsters[index]);
 

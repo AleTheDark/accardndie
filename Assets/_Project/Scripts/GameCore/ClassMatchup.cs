@@ -9,7 +9,7 @@ namespace AccardND.GameCore
 
     public static class ClassMatchup
     {
-        // Matrice a famiglie: Forza > Astuzia > Magia > Forza.
+        // Matrice a fazioni: Forza > Astuzia > Magia > Forza.
         public static MatchupResult Compare(HeroClass first, HeroClass second)
         {
             ClassFamily firstFamily = HeroClassFamily.Of(first);

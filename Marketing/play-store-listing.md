@@ -6,7 +6,11 @@ Testi pronti da incollare nella Play Console. I conteggi caratteri sono già ver
 
 ## Nome app (max 30)
 
-`AcCard N' Die` — 13/30 ✔ (già inserito)
+`AcCard N' Die: Carte e Dadi` — 27/30 ✔
+
+Il sottotitolo dopo i due punti serve alla ricerca: "carte" e "dadi" sono le parole che
+la gente digita e nel nome pesano più che nella descrizione. Il nome corto `AcCard N' Die`
+resta quello dell'icona sul telefono (viene dal Product Name di Unity, non da qui).
 
 ---
 
@@ -29,11 +33,11 @@ Tre carte in campo. Nove classi. Un dado che decide tutto.
 
 AcCard N' Die è un gioco di carte tattico in cui ogni scontro si risolve tirando i dadi. Costruisci la mano, schiera tre eroi e usa le loro abilità nell'ordine giusto: la fortuna conta, ma è la tattica a piegarla dalla tua parte.
 
-⚔️ TRE FAMIGLIE, NOVE CLASSI
+⚔️ TRE FAZIONI, NOVE CLASSI
 Might batte Cunning, Cunning batte Magic, Magic batte Might. Nel matchup favorevole tiri due dadi e tieni il migliore, in quello sfavorevole tieni il peggiore. Guerriero, Barbaro, Paladino, Ladro, Assassino, Cacciatore, Mago, Negromante e Sacerdote hanno ognuno un'abilità che cambia il modo in cui giochi il turno: proteggere un alleato, marcare un bersaglio, inibire un nemico, benedire un attacco, rialzare un caduto.
 
 🔮 AURE
-Le tre carte che schieri non combattono da sole. Tre classi uguali attivano un'Aura di Classe, tre carte della stessa famiglia un'Aura di Famiglia, e un trio bilanciato Might + Cunning + Magic sblocca l'Aura di Formazione che cancella uno svantaggio. Ogni schieramento è una scelta: potenza specializzata o copertura totale.
+Le tre carte che schieri non combattono da sole. Tre classi uguali attivano un'Aura di Classe, tre carte della stessa fazione un'Aura di Fazione, e un trio bilanciato Might + Cunning + Magic sblocca l'Aura di Formazione che cancella uno svantaggio. Ogni schieramento è una scelta: potenza specializzata o copertura totale.
 
 🎲 DADI VERI, TIRATI SUL TAVOLO
 Dal D4 al D20, lanciati in 3D e liberi di rimbalzare. Il Mago abbassa il dado del nemico, il Ladro rilancia gli 1, il Guerriero somma due dadi in un colpo solo: la scala del Vigore è un campo di battaglia a sé.
@@ -61,6 +65,9 @@ Schiera. Tira. Sopravvivi.
 ---
 
 ## Versione inglese (per la traduzione EN)
+
+### App name (29/30)
+`AcCard N' Die: Dice and Cards`
 
 ### Short description (73/80)
 `Dice-rolling card battler: 9 classes, deadly auras, campaign and online duels.`

@@ -5,6 +5,7 @@ namespace AccardND.GameData
         Monster,
         Boss,
         Item,
-        CardBack
+        CardBack,
+        Token
     }
 }

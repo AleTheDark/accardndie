@@ -32,7 +32,8 @@ public sealed class AdminSeasonDetailTests
         // Due ranked vinte dallo stesso giocatore: la ladder si separa.
         await RecordAsync(server, winner, loser, winnerIndex: 0, isRanked: true);
         await RecordAsync(server, winner, loser, winnerIndex: 0, isRanked: true);
-        // Un'amichevole: entra nel conteggio partite ma non nella classifica.
+        // Un'amichevole: entra nel conteggio partite della stagione ma non nelle
+        // statistiche dei giocatori, e non nella classifica.
         await RecordAsync(server, casual, loser, winnerIndex: 1, isRanked: false);
 
         JsonElement detail = Serialize(admin.GetSeasonDetail(seasons.ActiveSeasonId));
@@ -55,18 +56,23 @@ public sealed class AdminSeasonDetailTests
         JsonElement second = players[1];
         Assert.Equal("perdente", second.GetProperty("username").GetString());
         Assert.Equal(2, second.GetProperty("rank").GetInt32());
-        // Tre partite giocate (due ranked perse, un'amichevole vinta): l'aggregato di
-        // stagione conta tutto, games_played della ladder solo le ranked.
-        Assert.Equal(3, second.GetProperty("matches").GetInt32());
+        // Tre partite giocate (due classificate perse, un'amichevole vinta): match, win
+        // rate e aggregati contano solo le classificate, l'amichevole sta nella colonna
+        // a parte. Altrimenti il pannello direbbe un win rate che il giocatore non vede
+        // da nessuna parte.
+        Assert.Equal(2, second.GetProperty("matches").GetInt32());
         Assert.Equal(2, second.GetProperty("rankedGames").GetInt32());
-        Assert.Equal(33, second.GetProperty("winRatePercent").GetInt32());
+        Assert.Equal(1, second.GetProperty("friendlyMatches").GetInt32());
+        Assert.Equal(0, second.GetProperty("winRatePercent").GetInt32());
 
-        // Chi ha giocato solo amichevoli chiude la lista senza posizione ne' tier.
+        // Chi ha giocato solo amichevoli chiude la lista senza posizione ne' tier, e con
+        // zero partite: nella stagione c'e' passato, ma non ha giocato niente che conti.
         JsonElement last = players[2];
         Assert.Equal("amichevole", last.GetProperty("username").GetString());
         Assert.Equal(0, last.GetProperty("rank").GetInt32());
         Assert.False(last.GetProperty("ranked").GetBoolean());
-        Assert.Equal(1, last.GetProperty("matches").GetInt32());
+        Assert.Equal(0, last.GetProperty("matches").GetInt32());
+        Assert.Equal(1, last.GetProperty("friendlyMatches").GetInt32());
     }
 
     [Fact]

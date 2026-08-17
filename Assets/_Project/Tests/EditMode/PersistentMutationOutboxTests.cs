@@ -86,7 +86,10 @@ namespace AccardND.GameCore.Tests
                 "run-offline", "campaign", "chapter-2", "stage-4",
                 7, 19, 1, 43, 2,
                 new[] { "golem", "boss" }, new[] { "potion", "bomb" },
-                31, 6, 125);
+                31, 6, 125,
+                // itemsUsed non e' la lunghezza di consumedItemIds: conta anche gli oggetti
+                // trovati in run o comprati al mercante e usati sul posto.
+                itemsUsed: 5, keptItemIds: new[] { "detector" });
 
             bool queued = ServerSinglePlayerProgressClient.QueueDeathRewardForReplay(
                 summary, "player-a", outbox);
@@ -104,9 +107,10 @@ namespace AccardND.GameCore.Tests
             Assert.That(payload.diceRolled, Is.EqualTo(31));
             Assert.That(payload.abilitiesUsed, Is.EqualTo(6));
             Assert.That(payload.experienceEarned, Is.EqualTo(125));
-            Assert.That(payload.itemsUsed, Is.EqualTo(2));
+            Assert.That(payload.itemsUsed, Is.EqualTo(5));
             Assert.That(payload.defeatedBossIds, Is.EqualTo(new[] { "golem", "boss" }));
             Assert.That(payload.consumedItemIds, Is.EqualTo(new[] { "potion", "bomb" }));
+            Assert.That(payload.keptItemIds, Is.EqualTo(new[] { "detector" }));
         }
 
         [Test]
