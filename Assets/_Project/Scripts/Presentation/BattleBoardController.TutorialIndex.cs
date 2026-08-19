@@ -45,9 +45,7 @@ public sealed partial class BattleBoardController
 		}
 		if (tutorialModuleIndexOpen)
 		{
-			string heading = GameText.GetLocalizedFallback(
-				GameTextKeys.Adventure.TutorialIndexTitle,
-				"TUTORIAL", "TUTORIALS", "TUTORIALS", "TUTORIALES", "TUTORIELS");
+			string heading = GameText.Get(GameTextKeys.Adventure.TutorialIndexTitle);
 			AccardND.Battlefield.EditableRuntimeText.BindLocalized(
 				adventureChapterHeadingText, GameTextKeys.Adventure.TutorialIndexTitle, heading);
 			return;
@@ -76,14 +74,9 @@ public sealed partial class BattleBoardController
 			(string title, string subtitle) = TutorialModuleDisplayText(id);
 
 			string status = done
-				? GameText.GetLocalizedFallback(
-					GameTextKeys.Campaign.ChapterCompleted,
-					"completato", "completed", "abgeschlossen", "completado", "terminé")
+				? GameText.Get(GameTextKeys.Campaign.ChapterCompleted)
 				: current && !prerequisiteSatisfied
-					? GameText.GetLocalizedFallback(
-						GameTextKeys.Adventure.TutorialModuleVisitShopStatus,
-						"VISITA PRIMA IL NEGOZIO", "VISIT THE SHOP FIRST", "BESUCHE ZUERST DEN SHOP",
-						"VISITA PRIMERO LA TIENDA", "VISITEZ D'ABORD LA BOUTIQUE")
+					? GameText.Get(GameTextKeys.Adventure.TutorialModuleVisitShopStatus)
 					: string.Empty;
 
 			// "locked" mette il velo leggero, perche' e' pensato per il lucchetto dei capitoli
@@ -173,13 +166,7 @@ public sealed partial class BattleBoardController
 	{
 		if (!done && !TutorialModulePrerequisiteSatisfied(moduleId))
 		{
-			SetMessage(GameText.GetLocalizedFallback(
-				GameTextKeys.Adventure.TutorialModuleVisitShopFirst,
-				"Prima vai al Negozio e completa la sua visita guidata.",
-				"First visit the Shop and complete its guided tour.",
-				"Besuche zuerst den Shop und schließe seine Führung ab.",
-				"Primero visita la Tienda y completa su recorrido guiado.",
-				"Visitez d'abord la Boutique et terminez sa visite guidée."));
+			SetMessage(GameText.Get(GameTextKeys.Adventure.TutorialModuleVisitShopFirst));
 			return;
 		}
 		if (!done && !current)
@@ -187,16 +174,8 @@ public sealed partial class BattleBoardController
 			string blockingModuleId = TutorialModuleCatalog.NextModule(
 				singlePlayerProgressService?.Progress?.completedTutorialModules);
 			SetMessage(blockingModuleId == null
-				? GameText.GetLocalizedFallback(
-					GameTextKeys.Adventure.TutorialModuleOpensLater,
-					"Questo modulo si apre più avanti.", "This module unlocks later.",
-					"Dieses Modul wird später freigeschaltet.", "Este módulo se desbloquea más adelante.",
-					"Ce module se débloquera plus tard.")
-				: GameText.GetLocalizedFallback(
-					GameTextKeys.Adventure.TutorialModuleCompleteFirst,
-					"Prima completa: {0}.", "Complete this first: {0}.", "Schließe zuerst {0} ab.",
-					"Completa primero: {0}.", "Terminez d'abord : {0}.",
-					TutorialModuleDisplayText(blockingModuleId).Title));
+				? GameText.Get(GameTextKeys.Adventure.TutorialModuleOpensLater)
+				: GameText.Format(GameTextKeys.Adventure.TutorialModuleCompleteFirst, TutorialModuleDisplayText(blockingModuleId).Title));
 			return;
 		}
 		ShowTutorialModuleConfirmPopup(moduleId, alreadyDone: done);
@@ -226,14 +205,7 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)adventureTutorialConfirmBodyText != (Object)null)
 		{
 			string body = alreadyDone
-				? GameText.GetLocalizedFallback(
-					GameTextKeys.Adventure.TutorialModuleReplayBody,
-					"{0}. L'hai gia' completato: puoi rigiocarlo, ma la ricompensa e' gia' stata consegnata.",
-					"{0}. You already completed it: you can play it again, but the reward has already been granted.",
-					"{0}. Du hast es bereits abgeschlossen: Du kannst es erneut spielen, aber die Belohnung wurde schon vergeben.",
-					"{0}. Ya lo has completado: puedes volver a jugarlo, pero la recompensa ya fue entregada.",
-					"{0}. Vous l'avez déjà terminé : vous pouvez le rejouer, mais la récompense a déjà été accordée.",
-					subtitle)
+				? GameText.Format(GameTextKeys.Adventure.TutorialModuleReplayBody, subtitle)
 				: TutorialModuleIntroText(moduleId, subtitle);
 			AccardND.Battlefield.EditableRuntimeText.BindLocalized(
 				adventureTutorialConfirmBodyText,
@@ -253,47 +225,17 @@ public sealed partial class BattleBoardController
 		return moduleId switch
 		{
 			TutorialModuleCatalog.Basics =>
-				GameText.GetLocalizedFallback(GameTextKeys.Adventure.TutorialModuleIntro(moduleId),
-					"La prova pratica: una run guidata dall'inizio alla fine, con me che ti indico cosa toccare. Alla fine ricevi il primo capitolo e la Seconda Chance.",
-					"The field trial: a guided run from start to finish, with instructions on what to tap. At the end, you receive the first chapter and a Second Chance.",
-					"Die Feldprüfung: ein geführter Lauf von Anfang bis Ende. Am Schluss erhältst du das erste Kapitel und eine Zweite Chance.",
-					"La prueba de campo: una partida guiada de principio a fin. Al terminar recibirás el primer capítulo y una Segunda Oportunidad.",
-					"L'épreuve sur le terrain : une partie guidée du début à la fin. Vous recevrez ensuite le premier chapitre et une Seconde Chance."),
+				GameText.Get(GameTextKeys.Adventure.TutorialModuleIntro(moduleId)),
 			TutorialModuleCatalog.Warrior =>
-				GameText.GetLocalizedFallback(GameTextKeys.Adventure.TutorialModuleIntro(moduleId),
-					"Si comincia da qui: il mana, l'abilita' del Guerriero e la sua tecnica. Alla fine il Guerriero e' tuo, si apre il Santuario e ricevi i vasetti per la classe successiva.",
-					"Start here: learn about mana, the Warrior's ability, and his technique. At the end, the Warrior is yours, the Sanctuary opens, and you receive honey jars for the next class.",
-					"Beginne hier: Lerne Mana, die Fähigkeit und die Technik des Kriegers kennen. Danach gehört der Krieger dir, das Heiligtum öffnet sich und du erhältst Honiggläser für die nächste Klasse.",
-					"Empieza aquí: aprende sobre el maná, la habilidad del Guerrero y su técnica. Al final, el Guerrero será tuyo, se abrirá el Santuario y recibirás tarros de miel para la siguiente clase.",
-					"Commencez ici : découvrez le mana, la capacité du Guerrier et sa technique. À la fin, le Guerrier sera à vous, le Sanctuaire s'ouvrira et vous recevrez des pots de miel pour la classe suivante."),
+				GameText.Get(GameTextKeys.Adventure.TutorialModuleIntro(moduleId)),
 			TutorialModuleCatalog.Mage =>
-				GameText.GetLocalizedFallback(GameTextKeys.Adventure.TutorialModuleIntro(moduleId),
-					"L'abilita' del Mago, la Palla di fuoco e l'aura dei Magici. Alla fine ricevi i vasetti per la classe successiva.",
-					"Learn the Magician's ability, Fireball, and the Magic faction aura. At the end, you receive honey jars for the next class.",
-					"Lerne die Fähigkeit des Magiers, den Feuerball und die Aura der magischen Fraktion kennen. Danach erhältst du Honiggläser für die nächste Klasse.",
-					"Aprende la habilidad del Mago, Bola de Fuego y el aura de la facción Mágica. Al final recibirás tarros de miel para la siguiente clase.",
-					"Découvrez la capacité du Magicien, Boule de feu et l'aura de la faction Magique. À la fin, vous recevrez des pots de miel pour la classe suivante."),
+				GameText.Get(GameTextKeys.Adventure.TutorialModuleIntro(moduleId)),
 			TutorialModuleCatalog.Rogue =>
-				GameText.GetLocalizedFallback(GameTextKeys.Adventure.TutorialModuleIntro(moduleId),
-					"Le abilita' passive, Ruba potenziamenti e il triangolo completo delle fazioni. Alla fine si apre il Negozio.",
-					"Learn about passive abilities, Steal Buffs, and the complete faction triangle. At the end, the Shop opens.",
-					"Lerne passive Fähigkeiten, Verstärkungen stehlen und das vollständige Fraktionsdreieck kennen. Danach öffnet sich der Shop.",
-					"Aprende sobre habilidades pasivas, Robar mejoras y el triángulo completo de facciones. Al final se abrirá la Tienda.",
-					"Découvrez les capacités passives, Vol de bonus et le triangle complet des factions. À la fin, la Boutique s'ouvrira."),
+				GameText.Get(GameTextKeys.Adventure.TutorialModuleIntro(moduleId)),
 			TutorialModuleCatalog.ItemsAndBag =>
-				GameText.GetLocalizedFallback(GameTextKeys.Adventure.TutorialModuleIntro(moduleId),
-					"Come si usano i consumabili e cosa distingue la scorta dalla bisaccia.",
-					"Learn how to use consumables and the difference between your inventory and your bag.",
-					"Lerne, wie Verbrauchsgegenstände verwendet werden und was Vorrat und Tasche unterscheidet.",
-					"Aprende a usar consumibles y la diferencia entre el inventario y la bolsa.",
-					"Apprenez à utiliser les consommables et à distinguer la réserve du sac."),
+				GameText.Get(GameTextKeys.Adventure.TutorialModuleIntro(moduleId)),
 			TutorialModuleCatalog.ChapterRun =>
-				GameText.GetLocalizedFallback(GameTextKeys.Adventure.TutorialModuleIntro(moduleId),
-					"Com'e' fatto un capitolo: le porte, il miniboss, il boss e le stanze che non sono battaglie.",
-					"Learn how a chapter works: doors, the miniboss, the boss, and rooms that are not battles.",
-					"Lerne den Aufbau eines Kapitels kennen: Türen, Miniboss, Boss und Räume ohne Kämpfe.",
-					"Aprende cómo funciona un capítulo: puertas, minijefe, jefe y salas que no son combates.",
-					"Découvrez le fonctionnement d'un chapitre : portes, mini-boss, boss et salles sans combat."),
+				GameText.Get(GameTextKeys.Adventure.TutorialModuleIntro(moduleId)),
 			_ => subtitle
 		};
 	}

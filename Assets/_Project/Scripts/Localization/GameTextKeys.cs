@@ -317,6 +317,16 @@ namespace AccardND.Localization
             public const string CpuAttachmentAppliedLog = "combat.log.cpu_attachment_applied";
             public const string SpiritLastTurnEndedLog = "combat.log.spirit_last_turn_ended";
             public const string GolemNewFormLog = "combat.log.golem_new_form";
+
+            /// <summary>Nome della forma del Golem Componibile: ferro, cristallo, vetro.</summary>
+            public static string GolemFormName(string form) => "combat.golem.form." + form;
+
+            public const string GolemStrikesHighest = "combat.message.golem_strikes_highest";
+            public const string GolemOverwhelms = "combat.message.golem_overwhelms";
+            public const string GolemResisted = "combat.message.golem_resisted";
+            public const string GolemDamaged = "combat.message.golem_damaged";
+            public const string GolemGlassHeals = "combat.message.golem_glass_heals";
+            public const string GolemDefenseHeld = "combat.message.golem_defense_held";
             public const string AuraActiveLog = "combat.log.aura_active";
             public const string CpuAuraActiveLog = "combat.log.cpu_aura_active";
             public const string ManaInsufficientAbility = "combat.message.mana_insufficient_ability";
@@ -398,6 +408,7 @@ namespace AccardND.Localization
         public static class Inspection
         {
             public const string ActiveStatuses = "inspection.active_statuses";
+			public const string EquipmentRule = "inspection.rule.equipment";
             public const string Strength = "inspection.summary.strength";
             public const string StrengthChanged = "inspection.summary.strength_changed";
             public const string Family = "inspection.summary.family";
@@ -417,6 +428,8 @@ namespace AccardND.Localization
             public const string SupremeCostMalusDescription = "inspection.status.supreme_cost_malus_description";
             public const string SeraphelSealsStatus = "inspection.status.seraphel_seals";
             public const string SeraphelSealsDescription = "inspection.status.seraphel_seals_description";
+            public const string EquipmentStatus = "inspection.status.equipment";
+            public const string EquipmentDescription = "inspection.status.equipment_description";
         }
 
         public static class Hints
@@ -438,6 +451,10 @@ namespace AccardND.Localization
             public const string RecoveryAbandon = "campaign.recovery.abandon";
             public const string RecoveryCancel = "campaign.recovery.cancel";
             public const string RecoveryUnusableSave = "campaign.recovery.unusable_save";
+
+            /// <summary>Run cominciata con un'altra patch: {0} quella del salvataggio, {1} quella di adesso.</summary>
+            public const string RecoveryVersionBody = "campaign.recovery.version_body";
+            public const string RecoveryVersionUnknown = "campaign.recovery.version_unknown";
 
             public const string Adventure = "campaign.mode.adventure";
             public const string Hardcore = "campaign.mode.hardcore";
@@ -500,6 +517,7 @@ namespace AccardND.Localization
 			public const string MerchantRoomCompleteBanner = "campaign.banner.merchant_room_complete";
 			public const string CombatRoomCompleteBanner = "campaign.banner.combat_room_complete";
 			public const string LootRoomCompleteBanner = "campaign.banner.loot_room_complete";
+			public const string LootRoomCompleteMessage = "campaign.message.loot_room_complete";
 			public const string QuickChallengeCompleteBanner = "campaign.banner.quick_challenge_complete";
 			public const string JurinashorSwordSummoned = "campaign.jurinashor.sword_summoned";
             public const string DeckBuilderEmptyDeckHint = "campaign.deck_builder.empty_deck_hint";
@@ -524,6 +542,8 @@ namespace AccardND.Localization
             public const string ChapterCompletedTitle = "campaign.reward.chapter_completed_title";
             public const string TripleApplied = "campaign.reward.triple_applied";
             public const string PrepareBag = "campaign.bag.prepare";
+			public const string BagStatus = "campaign.bag.status";
+			public const string BagFull = "campaign.bag.full";
             public const string BagUnavailable = "campaign.bag.unavailable";
             public const string BagEmpty = "campaign.bag.empty";
             public const string ChooseModeToStart = "campaign.message.choose_mode_to_start";

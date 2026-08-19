@@ -363,10 +363,7 @@ namespace AccardND.PvpUi
                     PlayerPrefs.Save();
                     nicknameDialog?.gameObject.SetActive(false);
                     lobby.SetPlayerName(username);
-                    lobby.SetStatus(GameText.GetOrFallbackSilent(
-                        GameTextKeys.PvpNickname.Saved,
-                        "Nickname salvato: {0}.",
-                        username));
+                    lobby.SetStatus(GameText.Format(GameTextKeys.PvpNickname.Saved, username));
                     AccountServerSession.UpdateIdentity(myPlayerId, username);
                     break;
                 }
@@ -559,7 +556,7 @@ namespace AccardND.PvpUi
                     Debug.LogWarning($"[PvP] {error.code}: {error.message}");
                     string errorText = GameText.GetRemote(
                         error?.localizationKey,
-                        error?.message ?? GameText.GetOrFallbackSilent(GameTextKeys.Server.GenericError, "Errore del server."),
+                        error?.message ?? GameText.Get(GameTextKeys.Server.GenericError),
                         error?.localizationArguments);
                     if (error?.code == ErrorCodes.RankedLoadoutRequirements)
                     {
@@ -704,13 +701,8 @@ namespace AccardND.PvpUi
             Debug.Log($"[PvP] Partita ripresa: {resume.events?.Length ?? 0} eventi riapplicati.");
             ShowMatch();
             state.AddNotice(resume.reconnectSecondsRemaining > 0
-                ? GameText.GetOrFallbackSilent(
-                    GameTextKeys.PvpStatus.ReconnectRemaining,
-                    "Partita ripresa: restano {0}s di riconnessione per questo match.",
-                    resume.reconnectSecondsRemaining)
-                : GameText.GetOrFallbackSilent(
-                    GameTextKeys.PvpStatus.ReconnectExpired,
-                    "Partita ripresa: hai esaurito il tempo di riconnessione, un'altra caduta è sconfitta."));
+                ? GameText.Format(GameTextKeys.PvpStatus.ReconnectRemaining, resume.reconnectSecondsRemaining)
+                : GameText.Get(GameTextKeys.PvpStatus.ReconnectExpired));
             stateDirty = true;
         }
 
@@ -1074,9 +1066,7 @@ namespace AccardND.PvpUi
                 // al riepilogo della propria resa non serve a niente. Si torna al menu.
                 surrenderSent = false;
                 LeaveToLobby();
-                lobby.SetStatus(GameText.GetOrFallbackSilent(
-                    GameTextKeys.PvpResult.SurrenderLobbyStatus,
-                    "Ti sei arreso: la vittoria è andata all'avversario."));
+                lobby.SetStatus(GameText.Get(GameTextKeys.PvpResult.SurrenderLobbyStatus));
                 return;
             }
 
@@ -1317,12 +1307,8 @@ namespace AccardND.PvpUi
                 // Senza questo avviso una mossa non confermata è indistinguibile da un
                 // gioco che non risponde: il tavolo resta com'era e nessuno spiega perché.
                 state?.AddNotice(exception is System.TimeoutException
-                    ? GameText.GetOrFallbackSilent(
-                        GameTextKeys.PvpStatus.ActionNotConfirmed,
-                        "Mossa non confermata dal server: riprova.")
-                    : GameText.GetOrFallbackSilent(
-                        GameTextKeys.PvpStatus.ActionNotSent,
-                        "Mossa non inviata: connessione persa."));
+                    ? GameText.Get(GameTextKeys.PvpStatus.ActionNotConfirmed)
+                    : GameText.Get(GameTextKeys.PvpStatus.ActionNotSent));
                 stateDirty = true;
                 Debug.LogWarning($"[PvP] Invio azione fallito: {exception.Message}");
             }
@@ -1332,19 +1318,10 @@ namespace AccardND.PvpUi
         {
             return error?.code switch
             {
-                PvpActionErrorCodes.AbilityRequiresAction => GameText.GetLocalizedFallback(
-                    GameTextKeys.PvpError.AbilityRequiresAction,
-                    "Dopo aver usato un'abilità devi attaccare o equipaggiarti.",
-                    "After using an ability, you must attack or equip."),
-                PvpActionErrorCodes.NotEnoughMana => GameText.GetOrFallbackSilent(
-                    GameTextKeys.PvpError.ManaInsufficientGeneric,
-                    "Mana insufficiente per eseguire l'azione."),
-                PvpActionErrorCodes.SupremeNotAvailable => GameText.GetOrFallbackSilent(
-                    GameTextKeys.PvpError.SupremeNotAvailable,
-                    "La suprema non è ancora disponibile."),
-                _ => error?.message ?? GameText.GetOrFallbackSilent(
-                    GameTextKeys.PvpStatus.MoveRejected,
-                    "Mossa rifiutata dal server.")
+                PvpActionErrorCodes.AbilityRequiresAction => GameText.Get(GameTextKeys.PvpError.AbilityRequiresAction),
+                PvpActionErrorCodes.NotEnoughMana => GameText.Get(GameTextKeys.PvpError.ManaInsufficientGeneric),
+                PvpActionErrorCodes.SupremeNotAvailable => GameText.Get(GameTextKeys.PvpError.SupremeNotAvailable),
+                _ => error?.message ?? GameText.Get(GameTextKeys.PvpStatus.MoveRejected)
             };
         }
 
@@ -1507,15 +1484,11 @@ namespace AccardND.PvpUi
             RectTransform dialog = PvpUiFactory.CreateSoftPanel(nicknameDialog, "Nickname Dialog", new Color(0.02f, 0.035f, 0.055f, 0.98f));
             PvpUiFactory.SetAnchors(dialog, new Vector2(0.3f, 0.34f), new Vector2(0.7f, 0.68f));
 
-            Text title = PvpUiFactory.CreateTitleText(dialog, "Title", GameText.GetOrFallbackSilent(
-                GameTextKeys.PvpNickname.DialogTitle,
-                "CAMBIA NICKNAME"), 26);
+            Text title = PvpUiFactory.CreateTitleText(dialog, "Title", GameText.Get(GameTextKeys.PvpNickname.DialogTitle), 26);
             title.color = PvpUiFactory.Gold;
             PvpUiFactory.SetAnchors((RectTransform)title.transform, new Vector2(0.06f, 0.75f), new Vector2(0.94f, 0.94f));
 
-            Text hint = PvpUiFactory.CreateLabel(dialog, "Hint", GameText.GetOrFallbackSilent(
-                GameTextKeys.PvpNickname.DialogHint,
-                "Il nome viene associato al tuo account di gioco."), 16, TextAnchor.MiddleCenter);
+            Text hint = PvpUiFactory.CreateLabel(dialog, "Hint", GameText.Get(GameTextKeys.PvpNickname.DialogHint), 16, TextAnchor.MiddleCenter);
             PvpUiFactory.SetAnchors((RectTransform)hint.transform, new Vector2(0.08f, 0.62f), new Vector2(0.92f, 0.75f));
 
             RectTransform inputPanel = PvpUiFactory.CreateSoftPanel(dialog, "Nickname Input Panel", new Color(0.06f, 0.09f, 0.12f, 0.98f));
@@ -1526,9 +1499,7 @@ namespace AccardND.PvpUi
             nicknameInput.textComponent = PvpUiFactory.CreateText(inputPanel, "Input Text", nicknameInput.text, 22, TextAnchor.MiddleLeft, FontStyle.Normal);
             nicknameInput.textComponent.color = Color.white;
             PvpUiFactory.SetAnchors((RectTransform)nicknameInput.textComponent.transform, new Vector2(0.04f, 0f), new Vector2(0.96f, 1f));
-            nicknameInput.placeholder = PvpUiFactory.CreateLabel(inputPanel, "Placeholder", GameText.GetOrFallbackSilent(
-                GameTextKeys.PvpNickname.Placeholder,
-                "Nuovo nickname"), 20, TextAnchor.MiddleLeft);
+            nicknameInput.placeholder = PvpUiFactory.CreateLabel(inputPanel, "Placeholder", GameText.Get(GameTextKeys.PvpNickname.Placeholder), 20, TextAnchor.MiddleLeft);
             PvpUiFactory.SetAnchors((RectTransform)nicknameInput.placeholder.transform, new Vector2(0.04f, 0f), new Vector2(0.96f, 1f));
 
             nicknameStatusText = PvpUiFactory.CreateLabel(dialog, "Status", string.Empty, 16, TextAnchor.MiddleCenter);

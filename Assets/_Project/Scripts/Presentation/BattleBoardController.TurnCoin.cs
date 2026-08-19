@@ -285,7 +285,7 @@ public sealed partial class BattleBoardController
 	private static void ApplyTurnCoinMaterial(Renderer target, Color color, float metallic, Texture texture)
 	{
 		Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-		if ((Object)(object)shader == (Object)null)
+		if ((Object)(object)shader == (Object)null || !shader.isSupported)
 		{
 			return;
 		}

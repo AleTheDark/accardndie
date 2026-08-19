@@ -117,37 +117,77 @@ namespace AccardND.GameData
         }
     }
 
+    /// <summary>Come è andata la lettura di un salvataggio di campagna.</summary>
+    public enum CampaignRunLoadResult
+    {
+        /// <summary>Non c'è nessun salvataggio.</summary>
+        Missing,
+
+        /// <summary>C'è, ed è utilizzabile.</summary>
+        Loaded,
+
+        /// <summary>C'è ma non si legge: JSON corrotto o formato di un'altra epoca.</summary>
+        Unreadable,
+
+        /// <summary>
+        /// C'è, si legge, ma l'ha scritto un'altra patch del gioco. Non si riprende: va
+        /// detto al giocatore, non fatto sparire in silenzio.
+        /// </summary>
+        OtherGameVersion
+    }
+
     /// <summary>
     /// Salva/carica lo stato di una run di campagna. Serializza <see cref="CampaignRunSave"/> in
     /// JSON e lo affida a un <see cref="ICampaignRunStore"/> (di default PlayerPrefs). Un JSON
     /// corrotto o di versione incompatibile viene trattato come "nessun salvataggio".
+    ///
+    /// Ogni salvataggio porta la patch che lo ha scritto e si riprende solo con quella: una
+    /// run comincia con le carte, i costi, le stanze e le regole della sua versione, e
+    /// rimetterla in piedi con un'altra vorrebbe dire ricostruire uno stato che quella
+    /// versione non sa più leggere.
     /// </summary>
     public sealed class CampaignRunSaveService
     {
         private readonly ICampaignRunStore store;
+        private readonly Func<string> gameVersion;
 
         public CampaignRunSaveService() : this(new PlayerPrefsCampaignRunStore())
         {
         }
 
-        public CampaignRunSaveService(ICampaignRunStore store)
+        /// <summary>
+        /// <paramref name="gameVersion"/> serve ai test per fingere un aggiornamento: in
+        /// gioco resta Application.version, la stessa che il client dichiara al server.
+        /// </summary>
+        public CampaignRunSaveService(ICampaignRunStore store, Func<string> gameVersion = null)
         {
             this.store = store ?? throw new ArgumentNullException(nameof(store));
+            this.gameVersion = gameVersion ?? (() => Application.version);
         }
 
         public bool HasSave => store.Exists();
 
+        /// <summary>La patch con cui si sta giocando adesso.</summary>
+        public string CurrentGameVersion => gameVersion() ?? string.Empty;
+
         public void Save(CampaignRunSave save)
         {
             if (save == null) throw new ArgumentNullException(nameof(save));
+            save.gameVersion = CurrentGameVersion;
             store.Save(JsonUtility.ToJson(save));
         }
 
-        public bool TryLoad(out CampaignRunSave save)
+        /// <summary>
+        /// Legge il salvataggio e dice anche perché non si può usare. Con
+        /// <see cref="CampaignRunLoadResult.OtherGameVersion"/> il salvataggio esce comunque
+        /// da <paramref name="save"/>: serve a mostrare al giocatore con quale versione
+        /// aveva cominciato.
+        /// </summary>
+        public CampaignRunLoadResult Load(out CampaignRunSave save)
         {
             save = null;
             if (!store.TryLoad(out string json) || string.IsNullOrEmpty(json))
-                return false;
+                return CampaignRunLoadResult.Missing;
 
             try
             {
@@ -158,22 +198,34 @@ namespace AccardND.GameData
                 save = null;
             }
 
-            // Le versioni vecchie si leggono, non si buttano: la v1 non conosce la
-            // battaglia in corso e riprende dalla scelta della via, che e' quello che
-            // faceva comunque. Rifiutarla avrebbe fatto sparire la campagna di chi
-            // aggiorna il gioco a meta' run.
+            // Le versioni vecchie del formato si leggono, non si buttano: a decidere se la
+            // run e' ripartibile e' la patch, non il numero di schema.
             if (save == null
                 || save.version < CampaignRunSave.MinimumSupportedVersion
                 || save.version > CampaignRunSave.CurrentVersion)
             {
                 save = null;
-                return false;
+                return CampaignRunLoadResult.Unreadable;
             }
 			// I save v1 precedenti al mana non contengono il campo: JsonUtility lo
 			// lascerebbe a zero, mentre una run esistente deve ripartire dalla riserva base.
 			if (!json.Contains("\"playerMana\""))
 				save.playerMana = CampaignRunSave.DefaultPlayerMana;
-            return true;
+
+            // La patch. I salvataggi scritti prima della v3 non ce l'hanno: sono di una
+            // versione precedente per definizione, e cadono qui dentro.
+            if (!string.Equals(save.gameVersion, CurrentGameVersion, StringComparison.Ordinal))
+                return CampaignRunLoadResult.OtherGameVersion;
+
+            return CampaignRunLoadResult.Loaded;
+        }
+
+        public bool TryLoad(out CampaignRunSave save)
+        {
+            if (Load(out save) == CampaignRunLoadResult.Loaded)
+                return true;
+            save = null;
+            return false;
         }
 
         public void Clear() => store.Delete();

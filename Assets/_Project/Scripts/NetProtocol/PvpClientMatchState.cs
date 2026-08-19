@@ -251,8 +251,11 @@ namespace AccardND.NetProtocol
                         // consuma l'abilita' primaria: la UI deve continuare a
                         // proporla e il server eseguira' il normale check del mana.
                         card.AbilityUsedThisTurn = true;
-                        if ((SupremeAbilityType)e.supreme == SupremeAbilityType.Vanish)
+                        SupremeAbilityType supreme = (SupremeAbilityType)e.supreme;
+                        if (supreme == SupremeAbilityType.Vanish)
                             card.Untargetable = true;
+                        else if (supreme == SupremeAbilityType.StealBuffs)
+                            ApplyRogueSupremeReplay(card, CardAt(e.targetPlayer, e.targetSlot), e.magnitude);
                     }
                     if (e.player >= 0 && e.player < supremeUsesThisMatch.Length)
                     {
@@ -586,6 +589,34 @@ namespace AccardND.NetProtocol
                 foreach (PvpClientCard card in board)
                     card.AbilityUsedThisTurn = false;
             }
+        }
+
+        /// <summary>
+        /// Il server applica lo Scippo prima di emettere SupremeUsed. Il client non riceve
+        /// uno snapshot completo dopo ogni azione, quindi deve riprodurre anche il
+        /// trasferimento di buff/Potenza; prima questo ramo mancava e sul tavolo PvP le
+        /// due pedine restavano visivamente invariate pur essendo corrette sul server.
+        /// </summary>
+        private static void ApplyRogueSupremeReplay(PvpClientCard rogue, PvpClientCard target, int magnitude)
+        {
+            if (rogue == null || target == null || magnitude <= 0)
+                return;
+
+            if (target.PendingBonus > 0)
+            {
+                target.PendingBonus = 0;
+                target.PendingBonusKind = PvpPendingBonusKind.None;
+            }
+            else if (target.PermanentBonus > 0)
+            {
+                target.PermanentBonus = 0;
+            }
+            else
+            {
+                target.PermanentBonus -= magnitude;
+            }
+
+            rogue.PermanentBonus += magnitude;
         }
 
         /// <summary>Costo autorevole ricostruito dagli eventi ricevuti nella partita.</summary>

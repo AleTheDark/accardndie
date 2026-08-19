@@ -12,6 +12,7 @@ public sealed partial class BattleBoardController
     private readonly List<Canvas> authenticationSuspendedCanvases = new();
     private GameObject campaignRecoveryPopup;
     private bool recoveryResumeInputLocked;
+    private bool campaignSessionRecoveryAwaitingChoice;
 
     // Il popup è uno solo per due situazioni diverse - la sessione rifatta a gioco
     // acceso e la run ritrovata su disco all'ingresso in campagna - quindi testo e
@@ -39,9 +40,11 @@ public sealed partial class BattleBoardController
         }
 
         // Conserva anche un checkpoint persistente quando lo stato e' in un punto in cui
-        // il mapper attuale e' autorevole. Durante lo scontro non sovrascrive mai il save
-        // precedente con uno snapshot parziale e quindi non crea un falso resume.
-        if (!controller.IsCampaignBattleActive())
+        // il mapper attuale e' autorevole: fuori da una stanza. Dentro - in uno scontro
+        // come in una stanza mercato - non sovrascrive mai il checkpoint della soglia con
+        // uno snapshot parziale, che alla ripresa rimonterebbe la stanza su uno stato
+        // diverso da quello con cui era cominciata.
+        if (controller.CanSaveOutsideARoom)
             controller.SaveCurrentRun();
         pendingCampaignSessionRecovery = controller;
     }
@@ -68,34 +71,59 @@ public sealed partial class BattleBoardController
 
         // Non si riavvia LoadBattle e non si richiama BeginRoomChoice: entrambi
         // rigenererebbero la stanza. Lo stato runtime rimane quello gia' consolidato.
+        // Dopo il login, pero', si torna all'hub: la domanda di ripresa deve comparire
+        // soltanto quando il giocatore sceglie CAMPAGNA, non appena si autentica.
         recoveryResumeInputLocked = inputLocked;
         inputLocked = true;
+        campaignSessionRecoveryAwaitingChoice = true;
+        ShowModeSelection();
+    }
+
+    /// <summary>
+    /// Mostra la scelta per la campagna parcheggiata solo dall'ingresso in Campagna.
+    /// Ritorna true quando il popup caldo ha la precedenza sull'eventuale save su disco.
+    /// </summary>
+    private bool ShowPendingCampaignSessionRecoveryIfAny()
+    {
+        if (!campaignSessionRecoveryAwaitingChoice)
+            return false;
+
         ShowCampaignRecoveryPopup(
-            GameText.GetOrFallbackSilent(
-                GameTextKeys.Campaign.RecoverySessionBody,
-                "Hai una campagna in corso. Vuoi riprenderla nello stesso punto o abbandonarla?"),
-            GameText.GetOrFallbackSilent(GameTextKeys.Campaign.RecoveryAbandon, "ABBANDONA"),
+            GameText.Get(GameTextKeys.Campaign.RecoverySessionBody),
+            GameText.Get(GameTextKeys.Campaign.RecoveryAbandon),
             ResumeRecoveredCampaign,
             AbandonRecoveredCampaign);
+        return true;
     }
 
     /// <summary>
     /// Apre il popup con il testo e le due azioni di questa volta. Il bottone di
-    /// sinistra è sempre "riprendi": cambia solo quello di destra, che a gioco acceso
+    /// sinistra è quasi sempre "riprendi": cambia quello di destra, che a gioco acceso
     /// abbandona una run viva e all'ingresso in campagna annulla un salvataggio.
+    ///
+    /// Con <paramref name="resumeAvailable"/> a false il popup racconta e basta: resta
+    /// solo il bottone di destra, allargato a tutta la riga. Serve alla run scritta da
+    /// un'altra patch, che non si può riprendere in nessun modo.
     /// </summary>
     private void ShowCampaignRecoveryPopup(
-        string body, string discardLabel, UnityAction onResume, UnityAction onDiscard)
+        string body, string discardLabel, UnityAction onResume, UnityAction onDiscard,
+        bool resumeAvailable = true)
     {
         BuildCampaignRecoveryPopup();
         campaignRecoveryBodyText.text = body;
         campaignRecoveryResumeLabel.text =
-            GameText.GetOrFallbackSilent(GameTextKeys.Campaign.RecoveryResume, "RIPRENDI");
+            GameText.Get(GameTextKeys.Campaign.RecoveryResume);
         campaignRecoveryDiscardLabel.text = discardLabel;
         campaignRecoveryResumeButton.onClick.RemoveAllListeners();
         campaignRecoveryResumeButton.onClick.AddListener(onResume);
         campaignRecoveryDiscardButton.onClick.RemoveAllListeners();
         campaignRecoveryDiscardButton.onClick.AddListener(onDiscard);
+        // Il popup è uno solo e viene riaperto: i due rettangoli si riassegnano ogni volta,
+        // o la volta dopo il bottone resterebbe largo quanto l'apertura precedente.
+        campaignRecoveryResumeButton.gameObject.SetActive(resumeAvailable);
+        SetRecoveryRect(
+            (RectTransform)campaignRecoveryDiscardButton.transform,
+            new Vector2(resumeAvailable ? 0.53f : 0.08f, 0.1f), new Vector2(0.92f, 0.32f));
         campaignRecoveryPopup.SetActive(true);
         campaignRecoveryPopup.transform.SetAsLastSibling();
     }
@@ -126,7 +154,7 @@ public sealed partial class BattleBoardController
         panelRect.sizeDelta = new Vector2(720f, 350f);
 
         Text title = CreateRecoveryText("Title", panel.transform, 40, FontStyle.Bold);
-        title.text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.RecoveryTitle, "CAMPAGNA IN CORSO");
+        title.text = GameText.Get(GameTextKeys.Campaign.RecoveryTitle);
         SetRecoveryRect(title.rectTransform, new Vector2(0.08f, 0.67f), new Vector2(0.92f, 0.9f));
         campaignRecoveryBodyText = CreateRecoveryText("Body", panel.transform, 25, FontStyle.Normal);
         SetRecoveryRect(campaignRecoveryBodyText.rectTransform, new Vector2(0.08f, 0.4f), new Vector2(0.92f, 0.68f));
@@ -147,6 +175,12 @@ public sealed partial class BattleBoardController
     private void ResumeRecoveredCampaign()
     {
         campaignRecoveryPopup.SetActive(false);
+        campaignSessionRecoveryAwaitingChoice = false;
+        if ((Object)(object)modeSelectionPanel != (Object)null)
+            modeSelectionPanel.SetActive(false);
+        if ((Object)(object)campaignModeSelectionPanel != (Object)null)
+            campaignModeSelectionPanel.SetActive(false);
+        SetAccountHubHudActive(false);
         inputLocked = recoveryResumeInputLocked;
         ApplyResponsiveLayout();
         AppendLog("CAMPAGNA RIPRESA - sessione autenticata, stato della stanza conservato.");
@@ -155,6 +189,7 @@ public sealed partial class BattleBoardController
     private void AbandonRecoveredCampaign()
     {
         campaignRecoveryPopup.SetActive(false);
+        campaignSessionRecoveryAwaitingChoice = false;
         // ReturnToStart e' il solo percorso autorevole di abbandono: pulisce sia lo stato
         // runtime sia il checkpoint persistente, evitando salvataggi orfani.
         ReturnToStart(showModeSelection: true);

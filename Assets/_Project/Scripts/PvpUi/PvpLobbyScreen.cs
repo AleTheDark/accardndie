@@ -170,7 +170,7 @@ namespace AccardND.PvpUi
             RectTransform titleBand = PvpUiFactory.CreateScreenTitlePanel(
                 content,
                 "Arena Title Band",
-                GameText.GetOrFallbackSilent(GameTextKeys.Hub.Arena, "ARENA"),
+                GameText.Get(GameTextKeys.Hub.Arena),
                 null,
                 48);
             PvpUiFactory.SetAnchors(titleBand, new Vector2(0.08f, 0.785f), new Vector2(0.92f, 0.9f));

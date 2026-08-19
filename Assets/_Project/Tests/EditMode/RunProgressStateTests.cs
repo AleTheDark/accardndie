@@ -174,12 +174,12 @@ namespace AccardND.GameCore.Tests
 
             RoomReward reward = progress.CompleteMonsterRoom(new[] { 5, 8 }, 10, 2, 2);
 
-            // Double EXP is applied first: (10 + 13) * 2 / 2 = 23.
+            // Double Reward is applied first, then the forfeit penalty halves EXP and gold.
             Assert.That(reward.RoomExperience, Is.EqualTo(10));
             Assert.That(reward.DefeatedMonsterExperience, Is.EqualTo(13));
-            Assert.That(reward.Gold, Is.EqualTo(4));
+            Assert.That(reward.Gold, Is.EqualTo(8));
             Assert.That(progress.CurrentExperience, Is.EqualTo(23));
-            Assert.That(progress.Gold, Is.EqualTo(4));
+            Assert.That(progress.Gold, Is.EqualTo(8));
         }
 
         [TestCase(0, 100)]

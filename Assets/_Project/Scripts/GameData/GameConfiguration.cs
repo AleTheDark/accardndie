@@ -268,11 +268,11 @@ namespace AccardND.GameData
         [SerializeField, Min(0f)] private float cpuCardRevealDuration = 0.4f;
         [SerializeField, Range(1f, 1.2f)] private float selectedCardScale = 1.055f;
         [SerializeField, Min(0f)] private float draftCardEnterDuration = 0.18f;
-        [SerializeField, Min(0f)] private float draftCardCenterHold = 0.2f;
+        [SerializeField, Min(0f)] private float draftCardCenterHold = 0.3f;
         [SerializeField, Min(0f)] private float draftCardSettleDuration = 0.22f;
         [SerializeField, Min(0f)] private float draftCardEntranceStagger = 0.055f;
         [SerializeField, Min(0f)] private float draftCardEntranceInitialDelay = 0.2f;
-        [SerializeField, Range(1f, 1.8f)] private float draftCardEntranceScale = 1.5f;
+        [SerializeField, Range(1f, 3f)] private float draftCardEntranceScale = 2.5f;
 
         [Header("Transizione stanze")]
         [SerializeField, Min(0f)] private float roomFadeOutDuration = 0.32f;

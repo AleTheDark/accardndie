@@ -174,7 +174,7 @@ namespace AccardND.PvpUi
             group.alpha = 0f;
             float intro = 0f;
             while (intro < 1f) { intro += Time.unscaledDeltaTime * 2.8f; group.alpha = Mathf.SmoothStep(0f, 1f, intro); yield return null; }
-            if (!r.ranked || r.placement) { fill.rectTransform.anchorMax = Vector2.up; value.text = r.placement ? GameText.GetOrFallbackSilent(GameTextKeys.PvpResult.Placement, "{0} RIMANENTI", r.placementRemaining) : GameText.GetOrFallbackSilent(GameTextKeys.PvpResult.Friendly, "AMICHEVOLE"); yield break; }
+            if (!r.ranked || r.placement) { fill.rectTransform.anchorMax = Vector2.up; value.text = r.placement ? GameText.Format(GameTextKeys.PvpResult.Placement, r.placementRemaining) : GameText.Get(GameTextKeys.PvpResult.Friendly); yield break; }
 
             int oldLp = Mathf.Clamp(r.leaguePoints - r.lpDelta, 0, 100);
             float elapsed = 0f;
@@ -188,7 +188,7 @@ namespace AccardND.PvpUi
                 yield return null;
             }
             string sign = r.lpDelta >= 0 ? "+" : string.Empty;
-            change.text = r.promoted ? GameText.GetOrFallbackSilent(GameTextKeys.PvpResult.Promoted, "PROMOSSO!   {0} {1}\n{2}{3} LP", r.tier, r.division, sign, r.lpDelta) : r.demoted ? GameText.GetOrFallbackSilent(GameTextKeys.PvpResult.Demoted, "RETROCESSO   {0} {1}\n{2}{3} LP", r.tier, r.division, sign, r.lpDelta) : $"{sign}{r.lpDelta} LP";
+            change.text = r.promoted ? GameText.Format(GameTextKeys.PvpResult.Promoted, r.tier, r.division, sign, r.lpDelta) : r.demoted ? GameText.Format(GameTextKeys.PvpResult.Demoted, r.tier, r.division, sign, r.lpDelta) : $"{sign}{r.lpDelta} LP";
         }
     }
 }

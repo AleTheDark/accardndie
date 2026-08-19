@@ -169,7 +169,7 @@ public sealed partial class BattleBoardController
 		string familyText = InspectionText(GameTextKeys.Inspection.NoFamily, "Fazione: Nessuna", "Faction: None", "Familie: Keine", "Familia: Ninguna", "Famille : Aucune");
 		string classText = InspectionText(GameTextKeys.Inspection.NoClass, "Classe: Nessuna", "Class: None", "Klasse: Keine", "Clase: Ninguna", "Classe : Aucune");
 		string advantageText = InspectionText(GameTextKeys.Inspection.Advantage, "Vantaggio contro Nessuno", "Advantage against None", "Vorteil gegen Keine", "Ventaja contra Ninguna", "Avantage contre Aucune");
-		string disadvantageText = GameText.GetLocalizedFallback(GameTextKeys.Combat.DisadvantageAgainst, "Svantaggio contro {0}", "Disadvantage against {0}", "Nachteil gegen {0}", "Desventaja contra {0}", "Désavantage contre {0}", "Nessuno");
+		string disadvantageText = GameText.Format(GameTextKeys.Combat.DisadvantageAgainst, "Nessuno");
 		string familyAuraLabel = InspectionText(GameTextKeys.Inspection.FamilyAura, "AURA FAZIONE NESSUNA", "NO FACTION AURA", "KEINE FAMILIENAURA", "SIN AURA DE FAMILIA", "AUCUNE AURA DE FAMILLE");
 		string familyAuraDescription = "Nessuna aura di fazione.";
 		string classAuraLabel = "AURA CLASSE NESSUNA";
@@ -185,7 +185,7 @@ public sealed partial class BattleBoardController
 			familyText = InspectionText(GameTextKeys.Inspection.Family, "Fazione: {0}", "Faction: {0}", "Familie: {0}", "Familia: {0}", "Famille : {0}", CardRulesGlossary.ClassFamilyName(classFamily));
 			classText = InspectionText(GameTextKeys.Inspection.Class, "Classe: {0}", "Class: {0}", "Klasse: {0}", "Clase: {0}", "Classe : {0}", CardRulesGlossary.HeroClassName(definition.HeroClass));
 			advantageText = InspectionText(GameTextKeys.Inspection.Advantage, "Vantaggio contro {0}", "Advantage against {0}", "Vorteil gegen {0}", "Ventaja contra {0}", "Avantage contre {0}", CardRulesGlossary.ClassFamilyName(StrongAgainst(classFamily)));
-			disadvantageText = GameText.GetLocalizedFallback(GameTextKeys.Combat.DisadvantageAgainst, "Svantaggio contro {0}", "Disadvantage against {0}", "Nachteil gegen {0}", "Desventaja contra {0}", "Désavantage contre {0}", CardRulesGlossary.ClassFamilyName(WeakAgainst(classFamily)));
+			disadvantageText = GameText.Format(GameTextKeys.Combat.DisadvantageAgainst, CardRulesGlossary.ClassFamilyName(WeakAgainst(classFamily)));
 			familyAuraLabel = AuraInspectionLabel(familyAura);
 			familyAuraDescription = FamilyAuraSummary(classFamily);
 			classAuraLabel = AuraInspectionLabel(classAura);
@@ -335,7 +335,7 @@ public sealed partial class BattleBoardController
 	/// <summary>Suffisso da attaccare all'intestazione. Le passive costano 0 e non lo mostrano.</summary>
 	private static string ManaCostSuffix(int cost)
 	{
-		return cost <= 0 ? string.Empty : GameText.GetLocalizedFallback(GameTextKeys.Inspection.ManaSuffix, " ({0} MANA)", " ({0} MANA)", " ({0} MANA)", " ({0} MANÁ)", " ({0} MANA)", cost);
+		return cost <= 0 ? string.Empty : GameText.Format(GameTextKeys.Inspection.ManaSuffix, cost);
 	}
 
 	private string CardAbilityInspectionDescription(CardDefinition definition)
@@ -556,16 +556,16 @@ public sealed partial class BattleBoardController
 		{
 			int supremeCost = SupremeCostForInspection(state.Card.HeroClass, state);
 			list.Add(new InspectionStatusDetail(
-				GameText.GetLocalizedFallback(GameTextKeys.Inspection.SupremeCostMalusStatus, "MALUS SUPREMA {0} MANA", "SUPREME PENALTY {0} MANA", "HÖCHSTE-FÄHIGKEIT-MALUS {0} MANA", "PENALIZACIÓN SUPREMA {0} MANÁ", "MALUS SUPRÊME {0} MANA", supremeCost),
-				GameText.GetLocalizedFallback(GameTextKeys.Inspection.SupremeCostMalusDescription, "Suprema usata {0} volte in questa partita: il prossimo uso costa {1} mana.", "Supreme used {0} times in this match: the next use costs {1} Mana.", "Höchste Fähigkeit wurde in diesem Spiel {0}-mal benutzt: Die nächste Nutzung kostet {1} Mana.", "Suprema usada {0} veces en esta partida: el próximo uso cuesta {1} de Maná.", "Capacité suprême utilisée {0} fois dans cette partie : la prochaine utilisation coûte {1} Mana.", supremeUses, supremeCost),
+				GameText.Format(GameTextKeys.Inspection.SupremeCostMalusStatus, supremeCost),
+				GameText.Format(GameTextKeys.Inspection.SupremeCostMalusDescription, supremeUses, supremeCost),
 				new Color(1f, 0.38f, 0.32f), "debuff_supreme_cost"));
 		}
 		if (state.SeraphelSeals > 0)
 		{
 			int sealDamage = state.SeraphelSeals * SeraphelBoss.DamagePerSeal;
 			list.Add(new InspectionStatusDetail(
-				GameText.GetLocalizedFallback(GameTextKeys.Inspection.SeraphelSealsStatus, "SIGILLI {0} - MALUS", "SEALS {0} - PENALTY", "SIEGEL {0} - MALUS", "SELLOS {0} - PENALIZACIÓN", "SCEAUX {0} - MALUS", state.SeraphelSeals),
-				GameText.GetLocalizedFallback(GameTextKeys.Inspection.SeraphelSealsDescription, "Malus persistente di Seraphel: il boss ottiene +{0} contro questa carta. Al terzo Sigillo la carta viene eliminata automaticamente.", "Seraphel's persistent penalty: the boss gains +{0} against this card. At the third Seal, the card is eliminated automatically.", "Seraphels dauerhafter Malus: Der Boss erhält +{0} gegen diese Karte. Beim dritten Siegel wird die Karte automatisch eliminiert.", "Penalización persistente de Seraphel: el jefe obtiene +{0} contra esta carta. Al tercer Sello, la carta se elimina automáticamente.", "Malus persistant de Seraphel : le boss gagne +{0} contre cette carte. Au troisième Sceau, la carte est éliminée automatiquement.", sealDamage),
+				GameText.Format(GameTextKeys.Inspection.SeraphelSealsStatus, state.SeraphelSeals),
+				GameText.Format(GameTextKeys.Inspection.SeraphelSealsDescription, sealDamage),
 				new Color(1f, 0.22f, 0.18f)));
 		}
 		BattleAuraType battleAuraType = AuraForCard(state);
@@ -604,10 +604,23 @@ public sealed partial class BattleBoardController
 				"Bonus permanente del Sigillo Oscuro. Questa pedina non puo ricevere altri sigilli ne equipaggiamenti da altre pedine.",
 				new Color(0.72f, 0.35f, 0.9f)));
 		}
+		int upgradeBonus = UpgradeBonusOf(state);
+		if (upgradeBonus > 0)
+		{
+			list.Add(new InspectionStatusDetail(
+				$"UPGRADE +{upgradeBonus}",
+				"Upgrade permanente della pedina.",
+				new Color(0.7f, 1f, 0.45f),
+				$"forge_upgrade_{upgradeBonus}"));
+		}
 		int equipmentBonus = EquipmentBonusOf(state);
 		if (equipmentBonus > 0)
 		{
-			list.Add(new InspectionStatusDetail($"POTENZA AGGIUNTIVA DA EQUIPAGGIAMENTO +{equipmentBonus}", "Bonus permanente ottenuto equipaggiando una carta sacrificata.", new Color(0.7f, 1f, 0.45f)));
+			list.Add(new InspectionStatusDetail(
+				GameText.Format(GameTextKeys.Inspection.EquipmentStatus, equipmentBonus),
+				GameText.Get(GameTextKeys.Inspection.EquipmentDescription),
+				new Color(1f, 0.62f, 0.2f),
+				"EQUIPAGGIAMENTO"));
 		}
 		if (state.MightAuraCombatBonus > 0)
 		{
@@ -625,8 +638,8 @@ public sealed partial class BattleBoardController
 		if (num > 0)
 		{
 			list.Add(new InspectionStatusDetail(
-				GameText.GetLocalizedFallback(GameTextKeys.Inspection.HunterMarkStatus, "BERSAGLIO MARCATO +{0}", "MARKED TARGET +{0}", "MARKIERTES ZIEL +{0}", "OBJETIVO MARCADO +{0}", "CIBLE MARQUÉE +{0}", num),
-				GameText.GetLocalizedFallback(GameTextKeys.Inspection.HunterMarkDescription, "Chi attacca questa carta riceve il bonus indicato. Più marchi sullo stesso bersaglio non si sommano.", "Anyone attacking this card receives the indicated bonus. Multiple marks on the same target do not stack.", "Wer diese Karte angreift, erhält den angegebenen Bonus. Mehrere Markierungen auf demselben Ziel sind nicht kumulativ.", "Quien ataque esta carta recibe el bono indicado. Varias marcas sobre el mismo objetivo no se acumulan.", "Toute personne attaquant cette carte reçoit le bonus indiqué. Plusieurs marques sur la même cible ne se cumulent pas."),
+				GameText.Format(GameTextKeys.Inspection.HunterMarkStatus, num),
+				GameText.Get(GameTextKeys.Inspection.HunterMarkDescription),
 				new Color(1f, 0.65f, 0.2f),
 				"BERSAGLIO MARCATO"));
 		}
@@ -787,7 +800,7 @@ public sealed partial class BattleBoardController
 		text.horizontalOverflow = (HorizontalWrapMode)0;
 		text.verticalOverflow = (VerticalWrapMode)1;
 		ConfigureCardInspectionText(text);
-		text.text = GameText.GetOrFallbackSilent(GameTextKeys.Inspection.ActiveStatuses, "Status attivi:");
+		text.text = GameText.Get(GameTextKeys.Inspection.ActiveStatuses);
 		cardInspectionStatusRows.Add(((Component)text).gameObject);
 	}
 

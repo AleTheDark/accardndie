@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using AccardND.GameCore;
 using AccardND.GameCore.Mana;
 using AccardND.GameData;
@@ -144,6 +145,7 @@ public sealed partial class BattleBoardController
 			petrified = card.Petrified,
 			seraphelSeals = card.SeraphelSeals,
 			markedTarget = EncodePawn(card.MarkedTarget),
+			hunterMarkedTargets = card.HunterMarkedTargets.Select(EncodePawn).ToList(),
 			protectedAlly = EncodePawn(card.ProtectedAlly),
 			attachedTo = EncodePawn(card.AttachedTo)
 		};
@@ -358,11 +360,22 @@ public sealed partial class BattleBoardController
 
 	private void RestoreBattleRandom(CampaignBattleSave battle)
 	{
-		battleRandom = SeededRandomSource.Restore(battle.randomSeed, battle.randomDraws);
+		RestoreRunRandom(battle.randomSeed, battle.randomDraws, battle.cpuRandomSeed, battle.cpuRandomDraws);
+	}
+
+	/// <summary>
+	/// Rimette i due flussi di dadi dove li aveva lasciati il salvataggio, e ricabla su di
+	/// loro tutti i servizi che pescano. Vale per la battaglia ripresa come per la stanza
+	/// ripresa: da qui in poi la run deve riestrarre esattamente quello che aveva estratto,
+	/// o riaprire il gioco diventa un modo di ritirare porte, stanze e dadi.
+	/// </summary>
+	private void RestoreRunRandom(int seed, int draws, int cpuSeed, int cpuDraws)
+	{
+		battleRandom = SeededRandomSource.Restore(seed, draws);
 		random = battleRandom;
 		combatResolver = new CombatResolver(random);
 		formationDraftService = new FormationDraftService(random);
-		battleCpuRandom = SeededRandomSource.Restore(battle.cpuRandomSeed, battle.cpuRandomDraws);
+		battleCpuRandom = SeededRandomSource.Restore(cpuSeed, cpuDraws);
 		cpuDecisionService = new CpuDecisionService(battleCpuRandom);
 	}
 
@@ -447,6 +460,22 @@ public sealed partial class BattleBoardController
 			CampaignBattlePawnSave pawn = saved[index];
 			BattleCardState card = cards[index];
 			card.MarkedTarget = DecodePawn(pawn.markedTarget);
+			card.HunterMarkedTargets.Clear();
+			if (pawn.hunterMarkedTargets != null)
+			{
+				foreach (int encodedTarget in pawn.hunterMarkedTargets)
+				{
+					BattleCardState target = DecodePawn(encodedTarget);
+					if (target != null)
+						card.HunterMarkedTargets.Add(target);
+				}
+			}
+			if (card.Card.HeroClass == HeroClass.Hunter && card.HunterMarkedTargets.Count == 0 && card.MarkedTarget != null)
+			{
+				// Compatibilita' con i salvataggi creati prima del supporto a piu' marchi.
+				card.HunterMarkedTargets.Add(card.MarkedTarget);
+				card.MarkedTarget = null;
+			}
 			card.ProtectedAlly = DecodePawn(pawn.protectedAlly);
 			card.AttachedTo = DecodePawn(pawn.attachedTo);
 		}

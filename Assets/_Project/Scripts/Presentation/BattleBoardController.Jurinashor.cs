@@ -59,9 +59,9 @@ public sealed partial class BattleBoardController
 		boss.PermanentCombatBonus = Math.Max(0, boss.PermanentCombatBonus);
 		foreach (BattleCardState hunter in playerCards.Concat(cpuCards))
 		{
-			if (hunter == null || hunter.MarkedTarget != boss)
+			if (hunter == null || !hunter.HunterMarkedTargets.Contains(boss))
 				continue;
-			hunter.MarkedTarget = null;
+			hunter.HunterMarkedTargets.Remove(boss);
 			RefreshPersistentStatus(hunter);
 		}
 		RefreshPersistentStatus(boss);
@@ -119,13 +119,7 @@ public sealed partial class BattleBoardController
 		if (sword == null)
 			return false;
 		sword.View?.ConfigureJurinashorSwordPresentation();
-		sword.View?.PlayActionCallout(GameText.GetLocalizedFallback(
-			GameTextKeys.Campaign.JurinashorSwordSummoned,
-			"EVOCATA",
-			"SUMMONED",
-			"BESCHWOREN",
-			"INVOCADA",
-			"INVOQUÉE"), new Color(0.28f, 1f, 0.38f));
+		sword.View?.PlayActionCallout(GameText.Get(GameTextKeys.Campaign.JurinashorSwordSummoned), new Color(0.28f, 1f, 0.38f));
 		PlaySfx(jurinashorWeaponEvocationSfx);
 		LayoutJurinashorSwords();
 		if (sword.View != null && sword.View.RectTransform != null)

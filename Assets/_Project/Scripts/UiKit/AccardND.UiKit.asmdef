@@ -1,0 +1,8 @@
+{
+  "name": "AccardND.UiKit",
+  "rootNamespace": "AccardND.UiKit",
+  "references": [
+    "Unity.ugui"
+  ],
+  "autoReferenced": true
+}

@@ -26,7 +26,7 @@ public sealed partial class BattleBoardController
 
 		Text title = CreateText("Aura Codex Title", ((Component)overlay).transform, font, 40, (FontStyle)1, (TextAnchor)4);
 		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(title);
-		title.text = GameText.GetOrFallbackSilent(GameTextKeys.Rules.AuraCodexTitle, "CODICE DELLE AURE");
+		title.text = GameText.Get(GameTextKeys.Rules.AuraCodexTitle);
 		AccardND.Battlefield.EditableRuntimeText.BindLocalized(
 			title,
 			GameTextKeys.Rules.AuraCodexTitle,

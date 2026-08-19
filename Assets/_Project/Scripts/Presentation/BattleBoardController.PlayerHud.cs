@@ -682,10 +682,7 @@ public sealed partial class BattleBoardController
 			return ActiveTutorialDuelRoomLabel;
 		if (adventureScriptedTutorialActive)
 			return "TUTORIAL FINALE";
-		return GameText.GetOrFallbackSilent(
-			GameTextKeys.Combat.CpuHudRoom,
-			"STANZA {0}",
-			runProgress.RoomsCleared + 1);
+		return GameText.Format(GameTextKeys.Combat.CpuHudRoom, runProgress.RoomsCleared + 1);
 	}
 
 	private bool IsBossFightHudActive()

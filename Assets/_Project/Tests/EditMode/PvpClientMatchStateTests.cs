@@ -3,6 +3,7 @@ using System.Linq;
 using AccardND.GameCore;
 using AccardND.Battlefield;
 using AccardND.GameCore.Pvp;
+using AccardND.GameCore.Mana;
 using AccardND.NetProtocol;
 using NUnit.Framework;
 
@@ -191,6 +192,61 @@ namespace AccardND.GameCore.Tests
             Assert.That(card.DiePenaltySteps, Is.Zero);
             Assert.That(card.PermanentBonus, Is.Zero);
             Assert.That(card.PendingBonus, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void SupremeReplay_RogueTransfersPendingBuff()
+        {
+            PvpClientMatchState client = RogueSupremeClient(out PvpClientCard rogue, out PvpClientCard target);
+            target.PendingBonus = 2;
+            target.PendingBonusKind = PvpPendingBonusKind.Blessing;
+
+            ApplyRogueSupreme(client, 2);
+
+            Assert.That(target.PendingBonus, Is.Zero);
+            Assert.That(target.PendingBonusKind, Is.EqualTo(PvpPendingBonusKind.None));
+            Assert.That(rogue.PermanentBonus, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void SupremeReplay_RogueTransfersFallbackPower()
+        {
+            PvpClientMatchState client = RogueSupremeClient(out PvpClientCard rogue, out PvpClientCard target);
+
+            ApplyRogueSupreme(client, 1);
+
+            Assert.That(target.PermanentBonus, Is.EqualTo(-1));
+            Assert.That(rogue.PermanentBonus, Is.EqualTo(1));
+        }
+
+        private static PvpClientMatchState RogueSupremeClient(out PvpClientCard rogue, out PvpClientCard target)
+        {
+            var client = new PvpClientMatchState();
+            client.ApplyMatchStart(new MatchStart { opponentName = "x", yourPlayerIndex = 0 });
+            client.Apply(new MatchEventDto
+            {
+                type = "CardDeployed", player = 0, slot = 0, cardId = "rogue",
+                cardName = "Rogue", heroClass = (int)HeroClass.Rogue, strength = 5, lives = 2
+            });
+            client.Apply(new MatchEventDto
+            {
+                type = "CardDeployed", player = 1, slot = 0, cardId = "target",
+                cardName = "Target", heroClass = (int)HeroClass.Warrior, strength = 5, lives = 2
+            });
+            rogue = client.Boards[0].Single();
+            target = client.Boards[1].Single();
+            return client;
+        }
+
+        private static void ApplyRogueSupreme(PvpClientMatchState client, int magnitude)
+        {
+            client.Apply(new MatchEventDto
+            {
+                type = "SupremeUsed", player = 0, slot = 0,
+                ability = (int)HeroClass.Rogue,
+                supreme = (int)SupremeAbilityType.StealBuffs,
+                targetPlayer = 1, targetSlot = 0, magnitude = magnitude
+            });
         }
 
         [Test]

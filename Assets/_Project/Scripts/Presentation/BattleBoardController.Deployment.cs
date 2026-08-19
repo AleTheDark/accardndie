@@ -107,17 +107,10 @@ public sealed partial class BattleBoardController
 				gameFinished = true;
 				SetTurnBanner(
 					playerTurn: false,
-					GameText.GetOrFallbackSilent(
-						GameTextKeys.Campaign.DeckExhaustedBanner,
-						"CAMPAGNA TERMINATA  -  MAZZO ESAURITO"),
+					GameText.Get(GameTextKeys.Campaign.DeckExhaustedBanner),
 					defeat: true,
 					campaignEnded: true);
-				SetMessage(GameText.GetOrFallbackSilent(
-					GameTextKeys.Campaign.NotEnoughCards,
-					"Non hai abbastanza carte disponibili: {0}/{1}. Cimitero: {2}. Calcolo della ricompensa di fine campagna.",
-					draftCandidates.Count,
-					configuration.Gameplay.FormationSize,
-					campaignDeck.GraveyardCount));
+				SetMessage(GameText.Format(GameTextKeys.Campaign.NotEnoughCards, draftCandidates.Count, configuration.Gameplay.FormationSize, campaignDeck.GraveyardCount));
 				pendingCampaignRewardTask = ClaimCampaignRunAccountReward(completed: false);
 				return;
 			}
@@ -126,7 +119,6 @@ public sealed partial class BattleBoardController
 		{
 			draftCandidates.AddRange(formationDraftService.DrawCandidates(cardDatabase.Cards, configuration.Gameplay.DraftCandidateCount));
 		}
-		ShowFormationDraftHint();
 		for (int num = 0; num < draftCandidates.Count; num++)
 		{
 			int capturedIndex = num;
@@ -152,10 +144,7 @@ public sealed partial class BattleBoardController
 		}
 		if ((Object)(object)playerTitleText != (Object)null)
 		{
-			playerTitleText.text = GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.ChooseFormationCards,
-				"SCEGLI {0} CARTE",
-				configuration.Gameplay.FormationSize);
+			playerTitleText.text = GameText.Format(GameTextKeys.Campaign.ChooseFormationCards, configuration.Gameplay.FormationSize);
 		}
 		bool flag = campaignDeck != null && (currentRoomType == RoomType.Monster || currentRoomType == RoomType.Boss);
 		if (flag)
@@ -168,7 +157,7 @@ public sealed partial class BattleBoardController
 		((Component)confirmActionButton).gameObject.SetActive(!flag);
 		if ((Object)(object)confirmActionButtonText != (Object)null)
 		{
-			confirmActionButtonText.text = GameText.GetOrFallbackSilent(GameTextKeys.Common.Confirm, "CONFERMA");
+			confirmActionButtonText.text = GameText.Get(GameTextKeys.Common.Confirm);
 		}
 		confirmActionButton.interactable = false;
 		RefreshInitiativeDisplay();
@@ -195,6 +184,8 @@ public sealed partial class BattleBoardController
 
 	private void ClearDraftEntranceState()
 	{
+		draftEntranceAnimationVersion++;
+		activeDraftEntranceCards = 0;
 		if (draftEntranceCoroutine != null)
 		{
 			((MonoBehaviour)this).StopCoroutine(draftEntranceCoroutine);
@@ -217,7 +208,8 @@ public sealed partial class BattleBoardController
 
 	private IEnumerator PlayDraftHandEntrance(bool beginInitiativeDeploymentAfterEntrance)
 	{
-		yield return WaitForHintToClose();
+		int animationVersion = ++draftEntranceAnimationVersion;
+		activeDraftEntranceCards = 0;
 		draftEntranceAnimatingViews.Clear();
 		if (draftViews.Count == 0 || (Object)(object)playerHandRow == (Object)null || (Object)(object)safeAreaRoot == (Object)null)
 		{
@@ -275,72 +267,16 @@ public sealed partial class BattleBoardController
 			{
 				continue;
 			}
-			GameObject overlayObject = Object.Instantiate(((Component)realView).gameObject, (Transform)(object)safeAreaRoot, false);
-			overlayObject.name = ((Object)((Component)realView).gameObject).name + "-entrance";
-			NormalizeDraftEntranceClone(overlayObject);
-			PrototypeCardView overlayView = overlayObject.GetComponent<PrototypeCardView>();
-			Button overlayButton = overlayObject.GetComponent<Button>();
-			if ((Object)(object)overlayButton != (Object)null)
-			{
-				overlayButton.interactable = false;
-			}
-			overlayView.SetLayoutIgnored(ignored: true);
-			overlayView.SetAlpha(0f);
-			draftEntranceOverlayObjects.Add(overlayObject);
-			RectTransform animatedRect = overlayView.RectTransform;
-			animatedRect.anchorMin = new Vector2(0.5f, 0.5f);
-			animatedRect.anchorMax = new Vector2(0.5f, 0.5f);
-			animatedRect.pivot = new Vector2(0.5f, 0.5f);
-			animatedRect.sizeDelta = sizes[i];
-			float cardWidth = Mathf.Max(1f, sizes[i].x);
-			Vector2 start = new Vector2(safeBounds.xMax + cardWidth * 0.9f, Mathf.Lerp(0f, targets[i].y, 0.35f));
-			Vector2 center = new Vector2(0f, 0f);
-			animatedRect.anchoredPosition = start;
-			((Transform)animatedRect).localRotation = Quaternion.identity;
-			((Transform)animatedRect).localScale = Vector3.one * 0.82f;
-			overlayView.SetAlpha(0f);
-			PlayDrawCardSfx();
-			float elapsed = 0f;
-			while (elapsed < enterDuration)
-			{
-				elapsed += Time.unscaledDeltaTime;
-				float progress = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / enterDuration));
-				animatedRect.anchoredPosition = Vector2.LerpUnclamped(start, center, progress);
-				((Transform)animatedRect).localRotation = Quaternion.identity;
-				((Transform)animatedRect).localScale = Vector3.one * Mathf.LerpUnclamped(0.82f, entranceScale, progress);
-				overlayView.SetAlpha(Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / (enterDuration * 0.42f))));
-				yield return null;
-			}
-			animatedRect.anchoredPosition = center;
-			((Transform)animatedRect).localRotation = Quaternion.identity;
-			((Transform)animatedRect).localScale = Vector3.one * entranceScale;
-			overlayView.SetAlpha(1f);
-			if (holdDuration > 0f)
-			{
-				yield return WaitForCardInspectionPause(holdDuration);
-			}
-			elapsed = 0f;
-			while (elapsed < settleDuration)
-			{
-				elapsed += Time.unscaledDeltaTime;
-				float settleProgress = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / settleDuration));
-				float scaleEase = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / settleDuration));
-				animatedRect.anchoredPosition = Vector2.LerpUnclamped(center, targets[i], settleProgress);
-				((Transform)animatedRect).localRotation = Quaternion.SlerpUnclamped(Quaternion.identity, targetRotations[i], settleProgress);
-				((Transform)animatedRect).localScale = Vector3.one * Mathf.LerpUnclamped(entranceScale, 1f, scaleEase);
-				overlayView.SetAlpha(1f);
-				yield return null;
-			}
-			realView.SetAlpha(1f);
-			((Transform)realView.RectTransform).localScale = Vector3.one;
-			((Transform)realView.RectTransform).localRotation = targetRotations[i];
-			draftEntranceAnimatingViews.Remove(realView);
-			draftEntranceOverlayObjects.Remove(overlayObject);
-			Object.Destroy((Object)(object)overlayObject);
+			activeDraftEntranceCards++;
+			((MonoBehaviour)this).StartCoroutine(AnimateDraftEntranceCard(realView, targets[i], targetRotations[i], sizes[i], safeBounds, enterDuration, holdDuration, settleDuration, entranceScale, animationVersion));
 			if (betweenCardsDelay > 0f && i < count - 1)
 			{
-				yield return WaitForCardInspectionPause(betweenCardsDelay);
+				yield return WaitForCardInspectionPause(enterDuration + holdDuration + betweenCardsDelay);
 			}
+		}
+		while (activeDraftEntranceCards > 0 && animationVersion == draftEntranceAnimationVersion)
+		{
+			yield return null;
 		}
 		draftEntranceOverlayObjects.Clear();
 		ApplyResponsiveLayout();
@@ -364,6 +300,63 @@ public sealed partial class BattleBoardController
 			}
 			NotifyAdventureTutorial(AdventureTutorialAction.DraftReady);
 		}
+	}
+
+	private IEnumerator AnimateDraftEntranceCard(PrototypeCardView realView, Vector2 target, Quaternion targetRotation,
+		Vector2 size, Rect safeBounds, float enterDuration, float holdDuration, float settleDuration,
+		float entranceScale, int animationVersion)
+	{
+		GameObject overlayObject = Object.Instantiate(((Component)realView).gameObject, (Transform)(object)safeAreaRoot, false);
+		overlayObject.name = ((Object)((Component)realView).gameObject).name + "-entrance";
+		NormalizeDraftEntranceClone(overlayObject);
+		PrototypeCardView overlayView = overlayObject.GetComponent<PrototypeCardView>();
+		Button overlayButton = overlayObject.GetComponent<Button>();
+		if ((Object)(object)overlayButton != (Object)null) overlayButton.interactable = false;
+		overlayView.SetLayoutIgnored(ignored: true);
+		overlayView.SetAlpha(0f);
+		draftEntranceOverlayObjects.Add(overlayObject);
+		RectTransform animatedRect = overlayView.RectTransform;
+		animatedRect.anchorMin = animatedRect.anchorMax = animatedRect.pivot = new Vector2(0.5f, 0.5f);
+		animatedRect.sizeDelta = size;
+		Vector2 start = new Vector2(safeBounds.xMax + Mathf.Max(1f, size.x) * 0.9f, Mathf.Lerp(0f, target.y, 0.35f));
+		animatedRect.anchoredPosition = start;
+		((Transform)animatedRect).localRotation = Quaternion.identity;
+		((Transform)animatedRect).localScale = Vector3.one * 0.82f;
+		PlayDrawCardSfx();
+		float elapsed = 0f;
+		while (elapsed < enterDuration && animationVersion == draftEntranceAnimationVersion)
+		{
+			elapsed += Time.unscaledDeltaTime;
+			float progress = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / enterDuration));
+			animatedRect.anchoredPosition = Vector2.LerpUnclamped(start, Vector2.zero, progress);
+			((Transform)animatedRect).localScale = Vector3.one * Mathf.LerpUnclamped(0.82f, entranceScale, progress);
+			overlayView.SetAlpha(Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / (enterDuration * 0.42f))));
+			yield return null;
+		}
+		if (animationVersion == draftEntranceAnimationVersion)
+		{
+			animatedRect.anchoredPosition = Vector2.zero;
+			((Transform)animatedRect).localScale = Vector3.one * entranceScale;
+			overlayView.SetAlpha(1f);
+			if (holdDuration > 0f) yield return WaitForCardInspectionPause(holdDuration);
+			elapsed = 0f;
+			while (elapsed < settleDuration && animationVersion == draftEntranceAnimationVersion)
+			{
+				elapsed += Time.unscaledDeltaTime;
+				float progress = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / settleDuration));
+				animatedRect.anchoredPosition = Vector2.LerpUnclamped(Vector2.zero, target, progress);
+				((Transform)animatedRect).localRotation = Quaternion.SlerpUnclamped(Quaternion.identity, targetRotation, progress);
+				((Transform)animatedRect).localScale = Vector3.one * Mathf.LerpUnclamped(entranceScale, 1f, progress);
+				yield return null;
+			}
+			realView.SetAlpha(1f);
+			((Transform)realView.RectTransform).localScale = Vector3.one;
+			((Transform)realView.RectTransform).localRotation = targetRotation;
+		}
+		draftEntranceAnimatingViews.Remove(realView);
+		draftEntranceOverlayObjects.Remove(overlayObject);
+		if ((Object)(object)overlayObject != (Object)null) Object.Destroy((Object)(object)overlayObject);
+		if (animationVersion == draftEntranceAnimationVersion) activeDraftEntranceCards--;
 	}
 
 	private static void NormalizeDraftEntranceClone(GameObject overlayObject)
@@ -539,8 +532,6 @@ public sealed partial class BattleBoardController
 		SetTurnBanner(playerTurn: true, "SCHIERAMENTO");
 		RefreshInitiativeDisplay();
 		ClearDeploymentTimeline();
-		ShowDeploymentInitiativeHint();
-		yield return WaitForHintToClose();
 		SetMessage($"Tiro iniziativa: {formationSize} D20 per te e {cpuDeploymentCount} D20 per il Master.");
 		yield return PlayDeploymentInitiativeDiceRoll(initiativeDieSides);
 		RefreshDeploymentTimeline();
@@ -2178,7 +2169,7 @@ public sealed partial class BattleBoardController
 		{
 			playerTitleText.text = campaignDeck != null
 				? string.Empty
-				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.YourFormation, "LA TUA FORMAZIONE");
+				: GameText.Get(GameTextKeys.Campaign.YourFormation);
 		}
 		DestroyCardViews(playerCards);
 		DestroyCardViews(cpuCards);
@@ -2300,7 +2291,7 @@ public sealed partial class BattleBoardController
 		{
 			playerTitleText.text = campaignDeck != null
 				? string.Empty
-				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.YourFormation, "LA TUA FORMAZIONE");
+				: GameText.Get(GameTextKeys.Campaign.YourFormation);
 		}
 
 		DestroyCardViews(playerCards);

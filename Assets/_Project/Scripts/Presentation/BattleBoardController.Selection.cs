@@ -1120,7 +1120,7 @@ public sealed partial class BattleBoardController
 			return;
 		}
 		medusa.View.SetStrengthValue(MedusaBoss.CardStrength);
-		medusa.View.SetHealthBarName("Medusa");
+		medusa.View.SetHealthBarName(string.Empty);
 		UpdateMedusaBossHealthBar(medusa);
 		RefreshPersistentStatus(medusa);
 	}
@@ -1148,7 +1148,7 @@ public sealed partial class BattleBoardController
 			activeForm,
 			actionColor: GolemFormColor(activeForm));
 		golem.View.SetStrengthValue(activeComposableGolem.ActiveForm.Power);
-		golem.View.SetHealthBarName("StorgBot");
+		golem.View.SetHealthBarName(string.Empty);
 		UpdateComposableGolemHealthBar(golem);
 		RefreshPersistentStatus(golem);
 	}
@@ -1315,7 +1315,7 @@ public sealed partial class BattleBoardController
 	{
 		if (card != null && !inputLocked && !gameFinished)
 		{
-			if ((abilityTargetMode != AbilityTargetMode.NecromancerAlly || !CanReviveWithNecromancer(card)) && (abilityTargetMode != AbilityTargetMode.PaladinAlly || card.Eliminated || activeAbilityUser == null) && (abilityTargetMode != AbilityTargetMode.PriestAlly || card.Eliminated))
+			if ((abilityTargetMode != AbilityTargetMode.NecromancerAlly || !CanReviveWithNecromancer(card)) && (abilityTargetMode != AbilityTargetMode.PaladinAlly || card.Eliminated || activeAbilityUser == null || HasActivePaladinProtection(playerCards, card)) && (abilityTargetMode != AbilityTargetMode.PriestAlly || card.Eliminated))
 			{
 				if (abilityTargetMode == AbilityTargetMode.AttachmentAlly)
 				{
@@ -1480,11 +1480,7 @@ public sealed partial class BattleBoardController
 				UpdateInteractions();
 				return;
 			}
-			if (activeAbilityUser.MarkedTarget != null && !activeAbilityUser.MarkedTarget.Eliminated)
-			{
-				RefreshPersistentStatus(activeAbilityUser.MarkedTarget);
-			}
-			activeAbilityUser.MarkedTarget = battleCardState3;
+			activeAbilityUser.HunterMarkedTargets.Add(battleCardState3);
 			activeAbilityUser.AbilityArmed = false;
 			MarkAbilityUsed(activeAbilityUser);
 			RefreshPersistentStatus(battleCardState3);
@@ -1586,7 +1582,9 @@ public sealed partial class BattleBoardController
 				SetMessage("NECROMANTE: " + activeAbilityUser.Card.Name + " rialza " + target.Card.Name + ". Agira subito dopo il Necromante.");
 				TriggerMagicAuraAfterAbility();
 			}
-			else if (abilityTargetMode == AbilityTargetMode.PaladinAlly && !target.Eliminated)
+			else if (abilityTargetMode == AbilityTargetMode.PaladinAlly
+				&& !target.Eliminated
+				&& !HasActivePaladinProtection(playerCards, target))
 			{
 				if (!TrySpendCampaignPrimaryMana(activeAbilityUser))
 					return;

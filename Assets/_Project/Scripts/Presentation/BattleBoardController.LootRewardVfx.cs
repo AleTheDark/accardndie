@@ -82,13 +82,7 @@ public sealed partial class BattleBoardController
 		// lo impasta, quindi il titolo resta in stile normale.
 		Text title = CreateText("Loot Reward Title", root.transform, LootRewardTitleFont(), 38, FontStyle.Normal, TextAnchor.MiddleCenter);
 		title.alignment = TextAnchor.MiddleCenter;
-		title.text = GameText.GetLocalizedFallback(
-			GameTextKeys.Campaign.RewardReady,
-			"RICOMPENSA OTTENUTA",
-			"REWARD RECEIVED",
-			"BELOHNUNG ERHALTEN",
-			"RECOMPENSA OBTENIDA",
-			"RÉCOMPENSE OBTENUE");
+		title.text = GameText.Get(GameTextKeys.Campaign.RewardReady);
 		title.color = new Color(1f, 0.88f, 0.48f, 1f);
 		Outline titleOutline = ((Component)title).gameObject.AddComponent<Outline>();
 		titleOutline.effectColor = new Color(0.28f, 0.12f, 0.02f, 0.95f);

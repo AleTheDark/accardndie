@@ -49,9 +49,10 @@ public sealed partial class BattleBoardController
 
 	private static string CampaignConsumableDescription(CampaignConsumableType itemType)
 	{
-		if (itemType == CampaignConsumableType.ManaGain5) return "Recupera 5 mana in qualsiasi momento, senza superare il limite massimo di 10.";
-		if (itemType == CampaignConsumableType.ManaGain10) return "Recupera 10 mana in qualsiasi momento, senza superare il limite massimo di 10.";
-		if (itemType == CampaignConsumableType.Jolly) return "Ti teletrasporta subito alla scelta della stanza, anche mentre sei gia dentro una stanza.";
+		if (itemType == CampaignConsumableType.Jolly)
+		{
+			return GameText.Get(GameTextKeys.Consumables.Description("jolly"));
+		}
 		return GameText.Get(GameTextKeys.Consumables.Description(CampaignConsumableLocalizationId(itemType)));
 	}
 
@@ -94,7 +95,21 @@ public sealed partial class BattleBoardController
 		}
 	}
 
+	/// <summary>
+	/// Usa un oggetto e mette subito per iscritto che è stato usato. Il salvataggio non è
+	/// un dettaglio contabile: senza, spendere il Detector davanti alle porte, vedere tre
+	/// stanze che non piacciono e riaprire il gioco restituiva l'oggetto lasciando al
+	/// giocatore quello che aveva visto.
+	/// </summary>
 	private bool TryUseCampaignConsumable(CampaignConsumableType itemType)
+	{
+		if (!TryApplyCampaignConsumable(itemType))
+			return false;
+		SaveAfterCampaignItemUse();
+		return true;
+	}
+
+	private bool TryApplyCampaignConsumable(CampaignConsumableType itemType)
 	{
 		if (IsConsumableBlockedInBattle(itemType) && IsCampaignBattleActive())
 		{
@@ -155,14 +170,14 @@ public sealed partial class BattleBoardController
 			int gainedFive = campaignPlayerMana.Gain(5);
 			battleSfx?.PlayManaGain();
 			RefreshPlayerHud();
-			SetMessage(GameText.GetLocalizedFallback(GameTextKeys.Consumables.ManaRecovered, "Mana recuperato: +{0}. Riserva {1}/{2}.", "Mana restored: +{0}. Reserve {1}/{2}.", "Mana wiederhergestellt: +{0}. Reserve {1}/{2}.", "Maná recuperado: +{0}. Reserva {1}/{2}.", "Mana récupéré : +{0}. Réserve {1}/{2}.", gainedFive, CampaignPlayerManaCurrent, CampaignManaMaximum));
+			SetMessage(GameText.Format(GameTextKeys.Consumables.ManaRecovered, gainedFive, CampaignPlayerManaCurrent, CampaignManaMaximum));
 			AppendLog(GameText.Format(GameTextKeys.Consumables.ManaRecoveredLog, 5, gainedFive, CampaignPlayerManaCurrent, CampaignManaMaximum));
 			return true;
 		case CampaignConsumableType.ManaGain10:
 			int gainedTen = campaignPlayerMana.Gain(10);
 			battleSfx?.PlayManaGain();
 			RefreshPlayerHud();
-			SetMessage(GameText.GetLocalizedFallback(GameTextKeys.Consumables.ManaRecovered, "Mana recuperato: +{0}. Riserva {1}/{2}.", "Mana restored: +{0}. Reserve {1}/{2}.", "Mana wiederhergestellt: +{0}. Reserve {1}/{2}.", "Maná recuperado: +{0}. Reserva {1}/{2}.", "Mana récupéré : +{0}. Réserve {1}/{2}.", gainedTen, CampaignPlayerManaCurrent, CampaignManaMaximum));
+			SetMessage(GameText.Format(GameTextKeys.Consumables.ManaRecovered, gainedTen, CampaignPlayerManaCurrent, CampaignManaMaximum));
 			AppendLog(GameText.Format(GameTextKeys.Consumables.ManaRecoveredLog, 10, gainedTen, CampaignPlayerManaCurrent, CampaignManaMaximum));
 			return true;
 		case CampaignConsumableType.Jolly:
@@ -183,8 +198,8 @@ public sealed partial class BattleBoardController
 			// poi la stessa pulizia visiva usata al termine di una stanza.
 			BeginRoomChoice();
 			RevealCurrentCampaignDoorsWithDetector();
-			SetMessage(GameText.GetLocalizedFallback(GameTextKeys.Consumables.JollyUsed, "Jolly usato: scegli la stanza in cui teletrasportarti.", "Joker used: choose the room to teleport to.", "Joker benutzt: Wähle den Raum, in den du dich teleportieren möchtest.", "Comodín usado: elige la sala a la que teletransportarte.", "Joker utilisé : choisissez la salle vers laquelle vous téléporter."));
-			AppendLog(GameText.GetLocalizedFallback(GameTextKeys.Consumables.JollyUsedLog, "JOLLY - teletrasporto alla scelta della stanza", "JOKER - teleporting to room choice", "JOKER - Teleport zur Raumauswahl", "COMODÍN - teletransporte a la elección de sala", "JOKER - téléportation vers le choix de salle"));
+			SetMessage(GameText.Get(GameTextKeys.Consumables.JollyUsed));
+			AppendLog(GameText.Get(GameTextKeys.Consumables.JollyUsedLog));
 			return true;
 		default:
 			return false;
@@ -241,6 +256,9 @@ public sealed partial class BattleBoardController
 		}
 		RecordCampaignItemUsed(CampaignConsumableType.SigilloRubino);
 		rubySealTargetSelectionActive = false;
+		// Il Sigillo si consuma qui, non nello switch degli altri oggetti: il salvataggio
+		// va preso adesso, quando il marchio è già sulla carta.
+		SaveAfterCampaignItemUse();
 		PlayEmpowerItemUseSfx();
 		string cardName = CardDisplayNames.MarketName(target.Definition);
 		SetMessage(GameText.Format(GameTextKeys.Consumables.RubySealApplied, cardName));
@@ -287,9 +305,7 @@ public sealed partial class BattleBoardController
 		windowRect.offsetMin = Vector2.zero;
 		windowRect.offsetMax = Vector2.zero;
 		Text title = CreateText("Ruby Seal Target Title", ((Component)window).transform, font, 24, FontStyle.Bold, TextAnchor.MiddleCenter);
-		title.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Consumables.RubySealTargetTitle,
-			"SIGILLO RUBINO\nScegli una pedina schierata da sigillare, prenderà +2 potenza permanente ma non potrà più ricevere equipaggiamenti dagli alleati");
+		title.text = GameText.Get(GameTextKeys.Consumables.RubySealTargetTitle);
 		title.horizontalOverflow = HorizontalWrapMode.Wrap;
 		title.verticalOverflow = VerticalWrapMode.Truncate;
 		title.resizeTextForBestFit = true;
@@ -324,7 +340,7 @@ public sealed partial class BattleBoardController
 			"Cancel Ruby Seal Selection",
 			((Component)window).transform,
 			font,
-			GameText.GetOrFallbackSilent(GameTextKeys.Common.Cancel, "ANNULLA"));
+			GameText.Get(GameTextKeys.Common.Cancel));
 		RectTransform cancelRect = ((Component)cancel).GetComponent<RectTransform>();
 		cancelRect.anchorMin = new Vector2(0.3f, 0.035f);
 		cancelRect.anchorMax = new Vector2(0.7f, 0.17f);

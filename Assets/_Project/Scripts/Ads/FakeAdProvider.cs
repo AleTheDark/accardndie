@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Threading.Tasks;
+using AccardND.Battlefield;
 using AccardND.Localization;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -20,8 +21,8 @@ namespace AccardND.Ads
     /// </summary>
     public sealed class FakeAdProvider : IAdProvider
     {
-        private const float InterstitialSeconds = 3f;
-        private const float RewardedSeconds = 5f;
+        private const float InterstitialSeconds = 2f;
+        private const float RewardedSeconds = 2f;
 
         public string ProviderId => "fake";
 
@@ -66,8 +67,8 @@ namespace AccardND.Ads
             while (remaining > 0f && !skipped)
             {
                 countdown.text = format == AdFormat.Rewarded
-                    ? GameText.GetOrFallbackSilent(GameTextKeys.Ads.FakeCountdownReward, "RICOMPENSA FRA {0}", Mathf.CeilToInt(remaining))
-                    : GameText.GetOrFallbackSilent(GameTextKeys.Ads.FakeCountdownClose, "CHIUDIBILE FRA {0}", Mathf.CeilToInt(remaining));
+                    ? GameText.Format(GameTextKeys.Ads.FakeCountdownReward, Mathf.CeilToInt(remaining))
+                    : GameText.Format(GameTextKeys.Ads.FakeCountdownClose, Mathf.CeilToInt(remaining));
                 remaining -= Time.unscaledDeltaTime;
                 yield return null;
             }
@@ -79,7 +80,7 @@ namespace AccardND.Ads
             else
             {
                 countdown.text = format == AdFormat.Rewarded
-                    ? GameText.GetOrFallbackSilent(GameTextKeys.Ads.FakeRewardUnlocked, "RICOMPENSA SBLOCCATA")
+                    ? GameText.Get(GameTextKeys.Ads.FakeRewardUnlocked)
                     : string.Empty;
                 bool closed = false;
                 close.onClick.AddListener(() => closed = true);
@@ -108,30 +109,37 @@ namespace AccardND.Ads
             canvas.sortingOrder = 32000;
             UnityEngine.Object.DontDestroyOnLoad(root);
 
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Font font = MmoUiTheme.LoreFont;
 
-            Image background = CreatePanel(root.transform, "Background", new Color(0.02f, 0.02f, 0.03f, 0.985f));
-            Stretch(background.rectTransform, Vector2.zero, Vector2.one);
+            Image veil = CreatePanel(root.transform, "Backdrop", new Color(0.005f, 0.008f, 0.015f, 0.92f));
+            Stretch(veil.rectTransform, Vector2.zero, Vector2.one);
+
+            Image background = CreatePanel(root.transform, "MMO UI Panel", MmoUiTheme.Panel);
+            background.sprite = MmoUiTheme.GetPanelSprite();
+            background.type = Image.Type.Sliced;
+            Stretch(background.rectTransform, new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f));
+            MmoUiTheme.AddPanelGem(background.rectTransform, "Panel Crystal", new Vector2(0.5f, 1f),
+                new Vector2(38f, 38f), new Color(0.82f, 0.96f, 1f, 0.86f));
 
             Text banner = CreateText(background.transform, "Banner", font, 26, TextAnchor.MiddleCenter);
-            banner.text = GameText.GetOrFallbackSilent(GameTextKeys.Ads.FakeBanner, "AD DI PROVA - NESSUNA RETE COLLEGATA");
-            banner.color = new Color(0.98f, 0.42f, 0.32f);
+            banner.text = GameText.Get(GameTextKeys.Ads.FakeBanner);
+            banner.color = MmoUiTheme.Bad;
             Stretch(banner.rectTransform, new Vector2(0.05f, 0.86f), new Vector2(0.95f, 0.95f));
 
             Text title = CreateText(background.transform, "Title", font, 44, TextAnchor.MiddleCenter);
             title.text = format == AdFormat.Rewarded
-                ? GameText.GetOrFallbackSilent(GameTextKeys.Ads.FakeRewardedTitle, "VIDEO CON RICOMPENSA")
-                : GameText.GetOrFallbackSilent(GameTextKeys.Ads.FakeInterstitialTitle, "INTERSTITIAL");
-            title.color = new Color(0.95f, 0.79f, 0.34f);
+                ? GameText.Get(GameTextKeys.Ads.FakeRewardedTitle)
+                : GameText.Get(GameTextKeys.Ads.FakeInterstitialTitle);
+            title.color = MmoUiTheme.Gold;
             Stretch(title.rectTransform, new Vector2(0.05f, 0.6f), new Vector2(0.95f, 0.74f));
 
             Text subtitle = CreateText(background.transform, "Subtitle", font, 26, TextAnchor.MiddleCenter);
             subtitle.text = AdPlacements.DescribeFor(placement) + "\n" + AdPlacements.KeyOf(placement);
-            subtitle.color = new Color(0.72f, 0.78f, 0.84f);
+            subtitle.color = MmoUiTheme.TextMuted;
             Stretch(subtitle.rectTransform, new Vector2(0.05f, 0.46f), new Vector2(0.95f, 0.6f));
 
             countdown = CreateText(background.transform, "Countdown", font, 32, TextAnchor.MiddleCenter);
-            countdown.color = new Color(0.88f, 0.94f, 0.97f);
+            countdown.color = Color.white;
             Stretch(countdown.rectTransform, new Vector2(0.05f, 0.32f), new Vector2(0.95f, 0.44f));
 
             close = CreateButton(background.transform, "Close", font, "ATTENDI");
@@ -190,6 +198,10 @@ namespace AccardND.Ads
             Image background = CreatePanel(parent, name, new Color(0.16f, 0.2f, 0.28f, 1f));
             Button button = background.gameObject.AddComponent<Button>();
             button.targetGraphic = background;
+            background.sprite = MmoUiTheme.GetButtonSprite(MmoUiTheme.ButtonVariant.Gold);
+            background.type = Image.Type.Sliced;
+            MmoUiTheme.ApplyButtonColors(button);
+            MmoUiTheme.AddMotion(button);
 
             Text text = CreateText(background.transform, "Label", font, 24, TextAnchor.MiddleCenter);
             text.text = label;

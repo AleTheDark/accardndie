@@ -76,7 +76,7 @@ public sealed partial class BattleBoardController
 		((UnityEvent)button.onClick).AddListener(new UnityAction(CloseMerchantPanel));
 		SetRect((RectTransform)((Component)button).transform, new Vector2(0.875f, 0.905f), new Vector2(0.955f, 0.975f));
 
-		merchantCardsTabButton = CreateButton("Merchant Tab Cards", ((Component)image).transform, font, GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchCards, "CARTE"));
+		merchantCardsTabButton = CreateButton("Merchant Tab Cards", ((Component)image).transform, font, GameText.Get(GameTextKeys.Merchant.BranchCards));
 		((UnityEvent)merchantCardsTabButton.onClick).AddListener((UnityAction)delegate
 		{
 			SelectMerchantBranch(MerchantBranch.Cards);
@@ -92,7 +92,7 @@ public sealed partial class BattleBoardController
 			new Color(0.48f, 0.68f, 0.16f, 1f));
 		merchantCardsTabVfx.SetSweepScale(new Vector3(0.3167f, 1f, 1f));
 		SetRect((RectTransform)((Component)merchantCardsTabButton).transform, new Vector2(0.06f, 0.735f), new Vector2(0.35f, 0.805f));
-		merchantItemsTabButton = CreateButton("Merchant Tab Items", ((Component)image).transform, font, GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchItems, "OGGETTI"));
+		merchantItemsTabButton = CreateButton("Merchant Tab Items", ((Component)image).transform, font, GameText.Get(GameTextKeys.Merchant.BranchItems));
 		((UnityEvent)merchantItemsTabButton.onClick).AddListener((UnityAction)delegate
 		{
 			SelectMerchantBranch(MerchantBranch.Items);
@@ -109,7 +109,7 @@ public sealed partial class BattleBoardController
 		merchantItemsTabVfx.SetSweepScale(new Vector3(0.3167f, 1f, 1f));
 		SetRect((RectTransform)((Component)merchantItemsTabButton).transform, new Vector2(0.355f, 0.735f), new Vector2(0.645f, 0.805f));
 
-		merchantUpgradesTabButton = CreateButton("Merchant Tab Upgrades", ((Component)image).transform, font, GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchUpgrades, "POTENZIA"));
+		merchantUpgradesTabButton = CreateButton("Merchant Tab Upgrades", ((Component)image).transform, font, GameText.Get(GameTextKeys.Merchant.BranchUpgrades));
 		((UnityEvent)merchantUpgradesTabButton.onClick).AddListener((UnityAction)delegate
 		{
 			SelectMerchantBranch(MerchantBranch.Upgrades);
@@ -139,7 +139,7 @@ public sealed partial class BattleBoardController
 		shelfLayout.childAlignment = (TextAnchor)4;
 		shelfLayout.childControlWidth = true;
 		shelfLayout.childControlHeight = true;
-		shelfLayout.childForceExpandWidth = true;
+		shelfLayout.childForceExpandWidth = false;
 		shelfLayout.childForceExpandHeight = true;
 
 		merchantSellText = CreateText(
@@ -161,7 +161,7 @@ public sealed partial class BattleBoardController
 			"Merchant Recover Button",
 			((Component)image).transform,
 			font,
-			GameText.GetOrFallbackSilent(GameTextKeys.Merchant.Recover, "RECUPERA"));
+			GameText.Get(GameTextKeys.Merchant.Recover));
 		((UnityEvent)merchantRecoverButton.onClick).AddListener(new UnityAction(RecoverSelectedMerchantCard));
 		ApplyMerchantCampaignCta(merchantRecoverButton, "UI/CampaignRestyle/campaign_cta_olive");
 		SetRect((RectTransform)((Component)merchantRecoverButton).transform, new Vector2(0.39f, 0.325f), new Vector2(0.965f, 0.4f));
@@ -169,7 +169,7 @@ public sealed partial class BattleBoardController
 			"Merchant Sell Button",
 			((Component)image).transform,
 			font,
-			GameText.GetOrFallbackSilent(GameTextKeys.Merchant.Sell, "VENDI"));
+			GameText.Get(GameTextKeys.Merchant.Sell));
 		((UnityEvent)merchantSellButton.onClick).AddListener(new UnityAction(SellSelectedMerchantCard));
 		ApplyMerchantCampaignCta(merchantSellButton, "UI/CampaignRestyle/campaign_cta_blue");
 		SetRect((RectTransform)((Component)merchantSellButton).transform, new Vector2(0.39f, 0.325f), new Vector2(0.965f, 0.4f));
@@ -177,7 +177,7 @@ public sealed partial class BattleBoardController
 			"Merchant Upgrade Button",
 			((Component)image).transform,
 			font,
-			GameText.GetOrFallbackSilent(GameTextKeys.Merchant.Upgrade, "POTENZIA"));
+			GameText.Get(GameTextKeys.Merchant.Upgrade));
 		((UnityEvent)merchantUpgradeButton.onClick).AddListener(new UnityAction(UpgradeSelectedMerchantCard));
 		ApplyMerchantCampaignCta(merchantUpgradeButton, "UI/CampaignRestyle/campaign_cta_olive");
 		SetRect((RectTransform)((Component)merchantUpgradeButton).transform, new Vector2(0.67f, 0.325f), new Vector2(0.945f, 0.4f));
@@ -190,6 +190,12 @@ public sealed partial class BattleBoardController
 			22);
 		merchantDeckTabText = ((Component)merchantDeckTabButton).GetComponentInChildren<Text>();
 		ApplyMerchantCampaignCta(merchantDeckTabButton, "UI/CampaignRestyle/campaign_cta_olive");
+		merchantDeckTabText.resizeTextForBestFit = false;
+		merchantDeckTabText.fontSize = 30;
+		merchantDeckTabText.rectTransform.anchorMin = new Vector2(0f, 0f);
+		merchantDeckTabText.rectTransform.anchorMax = new Vector2(1f, 1f);
+		merchantDeckTabText.rectTransform.offsetMin = new Vector2(61.1006f, 37.4865f);
+		merchantDeckTabText.rectTransform.offsetMax = new Vector2(-61.1006f, -37.4865f);
 		merchantDeckTabVfx = AccardND.PvpUi.PvpUiVfx.CreateRankedButton(
 			(RectTransform)((Component)merchantDeckTabButton).transform,
 			new Color(0.48f, 0.68f, 0.16f, 1f));
@@ -207,6 +213,12 @@ public sealed partial class BattleBoardController
 			22);
 		merchantGraveyardTabText = ((Component)merchantGraveyardTabButton).GetComponentInChildren<Text>();
 		ApplyMerchantCampaignCta(merchantGraveyardTabButton, "UI/CampaignRestyle/campaign_cta_dark_gray");
+		merchantGraveyardTabText.resizeTextForBestFit = false;
+		merchantGraveyardTabText.fontSize = 30;
+		merchantGraveyardTabText.rectTransform.anchorMin = new Vector2(0f, 0f);
+		merchantGraveyardTabText.rectTransform.anchorMax = new Vector2(1f, 1f);
+		merchantGraveyardTabText.rectTransform.offsetMin = new Vector2(79.2697f, 37.4866f);
+		merchantGraveyardTabText.rectTransform.offsetMax = new Vector2(-79.2697f, -37.4866f);
 		merchantGraveyardTabVfx = AccardND.PvpUi.PvpUiVfx.CreateRankedButton(
 			(RectTransform)((Component)merchantGraveyardTabButton).transform,
 			new Color(0.48f, 0.68f, 0.16f, 1f));
@@ -290,7 +302,7 @@ public sealed partial class BattleBoardController
 			"Merchant Branch Confirm Cancel",
 			((Component)dialog).transform,
 			font,
-			GameText.GetOrFallbackSilent(GameTextKeys.Common.Cancel, "ANNULLA"));
+			GameText.Get(GameTextKeys.Common.Cancel));
 		ApplyMerchantCampaignCta(cancelButton, "UI/CampaignRestyle/campaign_cta_back_red");
 		((UnityEvent)cancelButton.onClick).AddListener((UnityAction)delegate
 		{
@@ -303,7 +315,7 @@ public sealed partial class BattleBoardController
 			"Merchant Branch Confirm Proceed",
 			((Component)dialog).transform,
 			font,
-			GameText.GetOrFallbackSilent(GameTextKeys.Common.Proceed, "PROCEDI"));
+			GameText.Get(GameTextKeys.Common.Proceed));
 		ApplyMerchantCampaignCta(proceedButton, "UI/CampaignRestyle/campaign_cta_orange");
 		((UnityEvent)proceedButton.onClick).AddListener((UnityAction)delegate
 		{
@@ -426,6 +438,8 @@ public sealed partial class BattleBoardController
 	{
 		Image slot = CreateImage(name, (Transform)(object)merchantShelfRoot, Color.clear);
 		slot.raycastTarget = false;
+		LayoutElement layout = ((Component)slot).gameObject.AddComponent<LayoutElement>();
+		layout.flexibleWidth = 1f;
 
 		// Carte e oggetti condividono la cornice degli item del Santuario. La cornice
 		// resta appena più larga della cella, ma è più bassa per alleggerire la vetrina.
@@ -479,10 +493,7 @@ public sealed partial class BattleBoardController
 		Text price = CreateText("Offer Price", ((Component)slot).transform, font, 25, FontStyle.Normal, TextAnchor.MiddleCenter);
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(price);
 		price.color = new Color(0.92f, 0.82f, 0.64f);
-		price.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.GoldPrice,
-			"{0} ORO",
-			EffectiveMerchantCost(offer.Cost));
+		price.text = GameText.Format(GameTextKeys.Merchant.GoldPrice, EffectiveMerchantCost(offer.Cost));
 		SetRect(price.rectTransform, new Vector2(0.08f, 0.17f), new Vector2(0.92f, 0.3f));
 		Button buy = CreateButton("Merchant Offer Buy", ((Component)slot).transform, font, MerchantOfferButtonLabel(offer.Sold, locked, IsMerchantDeckFull()));
 		ApplyMerchantCampaignCta(buy, "UI/CampaignRestyle/campaign_cta_blue");
@@ -524,10 +535,7 @@ public sealed partial class BattleBoardController
 		Text price = CreateText("Offer Price", ((Component)slot).transform, font, 25, FontStyle.Normal, TextAnchor.MiddleCenter);
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(price);
 		price.color = new Color(0.92f, 0.82f, 0.64f);
-		price.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.GoldPrice,
-			"{0} ORO",
-			EffectiveMerchantCost(offer.Cost));
+		price.text = GameText.Format(GameTextKeys.Merchant.GoldPrice, EffectiveMerchantCost(offer.Cost));
 		SetRect(price.rectTransform, new Vector2(0.08f, 0.17f), new Vector2(0.92f, 0.3f));
 		Button buy = CreateButton("Merchant Offer Buy", ((Component)slot).transform, font, MerchantOfferButtonLabel(offer.Sold, locked, deckFull: false));
 		ApplyMerchantCampaignCta(buy, "UI/CampaignRestyle/campaign_cta_blue");
@@ -544,43 +552,70 @@ public sealed partial class BattleBoardController
 	private void BuildMerchantUpgradeInfoSlot()
 	{
 		Image slot = CreateMerchantShelfSlot("Merchant Upgrade Guide");
+		LayoutElement slotLayout = ((Component)slot).GetComponent<LayoutElement>();
+		slotLayout.minWidth = 360f;
+		slotLayout.preferredWidth = 560f;
+		slotLayout.flexibleWidth = 0f;
 		Font font = AccardND.Battlefield.MmoUiTheme.BodyFont;
 		Text title = CreateText("Upgrade Title", ((Component)slot).transform, font, 30,
 			FontStyle.Bold, TextAnchor.MiddleCenter);
-		title.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeTitle, "BANCO POTENZIA");
+		title.text = GameText.Get(GameTextKeys.Merchant.UpgradeTitle);
 		title.color = new Color(0.98f, 0.86f, 0.45f);
-		SetRect(title.rectTransform, new Vector2(0.05f, 0.72f), new Vector2(0.95f, 0.94f));
+		SetRect(title.rectTransform, new Vector2(0.05f, 0.78f), new Vector2(0.95f, 0.96f));
 
 		bool first = HasMerchantUpgradeRelic(1);
 		bool second = HasMerchantUpgradeRelic(2);
-		Text body = CreateText("Upgrade Rules", ((Component)slot).transform, font, 22,
+		BuildMerchantUpgradeRelic(slot.transform, 1, first, 0.08f, 0.48f);
+		BuildMerchantUpgradeRelic(slot.transform, 2, second, 0.52f, 0.92f);
+	}
+
+	private void BuildMerchantUpgradeRelic(
+		Transform parent,
+		int level,
+		bool unlocked,
+		float minimumX,
+		float maximumX)
+	{
+		Font font = AccardND.Battlefield.MmoUiTheme.BodyFont;
+		Text label = CreateText($"Upgrade +{level} Label", parent, font, 24,
+			FontStyle.Bold, TextAnchor.MiddleCenter);
+		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(label);
+		label.text = $"UPGRADE +{level}";
+		label.color = new Color(0.95f, 0.82f, 0.48f);
+		SetRect(label.rectTransform, new Vector2(minimumX, 0.64f), new Vector2(maximumX, 0.79f));
+
+		Image icon = CreateImage($"Upgrade +{level} Relic", parent, Color.white);
+		icon.sprite = LoadSpriteResource($"UI/merchant_upgrade_relic_{level}");
+		icon.preserveAspect = true;
+		icon.raycastTarget = false;
+		icon.color = unlocked ? Color.white : new Color(0.42f, 0.45f, 0.48f, 0.72f);
+		SetRect(icon.rectTransform, new Vector2(minimumX + 0.06f, 0.22f), new Vector2(maximumX - 0.06f, 0.66f));
+
+		Text state = CreateText($"Upgrade +{level} State", parent, font, 22,
 			FontStyle.Normal, TextAnchor.MiddleCenter);
-		body.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.UpgradeRules,
-			"RELIQUIA I: {0}\nRELIQUIA II: {1}\n\nSeleziona una pedina qui sotto.\nOgni reliquia abilita un +1 permanente.",
-			first
-				? GameText.GetOrFallbackSilent(GameTextKeys.Merchant.RelicUnlocked, "SBLOCCATA")
-				: GameText.GetOrFallbackSilent(GameTextKeys.Merchant.RelicLocked, "BLOCCATA"),
-			second
-				? GameText.GetOrFallbackSilent(GameTextKeys.Merchant.RelicUnlocked, "SBLOCCATA")
-				: GameText.GetOrFallbackSilent(GameTextKeys.Merchant.RelicLocked, "BLOCCATA"));
-		body.color = new Color(0.88f, 0.93f, 0.95f);
-		SetRect(body.rectTransform, new Vector2(0.06f, 0.1f), new Vector2(0.94f, 0.73f));
+		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(state);
+		state.text = unlocked
+			? GameText.Get(GameTextKeys.Merchant.RelicUnlocked).ToUpperInvariant()
+			: GameText.Get(GameTextKeys.Merchant.RelicLocked).ToUpperInvariant();
+		state.color = unlocked
+			? new Color(0.58f, 0.86f, 0.54f)
+			: new Color(0.72f, 0.72f, 0.74f);
+		SetRect(state.rectTransform, new Vector2(minimumX, 0.06f), new Vector2(maximumX, 0.23f));
 	}
 
 	private static string MerchantOfferButtonLabel(bool sold, bool locked, bool deckFull)
 	{
 		if (sold)
 		{
-			return GameText.GetOrFallbackSilent(GameTextKeys.Merchant.OfferTaken, "PRESO");
+			return GameText.Get(GameTextKeys.Merchant.OfferTaken);
 		}
 		if (locked)
 		{
-			return GameText.GetOrFallbackSilent(GameTextKeys.Merchant.OfferLocked, "CHIUSO");
+			return GameText.Get(GameTextKeys.Merchant.OfferLocked);
 		}
 		if (deckFull)
 		{
-			return GameText.GetOrFallbackSilent(GameTextKeys.Merchant.DeckFull, "MAZZO PIENO");
+			return GameText.Get(GameTextKeys.Merchant.DeckFull);
 		}
 		return "COMPRA";
 	}
@@ -638,7 +673,7 @@ public sealed partial class BattleBoardController
 		scrollRect.vertical = true;
 		scrollRect.movementType = ScrollRect.MovementType.Clamped;
 		emptyText = CreateText("Merchant Owned Cards Empty", ((Component)image).transform, font, 16, (FontStyle)2, (TextAnchor)4);
-		emptyText.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.EmptyCards, "Nessuna carta");
+		emptyText.text = GameText.Get(GameTextKeys.Merchant.EmptyCards);
 		emptyText.color = new Color(0.68f, 0.76f, 0.78f);
 		SetRect(emptyText.rectTransform, new Vector2(0.04f, 0.08f), new Vector2(0.96f, 0.92f));
 	}

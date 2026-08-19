@@ -273,8 +273,14 @@ namespace AccardND.Battlefield
         {
             foreach (string shaderName in shaderNames)
             {
-                Shader shader = Shader.Find(shaderName);
-                if (shader != null)
+                Shader shader = shaderName switch
+                {
+                    "AccardND/VFX/Empower Fire Particle" => Resources.Load<Shader>("Shaders/EmpowerFireParticle"),
+                    "AccardND/VFX/Empower Dice Shell" => Resources.Load<Shader>("Shaders/EmpowerDiceShell"),
+                    "AccardND/VFX/Empower Dice Result Mask" => Resources.Load<Shader>("Shaders/EmpowerDiceResultMask"),
+                    _ => Shader.Find(shaderName)
+                };
+                if (shader != null && shader.isSupported)
                     return shader;
             }
             return null;

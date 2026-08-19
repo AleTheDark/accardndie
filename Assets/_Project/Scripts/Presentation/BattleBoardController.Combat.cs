@@ -53,7 +53,6 @@ public sealed partial class BattleBoardController
 	private void StartBattle()
 	{
 		SetCombatChromeVisible(visible: true);
-		ShowCombatHint();
 		BeginCampaignRoomMana();
 		inputLocked = true;
 		abilityTargetMode = AbilityTargetMode.None;
@@ -155,7 +154,6 @@ public sealed partial class BattleBoardController
 
 	private IEnumerator RollInitiatives()
 	{
-		yield return WaitForHintToClose();
 		HashSet<int> usedInitiatives = new HashSet<int>();
 		bool messagePanelWasHidden = HideMessagePanelForDiceRoll();
 		if (turnOrder.Count > 0)
@@ -308,11 +306,6 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		if (IsHintBlockingGame())
-		{
-			((MonoBehaviour)this).StartCoroutine(BeginCurrentTurnAfterHint());
-			return;
-		}
 		if (CheckEndGame())
 		{
 			return;
@@ -401,12 +394,6 @@ public sealed partial class BattleBoardController
 			UpdateInteractions();
 			((MonoBehaviour)this).StartCoroutine(ExecuteCpuTurn(battleCardState));
 		}
-	}
-
-	private IEnumerator BeginCurrentTurnAfterHint()
-	{
-		yield return WaitForHintToClose();
-		BeginCurrentTurn();
 	}
 
 	private void SetActiveTurnAura(BattleCardState activeCard)
@@ -583,7 +570,7 @@ public sealed partial class BattleBoardController
 			diceCatalog,
 			attackerDieSides,
 			TrackDiceRoll(result.AttackerRoll),
-			GameText.GetOrFallbackSilent(GameTextKeys.Combat.RollAttack, "ATTACCO"),
+			GameText.Get(GameTextKeys.Combat.RollAttack),
 			configuration.Animation.DiceRollDuration,
 			attackerResultHold,
 			empowered: nextRoomEmpowered && attacker.BelongsToPlayer,
@@ -593,7 +580,7 @@ public sealed partial class BattleBoardController
 			diceCatalog,
 			defenderDieSides,
 			TrackDiceRoll(result.DefenderRoll),
-			GameText.GetOrFallbackSilent(GameTextKeys.Combat.RollDefense, "DIFESA"),
+			GameText.Get(GameTextKeys.Combat.RollDefense),
 			configuration.Animation.DiceRollDuration,
 			defenderResultHold,
 			hideCaption: adventureScriptedTutorialActive,
@@ -709,9 +696,7 @@ public sealed partial class BattleBoardController
 
 	private IEnumerator ExecuteCpuTurn(BattleCardState attacker)
 	{
-		yield return WaitForHintToClose();
 		yield return WaitForCardInspectionPause(configuration.Animation.CpuThinkDelay);
-		yield return WaitForHintToClose();
 		if (IsTutorialWarriorDuelActive)
 		{
 			// Nella lezione i tre Guerrieri sono bersagli, non avversari: se attaccassero,
@@ -899,7 +884,7 @@ public sealed partial class BattleBoardController
 			diceCatalog,
 			attackerDieSides,
 			TrackDiceRoll(result.AttackerRoll),
-			GameText.GetOrFallbackSilent(GameTextKeys.Combat.RollCpuAttack, "ATTACCO CPU"),
+			GameText.Get(GameTextKeys.Combat.RollCpuAttack),
 			configuration.Animation.DiceRollDuration,
 			attackerResultHold,
 			hideCaption: adventureScriptedTutorialActive,
@@ -908,7 +893,7 @@ public sealed partial class BattleBoardController
 			diceCatalog,
 			defenderDieSides,
 			TrackDiceRoll(result.DefenderRoll),
-			GameText.GetOrFallbackSilent(GameTextKeys.Combat.RollYourDefense, "TUA DIFESA"),
+			GameText.Get(GameTextKeys.Combat.RollYourDefense),
 			configuration.Animation.DiceRollDuration,
 			defenderResultHold,
 			hideCaption: adventureScriptedTutorialActive,
@@ -999,10 +984,7 @@ public sealed partial class BattleBoardController
 			diceCatalog,
 			golemResult.VigorDieSides,
 			TrackDiceRoll(golemRoll),
-			GameText.GetOrFallbackSilent(
-				GameTextKeys.Combat.RollDefenseNamed,
-				"DIFESA {0}",
-				GolemFormName(golemResult.Form.Form)),
+			GameText.Format(GameTextKeys.Combat.RollDefenseNamed, GolemFormName(golemResult.Form.Form)),
 			configuration.Animation.DiceRollDuration,
 			configuration.Animation.DiceResultHold);
 		yield return WaitForCardInspectionPause(CombatRollPresentationDuration(attackerRoll, golemRoll));
@@ -1043,10 +1025,10 @@ public sealed partial class BattleBoardController
 		ConsumeVigorPenalties(attacker, golemProxy);
 		UpdateAttackerClassStateAfterExchange(attacker, golemResult.Damage > 0);
 		string text = golemResult.Damage > 0
-			?$"{attacker.Card.Name} infligge {golemResult.Damage} danni al Golem Componibile. HP {golemResult.HitPointsAfter}/{activeComposableGolem.MaxHitPoints}."
-			:golemResult.Healing > 0
-				?$"VETRO - il Golem non viene superato e si cura di {golemResult.Healing}. HP {golemResult.HitPointsAfter}/{activeComposableGolem.MaxHitPoints}."
-				:$"{attacker.Card.Name} non supera la difesa del Golem. HP {golemResult.HitPointsAfter}/{activeComposableGolem.MaxHitPoints}.";
+			? GameText.Format(GameTextKeys.Combat.GolemDamaged, attacker.Card.Name, golemResult.Damage, golemResult.HitPointsAfter, activeComposableGolem.MaxHitPoints)
+			: golemResult.Healing > 0
+				? GameText.Format(GameTextKeys.Combat.GolemGlassHeals, golemResult.Healing, golemResult.HitPointsAfter, activeComposableGolem.MaxHitPoints)
+				: GameText.Format(GameTextKeys.Combat.GolemDefenseHeld, attacker.Card.Name, golemResult.HitPointsAfter, activeComposableGolem.MaxHitPoints);
 		SetMessage(text);
 		selectedPlayerIndex = -1;
 		attacker.View.SetSelected(selected: false);
@@ -1499,7 +1481,8 @@ public sealed partial class BattleBoardController
 			availableTargets.Select((BattleCardState card) => card.Initiative).ToList());
 		BattleCardState defender = availableTargets[targetIndex];
 		BattleCardState originalTarget = defender;
-		SetMessage("GOLEM COMPONIBILE: " + GolemFormName(activeComposableGolem.ActiveForm.Form) + " colpisce la carta piu alta: " + defender.Card.Name + ".");
+		SetMessage(GameText.Format(GameTextKeys.Combat.GolemStrikesHighest,
+			GolemFormName(activeComposableGolem.ActiveForm.Form), defender.Card.Name));
 		yield return WaitForCardInspectionPause(configuration.Animation.CpuDecisionReveal);
 		BattleCardState protectingPaladin = playerCards.FirstOrDefault((BattleCardState card) => !card.Eliminated && card.Card.HeroClass == HeroClass.Paladin && card.AbilityArmed && (card.ProtectedAlly == null || card.ProtectedAlly == defender) && card != defender);
 		BattleCardState selfProtectingPaladin = ((defender.Card.HeroClass == HeroClass.Paladin && defender.AbilityArmed && (defender.ProtectedAlly == null || defender.ProtectedAlly == defender)) ?defender : null);
@@ -1546,10 +1529,7 @@ public sealed partial class BattleBoardController
 			diceCatalog,
 			golemResult.VigorDieSides,
 			TrackDiceRoll(golemRoll),
-			GameText.GetOrFallbackSilent(
-				GameTextKeys.Combat.RollAttackNamed,
-				"ATTACCO {0}",
-				GolemFormName(golemResult.Form.Form)),
+			GameText.Format(GameTextKeys.Combat.RollAttackNamed, GolemFormName(golemResult.Form.Form)),
 			configuration.Animation.DiceRollDuration,
 			configuration.Animation.DiceResultHold);
 		defender.View.PlayVigorRoll(diceCatalog, defenderDieSides, TrackDiceRoll(defenderRoll), "TUA DIFESA", configuration.Animation.DiceRollDuration, configuration.Animation.DiceResultHold);
@@ -1575,9 +1555,11 @@ public sealed partial class BattleBoardController
 		// Come per gli altri boss: chi difende alimenta o scarica la propria Furia.
 		UpdateDefenderClassStateAfterExchange(defender, golemResult.TargetIsDefeated);
 		string protectionText = defender != originalTarget ?$" {defender.Card.Name} ha protetto {originalTarget.Card.Name}." : string.Empty;
-		SetMessage(golemResult.TargetIsDefeated
-			?$"GOLEM {GolemFormName(golemResult.Form.Form)}: {defender.Card.Name} viene travolto." + protectionText
-			:$"GOLEM {GolemFormName(golemResult.Form.Form)}: {defender.Card.Name} resiste." + protectionText);
+		SetMessage(GameText.Format(
+			golemResult.TargetIsDefeated
+				? GameTextKeys.Combat.GolemOverwhelms
+				: GameTextKeys.Combat.GolemResisted,
+			GolemFormName(golemResult.Form.Form), defender.Card.Name) + protectionText);
 		yield return WaitForCardInspectionPause(configuration.Animation.TurnResultPause);
 		FinishTurn();
 	}
@@ -2333,15 +2315,15 @@ public sealed partial class BattleBoardController
 	{
 		return key switch
 		{
-			GameTextKeys.Combat.DefenseWarrior => GameText.GetLocalizedFallback(key, "PARATO", "PARRIED", "PARIERT", "BLOQUEADO", "PARÉ"),
-			GameTextKeys.Combat.DefensePaladin => GameText.GetLocalizedFallback(key, "BLOCCATO", "BLOCKED", "GEBLOCKT", "BLOQUEADO", "BLOQUÉ"),
-			GameTextKeys.Combat.DefenseBarbarian => GameText.GetLocalizedFallback(key, "RESISTITO", "RESISTED", "WIDERSTANDEN", "RESISTIDO", "RÉSISTÉ"),
-			GameTextKeys.Combat.DefenseHunter => GameText.GetLocalizedFallback(key, "SCHIVATO", "DODGED", "AUSGEWICHEN", "ESQUIVADO", "ESQUIVÉ"),
-			GameTextKeys.Combat.DefenseAssassin => GameText.GetLocalizedFallback(key, "ELUSO", "EVADED", "ENTKOMMEN", "EVADIDO", "ÉVITÉ"),
-			GameTextKeys.Combat.DefenseRogue => GameText.GetLocalizedFallback(key, "SVANITO", "VANISHED", "VERSCHWUNDEN", "DESVANECIDO", "ÉVANOUÏ"),
-			GameTextKeys.Combat.DefenseMage => GameText.GetLocalizedFallback(key, "PROTETTO", "SHIELDED", "GESCHÜTZT", "PROTEGIDO", "PROTÉGÉ"),
-			GameTextKeys.Combat.DefensePriest => GameText.GetLocalizedFallback(key, "ASSORBITO", "ABSORBED", "ABSORBIERT", "ABSORBIDO", "ABSORBÉ"),
-			GameTextKeys.Combat.DefenseNecromancer => GameText.GetLocalizedFallback(key, "DEFLESSO", "DEFLECTED", "ABGELENKT", "DESVIADO", "DÉVIÉ"),
+			GameTextKeys.Combat.DefenseWarrior => GameText.Get(key),
+			GameTextKeys.Combat.DefensePaladin => GameText.Get(key),
+			GameTextKeys.Combat.DefenseBarbarian => GameText.Get(key),
+			GameTextKeys.Combat.DefenseHunter => GameText.Get(key),
+			GameTextKeys.Combat.DefenseAssassin => GameText.Get(key),
+			GameTextKeys.Combat.DefenseRogue => GameText.Get(key),
+			GameTextKeys.Combat.DefenseMage => GameText.Get(key),
+			GameTextKeys.Combat.DefensePriest => GameText.Get(key),
+			GameTextKeys.Combat.DefenseNecromancer => GameText.Get(key),
 			_ => GameText.GetOrFallbackSilent(key, string.Empty)
 		};
 	}
@@ -2474,10 +2456,7 @@ public sealed partial class BattleBoardController
 			int rogueRerollMaximum = RogueConditionalRerollMaximum(
 				attacker.BelongsToPlayer ? runProgress.PlayerVigorDieSides : runProgress.MasterVigorDieSides);
 			attacker.View.SetStatus(
-				GameText.GetOrFallbackSilent(
-					GameTextKeys.Combat.RogueRerollStatus,
-					"REROLL 1-{0} SE SERVE",
-					rogueRerollMaximum),
+				GameText.Format(GameTextKeys.Combat.RogueRerollStatus, rogueRerollMaximum),
 				new Color(0.75f, 0.9f, 1f));
 		}
 		// Confronta la Potenza effettiva prima dell'aura: benedizioni applicabili,
@@ -2781,7 +2760,7 @@ public sealed partial class BattleBoardController
 		{
 			return 0;
 		}
-		return playerCards.Concat(cpuCards).Count((BattleCardState card) => card != null && card.Card.HeroClass == HeroClass.Hunter && card.MarkedTarget == target);
+		return playerCards.Concat(cpuCards).Count((BattleCardState card) => card != null && card.Card.HeroClass == HeroClass.Hunter && card.HunterMarkedTargets.Contains(target));
 	}
 
 	private bool IsHunterMarked(BattleCardState target)
@@ -2799,7 +2778,7 @@ public sealed partial class BattleBoardController
 		int auraBonus = 0;
 		foreach (BattleCardState hunter in playerCards.Concat(cpuCards))
 		{
-			if (hunter == null || hunter.Card.HeroClass != HeroClass.Hunter || hunter.MarkedTarget != target)
+			if (hunter == null || hunter.Card.HeroClass != HeroClass.Hunter || !hunter.HunterMarkedTargets.Contains(target))
 			{
 				continue;
 			}
@@ -2820,7 +2799,7 @@ public sealed partial class BattleBoardController
 		bool consumed = false;
 		foreach (BattleCardState hunter in playerCards.Concat(cpuCards))
 		{
-			if (hunter == null || hunter.Card.HeroClass != HeroClass.Hunter || hunter.MarkedTarget != target)
+			if (hunter == null || hunter.Card.HeroClass != HeroClass.Hunter || !hunter.HunterMarkedTargets.Contains(target))
 			{
 				continue;
 			}
@@ -2831,7 +2810,7 @@ public sealed partial class BattleBoardController
 				continue;
 			}
 
-			hunter.MarkedTarget = null;
+			hunter.HunterMarkedTargets.Remove(target);
 			consumed = true;
 		}
 
@@ -3015,9 +2994,8 @@ public sealed partial class BattleBoardController
 	}
 
 	/// <summary>
-	/// Il bonus permanente che finisce sotto l'etichetta EQUIP: equipaggiamento,
-	/// tempra del fabbro e upgrade del mercante stanno insieme, l'unico scorporato
-	/// e' il Sigillo Oscuro, che ha token, icona e descrizione tutti suoi.
+	/// Il bonus ottenuto sacrificando una pedina come equipaggiamento.
+	/// Sigillo e upgrade della forgia/mercante hanno voci dedicate.
 	/// </summary>
 	private static int EquipmentBonusOf(BattleCardState card)
 	{
@@ -3026,7 +3004,15 @@ public sealed partial class BattleBoardController
 		int bonus = card.PermanentCombatBonus;
 		if (card.CampaignCard?.HasRubySeal == true)
 			bonus -= RubySealPowerBonus;
+		bonus -= UpgradeBonusOf(card);
 		return Mathf.Max(0, bonus);
+	}
+
+	private static int UpgradeBonusOf(BattleCardState card)
+	{
+		if (card?.CampaignCard == null)
+			return 0;
+		return Mathf.Clamp(card.CampaignCard.MerchantUpgradeCount, 0, 2);
 	}
 
 	private int CombatBaseStrength(BattleCardState card)
@@ -3091,7 +3077,7 @@ public sealed partial class BattleBoardController
 		{
 			int supremeCost = SupremeCostForInspection(card.Card.HeroClass, card);
 			list.Add(new PrototypeCardView.StatusToken(
-				GameText.GetLocalizedFallback(GameTextKeys.Inspection.SupremeCostMalusStatus, "MALUS SUPREMA {0} MANA", "SUPREME PENALTY {0} MANA", "HÖCHSTE-FÄHIGKEIT-MALUS {0} MANA", "PENALIZACIÓN SUPREMA {0} MANÁ", "MALUS SUPRÊME {0} MANA", supremeCost) + $" ({supremeUses})",
+				GameText.Format(GameTextKeys.Inspection.SupremeCostMalusStatus, supremeCost) + $" ({supremeUses})",
 				new Color(1f, 0.38f, 0.32f),
 				GetSupremeButtonSprite()));
 		}
@@ -3117,7 +3103,7 @@ public sealed partial class BattleBoardController
 		if (card.SeraphelSeals > 0)
 		{
 			list.Add(new PrototypeCardView.StatusToken(
-				GameText.GetLocalizedFallback(GameTextKeys.Inspection.SeraphelSealsStatus, "SIGILLI {0} - MALUS", "SEALS {0} - PENALTY", "SIEGEL {0} - MALUS", "SELLOS {0} - PENALIZACIÓN", "SCEAUX {0} - MALUS", card.SeraphelSeals) + $" +{card.SeraphelSeals * SeraphelBoss.DamagePerSeal}",
+				GameText.Format(GameTextKeys.Inspection.SeraphelSealsStatus, card.SeraphelSeals) + $" +{card.SeraphelSeals * SeraphelBoss.DamagePerSeal}",
 				new Color(1f, 0.22f, 0.18f)));
 		}
 		if (HasMagicDefenseAura(card))
@@ -3160,17 +3146,21 @@ public sealed partial class BattleBoardController
 		{
 			list.Add(new PrototypeCardView.StatusToken("SIGILLO OSCURO +2", new Color(0.72f, 0.35f, 0.9f)));
 		}
+		int upgradeBonus = UpgradeBonusOf(card);
+		if (upgradeBonus > 0)
+		{
+			Sprite forgeUpgradeIcon = LoadSpriteResource($"UI/merchant_upgrade_relic_{upgradeBonus}");
+			list.Add(new PrototypeCardView.StatusToken(
+				$"UPGRADE +{upgradeBonus}",
+				new Color(0.7f, 1f, 0.45f),
+				forgeUpgradeIcon));
+		}
 		int equipmentBonus = EquipmentBonusOf(card);
 		if (equipmentBonus > 0)
 		{
-			int merchantUpgradeLevel = card.CampaignCard?.MerchantUpgradeCount ?? 0;
-			Sprite forgeUpgradeIcon = merchantUpgradeLevel > 0
-				? LoadSpriteResource($"UI/merchant_upgrade_relic_{Math.Min(merchantUpgradeLevel, 2)}")
-				: null;
 			list.Add(new PrototypeCardView.StatusToken(
 				$"EQUIP +{equipmentBonus}",
-				new Color(0.7f, 1f, 0.45f),
-				forgeUpgradeIcon));
+				new Color(1f, 0.62f, 0.2f)));
 		}
 		if (card.MightAuraCombatBonus > 0)
 		{
@@ -3188,7 +3178,7 @@ public sealed partial class BattleBoardController
 		if (num > 0)
 		{
 			list.Add(new PrototypeCardView.StatusToken(
-				GameText.GetLocalizedFallback(GameTextKeys.Inspection.HunterMarkStatus, "BERSAGLIO MARCATO +{0}", "MARKED TARGET +{0}", "MARKIERTES ZIEL +{0}", "OBJETIVO MARCADO +{0}", "CIBLE MARQUÉE +{0}", num),
+				GameText.Format(GameTextKeys.Inspection.HunterMarkStatus, num),
 				new Color(1f, 0.65f, 0.2f),
 				LoadSpriteResource("StatusIcons/hunter_debuff")));
 		}
@@ -3284,10 +3274,7 @@ public sealed partial class BattleBoardController
 			ShowNoManaCallout(battleCardState);
 			// Ripristina bottoni e AbilityUsedThisTurn: la pedina resta giocabile.
 			CancelPendingAction();
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Combat.ManaInsufficientAbility,
-				"Mana insufficiente per l'abilita di {0}.",
-				battleCardState.Card.Name));
+			SetMessage(GameText.Format(GameTextKeys.Combat.ManaInsufficientAbility, battleCardState.Card.Name));
 			return;
 		}
 		pendingAbilityUser = null;
@@ -3429,16 +3416,8 @@ public sealed partial class BattleBoardController
 		activeCard.View.SetSelected(selected: false);
 		SetActiveTurnAura(null);
 		ClearTargetHints();
-		SetMessage(GameText.GetLocalizedFallback(
-			GameTextKeys.Combat.SkipTurnMessage,
-			"{0} salta il turno.",
-			"{0} skips the turn.",
-			activeCard.Card.Name));
-		AppendLog(GameText.GetLocalizedFallback(
-			GameTextKeys.Combat.SkipTurnLog,
-			"SALTA - {0} passa senza agire.",
-			"SKIP - {0} passes without acting.",
-			activeCard.Card.Name));
+		SetMessage(GameText.Format(GameTextKeys.Combat.SkipTurnMessage, activeCard.Card.Name));
+		AppendLog(GameText.Format(GameTextKeys.Combat.SkipTurnLog, activeCard.Card.Name));
 		UpdateInteractions();
 		FinishTurn(skipped: true);
 	}
@@ -3852,7 +3831,12 @@ public sealed partial class BattleBoardController
 
 	private bool TryUseCpuPaladinAbility(BattleCardState card, out string message)
 	{
-		BattleCardState battleCardState = cpuCards.Where((BattleCardState ally) => ally != null && !ally.Eliminated).OrderByDescending(DisplayStrength).FirstOrDefault();
+		BattleCardState battleCardState = cpuCards
+			.Where((BattleCardState ally) => ally != null
+				&& !ally.Eliminated
+				&& !HasActivePaladinProtection(cpuCards, ally))
+			.OrderByDescending(DisplayStrength)
+			.FirstOrDefault();
 		if (battleCardState == null)
 		{
 			message = null;
@@ -3879,6 +3863,21 @@ public sealed partial class BattleBoardController
 		return true;
 	}
 
+	private static bool HasActivePaladinProtection(
+		IEnumerable<BattleCardState> team,
+		BattleCardState target)
+	{
+		if (team == null || target == null)
+			return false;
+
+		return team.Any(paladin => paladin != null
+			&& !paladin.Eliminated
+			&& paladin.Card.HeroClass == HeroClass.Paladin
+			&& paladin.AbilityArmed
+			&& (paladin.ProtectedAlly == target
+				|| (paladin.ProtectedAlly == null && paladin == target)));
+	}
+
 	private bool TryUseCpuHunterAbility(BattleCardState card, out string message)
 	{
 		BattleCardState battleCardState = playerCards.Where((BattleCardState target) => target != null && !target.Eliminated && !IsHunterMarked(target)).OrderByDescending(DisplayStrength).FirstOrDefault();
@@ -3887,11 +3886,7 @@ public sealed partial class BattleBoardController
 			message = null;
 			return false;
 		}
-		if (card.MarkedTarget != null && !card.MarkedTarget.Eliminated)
-		{
-			RefreshPersistentStatus(card.MarkedTarget);
-		}
-		card.MarkedTarget = battleCardState;
+		card.HunterMarkedTargets.Add(battleCardState);
 		MarkAbilityUsed(card);
 		RefreshPersistentStatus(battleCardState);
 		PlayClassAbilitySfx(HeroClass.Hunter);
@@ -4363,14 +4358,19 @@ public sealed partial class BattleBoardController
 
 	private IEnumerator RestoreCombatStrengthPresentation(BattleCardState attacker, BattleCardState defender)
 	{
-		int attackerStart = attacker != null && combatStrengthPresentationStarts.TryGetValue(attacker, out int savedAttacker)
+		int attackerPresentationStart = attacker != null && combatStrengthPresentationStarts.TryGetValue(attacker, out int savedAttacker)
 			? savedAttacker : (attacker != null ? DisplayStrength(attacker) : 0);
-		int defenderStart = defender != null && combatStrengthPresentationStarts.TryGetValue(defender, out int savedDefender)
+		int defenderPresentationStart = defender != null && combatStrengthPresentationStarts.TryGetValue(defender, out int savedDefender)
 			? savedDefender : (defender != null ? DisplayStrength(defender) : 0);
+		// Durante la risoluzione possono scattare effetti permanenti (per esempio il
+		// -2 dell'Aura del Mago). Il numero a cui torna l'animazione deve quindi
+		// essere riletto dallo stato corrente, non dal valore salvato prima del duello.
+		int attackerRestoredStrength = attacker != null ? DisplayStrength(attacker) : 0;
+		int defenderRestoredStrength = defender != null ? DisplayStrength(defender) : 0;
 		int attackerCurrent = attacker != null && combatStrengthPresentationTotals.TryGetValue(attacker, out int savedAttackerTotal)
-			? savedAttackerTotal : attackerStart;
+			? savedAttackerTotal : attackerPresentationStart;
 		int defenderCurrent = defender != null && combatStrengthPresentationTotals.TryGetValue(defender, out int savedDefenderTotal)
-			? savedDefenderTotal : defenderStart;
+			? savedDefenderTotal : defenderPresentationStart;
 		float attackerScale = attacker != null && combatStrengthPresentationScales.TryGetValue(attacker, out float savedAttackerScale)
 			? savedAttackerScale : 1f;
 		float defenderScale = defender != null && combatStrengthPresentationScales.TryGetValue(defender, out float savedDefenderScale)
@@ -4381,8 +4381,8 @@ public sealed partial class BattleBoardController
 		yield return AccardND.Battlefield.BattlePresentationAnimationPlayer.RestoreResolvedStrength(
 			attacker?.View,
 			defender?.View,
-			attackerStart,
-			defenderStart,
+			attackerRestoredStrength,
+			defenderRestoredStrength,
 			attackerCurrent,
 			defenderCurrent,
 			attackerScale,
@@ -4417,8 +4417,8 @@ public sealed partial class BattleBoardController
 	{
 		combatScoreText.text = (guaranteedKill ?"100%" : "0%");
 		combatOutcomeText.text = guaranteedKill
-			? GameText.GetOrFallbackSilent(GameTextKeys.Combat.GuaranteedKill, "ELIMINAZIONE CERTA")
-			: GameText.GetOrFallbackSilent(GameTextKeys.Combat.ImpossiblePlayerAttack, "ATTACCO IMPOSSIBILE - TURNO SALTATO");
+			? GameText.Get(GameTextKeys.Combat.GuaranteedKill)
+			: GameText.Get(GameTextKeys.Combat.ImpossiblePlayerAttack);
 		combatOutcomeText.color = (guaranteedKill ?new Color(0.3f, 1f, 0.5f) : new Color(1f, 0.38f, 0.25f));
 		combatResultRoot.SetActive(true);
 		yield return WaitForCardInspectionPause(configuration.Animation.CombatResultHold);
@@ -4499,8 +4499,6 @@ public sealed partial class BattleBoardController
 			if (flag)
 				AppendLog(GameText.Format(GameTextKeys.Combat.AuraActiveLog, AuraDisplayName(playerAura)));
 			ShowPlayerAuraActivationCallout(playerAura);
-			if (flag)
-				ShowFirstAuraHint(playerAura);
 		}
 	}
 
@@ -4842,7 +4840,7 @@ public sealed partial class BattleBoardController
 		outline.effectDistance = new Vector2(2.5f, -2.5f);
 
 		Text text = CreateText("Turn", ((Component)image).transform, font, 12, (FontStyle)1, (TextAnchor)4);
-		text.text = GameText.GetOrFallbackSilent(GameTextKeys.Combat.ChangeForm, "CAMBIO FORMA\n{0}", GolemFormName(nextForm));
+		text.text = GameText.Format(GameTextKeys.Combat.ChangeForm, GolemFormName(nextForm));
 		text.color = Color.white;
 		SetRect(text.rectTransform, new Vector2(0.04f, 0.02f), new Vector2(0.96f, 0.98f));
 	}
@@ -4883,13 +4881,14 @@ public sealed partial class BattleBoardController
 
 	private static string GolemFormName(ComposableGolemForm form)
 	{
-		return form switch
+		string id = form switch
 		{
-			ComposableGolemForm.Iron => "FERRO",
-			ComposableGolemForm.Crystal => "CRISTALLO",
-			ComposableGolemForm.Glass => "VETRO",
-			_ => "FORMA",
+			ComposableGolemForm.Iron => "iron",
+			ComposableGolemForm.Crystal => "crystal",
+			ComposableGolemForm.Glass => "glass",
+			_ => "unknown",
 		};
+		return GameText.Get(GameTextKeys.Combat.GolemFormName(id));
 	}
 
 	private string FormatPalatirDefenseMessage(BattleCardState attacker, PalatirDefenseResult result)

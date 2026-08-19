@@ -108,7 +108,7 @@ public sealed partial class BattleBoardController
 		CreateProfileNavigation(root.transform, fallbackFont);
 
 		profileIdentityRoot = CreateProfileSection(
-			root.transform, GameText.GetOrFallbackSilent(GameTextKeys.Profile.Adventurer, "AVVENTURIERO"),
+			root.transform, GameText.Get(GameTextKeys.Profile.Adventurer),
 			new Vector2(0.055f, 0.475f), new Vector2(0.945f, 0.645f));
 
 		Image contentPanel = CreateImage("Profile Content Panel", root.transform, Color.clear);
@@ -132,10 +132,10 @@ public sealed partial class BattleBoardController
 	{
 		string[] tabNames =
 		{
-			GameText.GetOrFallbackSilent(GameTextKeys.Profile.TabOverview, "PANORAMICA"),
-			GameText.GetLocalizedFallback(GameTextKeys.Profile.TabTalents, "TALENTI", "TALENTS", "TALENTE", "TALENTOS", "TALENTS"),
-			GameText.GetOrFallbackSilent(GameTextKeys.Profile.TabAchievements, "TRAGUARDI"),
-			GameText.GetOrFallbackSilent(GameTextKeys.Profile.TabMessages, "MESSAGGI")
+			GameText.Get(GameTextKeys.Profile.TabOverview),
+			GameText.Get(GameTextKeys.Profile.TabTalents),
+			GameText.Get(GameTextKeys.Profile.TabAchievements),
+			GameText.Get(GameTextKeys.Profile.TabMessages)
 		};
 		for (int index = 0; index < tabNames.Length; index++)
 		{
@@ -352,7 +352,7 @@ public sealed partial class BattleBoardController
 		if (profileLoading && profileData == null)
 		{
 			CreateProfileMessage(
-				GameText.GetOrFallbackSilent(GameTextKeys.Profile.Loading, "CARICAMENTO..."),
+				GameText.Get(GameTextKeys.Profile.Loading),
 				ProfileBody);
 			return;
 		}
@@ -395,10 +395,7 @@ public sealed partial class BattleBoardController
 		catch (Exception exception)
 		{
 			profilePendingRewards = Array.Empty<SinglePlayerPendingAdRewardData>();
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Profile.PendingLoadFailedLog,
-				"PROFILO - ricompense in sospeso non caricate: {0}",
-				exception.Message));
+			AppendLog(GameText.Format(GameTextKeys.Profile.PendingLoadFailedLog, exception.Message));
 		}
 		finally
 		{
@@ -428,8 +425,8 @@ public sealed partial class BattleBoardController
 		{
 			CreateProfileText(profileContentRoot, "Profile Messages Empty",
 				profilePendingLoading
-					? GameText.GetOrFallbackSilent(GameTextKeys.Profile.Loading, "CARICAMENTO...")
-					: GameText.GetOrFallbackSilent(GameTextKeys.Profile.NoMessages, "NESSUNA COMUNICAZIONE"),
+					? GameText.Get(GameTextKeys.Profile.Loading)
+					: GameText.Get(GameTextKeys.Profile.NoMessages),
 				24, TextAnchor.MiddleCenter, ProfileBody, Vector2.zero, new Vector2(1f, listTop));
 			return;
 		}
@@ -457,10 +454,7 @@ public sealed partial class BattleBoardController
 
 			Text expiry = CreateProfileText(card.rectTransform, "Expiry",
 				reward.hoursLeft > 0
-					? GameText.GetOrFallbackSilent(
-						GameTextKeys.Profile.ExpiresHours,
-						"SCADE FRA {0} H",
-						reward.hoursLeft)
+					? GameText.Format(GameTextKeys.Profile.ExpiresHours, reward.hoursLeft)
 					: string.Empty,
 				22, TextAnchor.MiddleRight, ProfileBody,
 				new Vector2(0.62f, 0.60f), new Vector2(0.90f, 0.94f));
@@ -476,12 +470,9 @@ public sealed partial class BattleBoardController
 
 			Text body = CreateProfileText(card.rectTransform, "Body",
 				string.Equals(reward.rewardType, "tavern", StringComparison.Ordinal)
-					? "You collected 1 jar of honey without watching an ad.\nWatch an ad to collect the 4 jars you missed by skipping it."
-					: GameText.GetOrFallbackSilent(
-					GameTextKeys.Profile.PendingRewardBody,
-					"Hai guadagnato +{0} EXP, ma il triplicatore non e' stato riscosso.\nGuarda un video e ricevi altri +{1} EXP.",
-					reward.baseAccountExperience,
-					reward.extraAccountExperience),
+					? $"Hai riscosso {reward.baseHoney} vasetti di miele con x1.\n"
+						+ $"Guarda il video per recuperare gli altri {reward.extraHoney} vasetti."
+					: GameText.Format(GameTextKeys.Profile.PendingRewardBody, reward.baseAccountExperience, reward.extraAccountExperience),
 				24, TextAnchor.UpperLeft, ProfileBody,
 				new Vector2(0.035f, 0.08f), new Vector2(0.64f, 0.58f));
 			body.resizeTextForBestFit = false;
@@ -492,7 +483,7 @@ public sealed partial class BattleBoardController
 				AccardND.Battlefield.MmoUiTheme.BodyFont,
 				string.Equals(reward.rewardType, "tavern", StringComparison.Ordinal)
 					? "x5 \u25b6"
-					: GameText.GetOrFallbackSilent(GameTextKeys.Profile.Triple, "TRIPLICA"));
+					: GameText.Get(GameTextKeys.Profile.Triple));
 			Text claimLabel = claim.GetComponentInChildren<Text>();
 			if ((Object)(object)claimLabel != (Object)null)
 			{
@@ -514,19 +505,15 @@ public sealed partial class BattleBoardController
 	private static string ProfileMessageHeading(SinglePlayerPendingAdRewardData reward)
 	{
 		if (string.Equals(reward.rewardType, "tavern", StringComparison.Ordinal))
-			return "TAVERN QUEST · x5 PENDING";
+			return "QUEST TAVERNA · MIELE DA RECUPERARE";
 		if (!string.Equals(reward.rewardType, "death", StringComparison.Ordinal))
-			return GameText.GetOrFallbackSilent(GameTextKeys.Profile.PendingReward, "RICOMPENSA IN SOSPESO");
+			return GameText.Get(GameTextKeys.Profile.PendingReward);
 		string chapter = string.IsNullOrWhiteSpace(reward.chapterId)
-			? GameText.GetOrFallbackSilent(GameTextKeys.Profile.Campaign, "CAMPAGNA")
+			? GameText.Get(GameTextKeys.Profile.Campaign)
 			: AdventureChapterDisplayName(reward.chapterId).ToUpperInvariant();
 		return reward.roomsCleared > 0
-			? GameText.GetOrFallbackSilent(
-				GameTextKeys.Profile.CampaignEndRooms,
-				"FINE {0} · {1} STANZE",
-				chapter,
-				reward.roomsCleared)
-			: GameText.GetOrFallbackSilent(GameTextKeys.Profile.CampaignEnd, "FINE {0}", chapter);
+			? GameText.Format(GameTextKeys.Profile.CampaignEndRooms, chapter, reward.roomsCleared)
+			: GameText.Format(GameTextKeys.Profile.CampaignEnd, chapter);
 	}
 
 	/// <summary>
@@ -542,16 +529,14 @@ public sealed partial class BattleBoardController
 
 		profilePendingClaiming = true;
 		profileMessagesNotice = AccardND.Ads.AdService.RewardsWaivedWithoutAds
-			? GameText.GetOrFallbackSilent(GameTextKeys.Profile.Claiming, "Un attimo: sto riscuotendo...")
-			: GameText.GetOrFallbackSilent(GameTextKeys.Profile.LoadingAd, "Un attimo: sto caricando la pubblicità...");
+			? GameText.Get(GameTextKeys.Profile.Claiming)
+			: GameText.Get(GameTextKeys.Profile.LoadingAd);
 		RefreshProfile();
 		try
 		{
 			if (!ServerProgressReady && !await EnsureServerProgressAsync())
 			{
-				profileMessagesNotice = GameText.GetOrFallbackSilent(
-					GameTextKeys.Profile.ConnectionRequired,
-					"Connessione al server necessaria: la ricompensa resta qui.");
+				profileMessagesNotice = GameText.Get(GameTextKeys.Profile.ConnectionRequired);
 				return;
 			}
 
@@ -566,16 +551,9 @@ public sealed partial class BattleBoardController
 			if (!ad.Grants)
 			{
 				profileMessagesNotice = ad.Unavailable
-					? GameText.GetOrFallbackSilent(
-						GameTextKeys.Profile.AdUnavailable,
-						"Nessuna pubblicità disponibile: la ricompensa resta qui, riprova più tardi.")
-					: GameText.GetOrFallbackSilent(
-						GameTextKeys.Profile.AdIncomplete,
-						"Il video va guardato per intero per triplicare l'EXP.");
-				AppendLog(GameText.GetOrFallbackSilent(
-					GameTextKeys.Profile.TripleNotAppliedLog,
-					"PROFILO - triplicatore in sospeso non applicato: annuncio {0}.",
-					ad.Outcome));
+					? GameText.Get(GameTextKeys.Profile.AdUnavailable)
+					: GameText.Get(GameTextKeys.Profile.AdIncomplete);
+				AppendLog(GameText.Format(GameTextKeys.Profile.TripleNotAppliedLog, ad.Outcome));
 				return;
 			}
 
@@ -586,24 +564,13 @@ public sealed partial class BattleBoardController
 			RefreshAccountBannerView();
 			profileMessagesNotice = string.Equals(reward.rewardType, "tavern", StringComparison.Ordinal)
 				? $"+{outcome.GrantedHoney} honey: reward increased to x5."
-				: GameText.GetOrFallbackSilent(
-					GameTextKeys.Profile.TripleApplied,
-					"+{0} EXP account: ricompensa triplicata.",
-					outcome.GrantedAccountExperience);
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Profile.TripleRecoveredLog,
-				"PROFILO - triplicatore recuperato: +{0} EXP account.",
-				outcome.GrantedAccountExperience));
+				: GameText.Format(GameTextKeys.Profile.TripleApplied, outcome.GrantedAccountExperience);
+			AppendLog(GameText.Format(GameTextKeys.Profile.TripleRecoveredLog, outcome.GrantedAccountExperience));
 		}
 		catch (Exception exception)
 		{
-			profileMessagesNotice = GameText.GetOrFallbackSilent(
-				GameTextKeys.Profile.ConnectionRequired,
-				"Connessione al server necessaria: la ricompensa resta qui.");
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Profile.TripleRejectedLog,
-				"PROFILO - triplicatore in sospeso rifiutato dal server: {0}",
-				exception.Message));
+			profileMessagesNotice = GameText.Get(GameTextKeys.Profile.ConnectionRequired);
+			AppendLog(GameText.Format(GameTextKeys.Profile.TripleRejectedLog, exception.Message));
 		}
 		finally
 		{
@@ -907,8 +874,8 @@ public sealed partial class BattleBoardController
 		{
 			CreateProfileText(backing.rectTransform, "Talent Loading",
 				talentLoading
-					? GameText.GetLocalizedFallback(GameTextKeys.Talents.Loading, "CARICAMENTO DEL FAVO...", "LOADING TALENT HIVE...", "TALENTWABE WIRD GELADEN...", "CARGANDO COLMENA DE TALENTOS...", "CHARGEMENT DE LA RUCHE DES TALENTS...")
-					: GameText.GetLocalizedFallback(GameTextKeys.Talents.Unavailable, "FAVO NON DISPONIBILE\nRIAPRI IL PROFILO PER RIPROVARE", "TALENT HIVE UNAVAILABLE\nREOPEN THE PROFILE TO TRY AGAIN", "TALENTWABE NICHT VERFÜGBAR\nÖFFNE DAS PROFIL ERNEUT", "COLMENA DE TALENTOS NO DISPONIBLE\nVUELVE A ABRIR EL PERFIL", "RUCHE DES TALENTS INDISPONIBLE\nROUVREZ LE PROFIL POUR RÉESSAYER"),
+					? GameText.Get(GameTextKeys.Talents.Loading)
+					: GameText.Get(GameTextKeys.Talents.Unavailable),
 				24, TextAnchor.MiddleCenter, ProfileBody,
 				new Vector2(0.06f, 0.3f), new Vector2(0.94f, 0.6f));
 			return;
@@ -945,7 +912,7 @@ public sealed partial class BattleBoardController
 		propolisCount.rectTransform.offsetMax = new Vector2(22.3158f, 131.251f);
 		AddTalentTextOutline(propolisCount);
 
-		Text propolisLabel = CreateProfileText(propolisSlot.rectTransform, "Propolis Label", GameText.GetLocalizedFallback(GameTextKeys.Talents.PropolisPoints, "PUNTI PROPOLI", "PROPOLIS POINTS", "PROPOLIS-PUNKTE", "PUNTOS DE PROPÓLEO", "POINTS DE PROPOLIS"),
+		Text propolisLabel = CreateProfileText(propolisSlot.rectTransform, "Propolis Label", GameText.Get(GameTextKeys.Talents.PropolisPoints),
 			25, TextAnchor.MiddleCenter, Color.white, new Vector2(0.08f, 0.04f), new Vector2(0.92f, 0.25f));
 		propolisLabel.rectTransform.offsetMin = new Vector2(1f, -25f);
 		propolisLabel.rectTransform.offsetMax = new Vector2(1f, -25f);
@@ -1279,7 +1246,7 @@ public sealed partial class BattleBoardController
 		bool maxed = node.rank >= node.maxRank;
 		if (maxed)
 		{
-			Text maxedText = CreateProfileText(bar.rectTransform, "Talent Detail Maxed", GameText.GetLocalizedFallback(GameTextKeys.Talents.Maxed, "AL MASSIMO", "MAXED", "MAXIMUM ERREICHT", "AL MÁXIMO", "AU MAXIMUM"),
+			Text maxedText = CreateProfileText(bar.rectTransform, "Talent Detail Maxed", GameText.Get(GameTextKeys.Talents.Maxed),
 				20, TextAnchor.MiddleCenter, ProfileGood,
 				new Vector2(0.34f, 0.03f), new Vector2(0.66f, 0.3f));
 			maxedText.rectTransform.offsetMin = new Vector2(0f, 42.9f);

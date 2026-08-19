@@ -2,7 +2,9 @@
   "name": "AccardND.Ads",
   "rootNamespace": "AccardND.Ads",
   "references": [
+    "AccardND.Battlefield",
     "AccardND.Localization",
-    "Unity.ugui"
+    "Unity.ugui",
+    "Unity.InputSystem"
   ]
 }

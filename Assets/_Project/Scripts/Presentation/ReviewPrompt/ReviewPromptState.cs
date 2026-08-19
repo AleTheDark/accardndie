@@ -3,9 +3,8 @@ using UnityEngine;
 namespace AccardND.Presentation.ReviewPrompt
 {
     /// <summary>
-    /// Memoria del popup di recensione. Stessa convenzione degli hint "prima volta"
-    /// (<c>AccardHint_*</c> in BattleBoardController.Hints.cs): PlayerPrefs, chiavi con
-    /// prefisso, nessuna dipendenza dal server.
+    /// Memoria del popup di recensione. PlayerPrefs, chiavi con prefisso, nessuna
+    /// dipendenza dal server.
     ///
     /// Restare locale e' voluto: se il giocatore reinstalla, ricomincia comunque il
     /// capitolo 1 e una seconda domanda dopo mesi non e' un abuso. Legarlo all'account

@@ -45,7 +45,6 @@ public sealed partial class BattleBoardController
 		{
 			initialDraftPanel.SetActive(true);
 		}
-		ShowInitialDraftHint();
 		AppendLog("DRAFT CAMPAGNA - scegli un capitano, poi conferma 3 carte per pacchetto.");
 		GenerateInitialDraftOffers();
 		RefreshInitialDraftView();
@@ -168,8 +167,8 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)cardInspectionDraftConfirmButtonText != (Object)null)
 		{
 			cardInspectionDraftConfirmButtonText.text = selected
-				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftRemove, "RIMUOVI")
-				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftSelect, "SELEZIONA");
+				? GameText.Get(GameTextKeys.Campaign.InitialDraftRemove)
+				: GameText.Get(GameTextKeys.Campaign.InitialDraftSelect);
 		}
 		((Component)cardInspectionDraftConfirmButton).transform.SetAsLastSibling();
 	}
@@ -213,8 +212,8 @@ public sealed partial class BattleBoardController
 		if (initialDraftSelectedIndices.Count != selectionLimit)
 		{
 			ShowInitialDraftNotice(initialDraftChoosingCaptain
-				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftChooseCaptainFirst, "Prima scegli il tuo capitano.")
-				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftChooseCardsFirst, "Scegli {0} carte prima di confermare.", selectionLimit));
+				? GameText.Get(GameTextKeys.Campaign.InitialDraftChooseCaptainFirst)
+				: GameText.Format(GameTextKeys.Campaign.InitialDraftChooseCardsFirst, selectionLimit));
 			return;
 		}
 		List<CardDefinition> selected = initialDraftSelectedIndices
@@ -266,22 +265,22 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)initialDraftHeadingText != (Object)null)
 		{
 			initialDraftHeadingText.text = initialDraftChoosingCaptain
-				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftChooseCaptain, "SCEGLI IL CAPITANO")
-				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftTitle, "DRAFT DEL MAZZO");
+				? GameText.Get(GameTextKeys.Campaign.InitialDraftChooseCaptain)
+				: GameText.Get(GameTextKeys.Campaign.InitialDraftTitle);
 		}
 		if ((Object)(object)initialDraftStatusText != (Object)null)
 		{
 			string captain = initialDraftCaptainClass.HasValue
-				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftCaptainStatus, "CAPITANO {0}  -  ", HeroClassDisplayName(initialDraftCaptainClass.Value).ToUpperInvariant())
+				? GameText.Format(GameTextKeys.Campaign.InitialDraftCaptainStatus, HeroClassDisplayName(initialDraftCaptainClass.Value).ToUpperInvariant())
 				: string.Empty;
-			initialDraftStatusText.text = captain + GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftStatus, "MAZZO {0}/{1}", initialDraftDeck.Count, configuration.DeckBuilding.DeckSize);
+			initialDraftStatusText.text = captain + GameText.Format(GameTextKeys.Campaign.InitialDraftStatus, initialDraftDeck.Count, configuration.DeckBuilding.DeckSize);
 		}
 		if ((Object)(object)initialDraftPromptText != (Object)null)
 		{
 			initialDraftPromptText.color = new Color(0.88f, 0.92f, 0.96f);
 			initialDraftPromptText.text = initialDraftChoosingCaptain
-				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftCaptainPrompt, "Scegli una carta capitano: guiderà le offerte successive.")
-				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftCardsPrompt, "Tocca una carta per leggerla, poi seleziona {0} carte.", InitialDraftSelectionLimit());
+				? GameText.Get(GameTextKeys.Campaign.InitialDraftCaptainPrompt)
+				: GameText.Format(GameTextKeys.Campaign.InitialDraftCardsPrompt, InitialDraftSelectionLimit());
 		}
 		RefreshInitialDraftOffers();
 		RefreshInitialDraftDeckPreview();
@@ -356,8 +355,8 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)initialDraftConfirmButtonText != (Object)null)
 		{
 			initialDraftConfirmButtonText.text = initialDraftChoosingCaptain
-				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftChoose, "SCEGLI")
-				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.InitialDraftConfirm, "CONFERMA {0}", limit);
+				? GameText.Get(GameTextKeys.Campaign.InitialDraftChoose)
+				: GameText.Format(GameTextKeys.Campaign.InitialDraftConfirm, limit);
 		}
 	}
 

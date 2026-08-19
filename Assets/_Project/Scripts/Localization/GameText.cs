@@ -33,8 +33,6 @@ namespace AccardND.Localization
             LocalizationSettings.SelectedLocaleChanged += HandleSelectedLocaleChanged;
 
             string savedLocale = PlayerPrefs.GetString(LocalePrefsKey, string.Empty);
-            if (!string.IsNullOrWhiteSpace(savedLocale))
-                TrySelectLocale(savedLocale, persist: false);
 
             // Alcune schermate runtime nascono prima che Addressables abbia caricato la
             // String Table. Al termine del caricamento notifichiamo tutti i binding: così
@@ -42,7 +40,7 @@ namespace AccardND.Localization
             if (!initializationRefreshQueued)
             {
                 initializationRefreshQueued = true;
-                _ = RefreshAfterInitializationAsync();
+                _ = RefreshAfterInitializationAsync(savedLocale);
             }
         }
 
@@ -109,9 +107,21 @@ namespace AccardND.Localization
                 await Task.Yield();
         }
 
-        private static async Task RefreshAfterInitializationAsync()
+        private static async Task RefreshAfterInitializationAsync(string savedLocale)
         {
-            await InitializeAsync();
+            var initialization = LocalizationSettings.InitializationOperation;
+            while (!initialization.IsDone)
+                await Task.Yield();
+
+            if (!string.IsNullOrWhiteSpace(savedLocale))
+                TrySelectLocale(savedLocale, persist: false);
+
+            // Carica la tabella soltanto dopo il ripristino della locale, così il
+            // preload riguarda la lingua effettivamente selezionata.
+            var table = LocalizationSettings.StringDatabase.GetTableAsync(TableName);
+            while (!table.IsDone)
+                await Task.Yield();
+
             autoFragmentsLocaleCode = null;
             AutoFragments.Clear();
             LocaleChanged?.Invoke();

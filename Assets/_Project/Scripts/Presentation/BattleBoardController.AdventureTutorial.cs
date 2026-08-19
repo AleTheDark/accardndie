@@ -1187,10 +1187,7 @@ public sealed partial class BattleBoardController
 	}
 
 	private static string LocalizedAdventureTutorialStepCounter(int current, int total) =>
-		GameText.GetLocalizedFallback(
-			"tutorial.guided.step_counter",
-			"PASSO {0}/{1}", "STEP {0}/{1}", "SCHRITT {0}/{1}",
-			"PASO {0}/{1}", "ÉTAPE {0}/{1}", current, total);
+		GameText.Format("tutorial.guided.step_counter", current, total);
 
 	private void ResizeAdventureTutorialPanelForBody(string body)
 	{

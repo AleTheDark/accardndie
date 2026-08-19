@@ -220,7 +220,7 @@ public sealed partial class BattleBoardController
 			RefreshDeckBuilderLayout();
 			DeckBuildingConfiguration deckBuilding = configuration.DeckBuilding;
 			deckBuilderStatusText.text = deckBuilderPreparingBag
-				? $"BISACCIA {deckBuilderSelectedBagItems.Count}/{Mathf.Max(0, sanctuaryData?.bagSlots ?? 0)}"
+				? GameText.Format(GameTextKeys.Campaign.BagStatus, deckBuilderSelectedBagItems.Count, Mathf.Max(0, sanctuaryData?.bagSlots ?? 0))
 				: DeckBuilderPromptText(initialDeckBuilder.Deck.Count, deckBuilding.DeckSize);
 			if ((Object)(object)deckBuilderBagEffectText != (Object)null)
 			{
@@ -271,18 +271,10 @@ public sealed partial class BattleBoardController
 	private static string DeckBuilderPromptText(int deckCount, int deckSize)
 	{
 		if (deckCount <= 0)
-			return GameText.GetOrFallbackSilent(GameTextKeys.Campaign.DeckBuilderChooseChampion, "SCEGLI IL TUO CAMPIONE");
+			return GameText.Get(GameTextKeys.Campaign.DeckBuilderChooseChampion);
 		if (deckCount == 1)
-			return GameText.GetOrFallbackSilent(GameTextKeys.Campaign.DeckBuilderChooseViceChampion, "SCEGLI IL VICE CAMPIONE");
-		return GameText.GetLocalizedFallback(
-			GameTextKeys.Campaign.DeckBuilderComplete,
-			"ORA COMPLETA IL MAZZO {0}/{1}",
-			"NOW COMPLETE THE DECK {0}/{1}",
-			"VERVOLLSTÄNDIGE JETZT DEIN DECK {0}/{1}",
-			"AHORA COMPLETA TU MAZO {0}/{1}",
-			"COMPLÉTEZ MAINTENANT VOTRE DECK {0}/{1}",
-			deckCount,
-			deckSize);
+			return GameText.Get(GameTextKeys.Campaign.DeckBuilderChooseViceChampion);
+		return GameText.Format(GameTextKeys.Campaign.DeckBuilderComplete, deckCount, deckSize);
 	}
 
 	private void RefreshDeckBuilderLayout()
@@ -500,14 +492,10 @@ public sealed partial class BattleBoardController
 		((Component)deckBuilderCardsText).gameObject.SetActive(!flag);
 		deckBuilderCardsText.text = flag
 			? string.Empty
-			: GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.DeckBuilderEmptyDeckHint,
-				"Scegli una classe: la prima carta sara' il tuo campione di valore 10.");
+			: GameText.Get(GameTextKeys.Campaign.DeckBuilderEmptyDeckHint);
 		if (!flag)
 		{
-			deckBuilderCardsText.text = GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.DeckBuilderEmptyDeckHint,
-				"Scegli una classe: la prima carta sara' il tuo campione di valore 10.");
+			deckBuilderCardsText.text = GameText.Get(GameTextKeys.Campaign.DeckBuilderEmptyDeckHint);
 		}
 		foreach (CardDefinition card in initialDeckBuilder.Deck)
 		{
@@ -532,10 +520,17 @@ public sealed partial class BattleBoardController
 			return;
 		if (deckBuilderPreparingBag)
 		{
-			component.constraint = GridLayoutGroup.Constraint.FixedRowCount;
-			component.constraintCount = 1;
-			component.spacing = new Vector2(8f, 0f);
-			component.cellSize = new Vector2(DeckBuilderBagItemSize, DeckBuilderBagItemSize);
+			int itemCount = Mathf.Max(1, sanctuaryData?.stash?.Count(item => item != null && item.count > 0) ?? 0);
+			int columns = Mathf.Min(3, itemCount);
+			int bagRows = Mathf.Max(1, Mathf.CeilToInt(itemCount / (float)columns));
+			component.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+			component.constraintCount = columns;
+			component.spacing = new Vector2(8f, 8f);
+			Rect bagRect = deckBuilderCardsRoot.rect;
+			float bagWidth = Mathf.Max(1f, bagRect.width - component.spacing.x * (columns - 1));
+			float bagHeight = Mathf.Max(1f, bagRect.height - component.spacing.y * (bagRows - 1));
+			float itemSize = Mathf.Min(DeckBuilderBagItemSize, bagWidth / columns, bagHeight / bagRows);
+			component.cellSize = new Vector2(itemSize, itemSize);
 			LayoutRebuilder.ForceRebuildLayoutImmediate(deckBuilderCardsRoot);
 			return;
 		}
@@ -651,7 +646,7 @@ public sealed partial class BattleBoardController
 				return;
 			deckBuilderPreparingBag = false;
 			ApplyMerchantCampaignCta(prepareBagButton, "UI/CampaignRestyle/campaign_cta_orange");
-			prepareBagButton.GetComponentInChildren<Text>().text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.PrepareBag, "PREPARA BISACCIA");
+			prepareBagButton.GetComponentInChildren<Text>().text = GameText.Get(GameTextKeys.Campaign.PrepareBag);
 			ClearDeckBuilderBagViews();
 			RefreshDeckBuilderView();
 			return;
@@ -673,7 +668,7 @@ public sealed partial class BattleBoardController
 			deckBuilderPreparingBag = true;
 			DestroyPrototypeViews(deckBuilderCardViews);
 			ApplyMerchantCampaignCta(prepareBagButton, "UI/CampaignRestyle/campaign_cta_back_red");
-			prepareBagButton.GetComponentInChildren<Text>().text = GameText.GetOrFallbackSilent(GameTextKeys.Common.Back, "INDIETRO");
+			prepareBagButton.GetComponentInChildren<Text>().text = GameText.Get(GameTextKeys.Common.Back);
 		}
 		catch (Exception exception)
 		{
@@ -725,6 +720,8 @@ public sealed partial class BattleBoardController
 			itemButton.onClick.AddListener(() => ToggleDeckBuilderBagItem(itemId));
 			deckBuilderBagItemViews.Add(itemButton.gameObject);
 		}
+
+		ResizeDeckBuilderCardGrid();
 	}
 
 	private void RefreshDeckBuilderSelectedBagItems()
@@ -810,7 +807,7 @@ public sealed partial class BattleBoardController
 		int slots = Mathf.Max(0, sanctuaryData?.bagSlots ?? 0);
 		if (deckBuilderSelectedBagItems.Count >= slots)
 		{
-			ShowDeckBuilderToast($"Bisaccia piena: hai {slots} slot.");
+			ShowDeckBuilderToast(GameText.Format(GameTextKeys.Campaign.BagFull, new { slots }));
 			return;
 		}
 		deckBuilderSelectedBagItems.Add(itemId);

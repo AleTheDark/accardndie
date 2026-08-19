@@ -52,7 +52,17 @@ namespace AccardND.Battlefield
             sphere.transform.localPosition = Vector3.zero;
             Destroy(sphere.GetComponent<Collider>());
             meteor = sphere.transform;
-            Shader shader = Shader.Find("AccardND/VFX/Mage Meteor");
+            // Keep the shader in Resources and load the asset directly: a Shader.Find-only
+            // reference can be stripped from Android builds, producing the magenta error disc.
+            Shader shader = Resources.Load<Shader>("VFX/MageMeteor")
+                ?? Shader.Find("AccardND/VFX/Mage Meteor");
+            if (shader == null || !shader.isSupported)
+            {
+                Debug.LogError("Mage meteor shader is missing or unsupported on this platform. Hiding the 3D meteor instead of rendering magenta.");
+                sphere.GetComponent<Renderer>().enabled = false;
+                return;
+            }
+
             meteorMaterial = new Material(shader) { name = "Mage Meteor Runtime Material" };
             meteorMaterial.SetTexture("_BaseMap", texture);
             meteorMaterial.SetFloat("_Dissolve", 0f);
@@ -61,6 +71,9 @@ namespace AccardND.Battlefield
 
         public void SetFlight(float time, float progress)
         {
+            if (meteorMaterial == null)
+                return;
+
             meteor.localRotation = Quaternion.Euler(time * 93f, time * 151f, time * 47f);
             meteor.localScale = Vector3.one * (0.88f + Mathf.Sin(time * 9f) * 0.025f);
             meteorMaterial.SetFloat("_EmissionStrength", 2.5f + Mathf.Sin(time * 11f) * 0.65f + progress);

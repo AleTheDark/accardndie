@@ -97,7 +97,7 @@ public sealed partial class BattleBoardController
 		shopStatusText.color = ShopBody;
 		SetRect(shopStatusText.rectTransform, new Vector2(0.08f, 0.73f), new Vector2(0.92f, 0.785f));
 
-		shopOffersRoot = CreateShopSection(root.transform, fallbackFont, GameText.GetOrFallbackSilent(GameTextKeys.Merchant.ShopOffers, "OFFERTE DEL MERCANTE"),
+		shopOffersRoot = CreateShopSection(root.transform, fallbackFont, GameText.Get(GameTextKeys.Merchant.ShopOffers),
 			new Vector2(0.04f, 0.465f), new Vector2(0.96f, 0.715f));
 		CreateShopScrollSection(root.transform, fallbackFont,
 			new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.455f));
@@ -142,7 +142,7 @@ public sealed partial class BattleBoardController
 		Text bagLabel = bag.GetComponentInChildren<Text>();
 		if ((Object)(object)bagLabel != (Object)null)
 		{
-		bagLabel.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.ShopPrepareBag, "PREPARA LA BISACCIA");
+		bagLabel.text = GameText.Get(GameTextKeys.Merchant.ShopPrepareBag);
 			bagLabel.color = Color.white;
 		}
 		bag.onClick.AddListener((UnityAction)delegate
@@ -438,32 +438,20 @@ public sealed partial class BattleBoardController
 		if (shopLoading)
 			return;
 		shopLoading = true;
-		SetShopStatus(GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.ShopLoading,
-			"Il mercante sta sistemando gli scaffali..."));
+		SetShopStatus(GameText.Get(GameTextKeys.Merchant.ShopLoading));
 		try
 		{
 			if (await EnsureServerProgressAsync())
 				sanctuaryData = await serverProgress.GetSanctuaryAsync();
 			else
 				SetShopStatus(AccardND.Network.AccountServerSession.IsReconnecting
-					? GameText.GetOrFallbackSilent(
-						GameTextKeys.Merchant.ShopReconnecting,
-						"Riconnessione in corso: il negozio si aggiornerà automaticamente.")
-					: GameText.GetOrFallbackSilent(
-						GameTextKeys.Merchant.ShopConnectionRequired,
-						"Il negozio è chiuso: serve una connessione al server."));
+					? GameText.Get(GameTextKeys.Merchant.ShopReconnecting)
+					: GameText.Get(GameTextKeys.Merchant.ShopConnectionRequired));
 		}
 		catch (Exception exception)
 		{
-			SetShopStatus(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.ShopLoadFailed,
-				"Il mercante si è preso una pausa: {0}",
-				exception.Message));
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.ShopLoadFailedLog,
-				"NEGOZIO - caricamento fallito: {0}",
-				exception.Message));
+			SetShopStatus(GameText.Format(GameTextKeys.Merchant.ShopLoadFailed, exception.Message));
+			AppendLog(GameText.Format(GameTextKeys.Merchant.ShopLoadFailedLog, exception.Message));
 		}
 		finally
 		{
@@ -574,12 +562,8 @@ public sealed partial class BattleBoardController
 
 		int cost = offer.offerCost;
 		string price = offer.remaining > 0
-			? GameText.GetLocalizedFallback(
-				GameTextKeys.Merchant.ShopOfferAvailable,
-				"<color=#888888>{0}</color> → {1} MIELE\n-{2}%  •  {3} RIMASTI",
-				"<color=#888888>{0}</color> → {1} HONEY\n-{2}%  •  {3} LEFT",
-				offer.regularCost, cost, offer.discountPercent, offer.remaining)
-			: GameText.GetLocalizedFallback(GameTextKeys.Merchant.ShopOfferSoldOut, "ESAURITO", "SOLD OUT");
+			? GameText.Format(GameTextKeys.Merchant.ShopOfferAvailable, offer.regularCost, cost, offer.discountPercent, offer.remaining)
+			: GameText.Get(GameTextKeys.Merchant.ShopOfferSoldOut);
 		string offerId = offer.offerId;
 		FillShopTile(tile, entry.id, ShopItemSprite(entry.id), ShopItemName(entry).ToUpperInvariant(), price,
 			offer.remaining > 0 ? new Color(0.55f, 0.9f, 0.62f) : ShopBody,
@@ -598,11 +582,7 @@ public sealed partial class BattleBoardController
 		int owned = sanctuaryData.stash?.FirstOrDefault(item => item.itemId == entry.id)?.count ?? 0;
 		int cost = entry.copyCost;
 		FillShopTile(tile, entry.id, ShopItemSprite(entry.id), ShopItemName(entry).ToUpperInvariant(),
-			GameText.GetLocalizedFallback(
-				GameTextKeys.Merchant.ShopStockPrice,
-				"SCORTA {0}  •  {1} MIELE",
-				"STASH {0}  •  {1} HONEY",
-				owned, cost), ShopBody,
+			GameText.Format(GameTextKeys.Merchant.ShopStockPrice, owned, cost), ShopBody,
 			!shopPurchasing && cost > 0 && IsTutorialSurfaceOpen(AccardND.GameData.TutorialSurface.ShopCatalog),
 			(UnityAction)delegate
 			{
@@ -683,11 +663,7 @@ public sealed partial class BattleBoardController
 		int remainingHoney = Mathf.Max(0, currentHoney - cost);
 		string itemName = ShopItemName(entry);
 		string itemDescription = ShopItemDescription(entry);
-		shopPurchaseConfirmationText.text = GameText.GetLocalizedFallback(
-			"shop.confirm.body",
-			"Vuoi comprare {0} per {1:n0} miele?\n\nEffetto: {2}\n\nSaldo dopo l'acquisto: {3:n0}",
-			"Do you want to buy {0} for {1:n0} honey?\n\nEffect: {2}\n\nBalance after purchase: {3:n0}",
-			itemName, cost, itemDescription, remainingHoney);
+		shopPurchaseConfirmationText.text = GameText.Format("shop.confirm.body", itemName, cost, itemDescription, remainingHoney);
 		shopPurchaseConfirmButton.interactable = currentHoney >= cost;
 		shopPurchaseConfirmation.SetActive(true);
 		shopPurchaseConfirmation.transform.SetAsLastSibling();
@@ -715,32 +691,19 @@ public sealed partial class BattleBoardController
 			return;
 		shopPurchasing = true;
 		RefreshShop();
-		SetShopStatus(GameText.GetLocalizedFallback(
-			GameTextKeys.Merchant.ShopPreparingPurchase,
-			"Il mercante prepara {0}...",
-			"The merchant is preparing {0}...",
-			ShopItemName(entry)));
+		SetShopStatus(GameText.Format(GameTextKeys.Merchant.ShopPreparingPurchase, ShopItemName(entry)));
 		string finalStatus;
 		try
 		{
 			sanctuaryData = await serverProgress.BuySanctuaryItemAsync(entry.id, offerId);
 			SyncShopHoneyToHud();
-			finalStatus = GameText.GetLocalizedFallback(
-				"shop.message.purchase_success",
-				"Affare fatto! {0} è nella tua scorta.",
-				"Deal complete! {0} is now in your stash.",
-				ShopItemName(entry));
+			finalStatus = GameText.Format("shop.message.purchase_success", ShopItemName(entry));
 			RefreshAccountBannerView();
 		}
 		catch (Exception exception)
 		{
-			finalStatus = GameText.GetLocalizedFallback(
-				"shop.message.purchase_failed",
-				"Affare saltato: {0}", "Purchase failed: {0}", exception.Message);
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.ShopPurchaseFailedLog,
-				"NEGOZIO - acquisto fallito: {0}",
-				exception.Message));
+			finalStatus = GameText.Format("shop.message.purchase_failed", exception.Message);
+			AppendLog(GameText.Format(GameTextKeys.Merchant.ShopPurchaseFailedLog, exception.Message));
 		}
 		finally
 		{
@@ -786,7 +749,7 @@ public sealed partial class BattleBoardController
 		string english = entry.id switch
 		{
 			"detector" => "Detector",
-			"double-exp" => "Double EXP",
+			"double-exp" => "Double Reward",
 			"empower" => "Empower",
 			"sigillo-rubino" => "Ruby Seal",
 			"second-chance" => "Second Chance",
@@ -808,7 +771,7 @@ public sealed partial class BattleBoardController
 		string english = entry.id switch
 		{
 			"detector" => "Reveals the contents of all three doors at the next path choice.",
-			"double-exp" => "Doubles all experience earned in the next room.",
+			"double-exp" => "Doubles all experience and gold earned in the next room.",
 			"empower" => "Increases your attack Vigor die by one step for the current or next room. Cannot be used in Boss or Miniboss rooms.",
 			"sigillo-rubino" => "Permanently grants +2 Power to a deployed pawn. Each card can receive only one Ruby Seal.",
 			"second-chance" => "Revives every card in the graveyard and returns it to the deck. Cannot be used during battle.",

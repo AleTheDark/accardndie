@@ -41,6 +41,7 @@ namespace AccardND.GameCore.Pvp
         public const string CardNotInHand = "card_not_in_hand";
         public const string AbilityAlreadyUsed = "ability_already_used";
         public const string TargetAlreadyMarked = "target_already_marked";
+        public const string TargetAlreadyProtected = "target_already_protected";
         public const string NecromancerNeedsAlly = "necromancer_needs_ally";
         public const string CardCannotRevive = "card_cannot_revive";
         public const string PassiveAbility = "passive_ability";
@@ -344,7 +345,7 @@ namespace AccardND.GameCore.Pvp
                     PvpCardState target = RequireEnemyTarget(player, targetPlayer, targetSlot);
                     if (IsMarked(target))
                         throw new PvpActionException(PvpActionErrorCodes.TargetAlreadyMarked);
-                    actor.MarkedTarget = target;
+                    actor.HunterMarkedTargets.Add(target);
                     actor.AbilityUsed = true;
                     events.Add(new AbilityUsedEvent(player, actor.Slot, HeroClass.Hunter, targetPlayer, targetSlot, MarkBonusOf(actor)));
                     break;
@@ -353,6 +354,10 @@ namespace AccardND.GameCore.Pvp
                 case HeroClass.Paladin:
                 {
                     PvpCardState ally = RequireAllyTarget(player, targetPlayer, targetSlot);
+                    if (HasActivePaladinProtection(players[player].Board, ally))
+                        throw new PvpActionException(
+                            PvpActionErrorCodes.TargetAlreadyProtected,
+                            "La carta ha già una protezione del Paladino attiva.");
                     actor.AbilityArmed = true;
                     actor.ProtectedAlly = ally;
                     events.Add(new AbilityUsedEvent(player, actor.Slot, HeroClass.Paladin, targetPlayer, targetSlot, 0));
@@ -428,6 +433,10 @@ namespace AccardND.GameCore.Pvp
                     + $"quella di {heroClass} non è fra queste.");
 
             bool attackSupreme = AbilityManaCosts.IsAttackSupreme(heroClass);
+            if (actor.AbilityArmed)
+                throw new PvpActionException(
+                    PvpActionErrorCodes.AbilityRequiresAction,
+                    "Devi prima consumare l'abilità già attiva.");
             // Per attivazione: una sola abilita' non-d'attacco, piu' una azione d'attacco.
             if (!attackSupreme && heroClass != HeroClass.Paladin && actor.AbilityUsedThisTurn)
                 throw new PvpActionException(
@@ -1495,8 +1504,8 @@ namespace AccardND.GameCore.Pvp
             {
                 foreach (PvpCardState card in state.Board)
                 {
-                    if (card.Card.HeroClass == HeroClass.Hunter && card.MarkedTarget == target)
-                        card.MarkedTarget = null;
+                    if (card.Card.HeroClass == HeroClass.Hunter)
+                        RemoveHunterMark(card, target);
                 }
             }
         }
@@ -1625,7 +1634,7 @@ namespace AccardND.GameCore.Pvp
             {
                 foreach (PvpCardState card in state.Board)
                 {
-                    if (card.Card.HeroClass == HeroClass.Hunter && card.MarkedTarget == target)
+                    if (card.Card.HeroClass == HeroClass.Hunter && card.HunterMarkedTargets.Contains(target))
                         return true;
                 }
             }
@@ -1639,11 +1648,19 @@ namespace AccardND.GameCore.Pvp
             {
                 foreach (PvpCardState card in state.Board)
                 {
-                    if (card.Card.HeroClass == HeroClass.Hunter && card.MarkedTarget == target)
+                    if (card.Card.HeroClass == HeroClass.Hunter && card.HunterMarkedTargets.Contains(target))
                         best = Math.Max(best, MarkBonusOf(card));
                 }
             }
             return best;
+        }
+
+        private static void RemoveHunterMark(PvpCardState hunter, PvpCardState target)
+        {
+            if (hunter.MarkedTarget == target)
+                hunter.MarkedTarget = null;
+            else
+                hunter.HunterMarkedTargets.Remove(target);
         }
 
         private int MarkBonusOf(PvpCardState hunter) =>
@@ -1728,6 +1745,18 @@ namespace AccardND.GameCore.Pvp
             if (!target.IsActive)
                 throw new PvpActionException(PvpActionErrorCodes.TargetEliminated);
             return target;
+        }
+
+        private static bool HasActivePaladinProtection(
+            IEnumerable<PvpCardState> team,
+            PvpCardState target)
+        {
+            return team != null
+                && target != null
+                && team.Any(paladin => paladin is { IsActive: true, AbilityArmed: true }
+                    && paladin.Card.HeroClass == HeroClass.Paladin
+                    && (paladin.ProtectedAlly == target
+                        || (paladin.ProtectedAlly == null && paladin == target)));
         }
 
         private static bool AllEliminated(List<PvpCardState> board)

@@ -81,6 +81,11 @@ namespace AccardND.Presentation
             if (edgeMaterial == null)
             {
                 Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                if (shader == null || !shader.isSupported)
+                {
+                    meshRenderer.enabled = false;
+                    return;
+                }
                 edgeMaterial = new Material(shader) { name = "Card 3D Edge (Runtime)" };
             }
             edgeMaterial.color = edgeColor;

@@ -473,8 +473,8 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)optionsMainMenuButtonText != (Object)null)
 		{
 			optionsMainMenuButtonText.text = surrender
-				? GameText.GetLocalizedFallback(GameTextKeys.Options.Surrender, "ARRENDITI", "SURRENDER")
-				: GameText.GetLocalizedFallback(GameTextKeys.Options.MainMenu, "MENU", "MENU");
+				? GameText.Get(GameTextKeys.Options.Surrender)
+				: GameText.Get(GameTextKeys.Options.MainMenu);
 		}
 	}
 
@@ -553,13 +553,14 @@ public sealed partial class BattleBoardController
 		SetRect(title.rectTransform, new Vector2(0.06f, 0.68f), new Vector2(0.94f, 0.9f));
 		returnToMenuTitleText = title;
 
-		Text body = CreateText("Return To Menu Body", ((Component)dialog).transform, font, 30, (FontStyle)0, (TextAnchor)4);
+		Text body = CreateText("Return To Menu Body", ((Component)dialog).transform, font, 35, (FontStyle)0, (TextAnchor)4);
 		body.text = GameText.Get(GameTextKeys.Options.ReturnToMenuBody);
 		returnToMenuBodyText = body;
 		body.color = new Color(0.86f, 0.92f, 0.94f);
 		body.horizontalOverflow = HorizontalWrapMode.Wrap;
 		body.verticalOverflow = VerticalWrapMode.Truncate;
 		body.resizeTextForBestFit = false;
+		body.fontSize = 35;
 		SetRect(body.rectTransform, new Vector2(0.08f, 0.36f), new Vector2(0.92f, 0.66f));
 
 		Button cancelButton = CreateButton("Cancel Return To Menu", ((Component)dialog).transform, font, GameText.Get(GameTextKeys.Common.Cancel));
@@ -587,22 +588,19 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)returnToMenuTitleText != (Object)null)
 		{
 			returnToMenuTitleText.text = surrender
-				? GameText.GetLocalizedFallback(GameTextKeys.Options.SurrenderTitle, "ARRENDERSI?", "SURRENDER?")
+				? GameText.Get(GameTextKeys.Options.SurrenderTitle)
 				: GameText.Get(GameTextKeys.Options.ReturnToMenuTitle);
 		}
 		if ((Object)(object)returnToMenuBodyText != (Object)null)
 		{
 			returnToMenuBodyText.text = surrender
-				? GameText.GetLocalizedFallback(
-					GameTextKeys.Options.SurrenderBody,
-					"Ti arrendi: la partita è persa e la vittoria va al tuo avversario.",
-					"You surrender: the match is lost and your opponent wins.")
+				? GameText.Get(GameTextKeys.Options.SurrenderBody)
 				: GameText.Get(GameTextKeys.Options.ReturnToMenuBody);
 		}
 		if ((Object)(object)returnToMenuConfirmButtonText != (Object)null)
 		{
 			returnToMenuConfirmButtonText.text = surrender
-				? GameText.GetLocalizedFallback(GameTextKeys.Options.Surrender, "ARRENDITI", "SURRENDER")
+				? GameText.Get(GameTextKeys.Options.Surrender)
 				: GameText.Get(GameTextKeys.Common.Exit);
 		}
 	}
@@ -669,16 +667,10 @@ public sealed partial class BattleBoardController
 			SetImplementationArchiveVisible(false);
 		}
 		HideReturnToMenuConfirmation();
-		if ((Object)(object)hintPanel != (Object)null)
-		{
-			hintPanel.SetActive(false);
-		}
 		if ((Object)(object)auraCodexPanel != (Object)null)
 		{
 			auraCodexPanel.SetActive(false);
 		}
-		pendingHints.Clear();
-		hintActive = false;
 
 		// Gli oggetti della bisaccia venivano scalati solo dal riepilogo di fine run.
 		// Uscendo dal menu, ReturnToStart azzera quel riepilogo: registriamo quindi gli

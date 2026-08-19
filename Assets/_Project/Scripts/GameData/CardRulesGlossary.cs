@@ -12,8 +12,8 @@ namespace AccardND.GameData
         public static string ManaCostLabel(int cost)
         {
             return cost <= 0
-                ? GameText.GetOrFallback(GameTextKeys.Rules.ManaCostFree, "Gratuita")
-                : GameText.GetOrFallback(GameTextKeys.Rules.ManaCost, "{0} mana", cost);
+                ? GameText.Get(GameTextKeys.Rules.ManaCostFree)
+                : GameText.Format(GameTextKeys.Rules.ManaCost, cost);
         }
 
         public static string PrimaryAbilityCostLabel(HeroClass heroClass) =>
@@ -25,10 +25,7 @@ namespace AccardND.GameData
         // --- Abilita' suprema ---
 
         public static string SupremeTitle(HeroClass heroClass) =>
-            GameText.GetOrFallback(
-                GameTextKeys.Rules.SupremeTitle,
-                "Suprema di {0}",
-                HeroClassName(heroClass));
+            GameText.Format(GameTextKeys.Rules.SupremeTitle, HeroClassName(heroClass));
 
         /// <summary>Nome proprio della suprema, quello che compare sul bottone.</summary>
         public static string SupremeName(HeroClass heroClass)
@@ -45,9 +42,7 @@ namespace AccardND.GameData
 
         /// <summary>La tecnica non e' ancora stata sbloccata al Santuario.</summary>
         public static string SupremeLockedText() =>
-            GameText.GetOrFallback(
-                GameTextKeys.Rules.SupremeLocked,
-                "Tecnica non ancora appresa. Si sblocca al Santuario.");
+            GameText.Get(GameTextKeys.Rules.SupremeLocked);
 
         // I testi veri stanno in GameCore: da li' li legge anche il server per la voce del
         // Santuario, cosi' l'effetto promesso all'altare e quello scritto sulla carta coincidono.

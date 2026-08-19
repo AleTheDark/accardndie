@@ -39,7 +39,7 @@ public sealed partial class BattleBoardController
         title.fontSize = 40;
         title.fontStyle = FontStyle.Normal;
         title.resizeTextForBestFit = false;
-        title.text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.LevelUpTitle, "NUOVO LIVELLO!");
+        title.text = GameText.Get(GameTextKeys.Campaign.LevelUpTitle);
         AccardND.Battlefield.EditableRuntimeText.BindLocalized(
             title,
             GameTextKeys.Campaign.LevelUpTitle,
@@ -59,7 +59,7 @@ public sealed partial class BattleBoardController
             "Next Room After Level Up",
             dialog.transform,
             font,
-            GameText.GetOrFallbackSilent(GameTextKeys.Campaign.NextRoom, "PROSSIMA STANZA"));
+            GameText.Get(GameTextKeys.Campaign.NextRoom));
         AccardND.Battlefield.EditableRuntimeText.BindLocalized(
             nextRoomButton.GetComponentInChildren<Text>(),
             GameTextKeys.Campaign.NextRoom,
@@ -114,9 +114,7 @@ public sealed partial class BattleBoardController
             if ((Object)(object)combatExperienceFill != (Object)null)
                 combatExperienceFill.rectTransform.anchorMax = Vector2.one;
             if ((Object)(object)combatExperienceText != (Object)null)
-                combatExperienceText.text = GameText.GetOrFallbackSilent(
-                    GameTextKeys.Campaign.MaxLevel,
-                    "LIVELLO MASSIMO");
+                combatExperienceText.text = GameText.Get(GameTextKeys.Campaign.MaxLevel);
         }
 
         combatExperienceFillRoutine = null;
@@ -145,23 +143,15 @@ public sealed partial class BattleBoardController
                 maximum > 0 ? Mathf.Clamp01((float)current / maximum) : 1f, 1f);
         if ((Object)(object)combatExperienceText != (Object)null)
             combatExperienceText.text = maximum > 0
-                ? GameText.GetOrFallbackSilent(
-                    GameTextKeys.Campaign.ExperienceProgress,
-                    "{0} / {1} EXP",
-                    current,
-                    maximum)
-                : GameText.GetOrFallbackSilent(GameTextKeys.Campaign.MaxLevel, "LIVELLO MASSIMO");
+                ? GameText.Format(GameTextKeys.Campaign.ExperienceProgress, current, maximum)
+                : GameText.Get(GameTextKeys.Campaign.MaxLevel);
     }
 
     private void ShowCampaignLevelUpPopup()
     {
         if (campaignLevelUpPopup == null || runProgress == null)
             return;
-        campaignLevelUpBodyText.text = GameText.GetOrFallbackSilent(
-            GameTextKeys.Campaign.LevelUpBody,
-            "Sei salito al livello {0}!\n\nIl tuo dado Vigore viene potenziato a <b>D{1}</b>.",
-            runProgress.PlayerLevel,
-            runProgress.PlayerVigorDieSides);
+        campaignLevelUpBodyText.text = GameText.Format(GameTextKeys.Campaign.LevelUpBody, runProgress.PlayerLevel, runProgress.PlayerVigorDieSides);
         campaignLevelUpPopup.SetActive(true);
         campaignLevelUpPopup.transform.SetAsLastSibling();
         PlayLevelUpSfx();

@@ -44,7 +44,7 @@
          cache di Cloudflare per ore (max-age=14400) e un deploy nuovo continua a essere
          servito con il CSS vecchio - nemmeno un ricaricamento forzato lo aggira, perche'
          salta la cache del browser ma non quella del bordo. -->
-    <link rel="stylesheet" href="TemplateData/style.css?v=0.19.0">
+    <link rel="stylesheet" href="TemplateData/style.css?v=0.19.1">
     <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#1a1410">
     <meta name="mobile-web-app-capable" content="yes">
@@ -161,7 +161,7 @@
       }
 
       var buildUrl = "Build";
-      var buildVersion = "0.19.0";
+      var buildVersion = "0.19.1";
       var cacheBust = "?v=" + encodeURIComponent(buildVersion);
       var loaderUrl = buildUrl + "/output-web.loader.js" + cacheBust;
       var config = {

@@ -158,9 +158,7 @@ public sealed partial class BattleBoardController
 			FontStyle.Normal,
 			TextAnchor.MiddleCenter);
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(sanctuaryHeadingText);
-		sanctuaryHeadingText.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Sanctuary.Title,
-			"SANTUARIO");
+		sanctuaryHeadingText.text = GameText.Get(GameTextKeys.Sanctuary.Title);
 		sanctuaryHeadingText.color = SanctuaryGold;
 		AddSanctuaryTextOutline(sanctuaryHeadingText);
 		SetRect(sanctuaryHeadingText.rectTransform, new Vector2(0.08f, 0.18f), new Vector2(0.92f, 0.72f));
@@ -336,9 +334,7 @@ public sealed partial class BattleBoardController
 		sanctuarySubtitleText = SanctuaryPrefabComponent<Text>("Sanctuary Subtitle");
 		if ((Object)(object)sanctuaryHeadingText != (Object)null)
 		{
-			sanctuaryHeadingText.text = GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.Title,
-				"SANTUARIO");
+			sanctuaryHeadingText.text = GameText.Get(GameTextKeys.Sanctuary.Title);
 			sanctuaryHeadingText.fontSize = 48;
 			sanctuaryHeadingText.resizeTextMaxSize = 48;
 			sanctuaryHeadingText.alignment = TextAnchor.MiddleCenter;
@@ -408,7 +404,7 @@ public sealed partial class BattleBoardController
 		{
 			Text cancelLabel = ((Component)cancelButton).GetComponentInChildren<Text>();
 			if ((Object)(object)cancelLabel != (Object)null)
-				cancelLabel.text = GameText.GetOrFallbackSilent(GameTextKeys.Common.Cancel, "ANNULLA");
+				cancelLabel.text = GameText.Get(GameTextKeys.Common.Cancel);
 			ApplySanctuaryCampaignCta(cancelButton, "UI/CampaignRestyle/campaign_cta_back_red");
 			ScaleSanctuaryConfirmButton(cancelButton);
 			cancelButton.onClick.RemoveAllListeners();
@@ -433,9 +429,7 @@ public sealed partial class BattleBoardController
 			});
 			sanctuaryConfirmButtonText = ((Component)sanctuaryConfirmButton).GetComponentInChildren<Text>();
 			if ((Object)(object)sanctuaryConfirmButtonText != (Object)null)
-				sanctuaryConfirmButtonText.text = GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.OfferHoney,
-					"OFFRI IL MIELE");
+				sanctuaryConfirmButtonText.text = GameText.Get(GameTextKeys.Sanctuary.OfferHoney);
 		}
 
 		HideSanctuaryConfirmPopup();
@@ -553,7 +547,7 @@ public sealed partial class BattleBoardController
 			"Sanctuary Confirm Cancel",
 			((Component)sanctuaryConfirmDialogImage).transform,
 			font,
-			GameText.GetOrFallbackSilent(GameTextKeys.Common.Cancel, "ANNULLA"));
+			GameText.Get(GameTextKeys.Common.Cancel));
 		ApplySanctuaryCampaignCta(cancelButton, "UI/CampaignRestyle/campaign_cta_back_red");
 		ScaleSanctuaryConfirmButton(cancelButton);
 		((UnityEvent)cancelButton.onClick).AddListener((UnityAction)delegate
@@ -567,7 +561,7 @@ public sealed partial class BattleBoardController
 			"Sanctuary Confirm Accept",
 			((Component)sanctuaryConfirmDialogImage).transform,
 			font,
-			GameText.GetOrFallbackSilent(GameTextKeys.Sanctuary.OfferHoney, "OFFRI IL MIELE"));
+			GameText.Get(GameTextKeys.Sanctuary.OfferHoney));
 		ApplySanctuaryCampaignCta(
 			sanctuaryConfirmButton,
 			"UI/CampaignRestyle/campaign_cta_orange");
@@ -649,17 +643,11 @@ public sealed partial class BattleBoardController
 	{
 		return altar switch
 		{
-			SanctuaryAltar.Classes => GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.AltarClasses,
-				"CLASSI"),
-			SanctuaryAltar.Techniques => GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.AltarTechniques,
-				"TECNICHE"),
+			SanctuaryAltar.Classes => GameText.Get(GameTextKeys.Sanctuary.AltarClasses),
+			SanctuaryAltar.Techniques => GameText.Get(GameTextKeys.Sanctuary.AltarTechniques),
 			// Il tab nasce clonando quello delle Classi: non deve poter ereditare
 			// una voce localizzata obsoleta dal template.
-			_ => GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.AltarRelics,
-				"RELIQUIE")
+			_ => GameText.Get(GameTextKeys.Sanctuary.AltarRelics)
 		};
 	}
 
@@ -854,9 +842,7 @@ public sealed partial class BattleBoardController
 		}
 
 		sanctuaryLoading = true;
-		SetSanctuaryStatus(GameText.GetOrFallbackSilent(
-			GameTextKeys.Sanctuary.Loading,
-			"Consulto l'alveare..."));
+		SetSanctuaryStatus(GameText.Get(GameTextKeys.Sanctuary.Loading));
 		try
 		{
 			// Il link di progressione nasce all'apertura del menu campagna: chi arriva al
@@ -865,37 +851,22 @@ public sealed partial class BattleBoardController
 			if (await EnsureServerProgressAsync())
 			{
 				sanctuaryData = await serverProgress.GetSanctuaryAsync();
-				AppendLog(GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.CatalogReceivedLog,
-					"SANTUARIO - catalogo ricevuto: {0} voci.",
-					sanctuaryData?.entries?.Length ?? 0));
+				AppendLog(GameText.Format(GameTextKeys.Sanctuary.CatalogReceivedLog, sanctuaryData?.entries?.Length ?? 0));
 			}
 			else
 			{
 				sanctuaryData = null;
 				sanctuaryNotice = AccardND.Network.AccountServerSession.IsReconnecting
-					? GameText.GetOrFallbackSilent(
-						GameTextKeys.Sanctuary.Reconnecting,
-						"Riconnessione in corso: il Santuario si aggiornerà automaticamente.")
-					: GameText.GetOrFallbackSilent(
-						GameTextKeys.Sanctuary.Offline,
-						"Santuario non disponibile offline: serve la connessione al server.");
-				AppendLog(GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.NoConnectionLog,
-					"SANTUARIO - nessuna connessione al server."));
+					? GameText.Get(GameTextKeys.Sanctuary.Reconnecting)
+					: GameText.Get(GameTextKeys.Sanctuary.Offline);
+				AppendLog(GameText.Get(GameTextKeys.Sanctuary.NoConnectionLog));
 			}
 		}
 		catch (Exception exception)
 		{
 			sanctuaryData = null;
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.CatalogFailedLog,
-				"SANTUARIO - catalogo non ricevuto: {0}",
-				exception.Message));
-			sanctuaryNotice = GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.Unavailable,
-				"Il Santuario non risponde: {0}",
-				exception.Message);
+			AppendLog(GameText.Format(GameTextKeys.Sanctuary.CatalogFailedLog, exception.Message));
+			sanctuaryNotice = GameText.Format(GameTextKeys.Sanctuary.Unavailable, exception.Message);
 		}
 		finally
 		{
@@ -947,9 +918,7 @@ public sealed partial class BattleBoardController
 
 		if (shown == 0)
 		{
-			SetSanctuaryStatus(GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.EmptyAltar,
-				"Nessuna voce in questo altare."));
+			SetSanctuaryStatus(GameText.Get(GameTextKeys.Sanctuary.EmptyAltar));
 			return;
 		}
 
@@ -973,20 +942,13 @@ public sealed partial class BattleBoardController
 	{
 		if (sanctuaryActiveAltar == SanctuaryAltar.Classes)
 		{
-			return GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.ClassesStatus,
-				"Ogni classe chiede una prova guadagnata giocando, oltre al miele.");
+			return GameText.Get(GameTextKeys.Sanctuary.ClassesStatus);
 		}
 		if (sanctuaryActiveAltar == SanctuaryAltar.Techniques)
 		{
-			return GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.TechniquesStatus,
-				"Ogni tecnica chiede la classe corrispondente, oltre al miele.");
+			return GameText.Get(GameTextKeys.Sanctuary.TechniquesStatus);
 		}
-		return GameText.GetOrFallbackSilent(
-			GameTextKeys.Sanctuary.RelicsStatus,
-			"Amplia la bisaccia per portare piu' consumabili. Slot disponibili: {0}.",
-			sanctuaryData?.bagSlots ?? 0);
+		return GameText.Format(GameTextKeys.Sanctuary.RelicsStatus, sanctuaryData?.bagSlots ?? 0);
 	}
 
 	private string ConsumeSanctuaryNotice()
@@ -1335,36 +1297,15 @@ public sealed partial class BattleBoardController
 		{
 			string offer = entry.type switch
 			{
-				"item" => GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.OfferItem,
-					"Sblocca {0} per {1} vasetti di miele: da quel momento il negozio potra' vendertelo. Lo sblocco non ti da' una copia.",
-					entry.name,
-					entry.honeyCost),
-				"slot" => GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.OfferSlot,
-					"Apri uno slot in piu' nella bisaccia per {0} vasetti di miele.",
-					entry.honeyCost),
+				"item" => GameText.Format(GameTextKeys.Sanctuary.OfferItem, entry.name, entry.honeyCost),
+				"slot" => GameText.Format(GameTextKeys.Sanctuary.OfferSlot, entry.honeyCost),
 				// La tecnica si apprende una volta e resta: vale per ogni carta di quella classe.
-				"secondAbility" => GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.OfferTechnique,
-					"Possiedi la classe. Offri {0} vasetti di miele per apprendere questa tecnica: sara' tua su ogni carta della classe.",
-					entry.honeyCost),
-				_ => GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.OfferClass,
-					"Hai superato le prove. Offri {0} vasetti di miele all'alveare per ricordare questa classe.",
-					entry.honeyCost)
+				"secondAbility" => GameText.Format(GameTextKeys.Sanctuary.OfferTechnique, entry.honeyCost),
+				_ => GameText.Format(GameTextKeys.Sanctuary.OfferClass, entry.honeyCost)
 			};
 			string purchaseBody = affordable
-				? GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.HoneyAvailable,
-					"{0}\n\nMiele disponibile: {1}.",
-					offer,
-					honey)
-				: GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.HoneyInsufficientBody,
-					"Servono {0} vasetti di miele e ne hai {1}.\n\nTorna quando ne avrai abbastanza.",
-					entry.honeyCost,
-					honey);
+				? GameText.Format(GameTextKeys.Sanctuary.HoneyAvailable, offer, honey)
+				: GameText.Format(GameTextKeys.Sanctuary.HoneyInsufficientBody, entry.honeyCost, honey);
 			bool tutorialMagePurchase = entry.type == "class"
 				&& string.Equals(entry.id, "mage", StringComparison.OrdinalIgnoreCase)
 				&& string.Equals(
@@ -1404,8 +1345,8 @@ public sealed partial class BattleBoardController
 		if ((Object)(object)sanctuaryConfirmButtonText != (Object)null)
 		{
 			sanctuaryConfirmButtonText.text = affordable
-				? GameText.GetOrFallbackSilent(GameTextKeys.Sanctuary.OfferHoney, "OFFRI IL MIELE")
-				: GameText.GetOrFallbackSilent(GameTextKeys.Sanctuary.HoneyInsufficient, "MIELE INSUFFICIENTE");
+				? GameText.Get(GameTextKeys.Sanctuary.OfferHoney)
+				: GameText.Get(GameTextKeys.Sanctuary.HoneyInsufficient);
 		}
 
 		sanctuaryConfirmPopup.SetActive(true);
@@ -1462,9 +1403,7 @@ public sealed partial class BattleBoardController
 
 		if (!ServerProgressReady)
 		{
-			SetSanctuaryStatus(GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.ConnectionRequired,
-				"Serve la connessione al server per offrire il miele."));
+			SetSanctuaryStatus(GameText.Get(GameTextKeys.Sanctuary.ConnectionRequired));
 			HideSanctuaryConfirmPopup();
 			return;
 		}
@@ -1482,17 +1421,10 @@ public sealed partial class BattleBoardController
 				&& string.Equals(entry.id, "mage", StringComparison.OrdinalIgnoreCase);
 			bool purchasedTutorialRogue = SanctuaryUnlockTypeOf(entry) == SinglePlayerUnlockType.Class
 				&& string.Equals(entry.id, "rogue", StringComparison.OrdinalIgnoreCase);
-			sanctuaryNotice = GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.EntryOwned,
-					"{0} ora e' tua.",
-					entry.name);
+			sanctuaryNotice = GameText.Format(GameTextKeys.Sanctuary.EntryOwned, entry.name);
 			MirrorServerProgress();
 			RefreshSinglePlayerProgressView();
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.PurchasedLog,
-				"SANTUARIO - {0} acquistato per {1} miele.",
-				entry.id,
-				entry.honeyCost));
+			AppendLog(GameText.Format(GameTextKeys.Sanctuary.PurchasedLog, entry.id, entry.honeyCost));
 			HideSanctuaryConfirmPopup();
 			// Se un tour d'acquisto stava aspettando proprio questa classe, prosegue da qui:
 			// e' l'acquisto vero a sbloccare la tappa, non una finta conferma del tutorial.
@@ -1515,11 +1447,7 @@ public sealed partial class BattleBoardController
 		}
 		catch (Exception exception)
 		{
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Sanctuary.PurchaseRejectedLog,
-				"SANTUARIO - acquisto {0} rifiutato: {1}",
-				entry.id,
-				exception.Message));
+			AppendLog(GameText.Format(GameTextKeys.Sanctuary.PurchaseRejectedLog, entry.id, exception.Message));
 			sanctuaryNotice = exception.Message;
 			HideSanctuaryConfirmPopup();
 		}
@@ -1551,25 +1479,17 @@ public sealed partial class BattleBoardController
 	{
 		if (entry.owned)
 		{
-			return GameText.GetOrFallbackSilent(GameTextKeys.Sanctuary.CardOwned, "OTTENUTA");
+			return GameText.Get(GameTextKeys.Sanctuary.CardOwned);
 		}
 		if (!entry.available)
 		{
 			// Le starter hanno costo zero e si prendono col tutorial; le tecniche ancora
 			// senza effetto mostrano il prezzo perche' il giocatore sappia cosa lo aspetta.
 			return entry.honeyCost > 0
-				? GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.CardComingSoon,
-					"IN ARRIVO - {0} MIELE",
-					entry.honeyCost)
-				: GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.CardFromTutorial,
-					"DAL TUTORIAL");
+				? GameText.Format(GameTextKeys.Sanctuary.CardComingSoon, entry.honeyCost)
+				: GameText.Get(GameTextKeys.Sanctuary.CardFromTutorial);
 		}
-		return GameText.GetOrFallbackSilent(
-			GameTextKeys.Sanctuary.CardHoneyCost,
-			"{0} MIELE",
-			entry.honeyCost);
+		return GameText.Format(GameTextKeys.Sanctuary.CardHoneyCost, entry.honeyCost);
 	}
 
 	private static Color SanctuaryCardStatusColor(SanctuaryEntryData entry)
@@ -1742,15 +1662,9 @@ public sealed partial class BattleBoardController
 		{
 			sanctuaryDiscoveryTitleText.text = sanctuaryActiveAltar switch
 			{
-				SanctuaryAltar.Classes => GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.DiscoveryClasses,
-					"CLASSI SCOPERTE"),
-				SanctuaryAltar.Techniques => GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.DiscoveryTechniques,
-					"TECNICHE SCOPERTE"),
-				_ => GameText.GetOrFallbackSilent(
-					GameTextKeys.Sanctuary.DiscoveryRelics,
-					"RELIQUIE SCOPERTE")
+				SanctuaryAltar.Classes => GameText.Get(GameTextKeys.Sanctuary.DiscoveryClasses),
+				SanctuaryAltar.Techniques => GameText.Get(GameTextKeys.Sanctuary.DiscoveryTechniques),
+				_ => GameText.Get(GameTextKeys.Sanctuary.DiscoveryRelics)
 			};
 		}
 		if ((Object)(object)sanctuaryDiscoveryCountText != (Object)null)

@@ -187,7 +187,7 @@ public sealed partial class BattleBoardController
 		MmoUiTheme.StyleAsTitle(title);
 		SetOptionsTextSize(title, OptionsTitleFontSize);
 		title.color = OptionsGold;
-		title.text = GameText.GetOrFallbackSilent(GameTextKeys.Options.Title, "OPZIONI");
+		title.text = GameText.Get(GameTextKeys.Options.Title);
 		EditableRuntimeText.BindLocalized(title, GameTextKeys.Options.Title, "OPZIONI");
 		SetOptionsCellSize(title, 0f, 1f, 78f);
 	}
@@ -265,7 +265,7 @@ public sealed partial class BattleBoardController
 
 		Text label = CreateText("Language Label", row, font, OptionsLabelFontSize, FontStyle.Bold, TextAnchor.MiddleLeft);
 		label.color = OptionsLabel;
-		label.text = GameText.GetOrFallbackSilent(GameTextKeys.Options.LanguageLabel, "LINGUA DI GIOCO");
+		label.text = GameText.Get(GameTextKeys.Options.LanguageLabel);
 		EditableRuntimeText.BindLocalized(label, GameTextKeys.Options.LanguageLabel, "LINGUA DI GIOCO");
 		SetOptionsCellSize(label, 260f, 1f);
 
@@ -501,7 +501,7 @@ public sealed partial class BattleBoardController
 		{
 			string name = GameText.CurrentLanguageName;
 			languageComboLabel.text = string.IsNullOrWhiteSpace(name)
-				? GameText.GetOrFallbackSilent(GameTextKeys.Options.LanguageUnavailable, "NON DISPONIBILE")
+				? GameText.Get(GameTextKeys.Options.LanguageUnavailable)
 				: name;
 		}
 		if (languageComboFlag != null)

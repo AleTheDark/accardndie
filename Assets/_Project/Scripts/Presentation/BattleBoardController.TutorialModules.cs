@@ -1,3 +1,4 @@
+using AccardND.TourKit;
 using System;
 using System.Collections.Generic;
 using AccardND.GameCore;
@@ -58,10 +59,7 @@ public sealed partial class BattleBoardController
 			AppendLog(TutorialModuleText("log_server_unavailable",
 				"TUTORIAL - modulo {0} non registrato: server non disponibile.",
 				"TUTORIAL - module {0} was not recorded: server unavailable.", moduleId));
-			SetMessage(GameText.GetLocalizedFallback(
-				GameTextKeys.Adventure.TutorialConnectionRequired,
-				"Connessione al server necessaria per registrare il completamento del tutorial.",
-				"A server connection is required to record tutorial completion."));
+			SetMessage(GameText.Get(GameTextKeys.Adventure.TutorialConnectionRequired));
 			ReturnToTutorialIndex();
 			return;
 		}

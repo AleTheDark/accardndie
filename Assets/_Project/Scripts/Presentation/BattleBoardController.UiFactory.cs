@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using AccardND.Battlefield;
+using AccardND.UiKit;
 using AccardND.GameCore;
 using AccardND.GameData;
 using AccardND.Localization;
@@ -98,42 +99,10 @@ public sealed partial class BattleBoardController
 	}
 
 	private static RectTransform CreateCardRow(string name, Transform parent, Vector2 anchor)
-	{
-		GameObject val = new GameObject(name, new Type[2]
-		{
-			typeof(RectTransform),
-			typeof(HorizontalLayoutGroup)
-		});
-		val.transform.SetParent(parent, false);
-		RectTransform val2 = (RectTransform)val.transform;
-		val2.anchorMin = anchor;
-		val2.anchorMax = anchor;
-		val2.pivot = new Vector2(0.5f, 0.5f);
-		val2.sizeDelta = new Vector2(1050f, 285f);
-		HorizontalLayoutGroup component = val.GetComponent<HorizontalLayoutGroup>();
-		component.spacing = 34f;
-		component.childAlignment = (TextAnchor)4;
-		component.childControlWidth = true;
-		component.childControlHeight = true;
-		component.childForceExpandWidth = true;
-		component.childForceExpandHeight = true;
-		return val2;
-	}
+		=> Ui.CreateCardRow(name, parent, anchor);
 
 	private static Image CreateImage(string name, Transform parent, Color color)
-	{
-		GameObject val = new GameObject(name, new Type[3]
-		{
-			typeof(RectTransform),
-			typeof(CanvasRenderer),
-			typeof(Image)
-		});
-		val.transform.SetParent(parent, false);
-		Image component = val.GetComponent<Image>();
-		component.color = color;
-		component.raycastTarget = false;
-		return component;
-	}
+		=> Ui.CreateImage(name, parent, color);
 
 	private static Text CreateText(string name, Transform parent, Font font, int size, FontStyle style, TextAnchor alignment)
 	{
@@ -160,18 +129,10 @@ public sealed partial class BattleBoardController
 	}
 
 	private static int ResponsiveTextSize(int size)
-	{
-		if (Screen.height > Screen.width)
-		{
-			return Mathf.CeilToInt(size * 1.18f);
-		}
-		return size;
-	}
+		=> Ui.ResponsiveTextSize(size);
 
 	private static int ResponsiveTextMinSize(int size)
-	{
-		return Mathf.Max(Screen.height > Screen.width ?16 : 12, Mathf.RoundToInt(size * 0.74f));
-	}
+		=> Ui.ResponsiveTextMinSize(size);
 
 	private static Button CreateButton(string name, Transform parent, Font font, string label)
 	{
@@ -331,20 +292,7 @@ public sealed partial class BattleBoardController
 	}
 
 	private static Button CreateTransparentButton(string name, Transform parent)
-	{
-		Image image = CreateImage(name, parent, Color.clear);
-		image.raycastTarget = true;
-		Button button = ((Component)image).gameObject.AddComponent<Button>();
-		button.targetGraphic = image;
-		ColorBlock colors = button.colors;
-		colors.normalColor = Color.white;
-		colors.highlightedColor = new Color(1f, 1f, 1f, 0.06f);
-		colors.pressedColor = new Color(1f, 1f, 1f, 0.12f);
-		colors.disabledColor = Color.clear;
-		colors.colorMultiplier = 1f;
-		button.colors = colors;
-		return button;
-	}
+		=> Ui.CreateTransparentButton(name, parent);
 
 	private static void StylePanel(Image image)
 	{
@@ -359,75 +307,15 @@ public sealed partial class BattleBoardController
 	}
 
 	private static Sprite GetHelpAuraSprite()
-	{
-		if ((Object)(object)helpAuraSprite != (Object)null)
-		{
-			return helpAuraSprite;
-		}
-		Texture2D val = new Texture2D(128, 128, (TextureFormat)4, false)
-		{
-			name = "help_aura",
-			filterMode = (FilterMode)1,
-			wrapMode = (TextureWrapMode)1,
-			hideFlags = (HideFlags)61
-		};
-		Color32[] array = (Color32[])(object)new Color32[16384];
-		Vector2 val2 = default(Vector2);
-		val2 = new Vector2(63.5f, 63.5f);
-		for (int i = 0; i < 128; i++)
-		{
-			for (int j = 0; j < 128; j++)
-			{
-				float num = Vector2.Distance(new Vector2((float)j, (float)i), val2) / 64f;
-				float num2 = Mathf.Exp(0f - Mathf.Pow((num - 0.72f) / 0.15f, 2f));
-				float num3 = Mathf.Clamp01(1f - num) * 0.18f;
-				byte b = (byte)Mathf.RoundToInt(255f * Mathf.Clamp01(num2 * 0.75f + num3));
-				array[i * 128 + j] = new Color32(byte.MaxValue, (byte)205, (byte)48, b);
-			}
-		}
-		val.SetPixels32(array);
-		val.Apply(false, true);
-		helpAuraSprite = Sprite.Create(val, new Rect(0f, 0f, 128f, 128f), new Vector2(0.5f, 0.5f), 100f);
-		((Object)helpAuraSprite).name = "help_aura";
-		((Object)helpAuraSprite).hideFlags = (HideFlags)61;
-		return helpAuraSprite;
-	}
+		=> ProceduralSprites.HelpAura();
 
 	private static void Stretch(RectTransform rect, float padding = 0f)
-	{
-		rect.anchorMin = Vector2.zero;
-		rect.anchorMax = Vector2.one;
-		rect.offsetMin = new Vector2(padding, padding);
-		rect.offsetMax = new Vector2(0f - padding, 0f - padding);
-	}
+		=> Ui.Stretch(rect, padding);
 
 	private static AspectRatioFitter ConfigureFittedBackground(Image image, Sprite sprite, float fallbackAspectRatio)
-	{
-		image.preserveAspect = true;
-		AspectRatioFitter obj = ((Component)image).GetComponent<AspectRatioFitter>() ?? ((Component)image).gameObject.AddComponent<AspectRatioFitter>();
-		obj.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
-		float aspectRatio;
-		if (!((Object)(object)sprite != (Object)null))
-		{
-			aspectRatio = fallbackAspectRatio;
-		}
-		else
-		{
-			Rect rect = sprite.rect;
-			float width = rect.width;
-			rect = sprite.rect;
-			aspectRatio = width / rect.height;
-		}
-		obj.aspectRatio = aspectRatio;
-		return obj;
-	}
+		=> Ui.ConfigureFittedBackground(image, sprite, fallbackAspectRatio);
 
 	private static void SetRect(RectTransform rect, Vector2 minimum, Vector2 maximum)
-	{
-		rect.anchorMin = minimum;
-		rect.anchorMax = maximum;
-		rect.offsetMin = Vector2.zero;
-		rect.offsetMax = Vector2.zero;
-	}
+		=> Ui.SetRect(rect, minimum, maximum);
 }
 }

@@ -59,6 +59,7 @@ namespace AccardND.GameData
 
         // Riferimenti ad altre pedine, codificati con CampaignBattleSave.EncodePawn.
         public int markedTarget = NoPawn;
+        public List<int> hunterMarkedTargets = new List<int>();
         public int protectedAlly = NoPawn;
         public int attachedTo = NoPawn;
     }

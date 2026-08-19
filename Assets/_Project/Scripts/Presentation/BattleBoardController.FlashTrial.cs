@@ -9,6 +9,8 @@ namespace AccardND.Presentation
 {
 public sealed partial class BattleBoardController
 {
+	private const int FlashTrialConsumableRewardCardThreshold = 12;
+
 	private readonly struct FlashTrialCampaignReward
 	{
 		public FlashTrialCampaignReward(FlashTrialSlotOutcome outcome, CardDefinition card,
@@ -40,8 +42,10 @@ public sealed partial class BattleBoardController
 		FlashTrialSlotOutcome outcome;
 		CardDefinition selectedCard = null;
 		var grantedConsumables = new List<CampaignConsumableType>();
-		bool deckIsFull = campaignDeck != null
-			&& campaignDeck.Cards.Count >= configuration.DeckBuilding.DeckSize;
+		int ownedCardCount = campaignDeck == null
+			? 0
+			: campaignDeck.AvailableCount + campaignDeck.CooldownCount + campaignDeck.GraveyardCount;
+		bool deckIsFull = ownedCardCount >= FlashTrialConsumableRewardCardThreshold;
 
 		if (!deckIsFull && available.Count > 0)
 		{
@@ -58,7 +62,7 @@ public sealed partial class BattleBoardController
 		}
 		else if (deckIsFull)
 		{
-			// A mazzo pieno (il conteggio include tutte le zone, anche il cimitero) le
+			// Da 12 carte possedute (mazzo + cooldown + cimitero) le
 			// prime due bobine pagano consumabili; la seconda soltanto con un Perfetto.
 			// La terza bobina continua sempre a pagare EXP oppure oro.
 			outcome = machine.Roll(performance, completedLevels);

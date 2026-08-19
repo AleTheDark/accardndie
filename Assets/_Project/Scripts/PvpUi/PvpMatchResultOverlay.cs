@@ -95,10 +95,7 @@ namespace AccardND.PvpUi
 				tripleButton = PvpUiFactory.CreateButton(
 					root,
 					"Triple Account EXP",
-					GameText.GetOrFallbackSilent(
-						GameTextKeys.PvpResult.TripleExperienceOffer,
-						"ADV  ×3 EXP ({0})",
-						result.accountExperienceEarned * 3),
+					GameText.Format(GameTextKeys.PvpResult.TripleExperienceOffer, result.accountExperienceEarned * 3),
 					new Color(0.42f, 0.18f, 0.62f, 0.98f),
 					() =>
 					{
@@ -107,13 +104,8 @@ namespace AccardND.PvpUi
 						{
 							if (tripleButton == null) return;
 							tripleButton.GetComponentInChildren<Text>().text = success
-								? GameText.GetOrFallbackSilent(
-									GameTextKeys.PvpResult.TripleExperienceApplied,
-									"EXP TRIPLICATA: +{0}",
-									result.accountExperienceEarned * 3)
-								: GameText.GetOrFallbackSilent(
-									GameTextKeys.PvpResult.TripleExperienceUnavailable,
-									"ADV NON DISPONIBILE");
+								? GameText.Format(GameTextKeys.PvpResult.TripleExperienceApplied, result.accountExperienceEarned * 3)
+								: GameText.Get(GameTextKeys.PvpResult.TripleExperienceUnavailable);
 							tripleButton.interactable = !success;
 						});
 					}, landscape ? 22 : 19);
@@ -173,14 +165,8 @@ namespace AccardND.PvpUi
             else if (result.endedReason == "surrender")
             {
                 builder.AppendLine(result.youWon
-                    ? GameText.GetLocalizedFallback(
-                        GameTextKeys.PvpResult.OpponentSurrendered,
-                        "HAI VINTO: IL TUO AVVERSARIO SI È ARRESO",
-                        "YOU WON: YOUR OPPONENT SURRENDERED")
-                    : GameText.GetLocalizedFallback(
-                        GameTextKeys.PvpResult.Surrendered,
-                        "Ti sei arreso.",
-                        "You surrendered."));
+                    ? GameText.Get(GameTextKeys.PvpResult.OpponentSurrendered)
+                    : GameText.Get(GameTextKeys.PvpResult.Surrendered));
             }
 
             if (result.ranked)

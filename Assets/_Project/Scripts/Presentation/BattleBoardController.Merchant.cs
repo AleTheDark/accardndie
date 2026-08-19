@@ -53,7 +53,6 @@ public sealed partial class BattleBoardController
 			SetImplementationArchiveVisible(visible: false);
 			SetMerchantInventoryLauncherVisible(visible: false);
 			merchantPanel.SetActive(true);
-			ShowMerchantHint();
 		}
 	}
 
@@ -182,10 +181,7 @@ public sealed partial class BattleBoardController
 		EnsureMerchantStock();
 		if ((Object)(object)merchantStatusText != (Object)null)
 		{
-			merchantStatusText.text = GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.GoldAvailable,
-				"ORO <size=30>{0}</size>  •  CARTE 12/18/26/36  •  UPGRADE +1 DA 14 ORO  •  PREZZI FISSI",
-				runProgress.Gold);
+			merchantStatusText.text = GameText.Format(GameTextKeys.Merchant.GoldAvailable, runProgress.Gold);
 		}
 		RefreshMerchantBranchTabs();
 		RefreshMerchantShelf();
@@ -203,21 +199,21 @@ public sealed partial class BattleBoardController
 			merchantCardsTabLockImage,
 			merchantCardsTabVfx,
 			MerchantBranch.Cards,
-			GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchCards, "CARTE"));
+			GameText.Get(GameTextKeys.Merchant.BranchCards));
 		ApplyMerchantTabState(
 			merchantItemsTabButton,
 			merchantItemsTabText,
 			merchantItemsTabLockImage,
 			merchantItemsTabVfx,
 			MerchantBranch.Items,
-			GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchItems, "OGGETTI"));
+			GameText.Get(GameTextKeys.Merchant.BranchItems));
 		ApplyMerchantTabState(
 			merchantUpgradesTabButton,
 			merchantUpgradesTabText,
 			merchantUpgradesTabLockImage,
 			merchantUpgradesTabVfx,
 			MerchantBranch.Upgrades,
-			GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchUpgrades, "POTENZIA"));
+			GameText.Get(GameTextKeys.Merchant.BranchUpgrades));
 	}
 
 	private void ApplyMerchantTabState(
@@ -369,9 +365,7 @@ public sealed partial class BattleBoardController
 			List<CardDefinition> pool = GetMerchantMysteryCardPool();
 			if (pool.Count == 0)
 			{
-				SetMessage(GameText.GetOrFallbackSilent(
-					GameTextKeys.Merchant.NoMoreCards,
-					"MERCATO: il mercante non ha altre carte da offrirti."));
+				SetMessage(GameText.Get(GameTextKeys.Merchant.NoMoreCards));
 				RefreshMerchantPanel();
 				return;
 			}
@@ -385,18 +379,14 @@ public sealed partial class BattleBoardController
 		int cost = EffectiveMerchantCost(offer.Cost);
 		if (runProgress.Gold < cost)
 		{
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.InsufficientGold,
-				"MERCATO: servono {0} oro, disponibili {1}.",
-				cost,
-				runProgress.Gold));
+			SetMessage(GameText.Format(GameTextKeys.Merchant.InsufficientGold, cost, runProgress.Gold));
 			RefreshMerchantPanel();
 			return;
 		}
 		if (merchantLockedBranch == MerchantBranch.None && !branchLockConfirmed)
 		{
 			string purchaseName = offer.Mystery
-				? GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UnknownCard, "una carta ignota")
+				? GameText.Get(GameTextKeys.Merchant.UnknownCard)
 				: CardDisplayNames.MarketName(definition);
 			ShowMerchantBranchConfirmPopup(
 				MerchantBranch.Cards,
@@ -412,9 +402,7 @@ public sealed partial class BattleBoardController
 			List<CardDefinition> pool = GetMerchantMysteryCardPool();
 			if (pool.Count == 0)
 			{
-				SetMessage(GameText.GetOrFallbackSilent(
-					GameTextKeys.Merchant.NoMoreCards,
-					"MERCATO: il mercante non ha altre carte da offrirti."));
+				SetMessage(GameText.Get(GameTextKeys.Merchant.NoMoreCards));
 				RefreshMerchantPanel();
 				return;
 			}
@@ -422,11 +410,7 @@ public sealed partial class BattleBoardController
 		}
 		if (!runProgress.TrySpendGold(cost))
 		{
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.InsufficientGold,
-				"MERCATO: servono {0} oro, disponibili {1}.",
-				cost,
-				runProgress.Gold));
+			SetMessage(GameText.Format(GameTextKeys.Merchant.InsufficientGold, cost, runProgress.Gold));
 			RefreshMerchantPanel();
 			return;
 		}
@@ -444,22 +428,12 @@ public sealed partial class BattleBoardController
 		if (ShouldTrackQuestProgress)
 			runProgress.RecordMerchantPurchase();
 		string displayName = CardDisplayNames.MarketName(definition);
-		AppendLog(GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.CardPurchaseLog,
-			"ACQUISTO - {0}, -{1} oro.",
-			displayName,
-			cost));
+		AppendLog(GameText.Format(GameTextKeys.Merchant.CardPurchaseLog, displayName, cost));
 		PlayBuyCardSfx();
 		string mystery = offer.Mystery
-			? GameText.GetOrFallbackSilent(GameTextKeys.Merchant.MysteryPurchasePrefix, "CARTA IGNOTA: ")
-			: GameText.GetOrFallbackSilent(GameTextKeys.Merchant.PurchasePrefix, "ACQUISTO: ");
-		SetMessage(GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.CardPurchased,
-			"{0}{1} entra nel mazzo per {2} oro. Oro disponibile: {3}.",
-			mystery,
-			displayName,
-			cost,
-			runProgress.Gold));
+			? GameText.Get(GameTextKeys.Merchant.MysteryPurchasePrefix)
+			: GameText.Get(GameTextKeys.Merchant.PurchasePrefix);
+		SetMessage(GameText.Format(GameTextKeys.Merchant.CardPurchased, mystery, displayName, cost, runProgress.Gold));
 		RefreshMerchantPanel();
 	}
 
@@ -491,11 +465,7 @@ public sealed partial class BattleBoardController
 		int cost = EffectiveMerchantCost(offer.Cost);
 		if (runProgress.Gold < cost)
 		{
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.InsufficientGold,
-				"MERCATO: servono {0} oro, disponibili {1}.",
-				cost,
-				runProgress.Gold));
+			SetMessage(GameText.Format(GameTextKeys.Merchant.InsufficientGold, cost, runProgress.Gold));
 			RefreshMerchantPanel();
 			return;
 		}
@@ -510,11 +480,7 @@ public sealed partial class BattleBoardController
 		}
 		if (!runProgress.TrySpendGold(cost))
 		{
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.InsufficientGold,
-				"MERCATO: servono {0} oro, disponibili {1}.",
-				cost,
-				runProgress.Gold));
+			SetMessage(GameText.Format(GameTextKeys.Merchant.InsufficientGold, cost, runProgress.Gold));
 			RefreshMerchantPanel();
 			return;
 		}
@@ -524,18 +490,9 @@ public sealed partial class BattleBoardController
 		if (ShouldTrackQuestProgress)
 			runProgress.RecordMerchantPurchase();
 		string itemName = CampaignConsumableName(offer.ItemType);
-		AppendLog(GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.ItemPurchaseLog,
-			"ACQUISTO OGGETTO - {0}, -{1} oro.",
-			itemName,
-			cost));
+		AppendLog(GameText.Format(GameTextKeys.Merchant.ItemPurchaseLog, itemName, cost));
 		PlayBuyCardSfx();
-		SetMessage(GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.ItemPurchased,
-			"ACQUISTO: {0} entra nella borsa per {1} oro. Oro disponibile: {2}.",
-			itemName,
-			cost,
-			runProgress.Gold));
+		SetMessage(GameText.Format(GameTextKeys.Merchant.ItemPurchased, itemName, cost, runProgress.Gold));
 		RefreshMerchantPanel();
 	}
 
@@ -550,8 +507,8 @@ public sealed partial class BattleBoardController
 			confirmAction?.Invoke();
 			return;
 		}
-		string cardsBranch = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchCards, "CARTE");
-		string itemsBranch = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.BranchItems, "OGGETTI");
+		string cardsBranch = GameText.Get(GameTextKeys.Merchant.BranchCards);
+		string itemsBranch = GameText.Get(GameTextKeys.Merchant.BranchItems);
 		string chosenName = chosenBranch switch
 		{
 			MerchantBranch.Cards => cardsBranch,
@@ -564,16 +521,8 @@ public sealed partial class BattleBoardController
 			MerchantBranch.Items => "CARTE",
 			_ => string.Empty
 		};
-		merchantBranchConfirmTitleText.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.BranchConfirmTitle,
-			"SCEGLI IL BANCO {0}",
-			chosenName);
-		merchantBranchConfirmBodyText.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.BranchConfirmBody,
-			"Stai per acquistare {0} per {1} oro. Questo primo acquisto chiuderà il banco {2} fino alla prossima stanza Mercato.\n\nVuoi procedere?",
-			purchaseName,
-			cost,
-			closedName);
+		merchantBranchConfirmTitleText.text = GameText.Format(GameTextKeys.Merchant.BranchConfirmTitle, chosenName);
+		merchantBranchConfirmBodyText.text = GameText.Format(GameTextKeys.Merchant.BranchConfirmBody, purchaseName, cost, closedName);
 		merchantBranchConfirmAction = confirmAction;
 		merchantBranchConfirmPopup.SetActive(true);
 		merchantBranchConfirmPopup.transform.SetAsLastSibling();
@@ -600,9 +549,7 @@ public sealed partial class BattleBoardController
 		if (selectedMerchantSaleCard == null)
 		{
 			merchantSellText.text = upgradePage
-				? GameText.GetOrFallbackSilent(
-					GameTextKeys.Merchant.UpgradeSelectionHint,
-					"Scegli una pedina da potenziare. Servono le Reliquie del Fabbro del Santuario.")
+				? GameText.Get(GameTextKeys.Merchant.UpgradeSelectionHint)
 				: merchantShowingGraveyard
 				? "Scegli una pedina da recuperare."
 				: "Scegli una pedina da vendere.";
@@ -612,24 +559,18 @@ public sealed partial class BattleBoardController
 		string displayName = CardDisplayNames.MarketName(definition);
 		if (selectedMerchantSaleCard.Zone == CampaignCardZone.Graveyard)
 		{
-			merchantSellText.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.RecoverDescription, "{0}\nRecupero dal Cimitero", displayName);
+			merchantSellText.text = GameText.Format(GameTextKeys.Merchant.RecoverDescription, displayName);
 		}
 		else if (upgradePage)
 		{
 			int strength = definition.Strength + selectedMerchantSaleCard.PermanentItemBonus;
 			merchantSellText.text = selectedMerchantSaleCard.MerchantUpgradeCount >= MerchantMaximumUpgrades
-				? GameText.GetOrFallbackSilent(
-					GameTextKeys.Merchant.UpgradeCardMaximumDescription,
-					"{0}  •  Forza {1}\nPotenziamento massimo raggiunto",
-					displayName, strength)
-				: GameText.GetOrFallbackSilent(
-					GameTextKeys.Merchant.UpgradeCardDescription,
-					"{0}  •  Forza {1}\nUpgrade +1: {2} oro",
-					displayName, strength, UpgradeCostFor(selectedMerchantSaleCard));
+				? GameText.Format(GameTextKeys.Merchant.UpgradeCardMaximumDescription, displayName, strength)
+				: GameText.Format(GameTextKeys.Merchant.UpgradeCardDescription, displayName, strength, UpgradeCostFor(selectedMerchantSaleCard));
 		}
 		else
 		{
-			merchantSellText.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.SellDescription, "{0}\nVendita al Mercante", displayName);
+			merchantSellText.text = GameText.Format(GameTextKeys.Merchant.SellDescription, displayName);
 		}
 	}
 
@@ -648,11 +589,8 @@ public sealed partial class BattleBoardController
 			if ((Object)(object)sellLabel != (Object)null)
 			{
 				sellLabel.text = hasSelection
-					? GameText.GetOrFallbackSilent(
-						GameTextKeys.Merchant.SellForGold,
-						"VENDI  +{0} ORO",
-						SellValueFor(selectedMerchantSaleCard.Definition))
-					: GameText.GetOrFallbackSilent(GameTextKeys.Merchant.SelectCard, "SELEZIONA CARTA");
+					? GameText.Format(GameTextKeys.Merchant.SellForGold, SellValueFor(selectedMerchantSaleCard.Definition))
+					: GameText.Get(GameTextKeys.Merchant.SelectCard);
 			}
 		}
 		if ((Object)(object)merchantRecoverButton != (Object)null)
@@ -665,11 +603,8 @@ public sealed partial class BattleBoardController
 			if ((Object)(object)recoverLabel != (Object)null)
 			{
 				recoverLabel.text = hasSelection
-					? GameText.GetOrFallbackSilent(
-						GameTextKeys.Merchant.RecoverForGold,
-						"RECUPERA  -{0} ORO",
-						RecoveryCostFor(selectedMerchantSaleCard.Definition))
-					: GameText.GetOrFallbackSilent(GameTextKeys.Merchant.SelectCard, "SELEZIONA CARTA");
+					? GameText.Format(GameTextKeys.Merchant.RecoverForGold, RecoveryCostFor(selectedMerchantSaleCard.Definition))
+					: GameText.Get(GameTextKeys.Merchant.SelectCard);
 			}
 		}
 		if ((Object)(object)merchantUpgradeButton != (Object)null)
@@ -685,18 +620,12 @@ public sealed partial class BattleBoardController
 			if ((Object)(object)upgradeLabel != (Object)null)
 			{
 				upgradeLabel.text = !hasSelection
-					? GameText.GetOrFallbackSilent(GameTextKeys.Merchant.SelectUpgradePawn, "SELEZIONA PEDINA")
+					? GameText.Get(GameTextKeys.Merchant.SelectUpgradePawn)
 					: upgradeEligible
-						? GameText.GetOrFallbackSilent(
-							GameTextKeys.Merchant.UpgradeAction,
-							"POTENZIA +1  •  {0} ORO",
-							UpgradeCostFor(selectedMerchantSaleCard))
+						? GameText.Format(GameTextKeys.Merchant.UpgradeAction, UpgradeCostFor(selectedMerchantSaleCard))
 						: selectedMerchantSaleCard.MerchantUpgradeCount >= MerchantMaximumUpgrades
-							? GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeMaximum, "POTENZIAMENTO MAX")
-							: GameText.GetOrFallbackSilent(
-								GameTextKeys.Merchant.UpgradeRelicRequired,
-								"SERVE RELIQUIA DEL FABBRO {0}",
-								selectedMerchantSaleCard.MerchantUpgradeCount + 1);
+							? GameText.Get(GameTextKeys.Merchant.UpgradeMaximum)
+							: GameText.Format(GameTextKeys.Merchant.UpgradeRelicRequired, selectedMerchantSaleCard.MerchantUpgradeCount + 1);
 			}
 		}
 	}
@@ -713,11 +642,11 @@ public sealed partial class BattleBoardController
 			((Component)merchantGraveyardTabButton).gameObject.SetActive(!upgradePage);
 		if ((Object)(object)merchantDeckTabText != (Object)null)
 		{
-			merchantDeckTabText.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.DeckCount, "MAZZO {0}", deckCards.Count);
+			merchantDeckTabText.text = GameText.Format(GameTextKeys.Merchant.DeckCount, deckCards.Count);
 		}
 		if ((Object)(object)merchantGraveyardTabText != (Object)null)
 		{
-			merchantGraveyardTabText.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.GraveyardCount, "CIMITERO {0}", graveyardCards.Count);
+			merchantGraveyardTabText.text = GameText.Format(GameTextKeys.Merchant.GraveyardCount, graveyardCards.Count);
 		}
 		SetMerchantOwnedCardsTabActive(
 			merchantDeckTabButton,
@@ -903,16 +832,8 @@ public sealed partial class BattleBoardController
 		selectedMerchantSaleCard = null;
 		PlayBuyCardSfx();
 		string displayName = CardDisplayNames.MarketName(definition);
-		AppendLog(GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.SoldLog,
-			"VENDITA - {0}, +{1} oro.",
-			displayName,
-			num));
-		SetMessage(GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.Sold,
-			"VENDUTA: {0}. Ottieni {1} oro.",
-			displayName,
-			num));
+		AppendLog(GameText.Format(GameTextKeys.Merchant.SoldLog, displayName, num));
+		SetMessage(GameText.Format(GameTextKeys.Merchant.Sold, displayName, num));
 		RefreshMerchantPanel();
 	}
 
@@ -937,12 +858,7 @@ public sealed partial class BattleBoardController
 		string displayName = CardDisplayNames.MarketName(definition);
 		if (!runProgress.TrySpendGold(num))
 		{
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.RecoverInsufficientGold,
-				"MERCATO: servono {0} oro per recuperare {1}, disponibili {2}.",
-				num,
-				displayName,
-				runProgress.Gold));
+			SetMessage(GameText.Format(GameTextKeys.Merchant.RecoverInsufficientGold, num, displayName, runProgress.Gold));
 			RefreshMerchantPanel();
 		}
 		else if (!campaignDeck.RecoverFromGraveyard(selectedMerchantSaleCard))
@@ -955,16 +871,8 @@ public sealed partial class BattleBoardController
 		{
 			if (ShouldTrackQuestProgress)
 				runProgress.RecordMerchantPurchase();
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.RecoveredLog,
-				"RECUPERO MERCATO - {0} torna nel mazzo, -{1} oro.",
-				displayName,
-				num));
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.Recovered,
-				"RECUPERATA: {0} torna nel mazzo per {1} oro. Ora puoi venderla o tenerla.",
-				displayName,
-				num));
+			AppendLog(GameText.Format(GameTextKeys.Merchant.RecoveredLog, displayName, num));
+			SetMessage(GameText.Format(GameTextKeys.Merchant.Recovered, displayName, num));
 			RefreshMerchantPanel();
 		}
 	}
@@ -1070,23 +978,23 @@ public sealed partial class BattleBoardController
 		CampaignCardInstance card = selectedMerchantSaleCard;
 		if (card == null || card.Zone == CampaignCardZone.Graveyard)
 		{
-			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeSelectDeckPawn, "MERCATO: scegli una pedina del mazzo da potenziare."));
+			SetMessage(GameText.Get(GameTextKeys.Merchant.UpgradeSelectDeckPawn));
 			return;
 		}
 		if (card.MerchantUpgradeCount >= MerchantMaximumUpgrades)
 		{
-			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeAlreadyMaximum, "MERCATO: questa pedina ha gia' raggiunto il massimo di 2 potenziamenti."));
+			SetMessage(GameText.Get(GameTextKeys.Merchant.UpgradeAlreadyMaximum));
 			return;
 		}
 		if (merchantVisibleBranch != MerchantBranch.Upgrades || IsMerchantBranchLocked(MerchantBranch.Upgrades))
 		{
-			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeBranchLocked, "MERCATO: il banco Potenzia e' chiuso fino alla prossima stanza."));
+			SetMessage(GameText.Get(GameTextKeys.Merchant.UpgradeBranchLocked));
 			return;
 		}
 		int requiredRelic = card.MerchantUpgradeCount + 1;
 		if (!HasMerchantUpgradeRelic(requiredRelic))
 		{
-			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeUnlockRelic, "MERCATO: sblocca la Reliquia del Fabbro {0} al Santuario.", requiredRelic));
+			SetMessage(GameText.Format(GameTextKeys.Merchant.UpgradeUnlockRelic, requiredRelic));
 			RefreshMerchantPanel();
 			return;
 		}
@@ -1100,7 +1008,7 @@ public sealed partial class BattleBoardController
 		if (!runProgress.TrySpendGold(cost))
 		{
 			RestoreMerchantUpgradeCost(usedFreeUpgrade);
-			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeInsufficientGold, "MERCATO: servono {0} oro per il potenziamento, disponibili {1}.", cost, runProgress.Gold));
+			SetMessage(GameText.Format(GameTextKeys.Merchant.UpgradeInsufficientGold, cost, runProgress.Gold));
 			RefreshMerchantPanel();
 			return;
 		}
@@ -1108,7 +1016,7 @@ public sealed partial class BattleBoardController
 		{
 			runProgress.AddGold(cost);
 			RestoreMerchantUpgradeCost(usedFreeUpgrade);
-			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeUnavailable, "MERCATO: questa pedina non puo' essere potenziata adesso."));
+			SetMessage(GameText.Get(GameTextKeys.Merchant.UpgradeUnavailable));
 			RefreshMerchantPanel();
 			return;
 		}
@@ -1118,13 +1026,13 @@ public sealed partial class BattleBoardController
 		string displayName = CardDisplayNames.MarketName(card.Definition);
 		if (cost <= 0)
 		{
-			AppendLog(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeFreeLog, "POTENZIAMENTO MERCATO - {0} ottiene +1 Forza. Primo affare: gratis.", displayName));
-			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradeFreeSuccess, "POTENZIATA: {0} ottiene +1 Forza permanente. Primo affare: gratis.", displayName));
+			AppendLog(GameText.Format(GameTextKeys.Merchant.UpgradeFreeLog, displayName));
+			SetMessage(GameText.Format(GameTextKeys.Merchant.UpgradeFreeSuccess, displayName));
 		}
 		else
 		{
-			AppendLog(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradePaidLog, "POTENZIAMENTO MERCATO - {0} ottiene +1 Forza, -{1} oro.", displayName, cost));
-			SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Merchant.UpgradePaidSuccess, "POTENZIATA: {0} ottiene +1 Forza permanente per {1} oro.", displayName, cost));
+			AppendLog(GameText.Format(GameTextKeys.Merchant.UpgradePaidLog, displayName, cost));
+			SetMessage(GameText.Format(GameTextKeys.Merchant.UpgradePaidSuccess, displayName, cost));
 		}
 		PlayForgeHitSfx();
 		RefreshMerchantPanel();
@@ -1133,10 +1041,7 @@ public sealed partial class BattleBoardController
 	private void RefreshBagGoldCounter()
 	{
 		if ((Object)(object)implementationArchiveGoldText != (Object)null)
-			implementationArchiveGoldText.text = GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.GoldCounter,
-				"ORO {0}",
-				Math.Max(0, runProgress?.Gold ?? 0));
+			implementationArchiveGoldText.text = GameText.Format(GameTextKeys.Merchant.GoldCounter, Math.Max(0, runProgress?.Gold ?? 0));
 	}
 }
 }

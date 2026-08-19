@@ -278,6 +278,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 
 		public BattleCardState MarkedTarget { get; set; }
 
+		public HashSet<BattleCardState> HunterMarkedTargets { get; } = new HashSet<BattleCardState>();
+
 		public BattleCardState ProtectedAlly { get; set; }
 
 		public BattleCardState AttachedTo { get; set; }
@@ -298,11 +300,9 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			if (campaignCard != null)
 			{
 				PermanentCombatBonus = campaignCard.PermanentItemBonus;
-				// I potenziamenti permanenti del fabbro/mercante sono equipaggiamento:
-				// devono quindi comparire sia nell'inspection card sia nel token buff.
-				// Il Sigillo Oscuro mantiene invece la propria voce dedicata.
-				int rubySealBonus = campaignCard.HasRubySeal ? RubySealPowerBonus : 0;
-				HasEquipment = campaignCard.PermanentItemBonus > rubySealBonus;
+				// Gli upgrade della forgia/mercante non sono equipaggiamenti. HasEquipment
+				// viene attivato soltanto quando una pedina viene sacrificata in battaglia.
+				HasEquipment = false;
 			}
 		}
 
@@ -385,7 +385,6 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		}
 	}
 
-	private static Sprite helpAuraSprite;
 
 	private static readonly Dictionary<string, Sprite> spriteResourceCache = new Dictionary<string, Sprite>();
 
@@ -444,6 +443,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 	private readonly List<GameObject> draftEntranceOverlayObjects = new List<GameObject>();
 
 	private Coroutine draftEntranceCoroutine;
+	private int draftEntranceAnimationVersion;
+	private int activeDraftEntranceCards;
 
 	private Coroutine handRelayoutCoroutine;
 
@@ -1451,9 +1452,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 			RefreshMerchantPanel();
 			SetTurnBanner(
 				playerTurn: true,
-				GameText.GetOrFallbackSilent(
-					GameTextKeys.Campaign.MerchantRoomCompleteBanner,
-					"SPENDI GOLD O CONTINUA"));
+				GameText.Get(GameTextKeys.Campaign.MerchantRoomCompleteBanner));
 		}
 
 		if ((Object)(object)tavernPanel != (Object)null && tavernPanel.activeSelf)
@@ -1629,16 +1628,20 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		return keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
 	}
 
+	/// <summary>Pulizia degli effetti che non devono sopravvivere alla disattivazione della scena.</summary>
+	private void OnDisable()
+	{
+		ClearManaDeltaCallouts();
+		ClearEnemyManaDeltaCallouts();
+		RestoreBossShakeTransform();
+		DestroyBossTransitionBlackout();
+	}
+
 	private bool CloseTopmostOverlay()
 	{
 		if (IsActive(campaignDefeatRewardPopup))
 		{
 			ContinueAfterCampaignDefeatReward();
-			return true;
-		}
-		else if (IsActive(hintPanel))
-		{
-			DismissHint();
 			return true;
 		}
 		else if (IsActive(auraCodexPanel))
@@ -1791,7 +1794,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		Text text = CreateText("Top Info Text", topInfoBar.transform, builtinResource, 50, (FontStyle)1, (TextAnchor)3);
 		titleRect = text.rectTransform;
 		topInfoText = text;
-		topInfoText.text = GameText.GetOrFallbackSilent(GameTextKeys.Combat.CpuHudRoom, "STANZA {0}", 1);
+		topInfoText.text = GameText.Format(GameTextKeys.Combat.CpuHudRoom, 1);
 		topInfoText.font = Resources.Load<Font>("Fonts/LifeCraft_Font") ?? AccardND.Battlefield.MmoUiTheme.BodyFont;
 		topInfoText.fontStyle = FontStyle.Normal;
 		topInfoText.alignment = TextAnchor.MiddleCenter;
@@ -1839,8 +1842,8 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		AccardND.Battlefield.MmoUiTheme.StyleAsTitle(text2);
 		cpuTitleRect = text2.rectTransform;
 		text2.text = ((Object)(object)currentScenario != (Object)null)
-			? GameText.GetOrFallbackSilent(GameTextKeys.Combat.CpuMasterScenario, "CPU - IL MASTER   *   {0}", currentScenario.DisplayName.ToUpperInvariant())
-			: GameText.GetOrFallbackSilent(GameTextKeys.Combat.CpuMaster, "CPU - IL MASTER");
+			? GameText.Format(GameTextKeys.Combat.CpuMasterScenario, currentScenario.DisplayName.ToUpperInvariant())
+			: GameText.Get(GameTextKeys.Combat.CpuMaster);
 		SetRect(text2.rectTransform, new Vector2(0.12f, 0.805f), new Vector2(0.88f, 0.85f));
 		((Component)text2).gameObject.SetActive(false);
 		cpuRow = CreateCardRow("CPU Formation", (Transform)(object)safeAreaRoot, new Vector2(0.5f, 0.67f));
@@ -1891,7 +1894,7 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		StylePanel(turnBannerImage);
 		SetRect(turnBannerImage.rectTransform, new Vector2(0.1825f, 0.69f), new Vector2(0.8175f, 0.98f));
 		turnBannerText = CreateText("Current Turn", ((Component)turnBannerImage).transform, builtinResource, 24, (FontStyle)1, (TextAnchor)4);
-		turnBannerText.text = GameText.GetOrFallbackSilent(GameTextKeys.Combat.Preparation, "PREPARAZIONE");
+		turnBannerText.text = GameText.Get(GameTextKeys.Combat.Preparation);
 		Stretch(turnBannerText.rectTransform, 4f);
 		restartButton = CreateButton("Primary Action", ((Component)image7).transform, builtinResource, "CONTINUA");
 		((UnityEvent)restartButton.onClick).AddListener(new UnityAction(HandlePrimaryAction));
@@ -1971,7 +1974,6 @@ public sealed partial class BattleBoardController : MonoBehaviour, IPvpMatchView
 		CreateSanctuaryView(builtinResource);
 		CreateShopView(builtinResource);
 		CreateProfileView(builtinResource);
-		CreateHintOverlay((Transform)(object)safeAreaRoot, builtinResource);
 		CreateAuraCodexView(((Component)val).transform, builtinResource);
 		// Il velo di fine campagna deve coprire anche le aree esterne alla safe area
 		// (notch/status bar). Il dialogo mantiene comunque il proprio layout centrale.

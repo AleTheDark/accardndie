@@ -28,11 +28,11 @@ MonoBehaviour:
     cpuCardRevealDuration: 0.4
     selectedCardScale: 1.055
     draftCardEnterDuration: 0.18
-    draftCardCenterHold: 0.2
+    draftCardCenterHold: 0.3
     draftCardSettleDuration: 0.22
     draftCardEntranceStagger: 0.055
     draftCardEntranceInitialDelay: 0.2
-    draftCardEntranceScale: 1.5
+    draftCardEntranceScale: 2.5
     roomFadeOutDuration: 0.32
     roomBlackHoldDuration: 0.14
     roomFadeInDuration: 0.42

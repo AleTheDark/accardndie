@@ -48,15 +48,13 @@ public sealed partial class BattleBoardController
 		switch (product)
 		{
 			case IapProduct.NoAds:
-				return GameText.GetOrFallbackSilent(GameTextKeys.Merchant.ShopPremiumNoAds, "NO ADS");
+				return GameText.Get(GameTextKeys.Merchant.ShopPremiumNoAds);
 			case IapProduct.Classes:
-				return GameText.GetOrFallbackSilent(GameTextKeys.Merchant.ShopPremiumClasses, "CLASSI");
+				return GameText.Get(GameTextKeys.Merchant.ShopPremiumClasses);
 			case IapProduct.ClassesSupreme:
-				return GameText.GetOrFallbackSilent(
-					GameTextKeys.Merchant.ShopPremiumClassesSupreme, "CLASSI + SUPREME");
+				return GameText.Get(GameTextKeys.Merchant.ShopPremiumClassesSupreme);
 			default:
-				return GameText.GetOrFallbackSilent(
-					GameTextKeys.Merchant.ShopPremiumSupremeUpgrade, "SUPREME");
+				return GameText.Get(GameTextKeys.Merchant.ShopPremiumSupremeUpgrade);
 		}
 	}
 
@@ -81,7 +79,7 @@ public sealed partial class BattleBoardController
 		{
 			color = new Color(0.55f, 0.9f, 0.62f);
 			interactable = false;
-			return GameText.GetOrFallbackSilent(GameTextKeys.Merchant.ShopPremiumOwned, "POSSEDUTO");
+			return GameText.Get(GameTextKeys.Merchant.ShopPremiumOwned);
 		}
 
 		IapOffer offer = IapService.Offers.Find(product);
@@ -90,8 +88,7 @@ public sealed partial class BattleBoardController
 		{
 			color = ShopBody;
 			interactable = false;
-			return price + "\n" + GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.ShopPremiumAndroidOnly, "SOLO NELL'APP ANDROID");
+			return price + "\n" + GameText.Get(GameTextKeys.Merchant.ShopPremiumAndroidOnly);
 		}
 
 		color = ShopGold;
@@ -110,8 +107,7 @@ public sealed partial class BattleBoardController
 			return;
 		premiumPurchaseInFlight = true;
 		RefreshShop();
-		SetShopStatus(GameText.GetOrFallbackSilent(
-			GameTextKeys.Merchant.ShopPremiumOpening, "Apro il pagamento..."));
+		SetShopStatus(GameText.Get(GameTextKeys.Merchant.ShopPremiumOpening));
 		try
 		{
 			IapPurchaseResult result = await IapService.PurchaseAsync(product);
@@ -124,13 +120,10 @@ public sealed partial class BattleBoardController
 					SetShopStatus(string.Empty);
 					break;
 				case IapOutcome.Deferred:
-					SetShopStatus(GameText.GetOrFallbackSilent(
-						GameTextKeys.Merchant.ShopPremiumDeferred,
-						"Pagamento in attesa di approvazione: lo sblocco arrivera' da solo."));
+					SetShopStatus(GameText.Get(GameTextKeys.Merchant.ShopPremiumDeferred));
 					break;
 				case IapOutcome.Unavailable:
-					SetShopStatus(GameText.GetOrFallbackSilent(
-						GameTextKeys.Merchant.ShopPremiumAndroidOnly, "SOLO NELL'APP ANDROID"));
+					SetShopStatus(GameText.Get(GameTextKeys.Merchant.ShopPremiumAndroidOnly));
 					break;
 				default:
 					// "already_owned" non e' un errore: e' un acquisto che c'e' gia' e che
@@ -138,16 +131,14 @@ public sealed partial class BattleBoardController
 					if (result.Message == "already_owned")
 						await SyncEntitlementsAsync(restore: true);
 					else
-						SetShopStatus(GameText.GetOrFallbackSilent(
-							GameTextKeys.Merchant.ShopPremiumFailed, "Acquisto non riuscito: {0}", result.Message));
+						SetShopStatus(GameText.Format(GameTextKeys.Merchant.ShopPremiumFailed, result.Message));
 					break;
 			}
 		}
 		catch (Exception exception)
 		{
 			AppendLog("NEGOZIO - acquisto premium fallito: " + exception.Message);
-			SetShopStatus(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.ShopPremiumFailed, "Acquisto non riuscito: {0}", exception.Message));
+			SetShopStatus(GameText.Format(GameTextKeys.Merchant.ShopPremiumFailed, exception.Message));
 		}
 		finally
 		{
@@ -164,9 +155,7 @@ public sealed partial class BattleBoardController
 		{
 			// Pagato ma offline: non si conferma l'ordine, cosi' resta pendente e il
 			// ripristino lo ripresentera' appena il server torna raggiungibile.
-			SetShopStatus(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.ShopPremiumOffline,
-				"Acquisto ricevuto: lo sblocco arrivera' appena torni online."));
+			SetShopStatus(GameText.Get(GameTextKeys.Merchant.ShopPremiumOffline));
 			return;
 		}
 
@@ -177,14 +166,13 @@ public sealed partial class BattleBoardController
 		{
 			IapService.Confirm(receipt.Product);
 			await RefreshAfterPremiumGrantAsync();
-			SetShopStatus(GameText.GetOrFallbackSilent(
-				GameTextKeys.Merchant.ShopPremiumGranted, "Affare fatto: {0} e' tuo.", PremiumTitle(product)));
+			SetShopStatus(GameText.Format(GameTextKeys.Merchant.ShopPremiumGranted, PremiumTitle(product)));
 			return;
 		}
 
 		string reason = result?.messageKey ?? "shop.premium.bad_receipt";
 		AppendLog("NEGOZIO - riscatto rifiutato dal server: " + reason);
-		SetShopStatus(GameText.GetOrFallbackSilent(reason, "Ricevuta non valida: acquisto non applicato."));
+		SetShopStatus(GameText.Get(reason));
 	}
 
 	/// <summary>

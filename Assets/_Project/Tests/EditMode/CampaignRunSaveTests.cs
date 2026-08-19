@@ -350,11 +350,147 @@ namespace AccardND.GameCore.Tests
 		public void Service_LegacySaveWithoutMana_UsesCampaignDefault()
 		{
 			var store = new InMemoryStore();
-			store.Save("{\"version\":1}");
-			var service = new CampaignRunSaveService(store);
+			store.Save("{\"version\":1,\"gameVersion\":\"1.0.0\"}");
+			var service = new CampaignRunSaveService(store, () => "1.0.0");
 
 			Assert.That(service.TryLoad(out CampaignRunSave loaded), Is.True);
 			Assert.That(loaded.playerMana, Is.EqualTo(CampaignRunSave.DefaultPlayerMana));
+		}
+
+		// --- La patch ---
+
+		/// <summary>
+		/// Una run comincia con le carte, i costi e le stanze della sua versione. Ripresa con
+		/// un'altra rimetterebbe in piedi uno stato che quella versione non sa piu' leggere:
+		/// il salvataggio non si usa, e si dice al giocatore con che versione l'aveva
+		/// cominciata invece di farlo sparire in silenzio.
+		/// </summary>
+		[Test]
+		public void ARunPlayedWithAnotherPatch_IsNotResumed()
+		{
+			var store = new InMemoryStore();
+			new CampaignRunSaveService(store, () => "1.4.0").Save(new CampaignRunSave { roomsCleared = 5 });
+
+			var afterTheUpdate = new CampaignRunSaveService(store, () => "1.5.0");
+
+			Assert.That(afterTheUpdate.Load(out CampaignRunSave loaded),
+				Is.EqualTo(CampaignRunLoadResult.OtherGameVersion));
+			Assert.That(loaded, Is.Not.Null, "Il salvataggio esce comunque: serve a dire quale versione era.");
+			Assert.That(loaded.gameVersion, Is.EqualTo("1.4.0"));
+			Assert.That(afterTheUpdate.TryLoad(out CampaignRunSave usable), Is.False);
+			Assert.That(usable, Is.Null);
+		}
+
+		[Test]
+		public void ARunPlayedWithThisPatch_IsResumed()
+		{
+			var store = new InMemoryStore();
+			var service = new CampaignRunSaveService(store, () => "1.4.0");
+			service.Save(new CampaignRunSave { roomsCleared = 5 });
+
+			Assert.That(service.Load(out CampaignRunSave loaded), Is.EqualTo(CampaignRunLoadResult.Loaded));
+			Assert.That(loaded.roomsCleared, Is.EqualTo(5));
+			Assert.That(loaded.gameVersion, Is.EqualTo("1.4.0"), "La patch la timbra il servizio, non il chiamante.");
+		}
+
+		[Test]
+		public void ASaveWrittenBeforeTheVersionStamp_IsNotResumed()
+		{
+			var store = new InMemoryStore();
+			store.Save("{\"version\":2,\"roomsCleared\":3}");
+
+			Assert.That(new CampaignRunSaveService(store, () => "1.4.0").Load(out _),
+				Is.EqualTo(CampaignRunLoadResult.OtherGameVersion));
+		}
+
+		// --- La stanza in corso ---
+
+		/// <summary>
+		/// Il punto di ripresa non deve mai stare prima di una scelta gia' fatta: se il
+		/// giocatore e' entrato in una stanza, il salvataggio deve dire quella stanza e non
+		/// la scelta della via, o riaprire il gioco diventa un modo di cambiare porta.
+		/// </summary>
+		[Test]
+		public void AnOpenedRoom_ComesBackAsThatRoomAndNotAsTheChoice()
+		{
+			var store = new InMemoryStore();
+			var service = new CampaignRunSaveService(store, () => "1.4.0");
+			var save = new CampaignRunSave
+			{
+				roomState = new CampaignRoomStateSave
+				{
+					roomEntered = true,
+					roomType = (int)RoomType.Monster,
+					scenarioId = "fog",
+					roomDifficulty = (int)RoomDifficulty.Hard,
+					backgroundIndex = 4,
+					entryRandomSeed = 99,
+					entryRandomDraws = 128,
+					entryCpuRandomSeed = 42,
+					entryCpuRandomDraws = 17
+				}
+			};
+
+			service.Save(save);
+			Assert.That(service.TryLoad(out CampaignRunSave loaded), Is.True);
+
+			Assert.That(loaded.HasRoomState, Is.True);
+			Assert.That(loaded.roomState.roomEntered, Is.True);
+			Assert.That(loaded.roomState.roomType, Is.EqualTo((int)RoomType.Monster));
+			Assert.That(loaded.roomState.scenarioId, Is.EqualTo("fog"));
+			Assert.That(loaded.roomState.roomDifficulty, Is.EqualTo((int)RoomDifficulty.Hard));
+			Assert.That(loaded.roomState.backgroundIndex, Is.EqualTo(4));
+			// I dadi della soglia: e' da li' che la stanza si rimonta identica.
+			Assert.That(loaded.roomState.entryRandomSeed, Is.EqualTo(99));
+			Assert.That(loaded.roomState.entryRandomDraws, Is.EqualTo(128));
+			Assert.That(loaded.roomState.entryCpuRandomSeed, Is.EqualTo(42));
+			Assert.That(loaded.roomState.entryCpuRandomDraws, Is.EqualTo(17));
+		}
+
+		/// <summary>
+		/// Le porte estratte sopravvivono con la loro anteprima: il Detector speso su quelle
+		/// tre porte deve valere ancora dopo un riavvio, altrimenti bastava riaprire il gioco
+		/// per riavere l'oggetto tenendosi quello che si era visto.
+		/// </summary>
+		[Test]
+		public void TheDoorsAlreadyDrawn_AreStillTheSameOnesAfterAReload()
+		{
+			var store = new InMemoryStore();
+			var service = new CampaignRunSaveService(store, () => "1.4.0");
+			var room = new CampaignRoomStateSave { roomEntered = false };
+			room.doors.Add(new CampaignDoorSave());
+			room.doors.Add(new CampaignDoorSave
+			{
+				revealed = true,
+				roomType = (int)RoomType.Merchant,
+				scenarioId = "god_merchant",
+				difficulty = (int)RoomDifficulty.Hard
+			});
+			room.doors.Add(new CampaignDoorSave());
+
+			service.Save(new CampaignRunSave { roomState = room });
+			Assert.That(service.TryLoad(out CampaignRunSave loaded), Is.True);
+
+			Assert.That(loaded.HasRoomState, Is.True);
+			Assert.That(loaded.roomState.roomEntered, Is.False);
+			Assert.That(loaded.roomState.doors, Has.Count.EqualTo(3));
+			Assert.That(loaded.roomState.doors[0].revealed, Is.False);
+			Assert.That(loaded.roomState.doors[1].revealed, Is.True);
+			Assert.That(loaded.roomState.doors[1].roomType, Is.EqualTo((int)RoomType.Merchant));
+			Assert.That(loaded.roomState.doors[1].scenarioId, Is.EqualTo("god_merchant"));
+			Assert.That(loaded.roomState.doors[2].revealed, Is.False);
+		}
+
+		[Test]
+		public void ASaveWithoutARoomState_DoesNotClaimToHaveOne()
+		{
+			var store = new InMemoryStore();
+			var service = new CampaignRunSaveService(store, () => "1.4.0");
+			service.Save(new CampaignRunSave { roomsCleared = 2 });
+
+			Assert.That(service.TryLoad(out CampaignRunSave loaded), Is.True);
+			Assert.That(loaded.HasRoomState, Is.False,
+				"Senza stanza in corso si riparte dalla scelta della via, come si e' sempre fatto.");
 		}
 
         private static RunProgressState CreateProgress()

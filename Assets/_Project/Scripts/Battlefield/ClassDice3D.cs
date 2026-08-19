@@ -175,8 +175,10 @@ namespace AccardND.Battlefield
 
             Color body = BodyColor(heroClass);
             Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
+            if (shader == null || !shader.isSupported)
                 shader = Shader.Find("Standard");
+            if (shader == null || !shader.isSupported)
+                return null;
             Material material = new Material(shader) { name = $"Die {heroClass}" };
             material.SetColor("_BaseColor", body);
             material.SetColor("_Color", body);

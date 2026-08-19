@@ -151,8 +151,8 @@ public sealed partial class BattleBoardController
 			int maximum = Mathf.Max(0, runProgress.ExperiencePerLevel);
 			int current = Mathf.Max(0, runProgress.CurrentExperience);
 			combatExperienceText.text = maximum > 0
-				? GameText.GetOrFallbackSilent(GameTextKeys.Combat.ExperienceProgress, "{0} / {1} EXP", current, maximum)
-				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.MaxLevel, "LIVELLO MASSIMO");
+				? GameText.Format(GameTextKeys.Combat.ExperienceProgress, current, maximum)
+				: GameText.Get(GameTextKeys.Campaign.MaxLevel);
 			float fill = maximum > 0 ? Mathf.Clamp01((float)current / maximum) : 1f;
 			AnimateCombatExperienceFill(fill);
 		}

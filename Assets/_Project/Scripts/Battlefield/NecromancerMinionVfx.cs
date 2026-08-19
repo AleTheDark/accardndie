@@ -324,8 +324,8 @@ namespace AccardND.Battlefield
             // l'alpha. Con il blending UI standard la trasparenza verrebbe
             // applicata due volte e le particelle additive coprirebbero il tavolo
             // invece di illuminarlo.
-            Shader premultipliedUi = Shader.Find("AccardND/UI/Premultiplied RawImage");
-            if (premultipliedUi != null)
+            Shader premultipliedUi = Resources.Load<Shader>("Shaders/PremultipliedRawImage");
+            if (premultipliedUi != null && premultipliedUi.isSupported)
             {
                 presentationMaterial = new Material(premultipliedUi)
                 {
@@ -834,8 +834,8 @@ namespace AccardND.Battlefield
             terrain.transform.localScale = new Vector3(3.35f, 3.35f, 1f);
             Object.Destroy(terrain.GetComponent<Collider>());
 
-            Shader shader = Shader.Find("AccardND/VFX/Necromancer Terrain Transparent");
-            if (shader == null)
+            Shader shader = Resources.Load<Shader>("Shaders/NecromancerTerrainTransparent");
+            if (shader == null || !shader.isSupported)
             {
                 Debug.LogError("Necromancer terrain shader non trovato.");
                 terrain.SetActive(false);
@@ -1085,10 +1085,12 @@ namespace AccardND.Battlefield
                 $"Models/Necromancer/texture_pbr_20250901{suffix}");
             Texture2D normal = Resources.Load<Texture2D>(
                 $"Models/Necromancer/texture_pbr_20250901_normal{suffix}");
-            Shader litShader = Shader.Find("AccardND/VFX/Necromancer Fleck Surface Clip");
-            if (litShader == null)
+            Shader litShader = Resources.Load<Shader>("Shaders/NecromancerFleckSurfaceClip");
+            if (litShader == null || !litShader.isSupported)
             {
-                Debug.LogError("Shader di ritaglio Fleck non trovato.");
+                Debug.LogError("Shader di ritaglio Fleck non trovato o non supportato.");
+                foreach (Renderer renderer in model.GetComponentsInChildren<Renderer>(true))
+                    renderer.enabled = false;
                 return;
             }
 
@@ -1146,8 +1148,8 @@ namespace AccardND.Battlefield
         {
             if (renderer == null)
                 return;
-            Shader shader = Shader.Find("AccardND/VFX/Necromancer Soul Wisp Additive");
-            if (shader == null)
+            Shader shader = Resources.Load<Shader>("Shaders/NecromancerSoulWispAdditive");
+            if (shader == null || !shader.isSupported)
             {
                 // Meglio nessuna particella che i quad magenta dello shader errore.
                 renderer.enabled = false;

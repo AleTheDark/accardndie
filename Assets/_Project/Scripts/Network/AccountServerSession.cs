@@ -160,9 +160,7 @@ namespace AccardND.Network
             pendingKickMessage = GameText.GetRemote(
                 kick?.localizationKey,
                 string.IsNullOrWhiteSpace(kick?.message)
-                    ? GameText.GetOrFallbackSilent(
-                        GameTextKeys.Account.SessionUsedElsewhere,
-                        "Il tuo account è stato usato su un altro dispositivo.")
+                    ? GameText.Get(GameTextKeys.Account.SessionUsedElsewhere)
                     : kick.message,
                 kick?.localizationArguments);
             Debug.LogWarning($"[Net] Sessione chiusa dal server: {pendingKickMessage}");
@@ -604,12 +602,8 @@ namespace AccardND.Network
                 return;
 
             connectionBadgeText.text = badgeOffersReturnToLogin
-                ? GameText.GetOrFallbackSilent(
-                    GameTextKeys.Account.BadgeSessionExpired,
-                    "SESSIONE SCADUTA · TOCCA PER RIENTRARE")
-                : GameText.GetOrFallbackSilent(
-                    GameTextKeys.Account.BadgeReconnecting,
-                    "RETE ASSENTE · RICONNESSIONE…");
+                ? GameText.Get(GameTextKeys.Account.BadgeSessionExpired)
+                : GameText.Get(GameTextKeys.Account.BadgeReconnecting);
             connectionBadgeText.fontSize = badgeOffersReturnToLogin ? 18 : 20;
             connectionBadgeBackground.color = badgeOffersReturnToLogin ? SessionLostColor : ReconnectingColor;
             // Durante la riconnessione non c'è niente da toccare: sta già succedendo.
@@ -674,10 +668,7 @@ namespace AccardND.Network
             text.alignment = TextAnchor.MiddleCenter;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.color = Color.white;
-            text.text = GameText.GetOrFallbackSilent(
-                GameTextKeys.Account.SessionClosedBody,
-                "{0}\n\nQuesta sessione è stata chiusa.",
-                message);
+            text.text = GameText.Format(GameTextKeys.Account.SessionClosedBody, message);
 
             var buttonObject = new GameObject("Quit", typeof(RectTransform), typeof(Image), typeof(Button));
             buttonObject.transform.SetParent(panel.transform, false);
@@ -699,9 +690,7 @@ namespace AccardND.Network
             label.color = Color.white;
             // Dopo un kick il giocatore deve poter rientrare subito: il nuovo login
             // sostituisce sul server l'altra eventuale sessione dello stesso account.
-            label.text = GameText.GetOrFallbackSilent(
-                GameTextKeys.Account.ReturnToLogin,
-                "TORNA AL LOGIN");
+            label.text = GameText.Get(GameTextKeys.Account.ReturnToLogin);
         }
 
         /// <summary>

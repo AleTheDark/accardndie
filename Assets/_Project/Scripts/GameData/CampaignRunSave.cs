@@ -25,6 +25,62 @@ namespace AccardND.GameData
     }
 
     /// <summary>
+    /// Una delle tre porte della scelta della via, come è stata estratta. Le porte si
+    /// salvano perché la scelta è già stata fatta dal caso: senza, riaprire il gioco
+    /// davanti alle porte le riestrarrebbe, e il Detector appena speso avrebbe mostrato
+    /// tre stanze che non esistono più.
+    /// </summary>
+    [Serializable]
+    public sealed class CampaignDoorSave
+    {
+        /// <summary>true se dietro la porta si vede già cosa c'è (Detector).</summary>
+        public bool revealed;
+
+        public int roomType;
+        public string scenarioId;
+        public int difficulty;
+    }
+
+    /// <summary>
+    /// Dove si è fermato il giocatore fra una battaglia e l'altra: davanti alle tre porte,
+    /// oppure già dentro la stanza che ha scelto.
+    ///
+    /// Serve a una regola sola: il punto di ripresa non deve mai stare prima di una scelta
+    /// già fatta. Senza, entrare in una stanza mostro e riaprire il gioco riportava alla
+    /// scelta della via, e la porta si poteva cambiare finché non usciva la stanza giusta.
+    /// </summary>
+    [Serializable]
+    public sealed class CampaignRoomStateSave
+    {
+        public List<CampaignDoorSave> doors = new List<CampaignDoorSave>();
+
+        /// <summary>Lo sfondo estratto per la schermata delle porte: cambiarlo si vedrebbe.</summary>
+        public int backgroundIndex = 1;
+
+        /// <summary>true quando la porta è stata varcata: si riprende dentro la stanza.</summary>
+        public bool roomEntered;
+
+        public int roomType;
+        public string scenarioId;
+        public int roomDifficulty;
+
+        /// <summary>
+        /// I due flussi di dadi come stavano sulla soglia della stanza, non come stanno
+        /// adesso. Una stanza ripresa si rimonta da capo: se ripartisse dai dadi correnti
+        /// - avanzati da tutto quello che è successo dentro - il mercante rifarebbe la
+        /// vetrina e il mostro cambierebbe formazione. Mettere in pausa il gioco tornerebbe
+        /// a essere un modo di riestrarre il contenuto della stanza.
+        /// </summary>
+        public int entryRandomSeed;
+        public int entryRandomDraws;
+        public int entryCpuRandomSeed;
+        public int entryCpuRandomDraws;
+
+        /// <summary>C'è qualcosa da riprendere: le porte estratte o la stanza già aperta.</summary>
+        public bool HasState => roomEntered || (doors != null && doors.Count > 0);
+    }
+
+    /// <summary>
     /// Stato serializzabile di una run di campagna (save/resume). Contiene solo dati:
     /// niente riferimenti a UnityEngine.Object, così è (de)serializzabile con JsonUtility.
     /// I punti di salvataggio sono due: la schermata "scelta della via", dove il
@@ -35,11 +91,12 @@ namespace AccardND.GameData
     public sealed class CampaignRunSave
     {
         /// <summary>
-        /// La v2 ha aggiunto la battaglia in corso. I salvataggi v1 restano validi e si
-        /// leggono come "nessuna battaglia": chi aggiorna il gioco a metà campagna
-        /// riprende dalla scelta della via, non perde la run.
+        /// La v2 ha aggiunto la battaglia in corso, la v3 la stanza in corso e la patch
+        /// che ha scritto il salvataggio. Le versioni vecchie del formato restano leggibili,
+        /// ma da adesso decide <see cref="gameVersion"/>: una run si riprende solo con la
+        /// stessa patch con cui è stata giocata (vedi CampaignRunSaveService).
         /// </summary>
-        public const int CurrentVersion = 2;
+        public const int CurrentVersion = 3;
 
         /// <summary>La prima versione, senza snapshot di battaglia.</summary>
         public const int MinimumSupportedVersion = 1;
@@ -47,6 +104,14 @@ namespace AccardND.GameData
 		public const int DefaultPlayerMana = 3;
 
         public int version = CurrentVersion;
+
+        /// <summary>
+        /// La versione del gioco che ha scritto il salvataggio (Application.version).
+        /// Una run comincia con le carte, i costi e le stanze della sua patch: ripresa con
+        /// un'altra riprenderebbe uno stato che quella patch non sa più leggere. Vuota nei
+        /// salvataggi scritti prima della v3, che infatti non si riprendono più.
+        /// </summary>
+        public string gameVersion;
 
         // Progressione (contatori di RunProgressState)
         public int playerLevel = 1;
@@ -113,6 +178,35 @@ namespace AccardND.GameData
         public bool nextDoorChoiceRevealed;
         public bool nextMonsterRewardHalved;
 
+        // Regole a colpo singolo armate fuori dal combattimento: le arma il bottino (le
+        // opportunità) o un oggetto, e vengono spese nella stanza dopo. Finivano solo nello
+        // snapshot di battaglia, quindi chiudere il gioco fra due stanze le buttava via
+        // insieme all'oggetto o all'evento che le aveva concesse.
+        public bool skipNextCombatCooldown;
+        public bool nextCombatFallenHeroesGrantExperience;
+        public bool nextCombatAssassinsActLast;
+        public bool nextCombatWarriorsLowerVigor;
+        public bool nextCombatTankDuel;
+        public bool nextRoomEmpowered;
+        public bool nextRoomDoubleExperience;
+
+        /// <summary>
+        /// Dove sono arrivati i due flussi di dadi della run (quello della partita e quello
+        /// delle decisioni della CPU). È lo stesso motivo dei dadi salvati in battaglia: se
+        /// una run ripresa ripartisse da dadi nuovi, riaprire il gioco sarebbe il modo più
+        /// comodo di riestrarre le porte e il contenuto della stanza.
+        /// </summary>
+        public int randomSeed;
+        public int randomDraws;
+        public int cpuRandomSeed;
+        public int cpuRandomDraws;
+
+        /// <summary>
+        /// La stanza in corso: le porte estratte e, se il giocatore ne ha già varcata una,
+        /// quale. Null nei salvataggi scritti prima della v3.
+        /// </summary>
+        public CampaignRoomStateSave roomState;
+
         // Consumabili posseduti (mappati dal controller in fase di wiring)
         public List<CampaignConsumableSave> consumables = new List<CampaignConsumableSave>();
 
@@ -126,6 +220,10 @@ namespace AccardND.GameData
         /// <summary>true se questo salvataggio riporta a metà scontro.</summary>
         public bool HasBattle => battle != null && battle.roundNumber > 0
             && (battle.playerPawns.Count > 0 || battle.cpuPawns.Count > 0);
+
+        /// <summary>true se questo salvataggio sa dire davanti a quali porte - o dentro
+        /// quale stanza - si era fermata la run.</summary>
+        public bool HasRoomState => roomState != null && roomState.HasState;
     }
 
     /// <summary>

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace AccardND.GameCore.Pvp
 {
     public enum PvpPendingBonusKind
@@ -41,8 +43,22 @@ namespace AccardND.GameCore.Pvp
         public int PendingVigorStepPenalty { get; internal set; }
         public bool IsSpirit { get; internal set; }
         public bool IsAttachment { get; internal set; }
-        public PvpCardState MarkedTarget { get; internal set; }
+        public HashSet<PvpCardState> HunterMarkedTargets { get; } = new HashSet<PvpCardState>();
+        public PvpCardState MarkedTarget
+        {
+            get => legacyMarkedTarget;
+            internal set
+            {
+                if (legacyMarkedTarget != null)
+                    HunterMarkedTargets.Remove(legacyMarkedTarget);
+                legacyMarkedTarget = value;
+                if (value != null)
+                    HunterMarkedTargets.Add(value);
+            }
+        }
         public PvpCardState ProtectedAlly { get; internal set; }
+
+        private PvpCardState legacyMarkedTarget;
 
         /// <summary>
         /// Invisibilita' dell'Assassino: non puo' essere scelta come bersaglio. Non decade,

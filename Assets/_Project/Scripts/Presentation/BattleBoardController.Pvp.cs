@@ -183,7 +183,7 @@ public sealed partial class BattleBoardController
         deploymentDraftActive = false;
         SetTurnBanner(playerTurn: true, "PREPARAZIONE");
         if ((Object)(object)playerTitleText != (Object)null)
-			playerTitleText.text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.YourFormation, "LA TUA FORMAZIONE");
+			playerTitleText.text = GameText.Get(GameTextKeys.Campaign.YourFormation);
         SetBattlefieldSurfaceVisible(false);
         RefreshScenarioBackground();
         // Il tavolo lo spegne (ShowPvpMatch) e nessuno lo riaccendeva: chiusa la
@@ -273,12 +273,8 @@ public sealed partial class BattleBoardController
         if (!IsPvpMatchInProgress || pvpActions == null)
             return;
         inputLocked = true;
-        SetMessage(GameText.GetOrFallbackSilent(
-            GameTextKeys.PvpError.Surrendered,
-            "Ti sei arreso: la vittoria va all'avversario."));
-        AppendLog(GameText.GetOrFallbackSilent(
-            GameTextKeys.PvpLog.SurrenderSent,
-            "PVP - resa inviata al server."));
+        SetMessage(GameText.Get(GameTextKeys.PvpError.Surrendered));
+        AppendLog(GameText.Get(GameTextKeys.PvpLog.SurrenderSent));
         pvpActions.Surrender();
     }
 
@@ -640,7 +636,7 @@ public sealed partial class BattleBoardController
 
             BattleCardState target = FindPvpCardByServerSlot(oppositeSide, source.Slot);
             if (target != null)
-                hunter.MarkedTarget = target;
+				hunter.HunterMarkedTargets.Add(target);
         }
     }
 
@@ -813,7 +809,7 @@ public sealed partial class BattleBoardController
             ((Component)confirmActionButton).gameObject.SetActive(!pvpDecisiveSubmitted);
             confirmActionButton.interactable = ready;
             if ((Object)(object)confirmActionButtonText != (Object)null)
-				confirmActionButtonText.text = GameText.GetOrFallbackSilent(GameTextKeys.PvpLoadout.Save, "CONFERMA SCELTA");
+				confirmActionButtonText.text = GameText.Get(GameTextKeys.PvpLoadout.Save);
         }
         if ((Object)(object)cancelActionButton != (Object)null)
             ((Component)cancelActionButton).gameObject.SetActive(!pvpDecisiveSubmitted && pvpDecisiveSelection.Count > 0);
@@ -1201,7 +1197,6 @@ public sealed partial class BattleBoardController
         bool canAttach = !active.IsSpirit && active.Card.Strength >= 2 && active.Card.Strength < 5;
         // Riserva, Cornamusa, Purificazione ed Evoca Sgherri sono istantanee:
         // niente selezione bersaglio.
-        // Riserva resta disponibile anche dopo la Protezione del Paladino.
         bool supremeImplemented = AbilityManaCosts.IsSupremeImplemented(active.Card.HeroClass);
         bool canUseTargetedSupreme = supremeImplemented
             && active.Card.HeroClass == HeroClass.Rogue
@@ -1209,7 +1204,9 @@ public sealed partial class BattleBoardController
         bool canUseInstantSupreme = supremeImplemented
             && active.Card.HeroClass != HeroClass.Rogue
             && !active.Eliminated;
-        bool canUseSupreme = !active.IsSpirit && (canUseInstantSupreme || canUseTargetedSupreme);
+        bool canUseSupreme = !active.IsSpirit
+            && !active.AbilityArmed
+            && (canUseInstantSupreme || canUseTargetedSupreme);
         // Lo skip resta disponibile anche dopo un'abilita': permette di chiudere
         // volontariamente l'attivazione quando non si vuole o non si puo' attaccare.
         bool canSkip = true;
@@ -1276,11 +1273,7 @@ public sealed partial class BattleBoardController
 		if (active != null && BattlePlayerManaCurrent < attackCost)
 		{
 			ShowNoManaCallout(active);
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.PvpError.ManaInsufficient,
-				"Mana insufficiente: servono {0}, disponibili {1}.",
-				attackCost,
-				BattlePlayerManaCurrent));
+			SetMessage(GameText.Format(GameTextKeys.PvpError.ManaInsufficient, attackCost, BattlePlayerManaCurrent));
 			return;
 		}
         bool enteringTargetMode = pvpTargetMode != PvpPresentationTargetMode.Attack;
@@ -1301,11 +1294,7 @@ public sealed partial class BattleBoardController
 		if (BattlePlayerManaCurrent < abilityCost)
 		{
 			ShowNoManaCallout(active);
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.PvpError.ManaInsufficient,
-				"Mana insufficiente: servono {0}, disponibili {1}.",
-				abilityCost,
-				BattlePlayerManaCurrent));
+			SetMessage(GameText.Format(GameTextKeys.PvpError.ManaInsufficient, abilityCost, BattlePlayerManaCurrent));
 			return;
 		}
         if (active != null && active.Card.HeroClass == HeroClass.Warrior)
@@ -1392,9 +1381,7 @@ public sealed partial class BattleBoardController
         pvpTargetMode = PvpPresentationTargetMode.None;
 		active.View?.ClearActionOverlay();
 		inputLocked = true;
-		SetMessage(GameText.GetOrFallbackSilent(
-			GameTextKeys.PvpError.TurnEndedWaiting,
-			"Turno concluso. In attesa del server..."));
+		SetMessage(GameText.Get(GameTextKeys.PvpError.TurnEndedWaiting));
         StopPvpTimerSfx();
         pvpActions?.Pass();
     }
@@ -2300,6 +2287,8 @@ public sealed partial class BattleBoardController
 
     private IEnumerator PlayPvpHandEntranceRoutine()
     {
+        int animationVersion = ++draftEntranceAnimationVersion;
+        activeDraftEntranceCards = 0;
         if (pvpHandViews.Count == 0
             || (Object)(object)playerHandRow == (Object)null
             || (Object)(object)safeAreaRoot == (Object)null)
@@ -2343,65 +2332,16 @@ public sealed partial class BattleBoardController
             Vector2 size = RectSizeInSafeArea(realView.RectTransform);
             draftEntranceAnimatingViews.Add(realView);
 
-            GameObject overlayObject = Object.Instantiate(
-                ((Component)realView).gameObject, (Transform)(object)safeAreaRoot, false);
-            NormalizeDraftEntranceClone(overlayObject);
-            PrototypeCardView overlayView = overlayObject.GetComponent<PrototypeCardView>();
-            Button overlayButton = overlayObject.GetComponent<Button>();
-            if ((Object)(object)overlayButton != (Object)null)
-                overlayButton.interactable = false;
-            overlayView.SetLayoutIgnored(true);
-            draftEntranceOverlayObjects.Add(overlayObject);
-
-            RectTransform animatedRect = overlayView.RectTransform;
-            animatedRect.anchorMin = new Vector2(0.5f, 0.5f);
-            animatedRect.anchorMax = new Vector2(0.5f, 0.5f);
-            animatedRect.pivot = new Vector2(0.5f, 0.5f);
-            animatedRect.sizeDelta = size;
-            Vector2 start = new Vector2(
-                safeBounds.xMax + Mathf.Max(1f, size.x) * 0.9f,
-                Mathf.Lerp(0f, target.y, 0.35f));
-            animatedRect.anchoredPosition = start;
-            ((Transform)animatedRect).localRotation = Quaternion.identity;
-            ((Transform)animatedRect).localScale = Vector3.one * 0.82f;
-            overlayView.SetAlpha(0f);
-            PlayDrawCardSfx();
-
-            float elapsed = 0f;
-            while (elapsed < enterDuration)
-            {
-                elapsed += Time.unscaledDeltaTime;
-                float progress = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / enterDuration));
-                animatedRect.anchoredPosition = Vector2.LerpUnclamped(start, Vector2.zero, progress);
-                ((Transform)animatedRect).localScale = Vector3.one * Mathf.LerpUnclamped(0.82f, entranceScale, progress);
-                overlayView.SetAlpha(Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / (enterDuration * 0.42f))));
-                yield return null;
-            }
-            animatedRect.anchoredPosition = Vector2.zero;
-            ((Transform)animatedRect).localScale = Vector3.one * entranceScale;
-            overlayView.SetAlpha(1f);
-            if (holdDuration > 0f)
-                yield return WaitForCardInspectionPause(holdDuration);
-
-            elapsed = 0f;
-            while (elapsed < settleDuration)
-            {
-                elapsed += Time.unscaledDeltaTime;
-                float progress = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / settleDuration));
-                animatedRect.anchoredPosition = Vector2.LerpUnclamped(Vector2.zero, target, progress);
-                ((Transform)animatedRect).localRotation =
-                    Quaternion.SlerpUnclamped(Quaternion.identity, targetRotation, progress);
-                ((Transform)animatedRect).localScale = Vector3.one * Mathf.LerpUnclamped(entranceScale, 1f, progress);
-                yield return null;
-            }
-
-            realView.SetAlpha(1f);
-            draftEntranceAnimatingViews.Remove(realView);
-            draftEntranceOverlayObjects.Remove(overlayObject);
-            Object.Destroy(overlayObject);
+            activeDraftEntranceCards++;
+            ((MonoBehaviour)this).StartCoroutine(AnimateDraftEntranceCard(
+                realView, target, targetRotation, size, safeBounds,
+                enterDuration, holdDuration, settleDuration, entranceScale, animationVersion));
             if (betweenCardsDelay > 0f && index < pvpHandViews.Count - 1)
-                yield return WaitForCardInspectionPause(betweenCardsDelay);
+                yield return WaitForCardInspectionPause(enterDuration + holdDuration + betweenCardsDelay);
         }
+
+        while (activeDraftEntranceCards > 0 && animationVersion == draftEntranceAnimationVersion)
+            yield return null;
 
         ApplyResponsiveLayout();
         Canvas.ForceUpdateCanvases();

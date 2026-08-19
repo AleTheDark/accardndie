@@ -41,7 +41,7 @@ public sealed partial class BattleBoardController
         title.fontSize = 40;
         title.fontStyle = FontStyle.Bold;
         title.resizeTextForBestFit = false;
-		title.text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.LevelUpTitle, "NUOVO LIVELLO!");
+		title.text = GameText.Get(GameTextKeys.Campaign.LevelUpTitle);
         title.color = new Color(0.95f, 0.79f, 0.34f);
         SetRect(title.rectTransform, new Vector2(0.06f, 0.76f), new Vector2(0.94f, 0.94f));
 

@@ -1180,7 +1180,7 @@ public sealed partial class BattleBoardController
 			"Tutorial Back To Adventure",
 			adventureContentRoot,
 			font,
-			GameText.GetOrFallbackSilent(GameTextKeys.Common.Back, "INDIETRO"));
+			GameText.Get(GameTextKeys.Common.Back));
 		SetLocalizedButtonLabel(adventureChapterBackButton, GameTextKeys.Common.Back, "INDIETRO");
 		ApplyCampaignRedCta(adventureChapterBackButton);
 		((UnityEvent)adventureChapterBackButton.onClick).AddListener((UnityAction)delegate
@@ -1241,7 +1241,7 @@ public sealed partial class BattleBoardController
 		SetRect(adventureRewardChapterImage.rectTransform, new Vector2(0.58f, 0.27f), new Vector2(0.82f, 0.43f));
 		SetAdventureRewardImagesVisible(false, false);
 
-		Button cancelButton = CreateButton("Cancel Tutorial Confirm", ((Component)dialog).transform, font, GameText.GetOrFallbackSilent(GameTextKeys.Common.Cancel, "ANNULLA"));
+		Button cancelButton = CreateButton("Cancel Tutorial Confirm", ((Component)dialog).transform, font, GameText.Get(GameTextKeys.Common.Cancel));
 		SetLocalizedButtonLabel(cancelButton, GameTextKeys.Common.Cancel, "ANNULLA");
 		AccardND.Battlefield.MmoUiTheme.ApplyBackButtonStyle(cancelButton);
 		((UnityEvent)cancelButton.onClick).AddListener((UnityAction)delegate
@@ -1463,13 +1463,13 @@ public sealed partial class BattleBoardController
 	{
 		bool done = singlePlayerProgressService.TutorialCompleted;
 		string status = done
-			? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterCompleted, "completato")
-			: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterUnlockFirst, "sblocca il primo capitolo");
+			? GameText.Get(GameTextKeys.Campaign.ChapterCompleted)
+			: GameText.Get(GameTextKeys.Campaign.ChapterUnlockFirst);
 
 		CreateAdventureRow(
 			"tutorial",
-			GameText.GetOrFallbackSilent(GameTextKeys.Adventure.TutorialChapterTitle, "TUTORIAL"),
-			GameText.GetOrFallbackSilent(GameTextKeys.Adventure.TutorialChapterSubtitle, "I MODULI"),
+			GameText.Get(GameTextKeys.Adventure.TutorialChapterTitle),
+			GameText.Get(GameTextKeys.Adventure.TutorialChapterSubtitle),
 			status,
 			available: true,
 			locked: false,
@@ -1490,24 +1490,22 @@ public sealed partial class BattleBoardController
 		string status;
 		if (!chapter.Playable)
 		{
-			status = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterComingSoon, "in arrivo");
+			status = GameText.Get(GameTextKeys.Campaign.ChapterComingSoon);
 		}
 		else if (IsAdventureChapterCompleted(chapter.Id))
 		{
-			status = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterCompleted, "completato");
+			status = GameText.Get(GameTextKeys.Campaign.ChapterCompleted);
 		}
 		else if (unlocked)
 		{
-			status = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterUnlocked, "sbloccato");
+			status = GameText.Get(GameTextKeys.Campaign.ChapterUnlocked);
 		}
 		else
 		{
 			// Un capitolo chiuso ha una sola porta: il boss di quello prima. Il Santuario li
 			// ha venduti per un periodo, quindi qui c'era il prezzo in miele; lasciarlo
 			// manderebbe il giocatore a cercare un banco che non esiste piu'.
-			status = GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.ChapterBeatPreviousBoss,
-				"batti il boss precedente");
+			status = GameText.Get(GameTextKeys.Campaign.ChapterBeatPreviousBoss);
 		}
 
 		// Il lucchetto solo su cio' che e' davvero chiuso. Un capitolo gia' in mano ma senza
@@ -1523,14 +1521,7 @@ public sealed partial class BattleBoardController
 			LocalizedAdventureChapterTitle(chapter),
 			chapter.ScenarioLabel == null
 				? "???"
-				: GameText.GetLocalizedFallback(
-					GameTextKeys.Adventure.ChapterScenarioLabel,
-					"Scenario: {0}",
-					"Scenario: {0}",
-					"Szenario: {0}",
-					"Escenario: {0}",
-					"Scénario : {0}",
-					LocalizedAdventureScenarioName(chapter)),
+				: GameText.Format(GameTextKeys.Adventure.ChapterScenarioLabel, LocalizedAdventureScenarioName(chapter)),
 			status,
 			available,
 			locked: !unlocked,
@@ -2049,8 +2040,8 @@ public sealed partial class BattleBoardController
 		RectTransform bannerRect = accountBannerImage.rectTransform;
 		SetRect(
 			bannerRect,
-			new Vector2(0.015f, 0.885f),
-			new Vector2(0.985f, 0.96f));
+			landscape ? new Vector2(0.015f, 0.885f) : new Vector2(0.015f, 0.9f),
+			landscape ? new Vector2(0.985f, 0.96f) : new Vector2(0.985f, 0.975f));
 		bannerRect.offsetMin = Vector2.zero;
 		bannerRect.offsetMax = Vector2.zero;
 		((Component)accountBannerImage).transform.SetAsLastSibling();
@@ -2110,7 +2101,12 @@ public sealed partial class BattleBoardController
 		rect.pivot = new Vector2(0.5f, 0.5f);
 		rect.localScale = Vector3.one;
 		rect.localRotation = Quaternion.identity;
-		rect.anchoredPosition = new Vector2(-227f, -100f);
+		// In portrait the currency sits to the left of the Home button.  Keeping
+		// both controls on the same top-right anchor makes their spacing stable
+		// across tall displays instead of letting the coin collapse onto Home.
+		rect.anchoredPosition = landscape
+			? new Vector2(-227f, -100f)
+			: new Vector2(-270f, -100f);
 		rect.sizeDelta = new Vector2(104f, 104f);
 		((Component)accountHoneyPanelImage).transform.SetAsLastSibling();
 		if ((Object)(object)accountHoneyAmountText != (Object)null)
@@ -2134,10 +2130,10 @@ public sealed partial class BattleBoardController
 		int level = Mathf.Max(1, progress.accountLevel);
 		int currentXp = Mathf.Max(0, progress.accountExperience);
 		int nextXp = Mathf.Max(1, progress.accountExperienceToNextLevel);
-		string displayName = PlayerPrefs.GetString(PlayerHudNamePrefsKey, GameText.GetOrFallbackSilent(GameTextKeys.Common.Guest, "Guest"));
+		string displayName = PlayerPrefs.GetString(PlayerHudNamePrefsKey, GameText.Get(GameTextKeys.Common.Guest));
 
-		accountBannerNameText.text = string.IsNullOrWhiteSpace(displayName) ? GameText.GetOrFallbackSilent(GameTextKeys.Common.Guest, "Guest") : displayName.Trim();
-		accountBannerLevelText.text = GameText.GetOrFallbackSilent(GameTextKeys.Common.Level, "Lv. {0}", level);
+		accountBannerNameText.text = string.IsNullOrWhiteSpace(displayName) ? GameText.Get(GameTextKeys.Common.Guest) : displayName.Trim();
+		accountBannerLevelText.text = GameText.Format(GameTextKeys.Common.Level, level);
 		accountBannerExperienceText.text = $"{currentXp:n0} / {nextXp:n0}";
 		float normalizedExperience = Mathf.Clamp01((float)currentXp / nextXp);
 		accountBannerExperienceFill.rectTransform.anchorMax =
@@ -3002,6 +2998,10 @@ public sealed partial class BattleBoardController
 		_ = EnsureServerProgressAsync();
 		// Per ultimo: la scelta della modalità è già in piedi sotto, così annullando il
 		// salvataggio il giocatore si ritrova subito davanti AVVENTURA e HARDCORE.
+		// Il recupero caldo ha la precedenza: contiene esattamente la mano, i dadi e lo
+		// stato runtime precedenti al login, senza alcuna nuova estrazione.
+		if (ShowPendingCampaignSessionRecoveryIfAny())
+			return;
 		ShowResumableRunPromptIfAny();
 	}
 
@@ -3148,18 +3148,14 @@ public sealed partial class BattleBoardController
 
 		Text title = CreateText("Class Choice Title", ((Component)dialog).transform,
 			AccardND.Battlefield.MmoUiTheme.LoreFont, 38, FontStyle.Normal, TextAnchor.MiddleCenter);
-		title.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Adventure.ClassChoiceTitle,
-			"SCEGLI UNA NUOVA CLASSE");
+		title.text = GameText.Get(GameTextKeys.Adventure.ClassChoiceTitle);
 		title.color = new Color(0.95f, 0.79f, 0.34f);
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(title);
 		SetRect(title.rectTransform, new Vector2(0.06f, 0.78f), new Vector2(0.94f, 0.94f));
 
 		Text body = CreateText("Class Choice Body", ((Component)dialog).transform, font, 23,
 			FontStyle.Normal, TextAnchor.MiddleCenter);
-		body.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Adventure.ClassChoiceBody,
-			"Hai completato il primo scenario. La classe scelta verra sbloccata permanentemente.");
+		body.text = GameText.Get(GameTextKeys.Adventure.ClassChoiceBody);
 		body.color = new Color(0.86f, 0.92f, 0.96f);
 		body.horizontalOverflow = HorizontalWrapMode.Wrap;
 		SetRect(body.rectTransform, new Vector2(0.08f, 0.62f), new Vector2(0.92f, 0.78f));
@@ -3370,9 +3366,7 @@ public sealed partial class BattleBoardController
 			}
 
 			AppendLog("AVVENTURA - completamento tutorial non registrato: server non disponibile.");
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Adventure.TutorialConnectionRequired,
-				"Connessione al server necessaria per registrare il completamento del tutorial."));
+			SetMessage(GameText.Get(GameTextKeys.Adventure.TutorialConnectionRequired));
 			RefreshAdventureChapterList();
 			return;
 		}
@@ -3396,18 +3390,13 @@ public sealed partial class BattleBoardController
 
 		if (!chapter.Playable)
 		{
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Adventure.ChapterComingSoonMessage,
-				"{0} arrivera' presto: il suo boss non e' ancora pronto.",
-				LocalizedAdventureChapterTitle(chapter)));
+			SetMessage(GameText.Format(GameTextKeys.Adventure.ChapterComingSoonMessage, LocalizedAdventureChapterTitle(chapter)));
 			return;
 		}
 
 		if (!singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Chapter, chapterId))
 		{
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Adventure.ChapterNeedsPreviousBossMessage,
-				"Capitolo chiuso: si apre battendo il boss del capitolo precedente."));
+			SetMessage(GameText.Get(GameTextKeys.Adventure.ChapterNeedsPreviousBossMessage));
 			return;
 		}
 
@@ -3474,7 +3463,7 @@ public sealed partial class BattleBoardController
 	{
 		AdventureChapter chapter = AdventureChapterCatalog.Find(chapterId);
 		return chapter == null
-			? GameText.GetLocalizedFallback(GameTextKeys.Campaign.Title, "Capitolo", "Chapter", "Kapitel", "Capítulo", "Chapitre")
+			? GameText.Get(GameTextKeys.Campaign.Title)
 			: LocalizedAdventureChapterTitle(chapter);
 	}
 
@@ -3482,20 +3471,14 @@ public sealed partial class BattleBoardController
 	{
 		if (!TryGetAdventureChapterConfig(chapterId, out _, out _, out _))
 		{
-			return (GameText.GetLocalizedFallback(GameTextKeys.Campaign.Title, "CAPITOLO", "CHAPTER", "KAPITEL", "CAPÍTULO", "CHAPITRE"), string.Empty);
+			return (GameText.Get(GameTextKeys.Campaign.Title), string.Empty);
 		}
 
 		AdventureChapter chapter = AdventureChapterCatalog.Find(chapterId);
 		string rewardPreview = BuildAdventureChapterRewardPreview(chapterId);
 		string rewardCopy = string.IsNullOrEmpty(rewardPreview)
 			? string.Empty
-			: GameText.GetLocalizedFallback(
-				GameTextKeys.Adventure.ChapterRewardsHeading,
-				"<b>COMPLETANDO IL CAPITOLO SBLOCCHERAI</b>",
-				"<b>BY COMPLETING THE CHAPTER, YOU WILL UNLOCK</b>",
-				"<b>DURCH DAS ABSCHLIESSEN DES KAPITELS SCHALTEST DU FOLGENDES FREI</b>",
-				"<b>AL COMPLETAR EL CAPÍTULO DESBLOQUEARÁS</b>",
-				"<b>EN TERMINANT LE CHAPITRE, VOUS DÉBLOQUEREZ</b>") + "\n" + rewardPreview;
+			: GameText.Get(GameTextKeys.Adventure.ChapterRewardsHeading) + "\n" + rewardPreview;
 		// Il titolo del dialogo deve essere esattamente quello mostrato sotto il riquadro.
 		// Ricostruirlo da scenario + boss produceva nomi diversi (per esempio
 		// "Haunted of Jurinashor" invece di "Jurinashor's Infestation").
@@ -3505,7 +3488,7 @@ public sealed partial class BattleBoardController
 	private static string LocalizedAdventureChapterTitle(AdventureChapter chapter)
 	{
 		if (chapter == null)
-			return GameText.GetLocalizedFallback(GameTextKeys.Campaign.Title, "Capitolo", "Chapter", "Kapitel", "Capítulo", "Chapitre");
+			return GameText.Get(GameTextKeys.Campaign.Title);
 
 		return chapter.Id switch
 		{
@@ -3525,11 +3508,11 @@ public sealed partial class BattleBoardController
 
 		return chapter.ScenarioId switch
 		{
-			"climbing" => GameText.GetLocalizedFallback(GameTextKeys.Data.ScenarioName("climbing"), "Rampicanti", "Vines", "Ranken", "Enredaderas", "Lianes"),
-			"fog" => GameText.GetLocalizedFallback(GameTextKeys.Data.ScenarioName("fog"), "Nebbia", "Fog", "Nebel", "Niebla", "Brume"),
-			"infested" => GameText.GetLocalizedFallback(GameTextKeys.Data.ScenarioName("infested"), "Infestata", "Infested", "Befallen", "Infestada", "Infestée"),
-			"lux" => GameText.GetLocalizedFallback(GameTextKeys.Data.ScenarioName("lux"), "Illuminata", "Luminous", "Erleuchtet", "Iluminada", "Illuminée"),
-			"cosmic" => GameText.GetLocalizedFallback(GameTextKeys.Data.ScenarioName("cosmic"), "Cosmica", "Cosmic", "Kosmisch", "Cósmica", "Cosmique"),
+			"climbing" => GameText.Get(GameTextKeys.Data.ScenarioName("climbing")),
+			"fog" => GameText.Get(GameTextKeys.Data.ScenarioName("fog")),
+			"infested" => GameText.Get(GameTextKeys.Data.ScenarioName("infested")),
+			"lux" => GameText.Get(GameTextKeys.Data.ScenarioName("lux")),
+			"cosmic" => GameText.Get(GameTextKeys.Data.ScenarioName("cosmic")),
 			_ => GameText.GetAuto(chapter.ScenarioLabel)
 		};
 	}
@@ -3549,27 +3532,19 @@ public sealed partial class BattleBoardController
 		if (!string.IsNullOrWhiteSpace(chapter.RewardClassId)
 			&& !singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Class, chapter.RewardClassId))
 		{
-			rewards.Add(GameText.GetLocalizedFallback(
-				GameTextKeys.Adventure.ChapterRewardClass,
-				"CLASSE  <b>{0}</b>", "CLASS  <b>{0}</b>", "KLASSE  <b>{0}</b>", "CLASE  <b>{0}</b>", "CLASSE  <b>{0}</b>",
-				ClassChoiceDisplayName(chapter.RewardClassId)));
+			rewards.Add(GameText.Format(GameTextKeys.Adventure.ChapterRewardClass, ClassChoiceDisplayName(chapter.RewardClassId)));
 		}
 
 		AdventureChapter nextChapter = AdventureChapterCatalog.Find($"chapter-{chapter.Number + 1}");
 		if (nextChapter != null
 			&& !singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.Chapter, nextChapter.Id))
 		{
-			rewards.Add(GameText.GetLocalizedFallback(
-				GameTextKeys.Adventure.ChapterRewardNumber,
-				"CAPITOLO  <b>{0}</b>", "CHAPTER  <b>{0}</b>", "KAPITEL  <b>{0}</b>", "CAPÍTULO  <b>{0}</b>", "CHAPITRE  <b>{0}</b>", nextChapter.Number));
+			rewards.Add(GameText.Format(GameTextKeys.Adventure.ChapterRewardNumber, nextChapter.Number));
 		}
 
 		if (!singlePlayerProgressService.IsUnlocked(SinglePlayerUnlockType.ChapterCleared, chapter.Id))
 		{
-			rewards.Add(GameText.GetLocalizedFallback(
-				GameTextKeys.Adventure.ChapterRewardPropolis,
-				"PUNTI PROPOLI  <b>+{0}</b>", "PROPOLIS POINTS  <b>+{0}</b>", "PROPOLIS-PUNKTE  <b>+{0}</b>", "PUNTOS DE PROPÓLEO  <b>+{0}</b>", "POINTS DE PROPOLIS  <b>+{0}</b>",
-				AccountLevelCurve.TalentPointsPerFirstChapterClear));
+			rewards.Add(GameText.Format(GameTextKeys.Adventure.ChapterRewardPropolis, AccountLevelCurve.TalentPointsPerFirstChapterClear));
 		}
 
 		return string.Join("\n", rewards);
@@ -3644,9 +3619,7 @@ public sealed partial class BattleBoardController
 				return;
 			}
 
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Adventure.HardcoreConnectionRequired,
-				"Connessione al server necessaria per sbloccare Hardcore."));
+			SetMessage(GameText.Get(GameTextKeys.Adventure.HardcoreConnectionRequired));
 			AppendLog("SINGLE PLAYER - acquisto Hardcore non eseguito: server non disponibile.");
 			RefreshSinglePlayerProgressView();
 			return;
@@ -3695,7 +3668,6 @@ public sealed partial class BattleBoardController
 			adventureChapterPanel.SetActive(false);
 		}
 		inputLocked = false;
-		ShowCampaignIntroHint();
 		LoadBattle();
 	}
 
@@ -3837,7 +3809,7 @@ public sealed partial class BattleBoardController
 		deckBuilderSelectedBagEmptyText = CreateText("Selected Bag Empty", deckBuilderContentRoot, font, 40, FontStyle.Bold, TextAnchor.MiddleCenter);
 		deckBuilderSelectedBagEmptyText.color = new Color(0.88f, 0.92f, 0.96f);
 		deckBuilderSelectedBagEmptyText.horizontalOverflow = HorizontalWrapMode.Wrap;
-		deckBuilderSelectedBagEmptyText.text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.BagEmpty, "Non si hanno oggetti consumabili, comprali nel negozio!");
+		deckBuilderSelectedBagEmptyText.text = GameText.Get(GameTextKeys.Campaign.BagEmpty);
 		deckBuilderSelectedBagRoot.gameObject.SetActive(false);
 		deckBuilderSelectedBagEmptyText.gameObject.SetActive(false);
 		deckBuilderBagEffectText = CreateText("Selected Bag Item Effect", deckBuilderContentRoot, font, 26, FontStyle.Normal, TextAnchor.MiddleCenter);

@@ -157,10 +157,7 @@ namespace AccardND.Presentation
 			catch (Exception exception)
 			{
 				UpdateTavernNotificationBadge(null);
-                AppendLog(GameText.GetOrFallbackSilent(
-                    GameTextKeys.Tavern.BadgeRefreshFailedLog,
-                    "TAVERNA - badge non aggiornato: {0}",
-                    exception.Message));
+                AppendLog(GameText.Format(GameTextKeys.Tavern.BadgeRefreshFailedLog, exception.Message));
 			}
 			finally
 			{
@@ -370,8 +367,7 @@ namespace AccardND.Presentation
 			await RefreshTavernFromServerAsync();
 		}
 
-		private static string TavernLoadingMessage() => GameText.GetOrFallbackSilent(
-			GameTextKeys.Tavern.Loading, "L'oste sta consultando la bacheca...");
+		private static string TavernLoadingMessage() => GameText.Get(GameTextKeys.Tavern.Loading);
 
 		/// <summary>
 		/// Scrive al posto delle quest, o toglie il messaggio passando null. E' l'unica cosa
@@ -450,21 +446,15 @@ namespace AccardND.Presentation
 			SetTavernBoardMessage(quests.Length > 0
 				? null
 				: data != null
-					? GameText.GetOrFallbackSilent(
-						GameTextKeys.Tavern.NoQuests, "Oggi la bacheca e' sguarnita: nessuna quest.")
+					? GameText.Get(GameTextKeys.Tavern.NoQuests)
 					: tavernLoading
 						? TavernLoadingMessage()
-						: GameText.GetOrFallbackSilent(
-							GameTextKeys.Tavern.Unavailable, "Bacheca non disponibile."));
+						: GameText.Get(GameTextKeys.Tavern.Unavailable));
 
 			// Il conto alla rovescia arriva dal server: l'orologio del dispositivo puo' essere
 			// sfasato e mostrerebbe un rinnovo che non corrisponde a quello vero.
 			int seconds = Mathf.Max(0, data?.secondsToRefresh ?? 0);
-            tavernRefreshText.text = GameText.GetOrFallbackSilent(
-                GameTextKeys.Tavern.RefreshCountdown,
-                "RINNOVO TRA: {0:00}H {1:00}M",
-                seconds / 3600,
-                seconds % 3600 / 60);
+            tavernRefreshText.text = GameText.Format(GameTextKeys.Tavern.RefreshCountdown, seconds / 3600, seconds % 3600 / 60);
 
 			// Il bonus usa punti pesati per difficolta': facile 1, intermedia 2, avanzata 3.
 			// I campi legacy permettono di mostrare correttamente anche la risposta di un
@@ -567,15 +557,12 @@ namespace AccardND.Presentation
 			SetRect(info.rectTransform, new Vector2(0.035f, 0.035f), new Vector2(0.59f, 0.965f));
 
 			Text reward = CreateText("Honey Reward", row.transform, tavernTitleFont, 22, FontStyle.Normal, TextAnchor.MiddleCenter);
-            reward.text = GameText.GetOrFallbackSilent(
-                GameTextKeys.Tavern.HoneyReward,
-                "MIELE\n<size=30><color=#F4B52D>● {0}</color></size>",
-                quest.honeyReward);
+            reward.text = GameText.Format(GameTextKeys.Tavern.HoneyReward, quest.honeyReward);
 			SetRect(reward.rectTransform, new Vector2(0.575f, 0.1f), new Vector2(0.755f, 0.9f));
 
             string label = quest.claimed
-                ? GameText.GetOrFallbackSilent(GameTextKeys.Tavern.QuestClaimed, "RISCOSSA")
-				: GameText.GetOrFallbackSilent(GameTextKeys.Tavern.QuestInProgress, "IN CORSO");
+                ? GameText.Get(GameTextKeys.Tavern.QuestClaimed)
+				: GameText.Get(GameTextKeys.Tavern.QuestInProgress);
 			bool claimable = quest.completed && !quest.claimed;
 			// Riscossione in volo: al posto di x1/x5 c'e' una sola targa spenta. Finche' il
 			// server non ha risposto non c'e' niente da premere, e il giocatore deve vedere
@@ -585,7 +572,7 @@ namespace AccardND.Presentation
 			{
 				Button pending = CreateButton(
 					"Quest Claiming", row.transform, tavernTitleFont,
-					GameText.GetOrFallbackSilent(GameTextKeys.Tavern.QuestClaiming, "RISCUOTO..."));
+					GameText.Get(GameTextKeys.Tavern.QuestClaiming));
 				SetRect((RectTransform)pending.transform, new Vector2(0.735f, 0.08f), new Vector2(0.99f, 0.92f));
 				ConfigureTavernClaimButton(pending);
 				SetTavernButtonInteractable(pending, false);
@@ -679,12 +666,8 @@ namespace AccardND.Presentation
 				{
 					ReportTavernUnavailable(
 						AccardND.Network.AccountServerSession.IsReconnecting
-							? GameText.GetOrFallbackSilent(
-								GameTextKeys.Tavern.Reconnecting,
-								"Riconnessione in corso: la taverna si aggiornerà da sola.")
-							: GameText.GetOrFallbackSilent(
-								GameTextKeys.Tavern.Offline,
-								"Taverna non disponibile offline: serve la connessione al server."),
+							? GameText.Get(GameTextKeys.Tavern.Reconnecting)
+							: GameText.Get(GameTextKeys.Tavern.Offline),
 						"TAVERNA - nessuna connessione al server.");
 				}
 			}
@@ -712,8 +695,7 @@ namespace AccardND.Presentation
 		{
 			tavernBoardStale = true;
 			if (tavernData == null)
-				SetTavernBoardMessage(GameText.GetOrFallbackSilent(
-					GameTextKeys.Tavern.Unavailable, "Bacheca non disponibile."));
+				SetTavernBoardMessage(GameText.Get(GameTextKeys.Tavern.Unavailable));
 			AppendLog(log);
 			SetTavernNotice(notice);
 		}
@@ -752,7 +734,20 @@ namespace AccardND.Presentation
 			// Fuori dal cancello: e' solo il badge dei messaggi, e tenere spenta la bacheca
 			// per un altro giro di rete che non la riguarda sarebbe attesa regalata.
 			if (claimed && !useRewardedVideo)
+			{
 				await LoadPendingAdRewardsAsync();
+				for (int index = 0; index < profilePendingRewards.Length; index++)
+				{
+					SinglePlayerPendingAdRewardData pending = profilePendingRewards[index];
+					if (pending == null || !string.Equals(pending.rewardType, "tavern", StringComparison.Ordinal))
+						continue;
+
+					SetTavernNotice(
+						$"Riscosso x1. Hai ricevuto una comunicazione: recupera gli altri "
+						+ $"{pending.extraHoney} vasetti di miele guardando il video.");
+					break;
+				}
+			}
 		}
 
 		/// <summary>
@@ -822,28 +817,20 @@ namespace AccardND.Presentation
 			// annunciarla sarebbe una promessa che non manteniamo, e per un attimo farebbe
 			// anche sembrare lento un incasso immediato.
 			SetTavernNotice(AdService.RewardsWaivedWithoutAds
-				? GameText.GetOrFallbackSilent(GameTextKeys.Tavern.Claiming, "Un attimo: sto riscuotendo...")
-				: GameText.GetOrFallbackSilent(GameTextKeys.Tavern.LoadingAd, "Un attimo: sto caricando la pubblicità..."));
+				? GameText.Get(GameTextKeys.Tavern.Claiming)
+				: GameText.Get(GameTextKeys.Tavern.LoadingAd));
 			AdResult ad = await AdService.ShowAsync(placement, asGate: true);
 
 			if (ad.Grants)
 			{
-				SetTavernNotice(GameText.GetOrFallbackSilent(
-					GameTextKeys.Tavern.Claiming, "Un attimo: sto riscuotendo..."));
+				SetTavernNotice(GameText.Get(GameTextKeys.Tavern.Claiming));
 				return true;
 			}
 
 			SetTavernNotice(ad.Unavailable
-				? GameText.GetOrFallbackSilent(
-					GameTextKeys.Tavern.AdUnavailable,
-					"Nessuna pubblicità disponibile in questo momento: la ricompensa resta qui, riprova più tardi.")
-				: GameText.GetOrFallbackSilent(
-					GameTextKeys.Tavern.AdIncomplete,
-					"La pubblicità va guardata per intero per riscuotere."));
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Tavern.ClaimNotUnlockedLog,
-				"TAVERNA - riscossione non sbloccata: annuncio {0}.",
-				ad.Outcome));
+				? GameText.Get(GameTextKeys.Tavern.AdUnavailable)
+				: GameText.Get(GameTextKeys.Tavern.AdIncomplete));
+			AppendLog(GameText.Format(GameTextKeys.Tavern.ClaimNotUnlockedLog, ad.Outcome));
 			return false;
 		}
 

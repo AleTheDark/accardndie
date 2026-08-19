@@ -730,6 +730,9 @@ namespace AccardND.GameCore.Tests
 			Assert.That(engine.ActiveCard, Is.SameAs(hunter));
 			Assert.That(hunter.AbilityUsed, Is.False);
 			Assert.DoesNotThrow(() => engine.UseAbility(hunter.Owner, 1 - hunter.Owner, 1));
+			Assert.That(hunter.HunterMarkedTargets, Has.Count.EqualTo(2));
+			Assert.That(hunter.HunterMarkedTargets, Does.Contain(engine.BoardOf(1 - hunter.Owner)[0]));
+			Assert.That(hunter.HunterMarkedTargets, Does.Contain(engine.BoardOf(1 - hunter.Owner)[1]));
 		}
 
         [Test]

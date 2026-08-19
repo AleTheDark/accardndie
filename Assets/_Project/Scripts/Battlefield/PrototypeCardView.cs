@@ -467,9 +467,9 @@ namespace AccardND.Presentation
             if (assassinSilverFilmMaterial == null)
             {
                 Shader shader = Resources.Load<Shader>("Shaders/AssassinSilverFilm");
-                if (shader == null)
+                if (shader == null || !shader.isSupported)
                 {
-                    Debug.LogWarning("Shader della pellicola argentata dell'Assassino non trovato.");
+                    Debug.LogWarning("Shader della pellicola argentata dell'Assassino non trovato o non supportato.");
                     return;
                 }
 
@@ -675,7 +675,7 @@ namespace AccardND.Presentation
             CreateStatusIconRoot(new Vector2(0.04f, -0.035f), new Vector2(0.96f, 0.175f), 60f, 7f);
 
             defeatedLabel = CreateText("Defeated", transform, font, 27, FontStyle.Bold, TextAnchor.MiddleCenter);
-            defeatedLabel.text = GameText.GetOrFallbackSilent(GameTextKeys.Combat.CardEliminated, "ELIMINATA");
+            defeatedLabel.text = GameText.Get(GameTextKeys.Combat.CardEliminated);
             defeatedLabel.color = new Color(1f, 0.26f, 0.22f);
             Stretch(defeatedLabel.rectTransform);
             defeatedLabel.gameObject.SetActive(false);
@@ -789,7 +789,7 @@ namespace AccardND.Presentation
             CreateStatusIconRoot(new Vector2(0.04f, -0.18f), new Vector2(0.96f, 0.08f), 56f, 6f);
 
             defeatedLabel = CreateText("Defeated", transform, font, 21, FontStyle.Bold, TextAnchor.MiddleCenter);
-            defeatedLabel.text = GameText.GetOrFallbackSilent(GameTextKeys.Combat.CardKnockedOut, "KO");
+            defeatedLabel.text = GameText.Get(GameTextKeys.Combat.CardKnockedOut);
             defeatedLabel.color = new Color(1f, 0.26f, 0.22f);
             Outline defeatedOutline = defeatedLabel.gameObject.AddComponent<Outline>();
             defeatedOutline.effectColor = Color.black;
@@ -2524,7 +2524,15 @@ namespace AccardND.Presentation
             }
 
             for (int index = actionOverlayRoot.childCount - 1; index >= 0; index--)
-                Destroy(actionOverlayRoot.GetChild(index).gameObject);
+            {
+                GameObject actionObject = actionOverlayRoot.GetChild(index).gameObject;
+                // Destroy viene applicato solo a fine frame. Il root, pero', puo'
+                // essere riattivato subito per ricostruire le azioni disponibili:
+                // disattiva quindi i vecchi pulsanti immediatamente, evitando che
+                // Abilita/Suprema restino visibili dopo aver armato una protezione.
+                actionObject.SetActive(false);
+                Destroy(actionObject);
+            }
             actionOverlayRoot.gameObject.SetActive(false);
         }
 
@@ -2744,11 +2752,7 @@ namespace AccardND.Presentation
                 }
             }
             if (healthBarText != null)
-                healthBarText.text = GameText.GetOrFallbackSilent(
-                    GameTextKeys.Combat.HitPoints,
-                    "HP {0} / {1}",
-                    clampedCurrent,
-                    maximum);
+                healthBarText.text = GameText.Format(GameTextKeys.Combat.HitPoints, clampedCurrent, maximum);
         }
 
         public void SetClassHealthBar(int current, int maximum)
@@ -3854,9 +3858,9 @@ namespace AccardND.Presentation
             Color dissolveEdgeColor = new Color(0.38f, 0.42f, 0.46f, 1f);
 
             // Instantiate custom burn dissolve material
-            Shader dissolveShader = Shader.Find("Custom/UIDissolve");
+            Shader dissolveShader = Resources.Load<Shader>("Shaders/UIDissolve");
             Material dissolveMat = null;
-            if (dissolveShader != null)
+            if (dissolveShader != null && dissolveShader.isSupported)
             {
                 dissolveMat = new Material(dissolveShader);
                     Texture2D noise = Resources.Load<Texture2D>("UI/dissolve_ash_noise");
@@ -6641,6 +6645,8 @@ namespace AccardND.Presentation
                 "buff_attack" => "barbarian_buff",
                 "agreement_buff" => "agreement_buff",
 				"buff_attachment" => "UI/attachment_button",
+				"forge_upgrade_1" => "UI/merchant_upgrade_relic_1",
+				"forge_upgrade_2" => "UI/merchant_upgrade_relic_2",
 				"dark_seal" => "UI/ruby_seal_item",
 				"buff_spirit" => "buff_spirit",
                 "seraphel_seal" => "UI/priest_purification_cross",

@@ -336,11 +336,7 @@ public sealed partial class BattleBoardController
 				// Anche il rifiuto differito (abilita' innescata e pagata piu' tardi)
 				// deve parlare dalla pedina, non solo dalla barra dei messaggi.
 				ShowNoManaCallout(card);
-				SetMessage(GameText.GetOrFallbackSilent(
-					GameTextKeys.Campaign.ManaInsufficient,
-					"Mana insufficiente: servono {0}, disponibili {1}.",
-					cost,
-					pool.Current));
+				SetMessage(GameText.Format(GameTextKeys.Campaign.ManaInsufficient, cost, pool.Current));
 			}
 			return false;
 		}
@@ -606,7 +602,7 @@ public sealed partial class BattleBoardController
 			PlaySeraphelHealSfx();
 			ownerCard.View?.PlayActionCallout($"RIGENERAZIONE +{healed}", Color.white);
 			((MonoBehaviour)this).StartCoroutine(PlaySeraphelRegenerationVfx());
-			SetMessage(GameText.GetLocalizedFallback(GameTextKeys.Campaign.SeraphelManaRegeneration, "LUCE RIGENERANTE: Seraphel consuma 10 Mana e recupera {0} HP. HP {1}/{2}.", "REGENERATING LIGHT: Seraphel spends 10 Mana and restores {0} HP. HP {1}/{2}.", "REGENERIERENDES LICHT: Seraphel verbraucht 10 Mana und stellt {0} LP wieder her. LP {1}/{2}.", "LUZ REGENERADORA: Seraphel consume 10 de Maná y recupera {0} PV. PV {1}/{2}.", "LUMIÈRE RÉGÉNÉRATRICE : Seraphel consomme 10 Mana et récupère {0} PV. PV {1}/{2}.", healed, activeSeraphelBoss.HitPoints, activeSeraphelBoss.MaxHitPoints));
+			SetMessage(GameText.Format(GameTextKeys.Campaign.SeraphelManaRegeneration, healed, activeSeraphelBoss.HitPoints, activeSeraphelBoss.MaxHitPoints));
 			AppendLog(GameText.Format(GameTextKeys.Campaign.SeraphelManaRegenerationLog, healed, activeSeraphelBoss.HitPoints, activeSeraphelBoss.MaxHitPoints));
 		}
 		RefreshCampaignManaPresentation();

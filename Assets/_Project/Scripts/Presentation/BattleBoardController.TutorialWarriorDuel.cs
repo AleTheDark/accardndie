@@ -615,8 +615,8 @@ public sealed partial class BattleBoardController
 	{
 		if ((Object)(object)tutorialWarriorFocusOverlay != (Object)null)
 			return;
-		Shader shader = Shader.Find("AccardND/UI/Tutorial Circular Spotlight");
-		if ((Object)(object)shader == (Object)null || (Object)(object)safeAreaRoot == (Object)null)
+		Shader shader = Resources.Load<Shader>("Shaders/TutorialCircularSpotlight");
+		if ((Object)(object)shader == (Object)null || !shader.isSupported || (Object)(object)safeAreaRoot == (Object)null)
 			return;
 		Canvas canvas = safeAreaRoot.GetComponentInParent<Canvas>();
 		RectTransform overlayParent = canvas != null

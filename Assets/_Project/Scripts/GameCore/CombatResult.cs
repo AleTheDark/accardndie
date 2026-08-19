@@ -278,6 +278,7 @@ namespace AccardND.GameCore
             rewardDivisor = Math.Max(1, rewardDivisor);
             roomExperience *= experienceMultiplier;
             defeatedExperience *= experienceMultiplier;
+            goldReward *= experienceMultiplier;
             roomExperience /= rewardDivisor;
             defeatedExperience /= rewardDivisor;
             goldReward /= rewardDivisor;

@@ -171,13 +171,7 @@ namespace AccardND.Presentation.ReviewPrompt
 
             if (usesStars)
             {
-                titleText.text = GameText.GetLocalizedFallback(
-                    GameTextKeys.ReviewPrompt.RatingTitle,
-                    "TI STA PIACENDO?",
-                    "ARE YOU ENJOYING IT?",
-                    "GEFÄLLT ES DIR?",
-                    "¿TE ESTÁ GUSTANDO?",
-                    "ÇA TE PLAÎT ?");
+                titleText.text = GameText.Get(GameTextKeys.ReviewPrompt.RatingTitle);
                 bodyText.text = "Hai appena chiuso il primo capitolo.\nQuante stelle daresti ad AcCard N' Die?";
                 confirmLabel.text = "INVIA";
                 confirmButton.interactable = false;
@@ -186,13 +180,7 @@ namespace AccardND.Presentation.ReviewPrompt
             }
             else
             {
-                titleText.text = GameText.GetLocalizedFallback(
-                    GameTextKeys.ReviewPrompt.StoreTitle,
-                    "LASCI UNA RECENSIONE?",
-                    "LEAVE A REVIEW?",
-                    "MÖCHTEST DU UNS BEWERTEN?",
-                    "¿QUIERES DEJAR UNA RESEÑA?",
-                    "LAISSER UN AVIS ?");
+                titleText.text = GameText.Get(GameTextKeys.ReviewPrompt.StoreTitle);
                 bodyText.text =
                     "Hai appena chiuso il primo capitolo.\n\nUna recensione sul Play Store "
                     + "aiuta altri giocatori a trovare il gioco.";
@@ -213,13 +201,7 @@ namespace AccardND.Presentation.ReviewPrompt
         {
             starRow.SetActive(false);
             titleText.alignment = TextAnchor.MiddleCenter;
-            titleText.text = GameText.GetLocalizedFallback(
-                GameTextKeys.ReviewPrompt.ThanksTitle,
-                "GRAZIE",
-                "THANK YOU",
-                "DANKE",
-                "GRACIAS",
-                "MERCI");
+            titleText.text = GameText.Get(GameTextKeys.ReviewPrompt.ThanksTitle);
             bodyText.text =
                 "Il tuo voto resta qui nel gioco.\n\nSe qualcosa non ti ha convinto, scrivilo: "
                 + "e' cosi' che il gioco migliora.";

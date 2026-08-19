@@ -1,4 +1,4 @@
-using System.Collections;
+using AccardND.AudioKit;
 using AccardND.Battlefield;
 using AccardND.GameCore;
 using AccardND.GameData;
@@ -14,23 +14,11 @@ public sealed partial class BattleBoardController
 
 	private const string MusicMutedPlayerPrefsKey = "AccardND.MusicMuted";
 
-	private const float DefaultMusicFadeOutDuration = 1.2f;
-
-	private const float MusicSwitchFadeOutDuration = 0.45f;
-
-	private AudioSource musicAudioSource;
+	private MusicChannel musicChannel;
 
 	private AudioSource pvpTimerAudioSource;
 
-	private MusicFadeRunner musicFadeRunner;
-
-	private bool musicFadeActive;
-
 	private BattleSfxPlayer battleSfx;
-
-	private float musicVolume = 0.75f;
-
-	private bool musicMuted;
 
 	/// <summary>Rifiuto per mana insufficiente, accompagna il callout NO MANA.</summary>
 	private AudioClip noManaSfx;
@@ -119,17 +107,8 @@ public sealed partial class BattleBoardController
 	{
 		battleSfx = new BattleSfxPlayer();
 		battleSfx.Initialize(transform);
-		musicVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(MusicVolumePlayerPrefsKey, 0.75f));
-		musicMuted = PlayerPrefs.GetInt(MusicMutedPlayerPrefsKey, 0) != 0;
-
-		GameObject musicObject = new GameObject("Music Audio Source");
-		musicObject.transform.SetParent(transform, false);
-		musicAudioSource = musicObject.AddComponent<AudioSource>();
-		musicAudioSource.playOnAwake = false;
-		musicAudioSource.loop = true;
-		musicAudioSource.spatialBlend = 0f;
-		musicFadeRunner = musicObject.AddComponent<MusicFadeRunner>();
-		UpdateMusicSourceVolume();
+		musicChannel = MusicChannel.Create(transform, MusicVolumePlayerPrefsKey, MusicMutedPlayerPrefsKey);
+		musicChannel.Changed += RefreshMusicOptionsUi;
 
 		GameObject pvpTimerObject = new GameObject("PvP Timer SFX Audio Source");
 		pvpTimerObject.transform.SetParent(transform, false);
@@ -299,186 +278,87 @@ public sealed partial class BattleBoardController
 		}
 	}
 
+	/// <summary>Il canale vive come figlio del controller: qui vale il controllo di vita di Unity.</summary>
+	private bool HasMusicChannel => (Object)(object)musicChannel != (Object)null;
+
+	private float MusicVolume => HasMusicChannel ? musicChannel.Volume : 0.75f;
+
+	private bool MusicMuted => HasMusicChannel && musicChannel.Muted;
+
 	private void IncreaseMusicVolume()
 	{
-		SetMusicVolume(musicVolume + 0.1f);
+		SetMusicVolume(MusicVolume + 0.1f);
 	}
 
 	private void DecreaseMusicVolume()
 	{
-		SetMusicVolume(musicVolume - 0.1f);
+		SetMusicVolume(MusicVolume - 0.1f);
 	}
 
 	private void SetMusicVolume(float volume)
 	{
-		musicVolume = Mathf.Clamp01(volume);
-		if (musicVolume > 0f)
+		if (HasMusicChannel)
 		{
-			musicMuted = false;
+			// SetVolume persiste e notifica Changed, che riaggiorna la UI delle opzioni.
+			musicChannel.SetVolume(volume);
 		}
-		PlayerPrefs.SetFloat(MusicVolumePlayerPrefsKey, musicVolume);
-		PlayerPrefs.SetInt(MusicMutedPlayerPrefsKey, musicMuted ? 1 : 0);
-		PlayerPrefs.Save();
-		UpdateMusicSourceVolume();
-		RefreshMusicOptionsUi();
 	}
 
 	private void ToggleMusicMute()
 	{
-		musicMuted = !musicMuted;
-		PlayerPrefs.SetInt(MusicMutedPlayerPrefsKey, musicMuted ? 1 : 0);
-		PlayerPrefs.Save();
-		UpdateMusicSourceVolume();
-		RefreshMusicOptionsUi();
+		if (HasMusicChannel)
+		{
+			musicChannel.ToggleMute();
+		}
 	}
 
 	private void RefreshMusicOptionsUi()
 	{
+		bool muted = MusicMuted;
+		float volume = MusicVolume;
 		if ((Object)(object)musicVolumeText != (Object)null)
 		{
-			musicVolumeText.text = musicMuted
+			musicVolumeText.text = muted
 				? GameText.Get(GameTextKeys.Common.Muted)
-				: GameText.Format(GameTextKeys.Audio.VolumePercent, Mathf.RoundToInt(musicVolume * 100f));
+				: GameText.Format(GameTextKeys.Audio.VolumePercent, Mathf.RoundToInt(volume * 100f));
 		}
 		if ((Object)(object)musicVolumeSlider != (Object)null)
-			musicVolumeSlider.SetValueWithoutNotify(musicVolume);
+			musicVolumeSlider.SetValueWithoutNotify(volume);
 		if ((Object)(object)musicMuteButtonText != (Object)null)
 		{
-			musicMuteButtonText.text = LocalizedOptionsAudioAction(musicMuted);
+			musicMuteButtonText.text = LocalizedOptionsAudioAction(muted);
 		}
 	}
 
 	private static string LocalizedOptionsAudioAction(bool muted)
 	{
 		return muted
-			? GameText.GetLocalizedFallback(GameTextKeys.Options.Unmute, "ATTIVA AUDIO", "UNMUTE", "TON EINSCHALTEN", "ACTIVAR SONIDO", "ACTIVER LE SON")
-			: GameText.GetLocalizedFallback(GameTextKeys.Options.Mute, "MUTE", "MUTE", "STUMMSCHALTEN", "SILENCIAR", "COUPER LE SON");
-	}
-
-	private void UpdateMusicSourceVolume()
-	{
-		if ((Object)(object)musicAudioSource == (Object)null)
-		{
-			return;
-		}
-		musicAudioSource.volume = musicMuted ? 0f : musicVolume;
+			? GameText.Get(GameTextKeys.Options.Unmute)
+			: GameText.Get(GameTextKeys.Options.Mute);
 	}
 
 	private void PlayMusic(AudioClip clip)
 	{
-		if ((Object)(object)musicAudioSource == (Object)null || (Object)(object)clip == (Object)null)
+		if (HasMusicChannel)
 		{
-			return;
+			musicChannel.Play(clip);
 		}
-		StopMusicFade();
-		if ((Object)(object)musicAudioSource.clip == (Object)(object)clip && musicAudioSource.isPlaying)
-		{
-			UpdateMusicSourceVolume();
-			return;
-		}
-		if (musicAudioSource.isPlaying)
-		{
-			StopMusicFade();
-			StartMusicFade(SwitchMusicRoutine(clip, MusicSwitchFadeOutDuration));
-			return;
-		}
-		musicAudioSource.clip = clip;
-		musicAudioSource.loop = true;
-		UpdateMusicSourceVolume();
-		Debug.Log($"[Music] Riproduco '{clip.name}' (volume {musicAudioSource.volume:0.00})");
-		musicAudioSource.Play();
 	}
 
 	private void StopMusic()
 	{
-		FadeOutMusic(DefaultMusicFadeOutDuration);
+		if (HasMusicChannel)
+		{
+			musicChannel.Stop();
+		}
 	}
 
 	private void FadeOutMusic(float duration)
 	{
-		if ((Object)(object)musicAudioSource == (Object)null || !musicAudioSource.isPlaying)
+		if (HasMusicChannel)
 		{
-			return;
+			musicChannel.FadeOut(duration);
 		}
-		StopMusicFade();
-		StartMusicFade(FadeOutMusicRoutine(Mathf.Max(0.01f, duration)));
-	}
-
-	private void StartMusicFade(IEnumerator routine)
-	{
-		if ((Object)(object)musicFadeRunner == (Object)null)
-		{
-			StartCoroutine(routine);
-			return;
-		}
-		musicFadeActive = true;
-		musicFadeRunner.Play(routine);
-	}
-
-	private IEnumerator SwitchMusicRoutine(AudioClip clip, float duration)
-	{
-		float startVolume = musicAudioSource.volume;
-		float elapsed = 0f;
-		while (elapsed < duration && (Object)(object)musicAudioSource != (Object)null)
-		{
-			elapsed += Time.unscaledDeltaTime;
-			float progress = Mathf.Clamp01(elapsed / duration);
-			musicAudioSource.volume = Mathf.Lerp(startVolume, 0f, progress);
-			yield return null;
-		}
-		if ((Object)(object)musicAudioSource != (Object)null)
-		{
-			musicAudioSource.Stop();
-			musicAudioSource.clip = clip;
-			musicAudioSource.loop = true;
-			UpdateMusicSourceVolume();
-			Debug.Log($"[Music] Riproduco '{clip.name}' (volume {musicAudioSource.volume:0.00})");
-			musicAudioSource.Play();
-		}
-		CompleteMusicFade();
-	}
-
-	private IEnumerator FadeOutMusicRoutine(float duration)
-	{
-		float startVolume = musicAudioSource.volume;
-		float elapsed = 0f;
-		while (elapsed < duration && (Object)(object)musicAudioSource != (Object)null)
-		{
-			elapsed += Time.unscaledDeltaTime;
-			float progress = Mathf.Clamp01(elapsed / duration);
-			musicAudioSource.volume = Mathf.Lerp(startVolume, 0f, progress);
-			yield return null;
-		}
-		if ((Object)(object)musicAudioSource != (Object)null)
-		{
-			musicAudioSource.Stop();
-			musicAudioSource.clip = null;
-			UpdateMusicSourceVolume();
-		}
-		CompleteMusicFade();
-	}
-
-	private void CompleteMusicFade()
-	{
-		musicFadeActive = false;
-		if ((Object)(object)musicFadeRunner != (Object)null)
-		{
-			musicFadeRunner.ClearActive();
-		}
-	}
-
-	private void StopMusicFade()
-	{
-		if (!musicFadeActive)
-		{
-			return;
-		}
-		if ((Object)(object)musicFadeRunner != (Object)null)
-		{
-			musicFadeRunner.StopActive();
-		}
-		musicFadeActive = false;
-		UpdateMusicSourceVolume();
 	}
 
 	private void PlayCardInspectionOpenSfx()
@@ -767,21 +647,22 @@ public sealed partial class BattleBoardController
 
 	private void StopPvpArenaMusic()
 	{
-		if ((Object)(object)musicAudioSource == (Object)null
-			|| pvpArenaSoundtracks == null
-			|| !System.Array.Exists(
-				pvpArenaSoundtracks,
-				clip => (Object)(object)clip == (Object)(object)musicAudioSource.clip))
+		if (!HasMusicChannel || pvpArenaSoundtracks == null)
+		{
+			return;
+		}
+
+		AudioClip playing = musicChannel.CurrentClip;
+		if (!System.Array.Exists(
+			pvpArenaSoundtracks,
+			clip => (Object)(object)clip == (Object)(object)playing))
 		{
 			return;
 		}
 
 		// L'uscita dal PvP e' un confine netto: nessun fade/coroutine Arena deve
 		// poter sopravvivere e riscrivere il volume o ripartire sopra la musica Hub.
-		StopMusicFade();
-		musicAudioSource.Stop();
-		musicAudioSource.clip = null;
-		UpdateMusicSourceVolume();
+		musicChannel.StopImmediate();
 	}
 
 	private bool IsMedusaMusicRoom()
@@ -852,29 +733,4 @@ public sealed partial class BattleBoardController
 	}
 }
 
-internal sealed class MusicFadeRunner : MonoBehaviour
-{
-	private Coroutine activeRoutine;
-
-	public void Play(IEnumerator routine)
-	{
-		StopActive();
-		activeRoutine = StartCoroutine(routine);
-	}
-
-	public void StopActive()
-	{
-		if (activeRoutine == null)
-		{
-			return;
-		}
-		StopCoroutine(activeRoutine);
-		activeRoutine = null;
-	}
-
-	public void ClearActive()
-	{
-		activeRoutine = null;
-	}
-}
 }

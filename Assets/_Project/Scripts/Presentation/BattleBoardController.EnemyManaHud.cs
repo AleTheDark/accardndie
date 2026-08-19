@@ -142,7 +142,7 @@ public sealed partial class BattleBoardController
 		bool visible = BattleManaHudEnabled
 			&& !waitingForCampaignBossReveal
 			&& !deploymentDraftActive
-			&& (pvpPresentationActive || roundNumber > 0)
+			&& (pvpPresentationActive || roundNumber > 0 || IsTutorialWarriorDuelActive)
 			&& !bragusBossPresentationActive
 			&& !waitingForSeraphelReveal
 			&& (!IsTutorialWarriorDuelActive

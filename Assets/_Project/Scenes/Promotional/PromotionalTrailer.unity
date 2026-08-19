@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &62001141
+--- !u!1 &1602233798
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,66 +127,9 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 62001143}
-  - component: {fileID: 62001142}
-  m_Layer: 0
-  m_Name: PROMOTIONAL TRAILER - Press Play
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &62001142
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 62001141}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: eeddfa8c87d15674094bde7bda82665a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: AccardND.Presentation::AccardND.Presentation.PromotionalSequenceController
-  backgrounds:
-  - {fileID: 21300000, guid: 94b16812bc0f965498f46cbb9005c9fa, type: 3}
-  - {fileID: 21300000, guid: 94b16812bc0f965498f46cbb9005c9fa, type: 3}
-  - {fileID: 21300000, guid: 94b16812bc0f965498f46cbb9005c9fa, type: 3}
-  bosses:
-  - {fileID: 21300000, guid: 7de3e61986ec4098bd62b619f4de3ed3, type: 3}
-  - {fileID: 21300000, guid: 18feb9d7ee924206a8314e5b50cf695d, type: 3}
-  - {fileID: 21300000, guid: dd17eeb6009246b1b415ae13b6fb2bc2, type: 3}
-  - {fileID: 21300000, guid: b8c3d40e5f607189a2b3c4d5e6f71829, type: 3}
-  heroes:
-  - {fileID: 21300000, guid: 1fe0c7f0a0524784ad9cc83127f8e126, type: 3}
-  - {fileID: 21300000, guid: ee41b899334f4074aa9cb23f009943e0, type: 3}
-  playbackSpeed: 1
---- !u!4 &62001143
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 62001141}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1015300360
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1015300363}
-  - component: {fileID: 1015300362}
-  - component: {fileID: 1015300361}
+  - component: {fileID: 1602233801}
+  - component: {fileID: 1602233800}
+  - component: {fileID: 1602233799}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -194,21 +137,21 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!81 &1015300361
+--- !u!81 &1602233799
 AudioListener:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1015300360}
+  m_GameObject: {fileID: 1602233798}
   m_Enabled: 1
---- !u!20 &1015300362
+--- !u!20 &1602233800
 Camera:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1015300360}
+  m_GameObject: {fileID: 1602233798}
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
@@ -253,13 +196,78 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
---- !u!4 &1015300363
+--- !u!4 &1602233801
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1015300360}
+  m_GameObject: {fileID: 1602233798}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2088145799
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2088145801}
+  - component: {fileID: 2088145800}
+  m_Layer: 0
+  m_Name: PROMOTIONAL TRAILER - Press Play
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2088145800
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2088145799}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eeddfa8c87d15674094bde7bda82665a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AccardND.Presentation::AccardND.Presentation.PromotionalSequenceController
+  backgrounds:
+  - {fileID: 21300000, guid: 94b16812bc0f965498f46cbb9005c9fa, type: 3}
+  - {fileID: 21300000, guid: 89a27a78b8106074db7c4ea17351c46d, type: 3}
+  - {fileID: 21300000, guid: a9f5b43c87f14dbb9c6218dcb61e37a4, type: 3}
+  bosses:
+  - {fileID: 21300000, guid: 7de3e61986ec4098bd62b619f4de3ed3, type: 3}
+  - {fileID: 21300000, guid: dd17eeb6009246b1b415ae13b6fb2bc2, type: 3}
+  - {fileID: 21300000, guid: b8c3d40e5f607189a2b3c4d5e6f71829, type: 3}
+  heroes:
+  - {fileID: 21300000, guid: 1fe0c7f0a0524784ad9cc83127f8e126, type: 3}
+  - {fileID: 21300000, guid: dc3f189a9fad774428b3a9a978ba96a6, type: 3}
+  - {fileID: 21300000, guid: ee41b899334f4074aa9cb23f009943e0, type: 3}
+  playbackSpeed: 1
+  loop: 1
+  showFramingGuides: 0
+  dieClass: 1
+  dieSides: 20
+  coldOpenResult: 3
+  coldOpenRollDuration: 1.5
+  payoffResult: 20
+  payoffRollDuration: 2.6
+--- !u!4 &2088145801
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2088145799}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -272,5 +280,5 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 62001143}
-  - {fileID: 1015300363}
+  - {fileID: 2088145801}
+  - {fileID: 1602233801}

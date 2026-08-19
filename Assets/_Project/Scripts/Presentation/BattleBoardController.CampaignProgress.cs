@@ -168,13 +168,7 @@ public sealed partial class BattleBoardController
 			RecordCampaignEnemiesDefeated();
 			if (IsFinalBossRoom())
 				RecordCampaignBossVictory();
-			SetTurnBanner(playerTurn: true, GameText.GetLocalizedFallback(
-				GameTextKeys.Campaign.CombatRoomCompleteBanner,
-				"VITTORIA - STANZA SUPERATA",
-				"VICTORY - ROOM CLEARED",
-				"SIEG - RAUM GESCHAFFT",
-				"VICTORIA - SALA SUPERADA",
-				"VICTOIRE - SALLE TERMINÉE"));
+			SetTurnBanner(playerTurn: true, GameText.Get(GameTextKeys.Campaign.CombatRoomCompleteBanner));
 			previousLevel = runProgress.PlayerLevel;
 			previousExperience = runProgress.CurrentExperience;
 			if (activeComposableGolem != null)
@@ -198,15 +192,7 @@ public sealed partial class BattleBoardController
 					AppendLog("PREZZO DELLA RINUNCIA - ricompensa Mostro ridotta del 50%.");
 				}
 			}
-			SetMessage(GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.RoomReward,
-				"Hai guadagnato {0} punti esperienza e {1} oro!",
-				roomReward.TotalExperience,
-				roomReward.Gold));
-			if (roomReward.LevelsGained > 0)
-			{
-				ShowLevelUpVigorHint();
-			}
+			SetMessage(GameText.Format(GameTextKeys.Campaign.RoomReward, roomReward.TotalExperience, roomReward.Gold));
 			SetPrimaryActionLabel(restartButtonText, PrimaryActionLabel.Advance);
 			ApplyBattleButtonVariant(restartButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Arcane);
 			canAdvanceToNextRoom = true;
@@ -216,17 +202,9 @@ public sealed partial class BattleBoardController
 		{
 			SetTurnBanner(
 				playerTurn: false,
-				GameText.GetOrFallbackSilent(
-					GameTextKeys.Campaign.DefeatFormationBanner,
-					"SCONFITTA  -  FORMAZIONE ELIMINATA"),
+				GameText.Get(GameTextKeys.Campaign.DefeatFormationBanner),
 				defeat: true);
-			SetMessage(GameText.GetLocalizedFallback(
-				GameTextKeys.Campaign.DefeatFormationMessage,
-				"SCONFITTA. La CPU ha eliminato la tua formazione.",
-				"DEFEAT. The CPU has eliminated your formation.",
-				"NIEDERLAGE. Die CPU hat deine Formation besiegt.",
-				"DERROTA. La CPU ha eliminado tu formación.",
-				"DÉFAITE. L'IA a éliminé votre formation."));
+			SetMessage(GameText.Get(GameTextKeys.Campaign.DefeatFormationMessage));
 			canAdvanceToNextRoom = false;
 			// Anche i mostri abbattuti nella stanza in cui si muore vanno contati: prima il
 			// conteggio stava solo nel ramo della vittoria, e l'ultima stanza di ogni run
@@ -252,24 +230,12 @@ public sealed partial class BattleBoardController
 					canRetryCampaignRoom = true;
 					SetTurnBanner(
 						playerTurn: false,
-						GameText.GetOrFallbackSilent(
-							GameTextKeys.Campaign.DefeatRetreatBanner,
-							"SCONFITTA - RITIRATA"),
+						GameText.Get(GameTextKeys.Campaign.DefeatRetreatBanner),
 						defeat: true);
-					SetMessage(GameText.GetLocalizedFallback(
-						GameTextKeys.Campaign.DefeatRetreatMessage,
-						"SCONFITTA. Puoi continuare: hai {0}/{1} carte disponibili. Restano {2} mostri nella stanza.",
-						"DEFEAT. You can continue: you have {0}/{1} cards available. {2} monsters remain in the room.",
-						"NIEDERLAGE. Du kannst weitermachen: Du hast {0}/{1} Karten verfügbar. {2} Monster bleiben im Raum.",
-						"DERROTA. Puedes continuar: tienes {0}/{1} cartas disponibles. Quedan {2} monstruos en la sala.",
-						"DÉFAITE. Vous pouvez continuer : vous avez {0}/{1} cartes disponibles. Il reste {2} monstres dans la salle.",
-						combatReadyCount,
-						formationSize,
-						survivingCpuFormation.Count));
+					SetMessage(GameText.Format(GameTextKeys.Campaign.DefeatRetreatMessage, combatReadyCount, formationSize, survivingCpuFormation.Count));
 					SetPrimaryActionLabel(restartButtonText, PrimaryActionLabel.RetryRoom);
 					ApplyBattleButtonVariant(restartButton, AccardND.Battlefield.MmoUiTheme.ButtonVariant.Arcane);
 					((Component)restartButton).gameObject.SetActive(true);
-					ShowFirstDefeatHint();
 					RefreshInitiativeDisplay();
 					UpdateInteractions();
 					ClearConsumedCombatRules();
@@ -278,13 +244,7 @@ public sealed partial class BattleBoardController
 			}
 			canRetryCampaignRoom = false;
 			SetTurnBanner(playerTurn: false, "GAME OVER");
-			SetMessage(GameText.GetLocalizedFallback(
-				GameTextKeys.Campaign.GameOverFormationMessage,
-				"GAME OVER. La CPU ha eliminato la tua formazione.",
-				"GAME OVER. The CPU has eliminated your formation.",
-				"GAME OVER. Die CPU hat deine Formation besiegt.",
-				"GAME OVER. La CPU ha eliminado tu formación.",
-				"GAME OVER. L'IA a éliminé votre formation."));
+			SetMessage(GameText.Get(GameTextKeys.Campaign.GameOverFormationMessage));
 			pendingCampaignRewardTask = ClaimCampaignRunAccountReward(completed: false);
 		}
 		RefreshInitiativeDisplay();
@@ -385,11 +345,7 @@ public sealed partial class BattleBoardController
 		if (retryComposableGolemForms != null)
 		{
 			activeComposableGolem = CreateComposableGolemForCurrentRoom();
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.GolemRetryStatePreservedLog,
-				"GOLEM - {0}/{1} HP e bonus Potenza delle forme conservati per il nuovo tentativo.",
-				activeComposableGolem.HitPoints,
-				activeComposableGolem.MaxHitPoints));
+			AppendLog(GameText.Format(GameTextKeys.Campaign.GolemRetryStatePreservedLog, activeComposableGolem.HitPoints, activeComposableGolem.MaxHitPoints));
 		}
 		if (!LoadCampaignRoomScenario())
 		{
@@ -501,14 +457,8 @@ public sealed partial class BattleBoardController
 
 		bool queued = AccardND.Network.ServerSinglePlayerProgressClient.QueueChapterClearForReplay(bossId);
 		AppendLog(queued
-			? GameText.GetOrFallbackSilent(
-				GameTextKeys.Adventure.ChapterClearQueuedLog,
-				"AVVENTURA - completamento capitolo {0} salvato: verra' registrato alla riconnessione.",
-				bossId)
-			: GameText.GetOrFallbackSilent(
-				GameTextKeys.Adventure.ChapterClearNotRecordedLog,
-				"AVVENTURA - completamento capitolo {0} non registrato: server non disponibile e account assente.",
-				bossId));
+			? GameText.Format(GameTextKeys.Adventure.ChapterClearQueuedLog, bossId)
+			: GameText.Format(GameTextKeys.Adventure.ChapterClearNotRecordedLog, bossId));
 	}
 
 	private void ShowPendingClassChoiceIfAny()
@@ -529,9 +479,7 @@ public sealed partial class BattleBoardController
 		foreach (GameObject view in classChoiceButtonViews)
 			if ((Object)(object)view != (Object)null) Object.Destroy(view);
 		classChoiceButtonViews.Clear();
-		classChoiceStatusText.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Adventure.ClassChoiceFinal,
-			"La scelta e definitiva.");
+		classChoiceStatusText.text = GameText.Get(GameTextKeys.Adventure.ClassChoiceFinal);
 
 		int count = choices.Count;
 		for (int index = 0; index < count; index++)
@@ -608,10 +556,7 @@ public sealed partial class BattleBoardController
 			return;
 		}
 
-		classChoiceStatusText.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Adventure.ClassChoiceTestComplete,
-			"TEST COMPLETATO: {0} SELEZIONATO",
-			ClassChoiceDisplayName(classId));
+		classChoiceStatusText.text = GameText.Format(GameTextKeys.Adventure.ClassChoiceTestComplete, ClassChoiceDisplayName(classId));
 	}
 
 	private static string ClassChoiceDisplayName(string classId)
@@ -757,11 +702,7 @@ public sealed partial class BattleBoardController
 				pendingCampaignRewardAdClaimed = false;
 				pendingCampaignRewardRecoverable = true;
 				AppendLog($"ACCOUNT - fine campagna ({outcomeLabel}): {availableExperience} EXP disponibili /10 = +{outcome.GrantedAccountExperience} EXP account.");
-				string reward = GameText.GetOrFallbackSilent(
-					GameTextKeys.Campaign.AccountRewardSummary,
-					"Fine campagna: +{0} EXP account ({1}/10).",
-					outcome.GrantedAccountExperience,
-					availableExperience);
+				string reward = GameText.Format(GameTextKeys.Campaign.AccountRewardSummary, outcome.GrantedAccountExperience, availableExperience);
 				if (completed)
 				{
 					SetMessage(reward);
@@ -791,26 +732,14 @@ public sealed partial class BattleBoardController
 		// ancora da riscuotere: il profilo la ritrovera'. Senza coda non nascera' niente.
 		pendingCampaignRewardRecoverable = queued;
 		AppendLog(queued
-			? GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.RewardQueuedLog,
-				"ACCOUNT - reward fine campagna ({0}) salvata: verra' registrata alla riconnessione.",
-				outcomeLabel)
-			: GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.RewardNotRecordedLog,
-				"ACCOUNT - reward fine campagna ({0}) non registrata: server non disponibile e account assente.",
-				outcomeLabel));
+			? GameText.Format(GameTextKeys.Campaign.RewardQueuedLog, outcomeLabel)
+			: GameText.Format(GameTextKeys.Campaign.RewardNotRecordedLog, outcomeLabel));
 		SetMessage(queued
 			// La reward viaggia alla riconnessione e nasce col moltiplicatore ancora da
 			// riscuotere: il x3 non e' bruciato dalla rete caduta, e' solo rimandato.
-			? GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.OfflineSummarySaved,
-				"Riepilogo della run salvato: EXP, statistiche e quest verranno sincronizzati alla riconnessione.")
-				+ " " + GameText.GetOrFallbackSilent(
-					GameTextKeys.Campaign.TripleSavedToProfile,
-					"Il triplicatore ti aspetta fra i messaggi del profilo.")
-			: GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.RewardConnectionRequired,
-				"Connessione al server necessaria per registrare la ricompensa di fine campagna."));
+			? GameText.Get(GameTextKeys.Campaign.OfflineSummarySaved)
+				+ " " + GameText.Get(GameTextKeys.Campaign.TripleSavedToProfile)
+			: GameText.Get(GameTextKeys.Campaign.RewardConnectionRequired));
 		ShowCampaignDefeatRewardPopup(baseAccountExperience, completed);
 		RefreshSinglePlayerProgressView();
 	}
@@ -838,7 +767,7 @@ public sealed partial class BattleBoardController
 			title.font = campaignTitleFont;
 		title.fontSize = 50;
 		title.resizeTextForBestFit = false;
-		title.text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.RewardTitle, "FINE CAMPAGNA");
+		title.text = GameText.Get(GameTextKeys.Campaign.RewardTitle);
 		title.color = new Color(0.95f, 0.79f, 0.34f);
 		SetRect(title.rectTransform, new Vector2(0.06f, 0.74f), new Vector2(0.94f, 0.92f));
 
@@ -945,8 +874,8 @@ public sealed partial class BattleBoardController
 		Text title = campaignDefeatRewardPopup.transform.Find("Campaign Defeat Reward Dialog/Campaign Defeat Reward Title")?.GetComponent<Text>();
 		if ((Object)(object)title != (Object)null)
 			title.text = completed
-				? GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChapterCompletedTitle, "CAPITOLO COMPLETATO")
-				: GameText.GetOrFallbackSilent(GameTextKeys.Campaign.RewardTitle, "FINE CAMPAGNA");
+				? GameText.Get(GameTextKeys.Campaign.ChapterCompletedTitle)
+				: GameText.Get(GameTextKeys.Campaign.RewardTitle);
 		// Senza claim id non c'e' niente da far verificare al server: il moltiplicatore
 		// verrebbe rifiutato prima ancora di mostrare il video. Succede quando la reward di
 		// fine campagna e' stata rifiutata o messa in coda offline, e in quei casi qui arriva
@@ -963,30 +892,18 @@ public sealed partial class BattleBoardController
 		// La domanda nomina la pubblicita' solo dove ce n'e' davvero una: dove il x3 e'
 		// condonato, prometterne una che non partira' e' una bugia gratuita.
 		string tripleQuestion = AccardND.Ads.AdService.RewardsWaivedWithoutAds
-			? GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.TripleQuestion,
-				"Vuoi triplicare la ricompensa?")
-			: GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.TripleQuestionWithAd,
-				"Vuoi triplicare la ricompensa guardando una pubblicità?");
+			? GameText.Get(GameTextKeys.Campaign.TripleQuestion)
+			: GameText.Get(GameTextKeys.Campaign.TripleQuestionWithAd);
 		// Il x3 saltato non e' perso: la reward resta a moltiplicatore 1 sul server e il
 		// profilo la ripropone. Dirlo qui e' l'unico modo perche' il giocatore vada a
 		// cercarla, invece di credere che l'occasione sia finita con la run.
 		string rewardReady = pendingCampaignRewardBaseAccountExperience > 0 && pendingCampaignRewardRecoverable
-			? GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.TripleSavedToProfile,
-				"Il triplicatore ti aspetta fra i messaggi del profilo.")
-			: GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.RewardReady,
-				"La ricompensa è pronta.");
+			? GameText.Get(GameTextKeys.Campaign.TripleSavedToProfile)
+			: GameText.Get(GameTextKeys.Campaign.RewardReady);
 		string unlockSummary = completed ? BuildChapterCompletionUnlockSummary() : string.Empty;
 		campaignDefeatRewardBodyText.text = completed
 			? $"{unlockSummary}\n\n<size=40><b>+{pendingCampaignRewardBaseAccountExperience} EXP</b></size>\n\n{(adOffered ? tripleQuestion : rewardReady)}"
-			: GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.RewardPopupBody,
-				"Hai guadagnato\n<size=40><b>+{0} EXP</b></size>\n\n{1}",
-				pendingCampaignRewardBaseAccountExperience,
-				adOffered ? tripleQuestion : rewardReady);
+			: GameText.Format(GameTextKeys.Campaign.RewardPopupBody, pendingCampaignRewardBaseAccountExperience, adOffered ? tripleQuestion : rewardReady);
 		((Component)campaignDefeatRewardDoubleButton).gameObject.SetActive(adOffered);
 		campaignDefeatRewardDoubleButton.interactable = adOffered;
 		Button continueButton = campaignDefeatRewardPopup.transform.Find("Campaign Defeat Reward Dialog/Continue After Campaign Defeat Reward")?.GetComponent<Button>();
@@ -1002,9 +919,7 @@ public sealed partial class BattleBoardController
 			AppendLog(rewardClaimable
 				? "ACCOUNT - TRIPLICA non offerto: nessun annuncio pronto per il placement."
 				: "ACCOUNT - TRIPLICA non offerto: la reward di fine campagna non ha un claim id dal server.");
-		campaignDefeatRewardDoubleButtonText.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Campaign.Triple,
-			"TRIPLICA");
+		campaignDefeatRewardDoubleButtonText.text = GameText.Get(GameTextKeys.Campaign.Triple);
 		campaignDefeatRewardPopup.transform.SetAsLastSibling();
 	}
 
@@ -1018,30 +933,21 @@ public sealed partial class BattleBoardController
 		var lines = new List<string>();
 		if (pendingAdventureChapterClassReward
 			&& !string.IsNullOrWhiteSpace(chapter.RewardClassId))
-			lines.Add(GameText.GetLocalizedFallback(
-				GameTextKeys.Adventure.ChapterRewardClass,
-				"CLASSE  <b>{0}</b>", "CLASS  <b>{0}</b>", "KLASSE  <b>{0}</b>", "CLASE  <b>{0}</b>", "CLASSE  <b>{0}</b>",
-				ClassChoiceDisplayName(chapter.RewardClassId)));
+			lines.Add(GameText.Format(GameTextKeys.Adventure.ChapterRewardClass, ClassChoiceDisplayName(chapter.RewardClassId)));
 
 		AccardND.GameData.AdventureChapter nextChapter =
 			AccardND.GameData.AdventureChapterCatalog.Find($"chapter-{chapter.Number + 1}");
 		if (pendingAdventureNextChapterReward
 			&& nextChapter != null
 			&& !string.IsNullOrWhiteSpace(nextChapter.ScenarioLabel))
-			lines.Add(GameText.GetLocalizedFallback(
-				GameTextKeys.Adventure.ChapterScenarioLabel,
-				"SCENARIO: <b>{0}</b>", "SCENARIO: <b>{0}</b>", "SZENARIO: <b>{0}</b>", "ESCENARIO: <b>{0}</b>", "SCÉNARIO : <b>{0}</b>",
-				LocalizedAdventureScenarioName(nextChapter)));
+			lines.Add(GameText.Format(GameTextKeys.Adventure.ChapterScenarioLabel, LocalizedAdventureScenarioName(nextChapter)));
 
 		if (pendingAdventureChapterTalentPointsReward)
-			lines.Add(GameText.GetLocalizedFallback(
-				GameTextKeys.Adventure.ChapterRewardPropolis,
-				"PUNTI PROPOLI  <b>+{0}</b>", "PROPOLIS POINTS  <b>+{0}</b>", "PROPOLIS-PUNKTE  <b>+{0}</b>", "PUNTOS DE PROPÓLEO  <b>+{0}</b>", "POINTS DE PROPOLIS  <b>+{0}</b>",
-				AccountLevelCurve.TalentPointsPerFirstChapterClear));
+			lines.Add(GameText.Format(GameTextKeys.Adventure.ChapterRewardPropolis, AccountLevelCurve.TalentPointsPerFirstChapterClear));
 
 		return lines.Count > 0
-			? GameText.GetLocalizedFallback(GameTextKeys.Adventure.ChapterRewardsHeading, "HAI SBLOCCATO", "YOU UNLOCKED", "DU HAST FREIGESCHALTET", "HAS DESBLOQUEADO", "VOUS AVEZ DÉBLOQUÉ") + "\n" + string.Join("\n", lines)
-			: GameText.GetLocalizedFallback(GameTextKeys.Campaign.ChapterCompletedTitle, "CAPITOLO COMPLETATO", "CHAPTER COMPLETE", "KAPITEL ABGESCHLOSSEN", "CAPÍTULO COMPLETADO", "CHAPITRE TERMINÉ");
+			? GameText.Get(GameTextKeys.Adventure.ChapterRewardsHeading) + "\n" + string.Join("\n", lines)
+			: GameText.Get(GameTextKeys.Campaign.ChapterCompletedTitle);
 	}
 
 	private static void ApplyCampaignRewardContinueStyle(Button button)
@@ -1124,9 +1030,7 @@ public sealed partial class BattleBoardController
 
 		((UnityEvent)merchantBuyButton.onClick).RemoveAllListeners();
 		((UnityEvent)merchantBuyButton.onClick).AddListener(new UnityAction(ClaimCampaignRewardAdMultiplier));
-		merchantBuyButtonText.text = GameText.GetOrFallbackSilent(
-			GameTextKeys.Campaign.WatchAdExperience,
-			"GUARDA ADV EXP");
+		merchantBuyButtonText.text = GameText.Get(GameTextKeys.Campaign.WatchAdExperience);
 		merchantBuyButton.interactable = true;
 		((Component)merchantBuyButton).gameObject.SetActive(true);
 		ConfigureActionButtonLayout(merchantVisible: true);
@@ -1167,11 +1071,7 @@ public sealed partial class BattleBoardController
 	{
 		SetMessage(message);
 		if (CampaignRewardPopupVisible && (Object)(object)campaignDefeatRewardBodyText != (Object)null)
-			campaignDefeatRewardBodyText.text = GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.RewardPopupBody,
-				"Hai guadagnato\n<size=40><b>+{0} EXP</b></size>\n\n{1}",
-				pendingCampaignRewardBaseAccountExperience,
-				message);
+			campaignDefeatRewardBodyText.text = GameText.Format(GameTextKeys.Campaign.RewardPopupBody, pendingCampaignRewardBaseAccountExperience, message);
 	}
 
 	private async void ClaimCampaignRewardAdMultiplier()
@@ -1185,13 +1085,8 @@ public sealed partial class BattleBoardController
 		{
 			pendingCampaignRewardAdClaimed = false;
 			SetCampaignRewardAdButtonInteractable(true);
-			ReportCampaignRewardAdOutcome(GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.AdMultiplierConnectionRequired,
-				"Connessione al server necessaria per applicare il moltiplicatore."));
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.AdMultiplierNotAppliedLog,
-				"ACCOUNT - moltiplicatore ADV non applicato: {0}.",
-				"server non disponibile"));
+			ReportCampaignRewardAdOutcome(GameText.Get(GameTextKeys.Campaign.AdMultiplierConnectionRequired));
+			AppendLog(GameText.Format(GameTextKeys.Campaign.AdMultiplierNotAppliedLog, "server non disponibile"));
 			return;
 		}
 
@@ -1209,16 +1104,9 @@ public sealed partial class BattleBoardController
 			pendingCampaignRewardAdClaimed = false;
 			SetCampaignRewardAdButtonInteractable(true);
 			ReportCampaignRewardAdOutcome(ad.Unavailable
-				? GameText.GetOrFallbackSilent(
-					GameTextKeys.Campaign.AdUnavailable,
-					"Nessuna pubblicita' disponibile in questo momento: riprova piu' tardi.")
-				: GameText.GetOrFallbackSilent(
-					GameTextKeys.Campaign.AdWatchIncomplete,
-					"Il video va guardato per intero per triplicare l'EXP."));
-			AppendLog(GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.AdMultiplierNotAppliedLog,
-				"ACCOUNT - moltiplicatore ADV non applicato: {0}.",
-				ad.Outcome));
+				? GameText.Get(GameTextKeys.Campaign.AdUnavailable)
+				: GameText.Get(GameTextKeys.Campaign.AdWatchIncomplete));
+			AppendLog(GameText.Format(GameTextKeys.Campaign.AdMultiplierNotAppliedLog, ad.Outcome));
 			return;
 		}
 
@@ -1237,9 +1125,7 @@ public sealed partial class BattleBoardController
 			SetCampaignRewardAdButtonInteractable(true);
 			// Il video l'ha guardato: se il server rifiuta, il giocatore ha diritto di sapere
 			// perche' non e' arrivato niente, altrimenti sembra che l'abbia guardato per nulla.
-			ReportCampaignRewardAdOutcome(GameText.GetOrFallbackSilent(
-				GameTextKeys.Campaign.AdMultiplierConnectionRequired,
-				"Connessione al server necessaria per applicare il moltiplicatore."));
+			ReportCampaignRewardAdOutcome(GameText.Get(GameTextKeys.Campaign.AdMultiplierConnectionRequired));
 			AppendLog($"ACCOUNT - ADV fine campagna rifiutata dal server: {exception.Message}");
 			return;
 		}
@@ -1249,7 +1135,7 @@ public sealed partial class BattleBoardController
 			campaignDefeatRewardBodyText.text =
 				$"<size=30><b>+{tripledExperience} EXP totali</b></size>\n\nLa ricompensa è stata triplicata.";
 			campaignDefeatRewardDoubleButton.interactable = false;
-			campaignDefeatRewardDoubleButtonText.text = GameText.GetOrFallbackSilent(GameTextKeys.Profile.Triple, "TRIPLICATA");
+			campaignDefeatRewardDoubleButtonText.text = GameText.Get(GameTextKeys.Profile.Triple);
 		}
 		else if ((Object)(object)merchantBuyButton != (Object)null)
 		{
@@ -1265,7 +1151,7 @@ public sealed partial class BattleBoardController
 
 		((UnityEvent)merchantBuyButton.onClick).RemoveAllListeners();
 		((UnityEvent)merchantBuyButton.onClick).AddListener(new UnityAction(OpenMerchantPanel));
-		merchantBuyButtonText.text = GameText.GetOrFallbackSilent(GameTextKeys.Merchant.CampaignTitle, "MERCATO");
+		merchantBuyButtonText.text = GameText.Get(GameTextKeys.Merchant.CampaignTitle);
 		merchantBuyButton.interactable = true;
 	}
 
@@ -1333,6 +1219,7 @@ public sealed partial class BattleBoardController
 		deploymentInitiativesReady = false;
 		canAdvanceToNextRoom = false;
 		canRetryCampaignRoom = false;
+		campaignRoomEntered = false;
 		currentRoomType = configuration.StartingRoom.RoomType;
 		campaignDeck = null;
 		initialDeckBuilder = null;
@@ -1410,11 +1297,11 @@ public sealed partial class BattleBoardController
 		ConfigureActionButtonLayout(merchantVisible: false);
 		ResetRunProgress();
 		RefreshInitiativeDisplay();
-		SetTurnBanner(playerTurn: true, GameText.GetOrFallbackSilent(GameTextKeys.Combat.Preparation, "PREPARAZIONE"));
-		SetMessage(GameText.GetOrFallbackSilent(GameTextKeys.Campaign.ChooseModeToStart, "Scegli una modalità per iniziare."));
+		SetTurnBanner(playerTurn: true, GameText.Get(GameTextKeys.Combat.Preparation));
+		SetMessage(GameText.Get(GameTextKeys.Campaign.ChooseModeToStart));
 		if ((Object)(object)playerTitleText != (Object)null)
 		{
-			playerTitleText.text = GameText.GetOrFallbackSilent(GameTextKeys.Campaign.YourFormation, "LA TUA FORMAZIONE");
+			playerTitleText.text = GameText.Get(GameTextKeys.Campaign.YourFormation);
 		}
 		SetBattlefieldSurfaceVisible(showModeSelection);
 		if (showModeSelection)
@@ -1794,28 +1681,16 @@ public sealed partial class BattleBoardController
 		};
 		SetTurnBanner(playerTurn: true, roomType switch
 		{
-			RoomType.Loot => GameText.GetLocalizedFallback(
-				GameTextKeys.Campaign.LootRoomCompleteBanner,
-				"STANZA TESORO", "TREASURE ROOM", "SCHATZRAUM", "SALA DEL TESORO", "SALLE AU TRÉSOR"),
-			RoomType.Merchant => GameText.GetLocalizedFallback(
-				GameTextKeys.Campaign.MerchantRoomCompleteBanner,
-				"SPENDI GOLD O CONTINUA", "SPEND GOLD OR CONTINUE", "GOLD AUSGEBEN ODER WEITER", "GASTA ORO O CONTINÚA", "DÉPENSER DE L'OR OU CONTINUER"),
-			RoomType.QuickChallenge => GameText.GetLocalizedFallback(
-				GameTextKeys.Campaign.QuickChallengeCompleteBanner,
-				"SFIDA VELOCE - COMPLETATA", "QUICK CHALLENGE - COMPLETE", "SCHNELLE HERAUSFORDERUNG - GESCHAFFT", "DESAFÍO RÁPIDO - COMPLETADO", "DÉFI RAPIDE - TERMINÉ"),
-			_ => GameText.GetLocalizedFallback(
-				GameTextKeys.Campaign.CombatRoomCompleteBanner,
-				"STANZA COMPLETATA", "ROOM CLEARED", "RAUM GESCHAFFT", "SALA SUPERADA", "SALLE TERMINÉE"),
+			RoomType.Loot => GameText.Get(GameTextKeys.Campaign.LootRoomCompleteBanner),
+			RoomType.Merchant => GameText.Get(GameTextKeys.Campaign.MerchantRoomCompleteBanner),
+			RoomType.QuickChallenge => GameText.Get(GameTextKeys.Campaign.QuickChallengeCompleteBanner),
+			_ => GameText.Get(GameTextKeys.Campaign.CombatRoomCompleteBanner),
 		});
 		string text3 = ((roomReward.TotalExperience > 0) ?$" +{roomReward.TotalExperience} EXP." : string.Empty);
 		string completionMessage = roomType == RoomType.Loot
-			? $"Hai trovato {text} e guadagni {roomReward.TotalExperience} EXP."
+			? GameText.Format(GameTextKeys.Campaign.LootRoomCompleteMessage, text, roomReward.TotalExperience)
 			: text2 + text + text3;
 		SetMessage(completionMessage);
-		if (roomReward.LevelsGained > 0)
-		{
-			ShowLevelUpVigorHint();
-		}
 		SetPrimaryActionLabel(restartButtonText, PrimaryActionLabel.Continue);
 		if (roomType == RoomType.QuickChallenge)
 		{

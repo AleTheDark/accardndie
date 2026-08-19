@@ -158,7 +158,7 @@ public sealed partial class BattleBoardController
 		if (!IsCampaignSupremeAffordable(card))
 		{
 			ShowNoManaCallout(card);
-			SetMessage(GameText.GetLocalizedFallback(GameTextKeys.Campaign.SupremeManaInsufficient, "Mana insufficiente per la suprema di {0}.", "Not enough Mana for {0}'s supreme ability.", "Nicht genug Mana für die höchste Fähigkeit von {0}.", "Maná insuficiente para la suprema de {0}.", "Mana insuffisant pour la capacité suprême de {0}.", card.Card.Name));
+			SetMessage(GameText.Format(GameTextKeys.Campaign.SupremeManaInsufficient, card.Card.Name));
 			return false;
 		}
 
@@ -167,7 +167,7 @@ public sealed partial class BattleBoardController
 		{
 			activeAbilityUser = card;
 			abilityTargetMode = AbilityTargetMode.RogueSupremeEnemy;
-			SetMessage(GameText.GetLocalizedFallback(GameTextKeys.Campaign.RogueSupremePrompt, "SCIPPO: scegli un nemico. Rubi 1 buff e 2 mana, oppure 1 Potenza se non ha buff.", "HEIST: choose an enemy. Steal 1 buff and 2 Mana, or 1 Strength if it has no buff.", "RAUB: Wähle einen Gegner. Stiehl 1 Buff und 2 Mana oder 1 Stärke, falls er keinen Buff hat.", "ROBO: elige un enemigo. Roba 1 mejora y 2 de Maná, o 1 de Fuerza si no tiene mejoras.", "VOL : choisissez un ennemi. Volez 1 bonus et 2 Mana, ou 1 de Force s'il n'a aucun bonus."));
+			SetMessage(GameText.Get(GameTextKeys.Campaign.RogueSupremePrompt));
 			ClearTargetHints();
 			UpdateInteractions();
 			return true;
@@ -420,7 +420,7 @@ public sealed partial class BattleBoardController
 		}
 
 		int attackerTotal = DisplayStrength(attacker) + attackerValue;
-		SetMessage(GameText.GetLocalizedFallback(GameTextKeys.Campaign.MassSupremeStarted, "{0} scatena {1}: totale {2} contro ogni nemico.", "{0} unleashes {1}: total {2} against every enemy.", "{0} entfesselt {1}: insgesamt {2} gegen jeden Gegner.", "{0} desata {1}: total {2} contra cada enemigo.", "{0} déchaîne {1} : total {2} contre chaque ennemi.", attacker.Card.Name, supremeName, attackerTotal));
+		SetMessage(GameText.Format(GameTextKeys.Campaign.MassSupremeStarted, attacker.Card.Name, supremeName, attackerTotal));
 		yield return WaitForCardInspectionPause(configuration.Animation.DiceRollDuration + configuration.Animation.DiceResultHold);
 
 		for (int index = 0; index < enemies.Count; index++)
@@ -472,8 +472,8 @@ public sealed partial class BattleBoardController
 		yield return RestoreCampaignMassAttackTotals(attacker, enemies, attackerValue, enemyValues);
 
 		SetMessage(defeated.Count > 0
-			? GameText.GetLocalizedFallback(GameTextKeys.Campaign.MassSupremeDefeated, "{0} travolge {1} nemici!", "{0} overwhelms {1} enemies!", "{0} überwältigt {1} Gegner!", "¡{0} arrolla a {1} enemigos!", "{0} submerge {1} ennemis !", supremeName, defeated.Count)
-			: GameText.GetLocalizedFallback(GameTextKeys.Campaign.MassSupremeResisted, "I nemici resistono a {0}.", "The enemies resist {0}.", "Die Gegner widerstehen {0}.", "Los enemigos resisten {0}.", "Les ennemis résistent à {0}.", supremeName));
+			? GameText.Format(GameTextKeys.Campaign.MassSupremeDefeated, supremeName, defeated.Count)
+			: GameText.Format(GameTextKeys.Campaign.MassSupremeResisted, supremeName));
 		selectedPlayerIndex = -1;
 		attacker.View.SetSelected(false);
 		yield return WaitForCardInspectionPause(configuration.Animation.TurnResultPause);

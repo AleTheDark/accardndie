@@ -74,7 +74,7 @@ namespace AccardND.GameCore
     public sealed class MedusaBoss
     {
         public const int CardStrength = 8;
-        public const int DefaultHitPoints = 50;
+        public const int DefaultHitPoints = 30;
         public const int DefaultVigorDieSides = 6;
 
         private readonly IRandomSource random;

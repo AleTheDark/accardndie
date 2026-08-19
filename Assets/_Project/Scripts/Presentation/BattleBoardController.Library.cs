@@ -123,7 +123,7 @@ public sealed partial class BattleBoardController
 			FontStyle.Normal,
 			TextAnchor.MiddleCenter);
 		AccardND.Battlefield.MmoUiTheme.StyleAsScreenTitle(title);
-		title.text = GameText.GetOrFallbackSilent(GameTextKeys.Library.Title, "BIBLIOTECA");
+		title.text = GameText.Get(GameTextKeys.Library.Title);
 		title.color = new Color32(0xF2, 0xC9, 0x57, 0xFF);
 		AddLibraryTextShadow(title, 2f);
 		SetRect(title.rectTransform, new Vector2(0.08f, 0.18f), new Vector2(0.92f, 0.72f));

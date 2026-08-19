@@ -88,10 +88,7 @@ namespace AccardND.Battlefield
                 "Classe: " + CardRulesGlossary.HeroClassName(definition.HeroClass),
                 string.Empty,
                 "Vantaggio contro " + CardRulesGlossary.ClassFamilyName(StrongAgainst(family)),
-                GameText.GetOrFallbackSilent(
-                    GameTextKeys.Combat.DisadvantageAgainst,
-                    "Svantaggio contro {0}",
-                    CardRulesGlossary.ClassFamilyName(WeakAgainst(family))),
+                GameText.Format(GameTextKeys.Combat.DisadvantageAgainst, CardRulesGlossary.ClassFamilyName(WeakAgainst(family))),
             };
 
             if (!isBossOrMiniboss)
@@ -104,7 +101,7 @@ namespace AccardND.Battlefield
 
             if (CanBeEquipped(definition))
             {
-                lines.Add($"EQUIPAGGIA: questa carta puo essere sacrificata per potenziare un alleato di +{AttachmentBonus(definition)} permanentemente. Se l'alleato equipaggiato muore, muore anche questa carta.");
+                lines.Add(GameText.Format(GameTextKeys.Inspection.EquipmentRule, AttachmentBonus(definition)));
             }
 
             if (!string.IsNullOrWhiteSpace(definition.RulesText))

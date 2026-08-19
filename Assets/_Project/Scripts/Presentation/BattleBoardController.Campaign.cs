@@ -61,10 +61,7 @@ public sealed partial class BattleBoardController
 		RefreshScenarioBackground();
 		if ((Object)(object)cpuTitleText != (Object)null)
 		{
-			cpuTitleText.text = GameText.GetOrFallbackSilent(
-				GameTextKeys.Combat.CpuMasterScenario,
-				"CPU - IL MASTER   *   {0}",
-				scenario.DisplayName.ToUpperInvariant());
+			cpuTitleText.text = GameText.Format(GameTextKeys.Combat.CpuMasterScenario, scenario.DisplayName.ToUpperInvariant());
 		}
 		AppendLog("SCENARIO - " + scenario.DisplayName + " [" + scenario.Id + "]");
 		return true;
@@ -451,10 +448,7 @@ public sealed partial class BattleBoardController
 		currentScenarioDisplayOverride = displayOverride;
 		if ((Object)(object)cpuTitleText != (Object)null && !string.IsNullOrWhiteSpace(displayOverride))
 		{
-			cpuTitleText.text = GameText.GetOrFallbackSilent(
-				GameTextKeys.Combat.CpuMasterScenario,
-				"CPU - IL MASTER   *   {0}",
-				displayOverride.ToUpperInvariant());
+			cpuTitleText.text = GameText.Format(GameTextKeys.Combat.CpuMasterScenario, displayOverride.ToUpperInvariant());
 		}
 		return true;
 	}
@@ -497,6 +491,23 @@ public sealed partial class BattleBoardController
 
 	private void BeginRoomChoice()
 	{
+		ClearBoardForRoomTransition();
+		roomChoiceBackgroundIndex = random != null ? random.NextInclusive(1, 5) : UnityEngine.Random.Range(1, 6);
+		PrepareCampaignDoors();
+		// Punto di salvataggio autorevole: lo stato tra le stanze è coerente qui. Si scrive
+		// dopo aver estratto le porte, non prima: sono già state decise, e un salvataggio
+		// preso prima le farebbe riestrarre alla ripresa.
+		SaveCurrentRun();
+		ShowRoomChoicePanel();
+	}
+
+	/// <summary>
+	/// Sgombra il campo fra una stanza e l'altra. È lo stato di partenza sia della scelta
+	/// della via sia di una stanza ripresa da un salvataggio: in mezzo non deve restare
+	/// niente della stanza precedente.
+	/// </summary>
+	private void ClearBoardForRoomTransition()
+	{
 		ClearManaDeltaCallouts();
 		ClearEnemyManaDeltaCallouts();
 		((MonoBehaviour)this).StopAllCoroutines();
@@ -506,6 +517,7 @@ public sealed partial class BattleBoardController
 		inputLocked = true;
 		gameFinished = true;
 		canAdvanceToNextRoom = false;
+		campaignRoomEntered = false;
 		pendingScenarioId = null;
 		pendingRoomDifficulty = RoomDifficulty.Normal;
 		currentScenarioDisplayOverride = null;
@@ -536,10 +548,15 @@ public sealed partial class BattleBoardController
 		initialPlayerFormation.Clear();
 		initialPlayerCampaignFormation.Clear();
 		initialCpuFormation.Clear();
-		roomChoiceBackgroundIndex = random != null ? random.NextInclusive(1, 5) : UnityEngine.Random.Range(1, 6);
-		// Punto di salvataggio autorevole: lo stato tra le stanze è coerente qui.
-		SaveCurrentRun();
-		PrepareCampaignDoors();
+	}
+
+	/// <summary>
+	/// Mostra la schermata delle tre porte. Le porte sono già decise da chi chiama: qui non
+	/// si estrae più niente, così la stessa schermata la può riaprire anche una run ripresa
+	/// con le porte che aveva davanti prima di chiudere il gioco.
+	/// </summary>
+	private void ShowRoomChoicePanel()
+	{
 		RefreshRoomChoiceCounter();
 		RefreshRoomChoiceLayout();
 		if ((Object)(object)roomChoicePanel != (Object)null)
@@ -548,7 +565,6 @@ public sealed partial class BattleBoardController
 		}
 		SetTurnBanner(playerTurn: true, "SCELTA DELLA VIA");
 		SetMessage("Scegli una delle tre porte per proseguire nella campagna.");
-		ShowRoomChoiceHint();
 		RefreshInitiativeDisplay();
 		ApplyResponsiveLayout();
 		if (ShouldForceMerchantDebugRoom() || ShouldForceFirstRoomComposableGolem() || ShouldForceFirstRoomMedusa() || ShouldForceFirstRoomTrentor() || ShouldForceFirstRoomBragus() || ShouldForceFirstRoomPalatir())
@@ -690,6 +706,11 @@ public sealed partial class BattleBoardController
 				pendingScenarioId = ActiveCampaignScenarioId();
 			}
 			AppendLog($"PORTA SCELTA - slot {index + 1}, stanza nascosta {DescribeRoomRoll(roomRoll)}");
+			// La porta è varcata: da adesso il salvataggio dice "sono in questa stanza", non
+			// più "sto scegliendo". Si scrive prima della dissolvenza, perché una stanza
+			// aperta non deve poter tornare una scelta da rifare chiudendo il gioco.
+			MarkCampaignRoomEntered();
+			SaveCurrentRun();
 			AnimationConfiguration animation = configuration.Animation;
 			PlayFootstepSfx();
 			roomTransition.Play(EnterChosenCampaignRoom, animation.RoomFadeOutDuration, animation.RoomBlackHoldDuration, animation.RoomFadeInDuration);
